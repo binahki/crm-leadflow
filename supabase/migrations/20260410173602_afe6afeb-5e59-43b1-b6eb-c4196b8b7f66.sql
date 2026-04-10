@@ -1,0 +1,2 @@
+DROP POLICY "Users can create webhook logs" ON public.webhook_logs;
+CREATE POLICY "Users can create webhook logs" ON public.webhook_logs FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
