@@ -118,7 +118,7 @@ export default function KanbanPage() {
     if (!over) return;
     const activeLead = leads.find((l) => l.id === active.id);
     if (activeLead) {
-      await supabase.from('leads').update({ status: activeLead.status }).eq('id', active.id);
+      await supabase.from('leads').update({ status: activeLead.status }).eq('id', String(active.id));
     }
   };
 

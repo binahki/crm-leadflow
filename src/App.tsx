@@ -3,8 +3,18 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import LoginPage from "./pages/Login";
+import ResetPasswordPage from "./pages/ResetPassword";
+import DashboardPage from "./pages/Dashboard";
+import LeadsPage from "./pages/Leads";
+import KanbanPage from "./pages/Kanban";
+import CampanhasPage from "./pages/Campanhas";
+import CriativosPage from "./pages/Criativos";
+import WebhookPage from "./pages/Webhook";
+import WhatsAppPage from "./pages/WhatsApp";
+import ConfiguracoesPage from "./pages/Configuracoes";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -15,8 +25,16 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
+          <Route path="/kanban" element={<ProtectedRoute><KanbanPage /></ProtectedRoute>} />
+          <Route path="/campanhas" element={<ProtectedRoute><CampanhasPage /></ProtectedRoute>} />
+          <Route path="/criativos" element={<ProtectedRoute><CriativosPage /></ProtectedRoute>} />
+          <Route path="/webhook" element={<ProtectedRoute><WebhookPage /></ProtectedRoute>} />
+          <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
+          <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
