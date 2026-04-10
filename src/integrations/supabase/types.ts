@@ -14,7 +14,231 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      campanhas: {
+        Row: {
+          budget: number | null
+          budget_type: string | null
+          clicks: number | null
+          cpm: number | null
+          created_at: string
+          ctr: number | null
+          id: string
+          impressions: number | null
+          leads_api: number | null
+          meta_campaign_id: string | null
+          name: string
+          objective: string | null
+          reach: number | null
+          roas: number | null
+          spend: number | null
+          status: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          budget?: number | null
+          budget_type?: string | null
+          clicks?: number | null
+          cpm?: number | null
+          created_at?: string
+          ctr?: number | null
+          id?: string
+          impressions?: number | null
+          leads_api?: number | null
+          meta_campaign_id?: string | null
+          name: string
+          objective?: string | null
+          reach?: number | null
+          roas?: number | null
+          spend?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          budget?: number | null
+          budget_type?: string | null
+          clicks?: number | null
+          cpm?: number | null
+          created_at?: string
+          ctr?: number | null
+          id?: string
+          impressions?: number | null
+          leads_api?: number | null
+          meta_campaign_id?: string | null
+          name?: string
+          objective?: string | null
+          reach?: number | null
+          roas?: number | null
+          spend?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      configuracoes_whatsapp: {
+        Row: {
+          api_key: string | null
+          auto_send: boolean | null
+          created_at: string
+          id: string
+          instance_id: string | null
+          message_template: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          auto_send?: boolean | null
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          message_template?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          auto_send?: boolean | null
+          created_at?: string
+          id?: string
+          instance_id?: string | null
+          message_template?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      criativos: {
+        Row: {
+          adset_name: string | null
+          campaign_name: string | null
+          clicks: number | null
+          cpl: number | null
+          created_at: string
+          ctr: number | null
+          effective_status: string | null
+          id: string
+          impressions: number | null
+          leads: number | null
+          meta_creative_id: string | null
+          name: string
+          spend: number | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          adset_name?: string | null
+          campaign_name?: string | null
+          clicks?: number | null
+          cpl?: number | null
+          created_at?: string
+          ctr?: number | null
+          effective_status?: string | null
+          id?: string
+          impressions?: number | null
+          leads?: number | null
+          meta_creative_id?: string | null
+          name: string
+          spend?: number | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          adset_name?: string | null
+          campaign_name?: string | null
+          clicks?: number | null
+          cpl?: number | null
+          created_at?: string
+          ctr?: number | null
+          effective_status?: string | null
+          id?: string
+          impressions?: number | null
+          leads?: number | null
+          meta_creative_id?: string | null
+          name?: string
+          spend?: number | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          cidade: string | null
+          created_at: string
+          entrada: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          quiz_data: Json | null
+          status: number
+          updated_at: string
+          user_id: string | null
+          wa_sent: boolean | null
+          whatsapp: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string
+          entrada?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          quiz_data?: Json | null
+          status?: number
+          updated_at?: string
+          user_id?: string | null
+          wa_sent?: boolean | null
+          whatsapp?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string
+          entrada?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          quiz_data?: Json | null
+          status?: number
+          updated_at?: string
+          user_id?: string | null
+          wa_sent?: boolean | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
