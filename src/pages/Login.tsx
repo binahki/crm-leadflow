@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) {
@@ -36,7 +37,7 @@ export default function LoginPage() {
     }
 
     if (isSignUp) {
-      const { error } = await signUp(email, password);
+      const { error } = await signUp(email, password, fullName);
       if (error) toast.error(error.message);
       else toast.success('Conta criada! Verifique seu email para confirmar.');
     } else {
@@ -66,6 +67,22 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isSignUp && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Nome completo
+              </label>
+              <Input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Seu nome completo"
+                required={isSignUp}
+                className="h-11"
+              />
+            </div>
+          )}
+          
           <div>
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
               Email

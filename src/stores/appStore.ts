@@ -5,11 +5,31 @@ export interface Lead {
   nome: string;
   whatsapp: string;
   cidade: string;
-  status: number;
-  entrada: string;
-  wa_sent: boolean;
+  instagram?: string;
+  o_que_mais_te_atrai?: string;
+  quanto_gostaria_de_ganhar_por_mes?: string;
+  o_que_mais_gostaria_de_conquistar?: string;
+  onde_se_imagina_em_6_meses?: string;
+  qual_sua_idade?: string;
+  tem_filhos?: string;
+  idade_do_filho_mais_novo?: string;
+  voce_tem_alguma_rede_de_apoio?: string;
+  voce_mora_com_alguem?: string;
+  por_quais_meios_pretende_vender?: string;
+  quantas_horas_por_semana_vai_se_dedicar?: string;
+  quando_gostaria_de_comecar?: string;
+  situacao_atual?: string;
+  experiencia_em_vendas?: string;
+  ja_tentou_vender_semijoia?: string;
+  para_comecar_no_consignado?: string;
+  seu_nome_esta_negativado?: string;
+  voce_aceita_as_regras_do_consignado?: string;
+  status?: number | null;
+  entrada?: string;
+  wa_sent?: boolean;
   observacoes?: string;
   created_at?: string;
+  updated_at?: string;
   user_id?: string;
   quiz_data?: Record<string, unknown>;
 }
@@ -77,7 +97,7 @@ export const useAppStore = create<AppState>((set) => ({
   campaigns: [],
   creatives: [],
   metaAccountId: '1667716164425149',
-  metaToken: '',
+  metaToken: 'EAASFxUC4PS0BRKyaU0lCw6uFQowDuH9epT4Afru4AxQNbykYcngh80exvpg0yipFBBxJnvdPKiAgJxuUBTBWzyFZCZBaY0EvhiZBIeSGFNrLe8ZAkcCC29Qfsk8ZCci4j87dZBpJKvHf19aKkMp4186ZAW9NG3fKrL4FFte1UFiSVAHlcRqZAmPGKdOnBZAPEurZAxIm37VQan3gMURGVrfrmkn4V4LwohCMplaYqVl5ENpI4MXt2EsXEuANwrs8ni95eO2H0tVd5GFZAcOephEyuBCgAZCvMb0WjS2ljOfZAZBQZDZD',
   period: 'last_30d',
 
   setLeads: (leads) => set({ leads }),
