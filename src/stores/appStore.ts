@@ -66,12 +66,12 @@ export interface Creative {
   leads?: number;
 }
 
-export const STATUS_LABELS = ['Aguardando', 'Em atendimento', 'Proposta enviada', 'Convertida'];
+export const STATUS_LABELS = ['Aguardando', 'Em atendimento', 'Reunião', 'Aprovado'];
 export const STATUS_COLORS = [
-  { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning' },
-  { bg: 'bg-info/10', text: 'text-info', dot: 'bg-info' },
-  { bg: 'bg-primary/10', text: 'text-primary', dot: 'bg-primary' },
-  { bg: 'bg-success/10', text: 'text-success', dot: 'bg-success' },
+  { bg: 'bg-amber-50',   text: 'text-amber-600',   dot: 'bg-amber-400'   },
+  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    },
+  { bg: 'bg-violet-50',  text: 'text-violet-600',   dot: 'bg-violet-400'  },
+  { bg: 'bg-emerald-50', text: 'text-emerald-600',  dot: 'bg-emerald-400' },
 ];
 
 interface AppState {

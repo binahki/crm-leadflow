@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Copy, RefreshCw, CheckCircle2, XCircle, Webhook, Activity, Key } from 'lucide-react';
+import { Copy, RefreshCw, CheckCircle2, XCircle, Activity, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WebhookLog {
@@ -25,20 +25,13 @@ export default function WebhookPage() {
   const webhookUrl = `${window.location.origin}/api/webhook/inlead`;
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      const { data } = await supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50);
-      if (data) setLogs(data as unknown as WebhookLog[]);
-    };
-    fetchLogs();
+    supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50)
+      .then(({ data }) => { if (data) setLogs(data as unknown as WebhookLog[]); });
 
-    // Real-time logs
-    const channel = supabase
-      .channel('webhook-logs')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs' }, (payload) => {
-        setLogs((prev) => [payload.new as unknown as WebhookLog, ...prev].slice(0, 50));
-      })
-      .subscribe();
-
+    const channel = supabase.channel('webhook-logs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs' }, p => {
+        setLogs(prev => [p.new as unknown as WebhookLog, ...prev].slice(0, 50));
+      }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -52,119 +45,90 @@ export default function WebhookPage() {
   const handleTest = async () => {
     setTestStatus('loading');
     try {
-      const { error } = await supabase.from('leads').insert({
-        nome: 'Lead de Teste',
-        whatsapp: '(11) 99999-0000',
-        cidade: 'São Paulo',
-        status: 0,
-        entrada: new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
-        wa_sent: false,
-      });
+      const { error } = await supabase.from('leads').upsert(
+        {
+          nome: 'Lead de Teste', whatsapp: '(11) 99999-0000', cidade: 'São Paulo',
+          status: 0, entrada: new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), wa_sent: false,
+        },
+        { onConflict: 'nome,whatsapp', ignoreDuplicates: true }
+      );
       if (error) throw error;
-      await supabase.from('webhook_logs').insert({
-        event_type: 'test',
-        payload: { nome: 'Lead de Teste', source: 'manual_test' },
-        status: 'success',
-      });
+      await supabase.from('webhook_logs').insert({ event_type: 'test', payload: { nome: 'Lead de Teste', source: 'manual_test' }, status: 'success' });
       setTestStatus('success');
       toast.success('Lead de teste criado!');
-    } catch {
-      setTestStatus('error');
-    }
+    } catch { setTestStatus('error'); }
     setTimeout(() => setTestStatus('idle'), 3000);
   };
 
   return (
     <AppLayout leadCount={leads.length}>
-      <div className="p-6 space-y-6">
+      <div className="p-7 space-y-6">
+
         {/* Header */}
-        <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
-              <Webhook className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold font-display tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Webhook</h1>
-              <p className="text-sm text-muted-foreground mt-1">Configure o recebimento automático de leads</p>
-            </div>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Webhook</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Configure o recebimento automático de leads</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Config */}
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl border border-white/20 dark:border-white/10 shadow-lg overflow-hidden">
-            <div className="px-6 py-5 border-b border-white/20 dark:border-white/10">
-              <div className="flex items-center gap-2">
-                <Key className="w-5 h-5 text-blue-600" />
-                <h2 className="text-sm font-bold font-display">Endpoint Webhook</h2>
-              </div>
+          {/* Config card */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-2">
+              <Key className="w-5 h-5 text-blue-600" />
+              <h2 className="font-semibold text-gray-900">Endpoint Webhook</h2>
             </div>
             <div className="p-6 space-y-4">
-              <p className="text-xs text-muted-foreground">Cole esta URL na configuração do seu quiz/formulário para receber leads automaticamente.</p>
-              <div className="backdrop-blur-xl bg-white/40 dark:bg-white/5 rounded-xl p-4 border border-white/20 dark:border-white/10">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">URL do Webhook</p>
+              <p className="text-sm text-gray-400">Cole esta URL na configuração do seu quiz/formulário para receber leads automaticamente.</p>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">URL do Webhook</p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs font-mono break-all bg-transparent">{webhookUrl}</code>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleCopy}
-                    className="backdrop-blur-xl bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20"
-                  >
+                  <code className="flex-1 text-xs font-mono text-gray-700 break-all">{webhookUrl}</code>
+                  <Button variant="ghost" size="sm" onClick={handleCopy} className="hover:bg-gray-100 flex-shrink-0">
                     {copied ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">Secret Key</label>
-                <Input 
-                  value={secretKey} 
-                  readOnly 
-                  className="font-mono text-xs backdrop-blur-xl bg-white/40 dark:bg-white/5 border border-white/20 dark:border-white/10" 
-                />
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Secret Key</label>
+                <Input value={secretKey} readOnly className="font-mono text-xs bg-gray-50 border-gray-200" />
               </div>
-              <Button 
-                onClick={handleTest} 
-                disabled={testStatus === 'loading'} 
-                className="w-full backdrop-blur-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg"
+              <Button
+                onClick={handleTest}
+                disabled={testStatus === 'loading'}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {testStatus === 'loading' && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
                 {testStatus === 'success' && <CheckCircle2 className="w-4 h-4 mr-2" />}
-                {testStatus === 'error' && <XCircle className="w-4 h-4 mr-2" />}
-                {testStatus === 'success' ? 'Teste enviado!' : testStatus === 'error' ? 'Erro' : 'Testar webhook'}
+                {testStatus === 'error'   && <XCircle className="w-4 h-4 mr-2" />}
+                {testStatus === 'success' ? 'Teste enviado!' : testStatus === 'error' ? 'Erro no teste' : 'Testar webhook'}
               </Button>
             </div>
           </div>
 
-          {/* Logs */}
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl border border-white/20 dark:border-white/10 shadow-lg overflow-hidden">
-            <div className="px-6 py-5 border-b border-white/20 dark:border-white/10 flex items-center justify-between">
+          {/* Logs card */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5 text-purple-600" />
-                <h2 className="text-sm font-bold font-display">Log de eventos em tempo real</h2>
+                <h2 className="font-semibold text-gray-900">Log em tempo real</h2>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => window.location.reload()}
-                className="backdrop-blur-xl bg-white/20 hover:bg-white/30 dark:bg-white/10 dark:hover:bg-white/20"
-              >
+              <Button variant="ghost" size="sm" onClick={() => window.location.reload()} className="hover:bg-gray-50">
                 <RefreshCw className="w-4 h-4" />
               </Button>
             </div>
             <div className="p-4 max-h-[400px] overflow-y-auto">
               {logs.length === 0 ? (
                 <div className="text-center py-10">
-                  <Activity className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground italic">Nenhum evento registrado</p>
+                  <Activity className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-400">Nenhum evento registrado</p>
                 </div>
               ) : (
                 <div className="space-y-2 font-mono text-xs">
-                  {logs.map((log) => (
-                    <div key={log.id} className="backdrop-blur-xl bg-white/40 dark:bg-white/5 rounded-lg p-3 border border-white/20 dark:border-white/10 flex items-center gap-3 hover:bg-white/60 dark:hover:bg-white/10 transition-colors">
-                      <span className="text-muted-foreground shrink-0">{new Date(log.created_at).toLocaleTimeString('pt-BR')}</span>
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${log.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className={log.status === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  {logs.map(log => (
+                    <div key={log.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100 flex items-center gap-3">
+                      <span className="text-gray-400 flex-shrink-0">{new Date(log.created_at).toLocaleTimeString('pt-BR')}</span>
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${log.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className={log.status === 'success' ? 'text-green-700' : 'text-red-600'}>
                         {log.event_type}: {(log.payload as any)?.nome || 'Lead'}
                       </span>
                     </div>
@@ -174,6 +138,7 @@ export default function WebhookPage() {
             </div>
           </div>
         </div>
+
       </div>
     </AppLayout>
   );

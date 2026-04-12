@@ -1,12 +1,9 @@
-import { useState } from 'react';
-import { Lead, STATUS_LABELS, STATUS_COLORS } from '@/stores/appStore';
+import { useState, useEffect } from 'react';
+import { Lead } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { X, MessageCircle, User, MapPin, Phone, Calendar, Info, Target, Clock, DollarSign, Users, Settings, ChevronDown, ChevronUp, Instagram, Briefcase, Home, TrendingUp, Award } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { X, MessageCircle, MapPin, Phone, Calendar, Target, Clock, Briefcase, Home, ChevronDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { getRelativeTime } from '@/utils/relativeTime';
+import { getRelativeTime, formatDate } from '@/utils/relativeTime';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -15,371 +12,315 @@ interface LeadDrawerProps {
   onUpdate: (lead: Lead) => void;
 }
 
-export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
-  const [observacoes, setObservacoes] = useState(lead?.observacoes || '');
-  const [status, setStatus] = useState(lead?.status !== undefined ? lead.status : 0);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    identification: true,
-    objectives: false,
-    personal: false,
-    availability: false,
-    experience: false,
-    crm: true
-  });
+const STATUS = [
+  { label: 'Aguardando',     dot: '#f59e0b' },
+  { label: 'Em atendimento', dot: '#3b82f6' },
+  { label: 'Reunião',        dot: '#8b5cf6' },
+  { label: 'Aprovado',       dot: '#10b981' },
+];
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
+function initials(name: string) {
+  if (!name) return '?';
+  return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
 
-  const handleSaveObservacoes = async () => {
-    if (!lead) return;
-    
-    const { error } = await supabase
-      .from('leads')
-      .update({ observacoes })
-      .eq('id', lead.id);
-    
-    if (error) {
-      toast.error('Erro ao salvar observações');
-      return;
-    }
-    
-    onUpdate({ ...lead, observacoes });
-    toast.success('Observações salvas!');
-  };
+function avatarBg(name: string) {
+  const shades = ['#e8e8ed', '#dddde5', '#d2d2db', '#c7c7d1', '#bcbcc7'];
+  return shades[(name?.charCodeAt(0) || 0) % shades.length];
+}
 
-  const handleStatusChange = async (newStatus: number) => {
-    if (!lead) return;
-    
-    const { error } = await supabase
-      .from('leads')
-      .update({ status: newStatus })
-      .eq('id', lead.id);
-    
-    if (error) {
-      toast.error('Erro ao atualizar status');
-      return;
-    }
-    
-    setStatus(newStatus);
-    onUpdate({ ...lead, status: newStatus });
-    toast.success('Status atualizado!');
-  };
-
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
-  if (!lead) return null;
+function Section({ icon, title, children, defaultOpen = false }: {
+  icon: React.ReactNode; title: string; children: React.ReactNode; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const kids = Array.isArray(children) ? children.filter(Boolean) : [children].filter(Boolean);
+  if (!kids.length) return null;
 
   return (
-    <div className={`fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-      <div className="h-full flex flex-col">
+    <div style={{ borderBottom: '1px solid rgba(0,0,0,0.055)' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', padding: '13px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'none', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+          <span style={{ color: 'rgba(0,0,0,0.3)', display: 'flex' }}>{icon}</span>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(0,0,0,0.82)', letterSpacing: '-0.015em' }}>
+            {title}
+          </span>
+        </div>
+        <ChevronDown style={{
+          width: '15px', height: '15px', color: 'rgba(0,0,0,0.22)',
+          transform: open ? 'rotate(180deg)' : 'rotate(0)',
+          transition: 'transform 0.18s ease', flexShrink: 0,
+        }} />
+      </button>
+      {open && <div style={{ padding: '2px 20px 16px' }}>{children}</div>}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  if (!value || value === '-') return null;
+  return (
+    <div style={{ marginBottom: '13px' }}>
+      <p style={{ fontSize: '11px', fontWeight: 500, color: 'rgba(0,0,0,0.32)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '3px' }}>
+        {label}
+      </p>
+      <p style={{ fontSize: '14px', color: 'rgba(0,0,0,0.78)', fontWeight: 500, lineHeight: 1.5, letterSpacing: '-0.01em' }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
+  const [obs, setObs]               = useState('');
+  const [status, setStatus]         = useState(0);
+  const [saving, setSaving]         = useState(false);
+  const [obsChanged, setObsChanged] = useState(false);
+
+  useEffect(() => {
+    if (lead) {
+      setObs(lead.observacoes || '');
+      setStatus(lead.status === null || lead.status === undefined ? 0 : Number(lead.status));
+      setObsChanged(false);
+    }
+  }, [lead?.id]);
+
+  async function handleStatus(i: number) {
+    if (!lead || status === i) return;
+    const prev = status;
+    setStatus(i);
+    const { error } = await supabase.from('leads').update({ status: String(i) }).eq('id', lead.id);
+    if (error) { setStatus(prev); toast.error('Erro ao atualizar status'); }
+    else { onUpdate({ ...lead, status: i }); toast.success(STATUS[i].label); }
+  }
+
+  async function handleSaveObs() {
+    if (!lead) return;
+    setSaving(true);
+    const { error } = await supabase.from('leads').update({ observacoes: obs }).eq('id', lead.id);
+    setSaving(false);
+    if (error) toast.error('Erro ao salvar');
+    else { onUpdate({ ...lead, observacoes: obs }); setObsChanged(false); toast.success('Salvo'); }
+  }
+
+  if (!isOpen || !lead) return null;
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.28)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 50, animation: 'ld-fade 0.18s ease',
+      }} />
+
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '92%', maxWidth: '452px', maxHeight: '88vh',
+        background: '#fff',
+        borderRadius: '20px',
+        boxShadow: '0 44px 120px rgba(0,0,0,0.16), 0 0 0 0.5px rgba(0,0,0,0.07)',
+        zIndex: 51, overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        animation: 'ld-up 0.26s cubic-bezier(0.32, 0.72, 0, 1)',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+      }}>
+
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">Perfil do Lead</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div style={{ padding: '22px 20px 18px', borderBottom: '1px solid rgba(0,0,0,0.055)', flexShrink: 0, position: 'relative' }}>
+          <button onClick={onClose} style={{
+            position: 'absolute', top: '16px', right: '16px',
+            width: '26px', height: '26px', background: 'rgba(0,0,0,0.055)',
+            border: 'none', borderRadius: '50%', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.15s',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.1)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.055)')}
+          >
+            <X style={{ width: '13px', height: '13px', color: 'rgba(0,0,0,0.45)' }} />
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '13px' }}>
+            <div style={{
+              width: '50px', height: '50px', borderRadius: '15px',
+              background: avatarBg(lead.nome),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '17px', fontWeight: 700, color: 'rgba(0,0,0,0.5)',
+              letterSpacing: '-0.02em', flexShrink: 0,
+            }}>
+              {initials(lead.nome)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{
+                margin: 0, fontSize: '17px', fontWeight: 700,
+                color: '#000', letterSpacing: '-0.025em',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+              }}>
+                {lead.nome}
+              </h2>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '5px', flexWrap: 'wrap' }}>
+                {lead.cidade && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: 'rgba(0,0,0,0.38)' }}>
+                    <MapPin style={{ width: '11px', height: '11px' }} />{lead.cidade}
+                  </span>
+                )}
+                {lead.whatsapp && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: 'rgba(0,0,0,0.38)' }}>
+                    <Phone style={{ width: '11px', height: '11px' }} />{lead.whatsapp}
+                  </span>
+                )}
+                {lead.created_at && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: 'rgba(0,0,0,0.38)' }}>
+                    <Calendar style={{ width: '11px', height: '11px' }} />{getRelativeTime(lead.created_at)}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
-              {getInitials(lead.nome)}
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">{lead.nome}</h3>
-              <div className="flex items-center gap-2 text-sm opacity-90">
-                <MapPin className="w-4 h-4" />
-                {lead.cidade || 'Sem cidade'}
-              </div>
-              <div className="flex items-center gap-2 text-sm opacity-90">
-                <Phone className="w-4 h-4" />
-                {lead.whatsapp || 'Sem WhatsApp'}
-              </div>
-            </div>
+
+          <button
+            onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank')}
+            style={{
+              marginTop: '14px', width: '100%', padding: '10px',
+              borderRadius: '11px', background: '#000', border: 'none',
+              color: '#fff', fontSize: '13px', fontWeight: 600,
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: '7px', letterSpacing: '-0.01em',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.82')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
+            <MessageCircle style={{ width: '14px', height: '14px' }} />
+            Abrir no WhatsApp
+          </button>
+        </div>
+
+        {/* Status */}
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(0,0,0,0.055)', flexShrink: 0 }}>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(0,0,0,0.28)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '9px' }}>
+            Status
+          </p>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {STATUS.map((s, i) => {
+              const active = status === i;
+              return (
+                <button key={i} onClick={() => handleStatus(i)} style={{
+                  padding: '6px 12px', borderRadius: '20px',
+                  border: active ? '1.5px solid #000' : '1.5px solid rgba(0,0,0,0.1)',
+                  background: active ? '#000' : 'transparent',
+                  color: active ? '#fff' : 'rgba(0,0,0,0.48)',
+                  fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'all 0.15s ease', letterSpacing: '-0.01em',
+                }}
+                  onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,0,0,0.28)'; (e.currentTarget as HTMLElement).style.color = 'rgba(0,0,0,0.72)'; } }}
+                  onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,0,0,0.1)'; (e.currentTarget as HTMLElement).style.color = 'rgba(0,0,0,0.48)'; } }}
+                >
+                  {active && <Check style={{ width: '11px', height: '11px' }} />}
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: active ? '#fff' : s.dot, flexShrink: 0 }} />
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {/* Seção 1 - Identificação */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection('identification')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                <span className="font-bold">Identificação</span>
-              </div>
-              {expandedSections.identification ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {expandedSections.identification && (
-              <div className="p-4 pt-0 space-y-3">
-                <div className="grid grid-cols-1 gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <span className="text-gray-500">Nome:</span>
-                      <p className="font-medium">{lead.nome || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <span className="text-gray-500">WhatsApp:</span>
-                      <p className="font-medium">{lead.whatsapp || '-'}</p>
-                      <Button
-                        onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank')}
-                        className="mt-1 text-xs bg-green-500 hover:bg-green-600 text-white"
-                        size="sm"
-                      >
-                        Abrir WhatsApp
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <span className="text-gray-500">Cidade:</span>
-                      <p className="font-medium">{lead.cidade || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Instagram className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <span className="text-gray-500">Instagram:</span>
-                      <p className="font-medium">{lead.instagram || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <span className="text-gray-500">Data de entrada:</span>
-                      <p className="font-medium">{lead.created_at ? getRelativeTime(lead.created_at) : '-'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Scrollable sections */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
 
-          {/* Seção 2 - Objetivos Financeiros */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection('objectives')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4" />
-                <span className="font-bold">Objetivos Financeiros</span>
-              </div>
-              {expandedSections.objectives ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {expandedSections.objectives && (
-              <div className="p-4 pt-0 space-y-3">
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="text-gray-500">O que mais te atrai:</span>
-                    <p className="font-medium">{lead.o_que_mais_te_atrai || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Quanto gostaria de ganhar:</span>
-                    <p className="font-medium">{lead.quanto_ganha || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">O que gostaria de conquistar:</span>
-                    <p className="font-medium">{lead.o_que_conquistar || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Onde se imagina em 6 meses:</span>
-                    <p className="font-medium">{lead.imagina_6_meses || '-'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <Section icon={<Phone style={{ width: '13px', height: '13px' }} />} title="Identificação" defaultOpen>
+            <Field label="Instagram" value={lead.instagram} />
+            <Field label="Idade" value={lead.idade} />
+            <Field label="Data de entrada" value={lead.created_at ? formatDate(lead.created_at) : undefined} />
+          </Section>
 
-          {/* Seção 3 - Perfil Pessoal */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection('personal')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Home className="w-4 h-4" />
-                <span className="font-bold">Perfil Pessoal</span>
-              </div>
-              {expandedSections.personal ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {expandedSections.personal && (
-              <div className="p-4 pt-0 space-y-3">
-                <div className="grid grid-cols-1 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-500">Idade:</span>
-                    <p className="font-medium">{lead.idade || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Tem filhos:</span>
-                    <p className="font-medium">{lead.tem_filhos || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Idade do filho mais novo:</span>
-                    <p className="font-medium">{lead.idade_filho || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Rede de apoio:</span>
-                    <p className="font-medium">{lead.rede_apoio || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Mora com alguém:</span>
-                    <p className="font-medium">{lead.mora_com || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Situação atual:</span>
-                    <p className="font-medium">{lead.situacao_atual || '-'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <Section icon={<Target style={{ width: '13px', height: '13px' }} />} title="Objetivos">
+            <Field label="O que mais te atrai" value={lead.o_que_mais_te_atrai} />
+            <Field label="Quanto quer ganhar" value={lead.quanto_ganha} />
+            <Field label="O que quer conquistar" value={lead.o_que_conquistar} />
+            <Field label="Onde se imagina em 6 meses" value={lead.imagina_6_meses} />
+          </Section>
 
-          {/* Seção 4 - Disponibilidade */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection('availability')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                <span className="font-bold">Disponibilidade</span>
-              </div>
-              {expandedSections.availability ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {expandedSections.availability && (
-              <div className="p-4 pt-0 space-y-3">
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="text-gray-500">Meios de venda:</span>
-                    <p className="font-medium">{lead.meios_venda || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Horas por semana:</span>
-                    <p className="font-medium">{lead.horas_semana || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Quando gostaria de começar:</span>
-                    <p className="font-medium">{lead.quando_comecar || '-'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <Section icon={<Home style={{ width: '13px', height: '13px' }} />} title="Perfil Pessoal">
+            <Field label="Tem filhos" value={lead.tem_filhos} />
+            <Field label="Idade do filho mais novo" value={lead.idade_filho} />
+            <Field label="Rede de apoio" value={lead.rede_apoio} />
+            <Field label="Mora com alguém" value={lead.mora_com} />
+            <Field label="Situação atual" value={lead.situacao_atual} />
+          </Section>
 
-          {/* Seção 5 - Experiência */}
-          <div className="border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection('experience')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Briefcase className="w-4 h-4" />
-                <span className="font-bold">Experiência</span>
-              </div>
-              {expandedSections.experience ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {expandedSections.experience && (
-              <div className="p-4 pt-0 space-y-3">
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="text-gray-500">Experiência em vendas:</span>
-                    <p className="font-medium">{lead.experiencia_vendas || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Já tentou vender semijoia:</span>
-                    <p className="font-medium">{lead.tentou_semijoia || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Para começar no consignado:</span>
-                    <p className="font-medium">{lead.consignado || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Nome está negativado:</span>
-                    <p className="font-medium">{lead.negativado || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Aceita regras do consignado:</span>
-                    <p className="font-medium">{lead.aceita_regras || '-'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <Section icon={<Clock style={{ width: '13px', height: '13px' }} />} title="Disponibilidade">
+            <Field label="Meios de venda" value={lead.meios_venda} />
+            <Field label="Horas por semana" value={lead.horas_semana} />
+            <Field label="Quando quer começar" value={lead.quando_comecar} />
+          </Section>
 
-          {/* Seção 6 - CRM */}
-          <div className="border border-gray-200 rounded-lg">
+          <Section icon={<Briefcase style={{ width: '13px', height: '13px' }} />} title="Experiência">
+            <Field label="Experiência em vendas" value={lead.experiencia_vendas} />
+            <Field label="Já tentou vender semijoia" value={lead.tentou_semijoia} />
+            <Field label="Para começar no consignado" value={lead.consignado} />
+            <Field label="Nome negativado" value={lead.negativado} />
+            <Field label="Aceita regras do consignado" value={lead.aceita_regras} />
+          </Section>
+
+          {/* Observações */}
+          <div style={{ padding: '16px 20px 28px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(0,0,0,0.28)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '9px' }}>
+              Observações
+            </p>
+            <textarea
+              value={obs}
+              onChange={e => { setObs(e.target.value); setObsChanged(true); }}
+              placeholder="Adicione anotações sobre este lead..."
+              rows={3}
+              style={{
+                width: '100%', padding: '11px 13px',
+                fontSize: '13.5px', lineHeight: 1.55,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                color: 'rgba(0,0,0,0.78)',
+                background: 'rgba(0,0,0,0.025)',
+                border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: '11px', resize: 'none', outline: 'none',
+                transition: 'border-color 0.15s', boxSizing: 'border-box',
+              }}
+              onFocus={e => (e.target.style.borderColor = 'rgba(0,0,0,0.22)')}
+              onBlur={e => (e.target.style.borderColor = 'rgba(0,0,0,0.08)')}
+            />
             <button
-              onClick={() => toggleSection('crm')}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              onClick={handleSaveObs}
+              disabled={saving || !obsChanged}
+              style={{
+                marginTop: '9px', padding: '9px 18px', borderRadius: '10px',
+                background: obsChanged ? '#000' : 'rgba(0,0,0,0.05)',
+                border: 'none',
+                color: obsChanged ? '#fff' : 'rgba(0,0,0,0.28)',
+                fontSize: '13px', fontWeight: 600,
+                cursor: obsChanged ? 'pointer' : 'default',
+                transition: 'all 0.15s', letterSpacing: '-0.01em',
+              }}
             >
-              <div className="flex items-center gap-2">
-                <Award className="w-4 h-4" />
-                <span className="font-bold">CRM</span>
-              </div>
-              {expandedSections.crm ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {saving ? 'Salvando…' : 'Salvar'}
             </button>
-            {expandedSections.crm && (
-              <div className="p-4 pt-0 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <Select value={String(status)} onValueChange={(value) => handleStatusChange(parseInt(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_LABELS.map((label, index) => (
-                        <SelectItem key={index} value={String(index)}>
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[index].dot}`} />
-                            {label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
-                  <Textarea
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Adicione observações sobre este lead..."
-                    className="min-h-[80px]"
-                  />
-                  <Button onClick={handleSaveObservacoes} size="sm" className="mt-2">
-                    Salvar Observações
-                  </Button>
-                </div>
-                
-                <div>
-                  <span className="text-gray-500 text-sm">Histórico de status:</span>
-                  <p className="text-xs text-gray-400 mt-1">Status atual: {STATUS_LABELS[status]}</p>
-                  <p className="text-xs text-gray-400">Data de criação: {lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR') : '-'}</p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
-    </div>
+
+      <style>{`
+        @keyframes ld-fade { from { opacity:0 } to { opacity:1 } }
+        @keyframes ld-up {
+          from { opacity:0; transform:translate(-50%,-47%) scale(0.97) }
+          to   { opacity:1; transform:translate(-50%,-50%) scale(1) }
+        }
+      `}</style>
+    </>
   );
 }

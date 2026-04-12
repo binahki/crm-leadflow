@@ -1,449 +1,447 @@
-import { useState, useMemo, useEffect, memo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { AppLayout } from '@/components/AppLayout';
-import { MetricCard } from '@/components/MetricCard';
-import { useAppStore, Lead, STATUS_LABELS, STATUS_COLORS } from '@/stores/appStore';
-import { useAuth } from '@/hooks/useAuth';
-import { useGreeting } from '@/hooks/useGreeting';
-import { useMetaAds } from '@/hooks/useMetaAds';
-import { supabase } from '@/integrations/supabase/client';
-import { 
-  DollarSign, 
-  Users, 
-  TrendingUp, 
-  Target, 
-  MessageCircle, 
-  RefreshCw,
-  TrendingDown,
-  ArrowUp,
-  ArrowDown,
-  Clock
+import {
+  Bell, Search, RefreshCw, ChevronDown, Flame,
+  CheckCircle2, Users, MessageCircle, Calendar,
 } from 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip,
+} from 'recharts';
 import { toast } from 'sonner';
-import { getRelativeTime } from '@/utils/relativeTime';
+import { AppLayout } from '@/components/AppLayout';
+import { useAppStore, Lead, STATUS_LABELS } from '@/stores/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { getRelativeTime, formatDDMM } from '@/utils/relativeTime';
 
-function formatCurrency(v: number) {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const AVATAR_COLORS = [
+  'bg-rose-400','bg-yellow-400','bg-emerald-400','bg-orange-400',
+  'bg-cyan-400','bg-violet-400','bg-blue-400','bg-pink-400',
+];
+const FUNNEL_COLORS = [
+  'from-blue-500 to-blue-400','from-blue-400 to-blue-300',
+  'from-violet-400 to-violet-300','from-emerald-500 to-emerald-400',
+];
+const PERIOD_FILTERS = [
+  { label: 'Hoje',          value: 'today' },
+  { label: 'Ontem',         value: 'yesterday' },
+  { label: '7 dias',        value: '7days' },
+  { label: '30 dias',       value: '30days' },
+  { label: 'Este mês',      value: 'month' },
+  { label: 'Personalizado', value: 'custom' },
+];
+const TOTAL_SPEND = 86.56;
+const STORAGE_KEY = 'dashboard_period';
+const STORAGE_CUSTOM_KEY = 'dashboard_custom_range';
+
+function avatarColor(name: string) {
+  if (!name) return AVATAR_COLORS[0];
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
+function initials(name: string) {
+  if (!name) return '?';
+  return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
+function parseLeadDate(str?: string): Date {
+  if (!str) return new Date(0);
+  if (str.includes('T') || str.endsWith('Z')) return new Date(str);
+  if (str.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+    const [dp, tp] = str.split(' ');
+    const [d, m, y] = dp.split('/');
+    const [h = '0', min = '0'] = (tp || '').split(':');
+    return new Date(Number(y), Number(m)-1, Number(d), Number(h), Number(min));
+  }
+  return new Date(str);
+}
+function startOf(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string): Lead[] {
+  const now = new Date();
+  const today = startOf(now);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const inRange = (l: Lead, from: Date, to: Date) => {
+    const d = parseLeadDate(l.created_at);
+    return d >= from && d < to;
+  };
+  switch (period) {
+    case 'today': return leads.filter(l => inRange(l, today, tomorrow));
+    case 'yesterday': { const y = new Date(today); y.setDate(today.getDate()-1); return leads.filter(l => inRange(l, y, today)); }
+    case '7days':  { const a = new Date(today); a.setDate(today.getDate()-7);  return leads.filter(l => inRange(l, a, tomorrow)); }
+    case '30days': { const a = new Date(today); a.setDate(today.getDate()-30); return leads.filter(l => inRange(l, a, tomorrow)); }
+    case 'month':  { const f = new Date(now.getFullYear(), now.getMonth(), 1); return leads.filter(l => inRange(l, f, tomorrow)); }
+    case 'custom': {
+      if (!customFrom || !customTo) return leads;
+      const from = startOf(new Date(customFrom));
+      const to = new Date(startOf(new Date(customTo))); to.setDate(to.getDate()+1);
+      return leads.filter(l => inRange(l, from, to));
+    }
+    default: return leads;
+  }
+}
+function buildChartData(leads: Lead[], period: string, customFrom?: string, customTo?: string) {
+  const now = new Date();
+  const today = startOf(now);
+  let days = 30;
+  let startDate = new Date(today); startDate.setDate(today.getDate()-29);
+  if (period === 'today')     { days = 1; startDate = today; }
+  else if (period === 'yesterday') { days = 1; startDate = new Date(today); startDate.setDate(today.getDate()-1); }
+  else if (period === '7days')  { days = 7;  startDate = new Date(today); startDate.setDate(today.getDate()-6); }
+  else if (period === '30days') { days = 30; startDate = new Date(today); startDate.setDate(today.getDate()-29); }
+  else if (period === 'month')  { startDate = new Date(now.getFullYear(), now.getMonth(), 1); days = today.getDate(); }
+  else if (period === 'custom' && customFrom && customTo) {
+    const f = startOf(new Date(customFrom)); const t = startOf(new Date(customTo));
+    days = Math.max(1, Math.round((t.getTime()-f.getTime())/86400000)+1);
+    startDate = f;
+  }
+  const map: Record<string,number> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startDate); d.setDate(startDate.getDate()+i);
+    map[d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})] = 0;
+  }
+  leads.forEach(l => {
+    const k = parseLeadDate(l.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    if (k in map) map[k]++;
+  });
+  return Object.entries(map).map(([date,leads]) => ({date,leads}));
 }
 
-const DashboardPage = memo(function DashboardPage() {
-  const { leads, setLeads, period, setPeriod } = useAppStore();
+export default function Dashboard() {
+  const { leads, setLeads } = useAppStore();
   const { user } = useAuth();
-  const firstName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0];
-  const greeting = useGreeting(firstName);
-  const { metrics, loading: metaLoading, error: metaError, lastUpdated, refreshData } = useMetaAds();
-  const [loading, setLoading] = useState(true);
-  const [hasShownInitialToast, setHasShownInitialToast] = useState(false);
+  const firstName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || 'Usuário';
+
+  const savedPeriod = localStorage.getItem(STORAGE_KEY) || '30days';
+  const savedCustom = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_KEY) || '{}'); } catch { return {}; } })();
+
+  const [selectedPeriod,   setSelectedPeriod]   = useState(savedPeriod);
+  const [customFrom,       setCustomFrom]       = useState<string>(savedCustom.from || '');
+  const [customTo,         setCustomTo]         = useState<string>(savedCustom.to || '');
+  const [showDropdown,     setShowDropdown]     = useState(false);
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
+  const [isRefreshing,     setIsRefreshing]     = useState(false);
+  const [loading,          setLoading]          = useState(true);
+  const [,                 setTick]             = useState(0);
+  const [recentLeads,      setRecentLeads]      = useState<Lead[]>([]);
+  const [proximasAcoes,    setProximasAcoes]    = useState<Lead[]>([]);
+  const [cardsLoading,     setCardsLoading]     = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchLeads = async () => {
-      const { data } = await supabase
-        .from('leads')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (data) {
-        setLeads(data as unknown as Lead[]);
-        // Only show toast on initial load, not on real-time updates
-        if (data.length > 0 && !hasShownInitialToast) {
-          toast.success(`${data.length} leads carregados com sucesso!`);
-          setHasShownInitialToast(true);
-        }
-      }
-      setLoading(false);
-    };
-    fetchLeads();
-
-    // Real-time subscription
-    const channel = supabase
-      .channel('leads-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
-        const newLead = payload.new as unknown as Lead;
-        useAppStore.getState().addLead(newLead);
-        // Show notification for new leads only
-        toast.success(`Novo lead! ${newLead.nome} de ${newLead.cidade}`, {
-          action: {
-            label: 'WhatsApp',
-            onClick: () => window.open(`https://wa.me/${newLead.whatsapp?.replace(/\D/g, '')}`, '_blank')
-          }
-        });
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    function close(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowDropdown(false);
+    }
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
   }, []);
 
-  // Generate chart data (last 30 days)
-  const chartData = useMemo(() => {
-    const days: Record<string, number> = {};
-    const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      days[key] = 0;
-    }
-    leads.forEach((lead) => {
-      if (lead.created_at) {
-        const d = new Date(lead.created_at);
-        const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        if (days[key] !== undefined) days[key]++;
-      }
-    });
-    return Object.entries(days).map(([date, count]) => ({ date, leads: count }));
-  }, [leads]);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t+1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
-  const recentLeads = leads.slice(0, 5);
-  const totalLeads = leads.length;
-  const totalSpend = metrics.spend;
-  const cpl = totalLeads > 0 && totalSpend > 0 ? totalSpend / totalLeads : metrics.cpl;
-  const conversionRate = totalLeads > 0
-    ? ((leads.filter((l) => l.status === 3).length / totalLeads) * 100).toFixed(1)
-    : '0';
+  function selectPeriod(value: string) {
+    if (value === 'custom') { setShowCustomPicker(true); setShowDropdown(false); return; }
+    setSelectedPeriod(value);
+    localStorage.setItem(STORAGE_KEY, value);
+    setShowDropdown(false);
+  }
 
-  // Calculate additional metrics
-  const leadsPerHour = leads.length > 0 ? (leads.length / 24).toFixed(1) : '0';
-  const roi = totalSpend > 0 ? ((leads.filter(l => l.status === 3).length * 100) / totalSpend).toFixed(1) : '0';
+  function applyCustomPeriod() {
+    if (!customFrom || !customTo) { toast.error('Selecione as duas datas'); return; }
+    if (new Date(customFrom) > new Date(customTo)) { toast.error('Data inicial maior que a final'); return; }
+    setSelectedPeriod('custom');
+    localStorage.setItem(STORAGE_KEY, 'custom');
+    localStorage.setItem(STORAGE_CUSTOM_KEY, JSON.stringify({ from: customFrom, to: customTo }));
+    setShowCustomPicker(false);
+  }
+
+  const fetchCards = async () => {
+    setCardsLoading(true);
+    const { data, error } = await supabase.from('leads').select('id, nome, whatsapp, cidade, status, created_at');
+    if (error) { console.error('[Dashboard] fetchCards:', error.message); setCardsLoading(false); return; }
+    const all = (data || []) as unknown as Lead[];
+    const recentes = [...all].sort((a,b) => parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5);
+    const aguardando = [...all]
+      .filter(l => { const s = l.status; return s===0||s===null||s===undefined||(s as unknown as string)==='0'||(s as unknown as string)===''; })
+      .sort((a,b) => parseLeadDate(a.created_at).getTime()-parseLeadDate(b.created_at).getTime())
+      .slice(0,4);
+    setRecentLeads(recentes);
+    setProximasAcoes(aguardando);
+    setCardsLoading(false);
+  };
+
+  useEffect(() => {
+    const ch = supabase.channel('dashboard-rt')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, p => {
+        const nl = p.new as unknown as Lead;
+        useAppStore.getState().addLead(nl);
+        fetchCards();
+        toast.success(`Novo lead: ${nl.nome}`, {
+          action: { label: 'WhatsApp', onClick: () => window.open(`https://wa.me/${nl.whatsapp?.replace(/\D/g,'')}`, '_blank') },
+        });
+      }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('leads').select('*').order('created_at',{ascending:false})
+      .then(({data,error}) => {
+        if (error) console.error('[Dashboard] fetchLeads:', error.message);
+        if (data) setLeads(data as unknown as Lead[]);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    fetchCards();
+  }, [user?.id]); // eslint-disable-line
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    const [{data}] = await Promise.all([supabase.from('leads').select('*').order('created_at',{ascending:false}), fetchCards()]);
+    if (data) setLeads(data as unknown as Lead[]);
+    setTimeout(() => setIsRefreshing(false), 600);
+  }
+
+  const filtered = useMemo(() => filterByPeriod(leads, selectedPeriod, customFrom, customTo), [leads, selectedPeriod, customFrom, customTo]);
+  const totalLeads = filtered.length;
+  const converted  = filtered.filter(l => Number(l.status) === 3).length;
+  const cpl        = totalLeads > 0 ? TOTAL_SPEND/totalLeads : 0;
+  const convRate   = totalLeads > 0 ? ((converted/totalLeads)*100).toFixed(1) : '0.0';
+  const leadsChartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
+  const funnelStages = useMemo(() => [
+    { stage: STATUS_LABELS[0], value: filtered.filter(l => !l.status||Number(l.status)===0).length, color: FUNNEL_COLORS[0] },
+    { stage: STATUS_LABELS[1], value: filtered.filter(l => Number(l.status)===1).length,             color: FUNNEL_COLORS[1] },
+    { stage: STATUS_LABELS[2], value: filtered.filter(l => Number(l.status)===2).length,             color: FUNNEL_COLORS[2] },
+    { stage: STATUS_LABELS[3], value: converted,                                                      color: FUNNEL_COLORS[3] },
+  ], [filtered, converted]);
+
+  function getGreeting() { const h=new Date().getHours(); return h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'; }
+
+  const periodLabel = selectedPeriod === 'custom' && customFrom && customTo
+    ? `${new Date(customFrom).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} – ${new Date(customTo).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}`
+    : PERIOD_FILTERS.find(p => p.value === selectedPeriod)?.label ?? '30 dias';
 
   return (
-    <AppLayout leadCount={totalLeads}>
-      <div className="p-6 space-y-6">
-        {/* Meta Ads Empty State */}
-        {metaError && (
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white mx-auto mb-4">
-                <TrendingDown className="w-6 h-6" />
+    <AppLayout leadCount={leads.length}>
+      <div className="p-7 space-y-6">
+
+        {/* Hero */}
+        <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 rounded-2xl p-5 shadow-lg shadow-blue-600/20">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Flame className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold font-display mb-2">Integração com Meta Ads</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Configure sua integração com o Facebook Ads para visualizar métricas de campanha em tempo real.
-              </p>
-              <Button 
-                onClick={() => window.location.href = '/configuracoes'}
-                className="backdrop-blur-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg"
-              >
-                Configurar Integração
-              </Button>
+              <div>
+                <h1 className="text-xl font-bold text-white">{getGreeting()}, {firstName}! Seus resultados em tempo real 🔥</h1>
+                <p className="text-xs text-blue-100 mt-0.5">{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowDropdown(v => !v)}
+                  className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+                >
+                  {periodLabel}
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showDropdown?'rotate-180':''}`} />
+                </button>
+                {showDropdown && (
+                  <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 min-w-[180px] z-50">
+                    {PERIOD_FILTERS.map(f => (
+                      <button key={f.value} onClick={() => selectPeriod(f.value)}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${selectedPeriod===f.value?'text-blue-600 font-semibold bg-blue-50':'text-gray-700'}`}
+                      >
+                        {f.value==='custom' && <Calendar className="w-3.5 h-3.5" />}
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={handleRefresh} className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+                <RefreshCw className={`w-4 h-4 ${isRefreshing?'animate-spin':''}`} /> Atualizar
+              </button>
+              <div className="flex items-center gap-1.5 ml-1">
+                <button className="w-10 h-10 bg-white/15 hover:bg-white/25 rounded-xl flex items-center justify-center transition-all"><Search className="w-5 h-5 text-white" /></button>
+                <button className="relative w-10 h-10 bg-white/15 hover:bg-white/25 rounded-xl flex items-center justify-center transition-all">
+                  <Bell className="w-5 h-5 text-white" />
+                  {leads.length>0 && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-blue-500" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Custom period picker */}
+        {showCustomPicker && (
+          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <p className="text-sm font-semibold text-gray-700 mb-4">Período personalizado</p>
+            <div className="flex items-end gap-4 flex-wrap">
+              <div>
+                <label className="text-xs text-gray-400 font-medium block mb-1">Data inicial</label>
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium block mb-1">Data final</label>
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 transition-colors" />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={applyCustomPeriod} size="sm" className="rounded-xl">Aplicar</Button>
+                <Button onClick={() => setShowCustomPicker(false)} variant="outline" size="sm" className="rounded-xl">Cancelar</Button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Header with Apple glassmorphism design */}
-        <div className="flex items-center justify-between">
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold font-display tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                {greeting}
-              </h1>
-              {metaLoading && (
-                <div className="w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">Visão geral dos seus leads e campanhas</p>
-            {lastUpdated && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                <Clock className="w-3 h-3" />
-                Atualizado há {Math.floor((Date.now() - lastUpdated.getTime()) / 60000)} min
+        {/* Metrics */}
+        <div className="grid grid-cols-4 gap-5">
+          {[
+            { label:'Gasto Total',    value:`R$ ${TOTAL_SPEND.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, sub:'Valor investido',                    icon:<span className="text-blue-600 font-semibold text-sm">R$</span>, bg:'bg-blue-50' },
+            { label:'Leads',          value:loading?'…':String(totalLeads),                                         sub:`Período: ${periodLabel}`,             icon:<Users className="w-4 h-4 text-emerald-600" />,                  bg:'bg-emerald-50' },
+            { label:'Custo por Lead', value:loading?'…':`R$ ${cpl.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`,              sub:`Baseado em ${totalLeads} leads`,          icon:<span className="text-amber-600 font-semibold text-xs">CPL</span>,bg:'bg-amber-50' },
+            { label:'Aprovados',      value:loading?'…':String(converted),                                          sub:`${convRate}% taxa de conversão`,      icon:<CheckCircle2 className="w-4 h-4 text-violet-600" />,            bg:'bg-violet-50' },
+          ].map((c,i) => (
+            <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-gray-500">{c.label}</span>
+                <div className={`w-9 h-9 ${c.bg} rounded-xl flex items-center justify-center`}>{c.icon}</div>
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={refreshData}
-              disabled={metaLoading}
-              className="backdrop-blur-xl bg-white/60 dark:bg-white/5 border border-white/20 dark:border-white/10"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${metaLoading ? 'animate-spin' : ''}`} />
-              {metaLoading ? 'Carregando...' : 'Atualizar'}
-            </Button>
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[160px] h-9 backdrop-blur-xl bg-white/60 dark:bg-white/5 border border-white/20 dark:border-white/10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Hoje</SelectItem>
-                <SelectItem value="last_7d">Últimos 7 dias</SelectItem>
-                <SelectItem value="last_30d">Últimos 30 dias</SelectItem>
-                <SelectItem value="last_90d">Últimos 90 dias</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <p className="text-2xl font-bold text-gray-900">{c.value}</p>
+              <p className="text-xs mt-1 text-gray-400">{c.sub}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Metric Cards with SaaS American style */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-500">Gasto Total</div>
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                <DollarSign className="w-4 h-4 text-blue-600" />
-              </div>
+        {/* Chart + Funnel */}
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-8 bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="mb-5">
+              <h3 className="font-semibold text-gray-900 text-base">Leads por Dia</h3>
+              <p className="text-[13px] text-gray-400">{periodLabel}</p>
             </div>
-            <div className="space-y-2">
-              <div className="text-3xl font-bold text-gray-900">
-                {metaLoading ? (
-                  <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
-                ) : (
-                  `R$ ${formatCurrency(totalSpend)}`
-                )}
-              </div>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="text-green-600 font-medium">+12.5%</span>
-                <span className="text-gray-500">vs. período anterior</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-500">Leads Aprovados</div>
-              <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
-                <Users className="w-4 h-4 text-green-600" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-3xl font-bold text-gray-900">{totalLeads}</div>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="text-green-600 font-medium">+8.2%</span>
-                <span className="text-gray-500">vs. período anterior</span>
-              </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={leadsChartData} margin={{top:4,right:4,left:-20,bottom:0}}>
+                  <defs>
+                    <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="date" tick={{fill:'#9ca3af',fontSize:11}} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{fill:'#9ca3af',fontSize:11}} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{background:'#fff',border:'none',borderRadius:'12px',fontSize:'12px',boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}} formatter={v => [`${v} leads`,'Leads']} />
+                  <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#colorLeads)" dot={false} activeDot={{r:4,fill:'#3b82f6'}} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-500">CPL Médio</div>
-              <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-purple-600" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-3xl font-bold text-gray-900">
-                {metaLoading ? (
-                  <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
-                ) : (
-                  cpl > 0 ? `R$ ${formatCurrency(cpl)}` : '-'
-                )}
-              </div>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="text-red-600 font-medium">-3.1%</span>
-                <span className="text-gray-500">vs. período anterior</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-500">Taxa de Conversão</div>
-              <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
-                <Target className="w-4 h-4 text-orange-600" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-3xl font-bold text-gray-900">{conversionRate}%</div>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="text-green-600 font-medium">+5.7%</span>
-                <span className="text-gray-500">vs. período anterior</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Funnel Summary and Response Rate Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Resumo do Funil */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumo do Funil</h3>
+          <div className="col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="font-semibold text-gray-900 text-base mb-1">Funil de Conversão</h3>
+            <p className="text-[13px] text-gray-400 mb-5">{periodLabel}</p>
             <div className="space-y-4">
-              {STATUS_LABELS.map((label, index) => {
-                const count = leads.filter(l => l.status === index).length;
-                const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0;
+              {funnelStages.map((item,i) => {
+                const widths=[100,75,50,30];
                 return (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[index].dot}`} />
-                      <span className="text-sm font-medium text-gray-700">{label}</span>
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="w-full flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-gray-500">{item.stage}</span>
+                      <span className="text-xs font-semibold text-gray-900">{item.value}</span>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm font-semibold text-gray-900">{count}</span>
-                      <div className="w-24 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${STATUS_COLORS[index].bg.replace('bg-', 'bg-').replace('/20', '/100')}`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
+                    <div className={`h-10 bg-gradient-to-r ${item.color} rounded-lg relative overflow-hidden`} style={{width:`${widths[i]}%`}}>
+                      <div className="absolute inset-0 bg-white/10" />
+                      {item.value>0 && <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-semibold">{item.value}</span>}
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-
-          {/* Taxa de Resposta */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Taxa de Resposta</h3>
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {totalLeads > 0 ? Math.round((leads.filter(l => l.wa_sent).length / totalLeads) * 100) : 0}%
-                </div>
-                <p className="text-sm text-gray-500 mt-1">Taxa de resposta no WhatsApp</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="font-semibold text-gray-900">{leads.filter(l => l.wa_sent).length}</div>
-                  <div className="text-gray-500">Mensagens enviadas</div>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="font-semibold text-gray-900">{totalLeads}</div>
-                  <div className="text-gray-500">Total de leads</div>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 text-center">
-                {leads.filter(l => l.wa_sent).length} de {totalLeads} leads receberam mensagem no WhatsApp
-              </div>
+            <div className="mt-8 pt-4 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-sm text-gray-500">Taxa de conversão</span>
+              <span className="text-2xl font-bold text-blue-600">{convRate}%</span>
             </div>
           </div>
         </div>
 
-        {/* Additional Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-bold font-display">{roi}%</div>
-                <div className="text-sm text-muted-foreground">ROI Estimado</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                <ArrowUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
+        {/* Leads recentes + Próximas ações */}
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-7 bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-semibold text-gray-900 text-base">Leads Recentes</h3>
+              <Link to="/leads" className="text-blue-600 text-sm font-medium hover:underline">Ver todos</Link>
             </div>
+            {cardsLoading
+              ? <div className="space-y-3 py-2">{[...Array(3)].map((_,i) => <div key={i} className="h-12 bg-gray-50 rounded-xl animate-pulse" />)}</div>
+              : recentLeads.length===0
+                ? <p className="text-sm text-gray-400 text-center py-8">Nenhum lead ainda.</p>
+                : recentLeads.map(lead => {
+                    const st=Number(lead.status??0);
+                    const statusLabel=STATUS_LABELS[st]??'Aguardando';
+                    const sc=st===0?'bg-amber-50 text-amber-600':st===3?'bg-emerald-50 text-emerald-600':'bg-blue-50 text-blue-600';
+                    return (
+                      <div key={lead.id} className="flex items-center gap-4 py-3.5 border-b border-gray-50 last:border-0">
+                        <Avatar className={`w-10 h-10 flex-shrink-0 ${avatarColor(lead.nome)}`}>
+                          <AvatarFallback className="bg-transparent text-white font-semibold text-sm">{initials(lead.nome)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 text-sm truncate">{lead.nome||'Lead sem nome'}</p>
+                          <p className="text-xs text-gray-400 truncate">{lead.cidade||'—'}</p>
+                        </div>
+                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full whitespace-nowrap ${sc}`}>{statusLabel}</span>
+                        <span className="text-xs text-gray-400 w-16 text-right flex-shrink-0">{getRelativeTime(lead.created_at)}</span>
+                        <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank')} className="w-8 h-8 rounded-lg hover:bg-gray-50 flex items-center justify-center transition-colors flex-shrink-0">
+                          <MessageCircle className="w-4 h-4 text-gray-400 hover:text-emerald-500 transition-colors" />
+                        </button>
+                      </div>
+                    );
+                  })
+            }
           </div>
 
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-bold font-display">{leadsPerHour}/h</div>
-                <div className="text-sm text-muted-foreground">Velocidade Leads</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
+          <div className="col-span-5 bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="mb-5">
+              <h3 className="font-semibold text-gray-900 text-base">Próximas Ações</h3>
+              <p className="text-[13px] text-gray-400">Leads aguardando há mais tempo</p>
             </div>
-          </div>
-
-          <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-bold font-display">{metrics.ctr.toFixed(2)}%</div>
-                <div className="text-sm text-muted-foreground">CTR Campanhas</div>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chart with Apple glassmorphism */}
-        <div className="backdrop-blur-xl bg-white/60 dark:bg-white/5 rounded-2xl p-6 border border-white/20 dark:border-white/10 shadow-lg">
-          <h2 className="text-sm font-semibold font-display mb-4">Leads aprovados últimos 30 dias</h2>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="leadGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.6} />
-                    <stop offset="95%" stopColor="#dbeafe" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '12px',
-                    color: '#1e293b',
-                    fontSize: '12px',
-                    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)',
-                  }}
-                />
-                <Area type="monotone" dataKey="leads" stroke="#3b82f6" fill="url(#leadGradient)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Recent Leads */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Leads Recentes</h2>
-            <Link
-              to="/leads"
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Ver todos
+            {cardsLoading
+              ? <div className="space-y-3 py-2">{[...Array(3)].map((_,i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
+              : proximasAcoes.length===0
+                ? <p className="text-sm text-gray-400 text-center py-8">Nenhum lead aguardando.</p>
+                : proximasAcoes.map(lead => (
+                    <div key={lead.id} className="flex items-center gap-3 py-4 border-b border-gray-50 last:border-0">
+                      <Avatar className={`w-10 h-10 flex-shrink-0 ${avatarColor(lead.nome)}`}>
+                        <AvatarFallback className="bg-transparent text-white font-semibold text-sm">{initials(lead.nome)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-sm truncate">{lead.nome||'Lead sem nome'}</p>
+                        <p className="text-xs text-gray-400 truncate">{lead.cidade||'—'}</p>
+                      </div>
+                      <div className="text-right mr-1 flex-shrink-0">
+                        <p className="text-xs text-red-500 font-medium">Esperando</p>
+                        <p className="text-xs text-gray-400">{formatDDMM(lead.created_at)}</p>
+                      </div>
+                      <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank')} className="w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center text-white transition-colors flex-shrink-0">
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+            }
+            <Link to="/kanban">
+              <Button variant="outline" className="w-full mt-4 rounded-xl border-gray-200 text-gray-600 hover:bg-gray-50">
+                Ver todos os pendentes
+              </Button>
             </Link>
           </div>
-          <div className="divide-y divide-gray-100">
-            {recentLeads.length === 0 && (
-              <div className="px-6 py-10 text-center text-sm text-gray-500">
-                Nenhum lead ainda. Configure o webhook para começar a receber leads.
-              </div>
-            )}
-            {recentLeads.map((lead) => (
-              <div key={lead.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm font-medium text-gray-900">{lead.nome || 'Sem nome'}</p>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[lead.status !== undefined ? lead.status : 0].bg} ${STATUS_COLORS[lead.status !== undefined ? lead.status : 0].text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${STATUS_COLORS[lead.status !== undefined ? lead.status : 0].dot}`} />
-                      {STATUS_LABELS[lead.status !== undefined ? lead.status : 0]}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-1">
-                    <p className="text-xs text-gray-600">{lead.cidade || 'Sem cidade'}</p>
-                    <p className="text-xs text-gray-500">{getRelativeTime(lead.created_at)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-green-600 hover:bg-green-100 transition-colors"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
+
       </div>
     </AppLayout>
   );
-});
-export default DashboardPage;
+}
