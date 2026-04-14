@@ -104,7 +104,7 @@ function Section({
         transition: 'height 0.28s cubic-bezier(0.4,0,0.2,1)',
         willChange: 'height',
       }}>
-        <div ref={contentRef} style={{ paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div ref={contentRef} style={{ paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '10px', willChange: 'transform' }}>
           {children}
         </div>
       </div>

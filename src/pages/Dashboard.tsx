@@ -57,7 +57,12 @@ const AVATAR_COLORS = ['bg-rose-400', 'bg-yellow-400', 'bg-emerald-400', 'bg-ora
 // ─── Helpers ──────────────────────────────────────────────────
 
 function initials(n: string) { return (n || '').split(' ').slice(0, 2).map((x: string) => x[0]).join('').toUpperCase() || '?'; }
-function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; }
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h >= 5  && h < 12) return 'Bom dia';
+  if (h >= 12 && h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
 
 function parseLeadDate(str?: string | null): Date {
@@ -71,8 +76,14 @@ function parseLeadDate(str?: string | null): Date {
 function relativeTime(str?: string | null): string {
   if (!str) return '—';
   const diff = Date.now() - parseLeadDate(str).getTime();
-  const min = Math.floor(diff / 60000); const h = Math.floor(min / 60); const days = Math.floor(h / 24);
-  if (min < 1) return 'agora'; if (min < 60) return `${min}min`; if (h < 24) return `${h}h`; if (days === 1) return 'ontem'; return `${days}d`;
+  const min = Math.floor(diff / 60000);
+  const h = Math.floor(min / 60);
+  const days = Math.floor(h / 24);
+  if (min < 1)  return 'agora';
+  if (min < 60) return `${min}m`;
+  if (h < 24)   return `${h}h`;
+  if (days === 1) return '1d';
+  return `${days}d`;
 }
 
 function startOfDay(d: Date) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0); }
@@ -591,7 +602,9 @@ export default function Dashboard() {
                           <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>{lead.cidade || '—'}</p>
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st] ?? ''}`}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
-                        <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0 }}>{relativeTime(lead.created_at)}</span>
+                        <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '32px', textAlign: 'right' }}>
+                          {relativeTime(lead.created_at)}
+                        </span>
                         <a href={lead.whatsapp ? `https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}` : '#'} target="_blank" rel="noreferrer"
                           className="w-7 h-7 rounded-full bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center transition-colors flex-shrink-0">
                           <MessageCircle className="w-3.5 h-3.5 text-white" />

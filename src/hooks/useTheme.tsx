@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
+
+// useLayoutEffect para aplicar o tema ANTES da primeira pintura — evita flash
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export function useTheme() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -8,14 +11,16 @@ export function useTheme() {
     return 'light';
   });
 
-  useEffect(() => {
+  // Aplica classe no <html> com useLayoutEffect para evitar flash
+  useIsomorphicLayoutEffect(() => {
     const root = document.documentElement;
+    // Remove ambas antes de adicionar — garante troca simultânea
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
   return { theme, toggleTheme };
 }
