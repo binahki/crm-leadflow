@@ -6,6 +6,8 @@ import {
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const NAV_MAIN = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/', badge: false },
@@ -41,6 +43,39 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === 'true'; } catch { return false; }
   });
+
+  const [showProfile, setShowProfile] = useState(false);
+  const [profName, setProfName] = useState('');
+  const [profEmail, setProfEmail] = useState('');
+  const [profPass, setProfPass] = useState('');
+  const [profLoading, setProfLoading] = useState(false);
+
+  function openProfile() {
+    setProfName(displayName);
+    setProfEmail(userEmail);
+    setProfPass('');
+    setShowProfile(true);
+  }
+
+  async function handleUpdateProfile() {
+    if (!user) return;
+    setProfLoading(true);
+    try {
+      const updates: any = {};
+      if (profName !== displayName) updates.data = { full_name: profName };
+      if (profEmail !== userEmail) updates.email = profEmail;
+      if (profPass.trim()) updates.password = profPass.trim();
+
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) throw error;
+      toast.success('Perfil atualizado com sucesso!');
+      setShowProfile(false);
+    } catch (err: any) {
+      toast.error(`Erro ao atualizar: ${err.message}`);
+    }
+    setProfLoading(false);
+  }
+
 
   function toggle() {
     const next = !collapsed;
@@ -240,8 +275,13 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
 
         {/* User info — expandido */}
         {!isCollapsed && (
-          <div style={{ padding: '10px 12px 2px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '6px' }}>
+          <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
+            <div 
+              onClick={openProfile}
+              style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.12s', marginBottom: '4px' }}
+              onMouseEnter={e => (e.currentTarget.style.background = hovBg)}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
               <div style={{
                 width: '32px', height: '32px', borderRadius: '50%',
                 background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
@@ -259,6 +299,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                 </p>
               </div>
             </div>
+
             <button onClick={signOut} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
               padding: '7px 4px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
@@ -290,6 +331,61 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           </button>
         )}
       </div>
+
+      {/* Profile Modal */}
+      {showProfile && (
+        <>
+          <div onClick={() => setShowProfile(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(3px)', zIndex: 1000 }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            background: isDark ? '#111113' : '#ffffff', border: `1px solid ${isDark ? '#27272a' : '#e5e7eb'}`,
+            borderRadius: '16px', padding: '24px', zIndex: 1001, width: '90%', maxWidth: '360px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)', fontFamily: 'inherit'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: isDark ? '#fff' : '#111' }}>Editar Perfil</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nome</label>
+                <input 
+                  type="text" value={profName} onChange={e => setProfName(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Email</label>
+                <input 
+                  type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nova Senha (opcional)</label>
+                <input 
+                  type="password" value={profPass} onChange={e => setProfPass(e.target.value)} placeholder="Deixe em branco para não alterar"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setShowProfile(false)}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: 'transparent', color: isDark ? '#fff' : '#111', fontWeight: 500, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleUpdateProfile} disabled={profLoading}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: profLoading ? 'default' : 'pointer', opacity: profLoading ? 0.7 : 1 }}
+              >
+                {profLoading ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </aside>
   );
 }
+
