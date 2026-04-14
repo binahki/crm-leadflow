@@ -1,15 +1,11 @@
-import { useState, useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
+import { useAppStore } from '@/stores/appStore';
 
 // useLayoutEffect para aplicar o tema ANTES da primeira pintura — evita flash
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export function useTheme() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
-    }
-    return 'light';
-  });
+  const { theme, toggleTheme } = useAppStore();
 
   // Aplica classe no <html> com useLayoutEffect para evitar flash
   useIsomorphicLayoutEffect(() => {
@@ -20,7 +16,6 @@ export function useTheme() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
-
+  // Se precisar usar apenas isso em componentes, sem o store inteiro
   return { theme, toggleTheme };
 }

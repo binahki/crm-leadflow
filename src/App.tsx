@@ -15,6 +15,7 @@ import WebhookPage from "./pages/Webhook";
 import WhatsAppPage from "./pages/WhatsApp";
 import ConfiguracoesPage from "./pages/Configuracoes";
 import ReportsPage from "./pages/Reports";
+import InvitePage from "./pages/InvitePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
           <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/convidar" element={<ProtectedRoute><InvitePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

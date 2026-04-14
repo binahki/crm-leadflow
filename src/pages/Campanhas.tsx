@@ -205,6 +205,13 @@ export default function CampanhasPage() {
   const [datePreset, setDatePreset] = useState('this_month');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'campanhas' | 'insights'>('campanhas');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check(); window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const load = async () => {
     setLoading(true); setError(false);
@@ -253,9 +260,11 @@ export default function CampanhasPage() {
     color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.12s',
   };
 
+  const pad = isMobile ? '20px 16px' : '32px';
+
   return (
     <AppLayout leadCount={leads.length}>
-      <div style={{ padding: '32px', background: bg, minHeight: '100vh' }}>
+      <div style={{ padding: pad, background: bg, minHeight: '100vh' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -279,7 +288,7 @@ export default function CampanhasPage() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '12px' : '14px', marginBottom: '20px' }}>
           {[
             { label: 'Gasto Total', value: loading ? '…' : `R$ ${fmt(totalSpend)}`, icon: DollarSign, color: '#10b981', bgC: dark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' },
             { label: 'Leads Gerados', value: loading ? '…' : String(totalLeads), icon: Users, color: '#3b82f6', bgC: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff' },

@@ -81,7 +81,10 @@ interface AppState {
   metaAccountId: string;
   metaToken: string;
   period: string;
+  theme: 'light' | 'dark';
 
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleTheme: () => void;
   setLeads: (leads: Lead[]) => void;
   addLead: (lead: Lead) => void;
   updateLead: (id: string, updates: Partial<Lead>) => void;
@@ -99,7 +102,10 @@ export const useAppStore = create<AppState>((set) => ({
   metaAccountId: '1667716164425149',
   metaToken: 'EAASFxUC4PS0BRKyaU0lCw6uFQowDuH9epT4Afru4AxQNbykYcngh80exvpg0yipFBBxJnvdPKiAgJxuUBTBWzyFZCZBaY0EvhiZBIeSGFNrLe8ZAkcCC29Qfsk8ZCci4j87dZBpJKvHf19aKkMp4186ZAW9NG3fKrL4FFte1UFiSVAHlcRqZAmPGKdOnBZAPEurZAxIm37VQan3gMURGVrfrmkn4V4LwohCMplaYqVl5ENpI4MXt2EsXEuANwrs8ni95eO2H0tVd5GFZAcOephEyuBCgAZCvMb0WjS2ljOfZAZBQZDZD',
   period: 'last_30d',
+  theme: (typeof window !== 'undefined' ? (localStorage.getItem('theme') as 'light' | 'dark') || 'light' : 'light'),
 
+  setTheme: (theme) => set({ theme }),
+  toggleTheme: () => set((s) => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
   setLeads: (leads) => set({ leads }),
   addLead: (lead) => set((s) => ({ leads: [lead, ...s.leads] })),
   updateLead: (id, updates) =>

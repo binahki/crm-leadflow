@@ -16,20 +16,20 @@ import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 
 const STATUS_BADGE = [
-  { bg: 'bg-amber-100',   text: 'text-amber-700',   dot: 'bg-amber-500'   },
-  { bg: 'bg-blue-100',    text: 'text-blue-700',     dot: 'bg-blue-500'    },
-  { bg: 'bg-purple-100',  text: 'text-purple-700',   dot: 'bg-purple-500'  },
-  { bg: 'bg-emerald-100', text: 'text-emerald-700',  dot: 'bg-emerald-500' },
+  { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
+  { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+  { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
 ];
 
 const PERIOD_OPTIONS = [
-  { label: 'Todos',         value: 'all'       },
-  { label: 'Hoje',          value: 'today'     },
-  { label: 'Ontem',         value: 'yesterday' },
-  { label: '7 dias',        value: '7days'     },
-  { label: '30 dias',       value: '30days'    },
-  { label: 'Este mês',      value: 'month'     },
-  { label: 'Personalizado', value: 'custom'    },
+  { label: 'Todos', value: 'all' },
+  { label: 'Hoje', value: 'today' },
+  { label: 'Ontem', value: 'yesterday' },
+  { label: '7 dias', value: '7days' },
+  { label: '30 dias', value: '30days' },
+  { label: 'Este mês', value: 'month' },
+  { label: 'Personalizado', value: 'custom' },
 ];
 
 const STATUS_OPTIONS = [
@@ -84,11 +84,11 @@ function normalizeCity(raw: string): string {
   let uf = '';
   if (ufMatch) {
     const candidate = ufMatch[1].toUpperCase();
-    const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+    const UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
     if (UFS.includes(candidate)) { uf = candidate; city = city.slice(0, city.length - ufMatch[0].length).trim(); }
   }
-  const lower = new Set(['de','do','da','dos','das','e','em','com','no','na','nos','nas']);
-  city = city.toLowerCase().replace(/[_\-\/]+/g,' ').replace(/\s+/g,' ').trim().split(' ').map((w,i)=>{if(!w)return'';if(i>0&&lower.has(w))return w;return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+  const lower = new Set(['de', 'do', 'da', 'dos', 'das', 'e', 'em', 'com', 'no', 'na', 'nos', 'nas']);
+  city = city.toLowerCase().replace(/[_\-\/]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').map((w, i) => { if (!w) return ''; if (i > 0 && lower.has(w)) return w; return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
   return uf ? `${city} - ${uf}` : city;
 }
 
@@ -96,14 +96,14 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
   if (period === 'all') return leads;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   switch (period) {
-    case 'today':    return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= todayStart && d <= todayEnd; });
-    case 'yesterday':{const ys=new Date(todayStart);ys.setDate(ys.getDate()-1);const ye=new Date(todayEnd);ye.setDate(ye.getDate()-1);return leads.filter(l=>{const d=parseLeadDate(l.created_at);return d>=ys&&d<=ye;});}
-    case '7days':    {const a=new Date(todayStart);a.setDate(a.getDate()-6);return leads.filter(l=>{const d=parseLeadDate(l.created_at);return d>=a&&d<=todayEnd;});}
-    case '30days':   {const a=new Date(todayStart);a.setDate(a.getDate()-29);return leads.filter(l=>{const d=parseLeadDate(l.created_at);return d>=a&&d<=todayEnd;});}
-    case 'month':    {const f=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0);return leads.filter(l=>{const d=parseLeadDate(l.created_at);return d>=f&&d<=todayEnd;});}
-    case 'custom':   {if(!customFrom||!customTo)return leads;const[fy,fm,fd]=customFrom.split('-').map(Number);const[ty,tm,td]=customTo.split('-').map(Number);if(!fy||!ty)return leads;const f=new Date(fy,fm-1,fd,0,0,0,0);const t=new Date(ty,tm-1,td,23,59,59,999);return leads.filter(l=>{const d=parseLeadDate(l.created_at);return d>=f&&d<=t;});}
+    case 'today': return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= todayStart && d <= todayEnd; });
+    case 'yesterday': { const ys = new Date(todayStart); ys.setDate(ys.getDate() - 1); const ye = new Date(todayEnd); ye.setDate(ye.getDate() - 1); return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= ys && d <= ye; }); }
+    case '7days': { const a = new Date(todayStart); a.setDate(a.getDate() - 6); return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= a && d <= todayEnd; }); }
+    case '30days': { const a = new Date(todayStart); a.setDate(a.getDate() - 29); return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= a && d <= todayEnd; }); }
+    case 'month': { const f = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0); return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= f && d <= todayEnd; }); }
+    case 'custom': { if (!customFrom || !customTo) return leads; const [fy, fm, fd] = customFrom.split('-').map(Number); const [ty, tm, td] = customTo.split('-').map(Number); if (!fy || !ty) return leads; const f = new Date(fy, fm - 1, fd, 0, 0, 0, 0); const t = new Date(ty, tm - 1, td, 23, 59, 59, 999); return leads.filter(l => { const d = parseLeadDate(l.created_at); return d >= f && d <= t; }); }
     default: return leads;
   }
 }
@@ -162,6 +162,9 @@ export default function LeadsPage() {
   const dark = theme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -227,7 +230,7 @@ export default function LeadsPage() {
     if (!newLead.nome.trim() || !newLead.whatsapp.trim()) { toast.error('Nome e WhatsApp são obrigatórios'); return; }
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
-    const existing = allLeads.find(l => l.whatsapp?.replace(/\D/g,'') === phoneClean);
+    const existing = allLeads.find(l => l.whatsapp?.replace(/\D/g, '') === phoneClean);
     if (existing) {
       const { error } = await supabase.from('leads').update({ nome: newLead.nome.trim(), cidade: cidadeNorm }).eq('id', existing.id);
       if (error) { toast.error(`Erro: ${error.message}`); return; }
@@ -268,7 +271,7 @@ export default function LeadsPage() {
     const toExport = selectedIds.size > 0 ? allLeads.filter(l => selectedIds.has(l.id)) : filtered;
     if (!toExport.length) { toast.error('Nenhum lead para exportar'); return; }
     const allKeys = Array.from(new Set(toExport.flatMap(l => Object.keys(l as object))));
-    const rows = toExport.map(l => allKeys.map(k => { const v=(l as any)[k]; if(v===null||v===undefined)return''; const s=String(v).replace(/"/g,'""'); return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s}"`:s; }).join(',')).join('\n');
+    const rows = toExport.map(l => allKeys.map(k => { const v = (l as any)[k]; if (v === null || v === undefined) return ''; const s = String(v).replace(/"/g, '""'); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s; }).join(',')).join('\n');
     const blob = new Blob([allKeys.join(',') + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().split('T')[0]}.csv`; a.click();
   };
@@ -413,16 +416,46 @@ export default function LeadsPage() {
               const sel = selectedIds.has(lead.id);
               return (
                 <div key={lead.id}
-                  onClick={() => setViewingLead(lead)}
+                  onTouchStart={() => {
+                    longPressTriggered.current = false;
+                    pressTimer.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setSelectedIds(prev => {
+                        const n = new Set(prev);
+                        if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id);
+                        return n;
+                      });
+                      if (window.navigator?.vibrate) window.navigator.vibrate(50);
+                    }, 450);
+                  }}
+                  onTouchEnd={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                  onTouchMove={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                  onContextMenu={(e) => { e.preventDefault(); }} // avoid default browser context menu on long press
+                  onClick={() => {
+                    if (longPressTriggered.current) {
+                      longPressTriggered.current = false;
+                      return;
+                    }
+                    if (selectedIds.size > 0) {
+                      const n = new Set(selectedIds);
+                      if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id);
+                      setSelectedIds(n);
+                    } else {
+                      setViewingLead(lead);
+                    }
+                  }}
                   style={{
                     background: cardBg, borderRadius: '12px', padding: '12px 14px',
                     border: `1px solid ${sel ? '#2563eb' : border}`,
                     boxShadow: sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)',
                     cursor: 'pointer', transition: 'all 0.12s',
+                    userSelect: 'none', WebkitUserSelect: 'none',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input type="checkbox" checked={sel} onChange={e => { e.stopPropagation(); const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); }} onClick={e => e.stopPropagation()} style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0 }} />
+                    {selectedIds.size > 0 && (
+                      <input type="checkbox" checked={sel} readOnly style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0, pointerEvents: 'none' }} />
+                    )}
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{getInitials(lead.nome)}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || '—'}</p>
@@ -436,16 +469,6 @@ export default function LeadsPage() {
                       </span>
                       <span style={{ fontSize: '11px', color: txtMid }}>{formatEntrada(lead.created_at)}</span>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }} onClick={e => e.stopPropagation()}>
-                    <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
-                      style={{ flex: 1, padding: '7px', borderRadius: '8px', background: dark ? 'rgba(16,185,129,0.12)' : '#f0fdf4', color: dark ? '#34d399' : '#16a34a', fontSize: '12px', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', textDecoration: 'none' }}>
-                      <MessageCircle style={{ width: '13px', height: '13px' }} /> WhatsApp
-                    </a>
-                    <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }}
-                      style={{ flex: 1, padding: '7px', borderRadius: '8px', background: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff', color: dark ? '#60a5fa' : '#2563eb', fontSize: '12px', fontWeight: 500, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <Edit style={{ width: '13px', height: '13px' }} /> Editar
-                    </button>
                   </div>
                 </div>
               );
@@ -469,7 +492,7 @@ export default function LeadsPage() {
                   <th className="pl-5 pr-2 py-3 w-8">
                     <input type="checkbox" checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.has(l.id))} onChange={e => { const n = new Set(selectedIds); paginatedLeads.forEach(l => e.target.checked ? n.add(l.id) : n.delete(l.id)); setSelectedIds(n); }} style={{ width: '15px', height: '15px', accentColor: '#2563eb' }} />
                   </th>
-                  {['Nome','WhatsApp','Cidade','Status','Entrada','Ações'].map(h => (
+                  {['Nome', 'WhatsApp', 'Cidade', 'Status', 'Entrada', 'Ações'].map(h => (
                     <th key={h} className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
                 </tr>
@@ -498,7 +521,7 @@ export default function LeadsPage() {
                           <p className={`font-medium truncate max-w-[140px] ${bold}`}>{lead.nome || '—'}</p>
                           {obs && obs.trim() && (
                             <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={dark?'#9ca3af':'#6b7280'} strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={dark ? '#9ca3af' : '#6b7280'} strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
                             </div>
                           )}
                         </div>
@@ -513,8 +536,8 @@ export default function LeadsPage() {
                       <td className={`px-4 py-4 text-sm whitespace-nowrap ${muted}`}>{formatEntrada(lead.created_at)}</td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-green-50 inline-flex items-center justify-center text-green-600 hover:bg-green-100 transition-colors"><MessageCircle className="w-4 h-4"/></a>
-                          <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className="w-8 h-8 rounded-lg bg-blue-50 inline-flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors"><Edit className="w-4 h-4"/></button>
+                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-green-50 inline-flex items-center justify-center text-green-600 hover:bg-green-100 transition-colors"><MessageCircle className="w-4 h-4" /></a>
+                          <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className="w-8 h-8 rounded-lg bg-blue-50 inline-flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors"><Edit className="w-4 h-4" /></button>
                         </div>
                       </td>
                     </tr>
@@ -524,10 +547,10 @@ export default function LeadsPage() {
             </table>
             {!isLoading && totalPages > 1 && (
               <div className={`px-6 py-4 border-t ${divider} flex items-center justify-between`}>
-                <p className={`text-sm ${muted}`}>Mostrando {(currentPage-1)*leadsPerPage+1}–{Math.min(currentPage*leadsPerPage,filtered.length)} de {filtered.length}</p>
+                <p className={`text-sm ${muted}`}>Mostrando {(currentPage - 1) * leadsPerPage + 1}–{Math.min(currentPage * leadsPerPage, filtered.length)} de {filtered.length}</p>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  <button onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: currentPage===1?'default':'pointer', opacity: currentPage===1?0.4:1 }}>Anterior</button>
-                  <button onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: currentPage===totalPages?'default':'pointer', opacity: currentPage===totalPages?0.4:1 }}>Próximo</button>
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: currentPage === 1 ? 'default' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }}>Anterior</button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: currentPage === totalPages ? 'default' : 'pointer', opacity: currentPage === totalPages ? 0.4 : 1 }}>Próximo</button>
                 </div>
               </div>
             )}
@@ -543,9 +566,9 @@ export default function LeadsPage() {
           <DialogHeader><DialogTitle style={{ color: dark ? '#fff' : '#111827' }}>Editar Lead</DialogTitle></DialogHeader>
           {editingLead && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
-              <input placeholder="Nome" value={editingLead.nome||''} onChange={e => setEditingLead(l => l&&({...l,nome:e.target.value}))} style={inputStyle} />
-              <PhoneInput value={editingLead.whatsapp||''} onChange={v => setEditingLead(l => l&&({...l,whatsapp:v}))} style={inputStyle} />
-              <input placeholder="Cidade" value={editingLead.cidade||''} onChange={e => setEditingLead(l => l&&({...l,cidade:e.target.value}))} style={inputStyle} />
+              <input placeholder="Nome" value={editingLead.nome || ''} onChange={e => setEditingLead(l => l && ({ ...l, nome: e.target.value }))} style={inputStyle} />
+              <PhoneInput value={editingLead.whatsapp || ''} onChange={v => setEditingLead(l => l && ({ ...l, whatsapp: v }))} style={inputStyle} />
+              <input placeholder="Cidade" value={editingLead.cidade || ''} onChange={e => setEditingLead(l => l && ({ ...l, cidade: e.target.value }))} style={inputStyle} />
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button onClick={handleEditLead} style={{ flex: 1, padding: '10px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>Salvar</button>
                 <button onClick={() => setIsEditOpen(false)} style={{ flex: 1, padding: '10px', borderRadius: '9px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer' }}>Cancelar</button>
