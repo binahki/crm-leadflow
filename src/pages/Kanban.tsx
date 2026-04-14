@@ -13,24 +13,22 @@ import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, Lead } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, User } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
+import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime } from '@/utils/relativeTime';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
+import { useTheme } from '@/hooks/useTheme';
 
 const COLUMNS = [
-  { status: 0, label: 'Aguardando',     border: '#f59e0b', dot: '#f59e0b', bg: '#fffbeb' },
-  { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: '#eff6ff' },
-  { status: 2, label: 'Reunião',        border: '#8b5cf6', dot: '#8b5cf6', bg: '#f5f3ff' },
-  { status: 3, label: 'Aprovado',       border: '#10b981', dot: '#10b981', bg: '#ecfdf5' },
+  { status: 0, label: 'Aguardando',     border: '#f59e0b', dot: '#f59e0b', bg: 'rgba(245,158,11,0.06)' },
+  { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: 'rgba(59,130,246,0.06)' },
+  { status: 2, label: 'Reunião',        border: '#8b5cf6', dot: '#8b5cf6', bg: 'rgba(139,92,246,0.06)' },
+  { status: 3, label: 'Aprovado',       border: '#10b981', dot: '#10b981', bg: 'rgba(16,185,129,0.06)' },
 ];
 
 const AVATAR_COLORS = [
-  'bg-rose-400','bg-yellow-400','bg-emerald-400','bg-orange-400',
-  'bg-cyan-400','bg-violet-400','bg-blue-400','bg-pink-400',
+  '#f43f5e','#f97316','#eab308','#22c55e',
+  '#06b6d4','#6366f1','#ec4899','#8b5cf6',
 ];
 
 function avatarColor(name: string) {
@@ -53,6 +51,55 @@ function parseDate(str?: string): Date {
   return new Date(str);
 }
 
+// ── Obs Badge ─────────────────────────────────────────────────
+
+function ObsBadge({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onPointerDown={e => e.stopPropagation()}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+    >
+      <span style={{
+        display: 'flex', alignItems: 'center', gap: '3px',
+        fontSize: '11.5px', color: '#f59e0b', cursor: 'default',
+        background: 'rgba(245,158,11,0.1)', padding: '2px 6px',
+        borderRadius: '20px', fontWeight: 500,
+      }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        Obs
+      </span>
+      {show && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 7px)', left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#1f2937', color: '#f9fafb',
+          fontSize: '12px', lineHeight: 1.5,
+          padding: '8px 12px', borderRadius: '9px',
+          maxWidth: '220px', minWidth: '100px',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          zIndex: 100, boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+          pointerEvents: 'none',
+        }}>
+          {text}
+          <div style={{
+            position: 'absolute', top: '100%', left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0, height: 0,
+            borderLeft: '5px solid transparent',
+            borderRight: '5px solid transparent',
+            borderTop: '5px solid #1f2937',
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Draggable Card ────────────────────────────────────────────
 
 function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfile }: {
@@ -63,6 +110,9 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
   onViewProfile: (e: React.MouseEvent) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+  const color = avatarColor(lead.nome);
 
   return (
     <div
@@ -70,66 +120,106 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
       {...attributes}
       {...listeners}
       onClick={onCardClick}
-      className="group select-none rounded-xl transition-all"
       style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        padding: '12px',
-        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
+        background: dark ? '#111113' : '#ffffff',
+        border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.07)'}`,
+        borderRadius: '14px',
+        padding: '13px',
+        boxShadow: isDragging
+          ? (dark ? '0 12px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)' : '0 12px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)')
+          : (dark ? '0 1px 4px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.05)'),
         cursor: isDragging ? 'grabbing' : 'grab',
         opacity: isDragging ? 0 : 1,
         touchAction: 'none',
+        userSelect: 'none',
+        transition: 'box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s',
+        willChange: 'box-shadow, opacity',
+        outline: 'none',
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <div className={`w-8 h-8 rounded-full ${avatarColor(lead.nome)} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+          <div style={{
+            width: '34px', height: '34px', borderRadius: '10px',
+            background: color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0,
+            letterSpacing: '-0.01em',
+          }}>
             {initials(lead.nome)}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead sem nome'}</p>
-            <p className="text-xs text-gray-400 truncate">{lead.whatsapp || '—'}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: '13.5px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+              {lead.nome || 'Lead sem nome'}
+            </p>
+            <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+              {lead.whatsapp || '—'}
+            </p>
           </div>
         </div>
         <button
-          className="p-1 text-gray-300 hover:text-gray-600 rounded-lg transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
+          style={{
+            padding: '4px', color: '#d1d5db', border: 'none', background: 'transparent',
+            borderRadius: '7px', cursor: 'pointer', flexShrink: 0,
+            opacity: 0, transition: 'opacity 0.15s, color 0.15s, background 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          className="card-menu-btn"
           onPointerDown={e => e.stopPropagation()}
           onClick={onMenuClick}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#374151'; (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#d1d5db'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
-          <MoreVertical className="w-4 h-4" />
+          <MoreVertical style={{ width: '15px', height: '15px' }} />
         </button>
       </div>
-      <div className="mt-2.5 flex items-center gap-3 flex-wrap">
+
+      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         {lead.cidade && (
-          <span className="flex items-center gap-1 text-xs text-gray-400">
-            <MapPin className="w-3 h-3" />{lead.cidade}
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#9ca3af' }}>
+            <MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />
+            {lead.cidade}
           </span>
         )}
-        <span className="flex items-center gap-1 text-xs text-gray-400">
-          <Clock className="w-3 h-3" />{getRelativeTime(lead.created_at)}
+        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#9ca3af' }}>
+          <Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />
+          {getRelativeTime(lead.created_at)}
         </span>
-        {lead.observacoes && (
-          <span className="flex items-center gap-1 text-xs text-amber-500">
-            <Eye className="w-3 h-3" />Obs
-          </span>
+        {lead.observacoes && lead.observacoes.trim() && (
+          <ObsBadge text={lead.observacoes.trim()} />
         )}
       </div>
-      <div className="mt-3 flex gap-2">
+
+      <div style={{ marginTop: '10px', display: 'flex', gap: '6px' }}>
         <button
-          className="flex-1 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-          style={{ background: '#f0fdf4', color: '#16a34a' }}
+          style={{
+            flex: 1, padding: '6px 0', borderRadius: '8px', border: 'none',
+            background: dark ? 'rgba(16,163,74,0.15)' : '#f0fdf4', color: dark ? '#4ade80' : '#16a34a',
+            fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+            transition: 'background 0.15s',
+          }}
           onPointerDown={e => e.stopPropagation()}
           onClick={onWhatsApp}
+          onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(16,163,74,0.25)' : '#dcfce7')}
+          onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(16,163,74,0.15)' : '#f0fdf4')}
         >
-          <MessageCircle className="w-3 h-3" />WhatsApp
+          <MessageCircle style={{ width: '12px', height: '12px' }} /> WhatsApp
         </button>
         <button
-          className="flex-1 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
+          style={{
+            flex: 1, padding: '6px 0', borderRadius: '8px', border: 'none',
+            background: dark ? 'rgba(255,255,255,0.05)' : '#f8fafc', color: dark ? '#cbd5e1' : '#475569',
+            fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+            transition: 'background 0.15s',
+          }}
           onPointerDown={e => e.stopPropagation()}
           onClick={onViewProfile}
+          onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : '#f1f5f9')}
+          onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : '#f8fafc')}
         >
-          <Eye className="w-3 h-3" />Perfil
+          <Eye style={{ width: '12px', height: '12px' }} /> Perfil
         </button>
       </div>
     </div>
@@ -145,33 +235,58 @@ function DroppableColumn({ col, children, count, isOver }: {
   isOver: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id: String(col.status) });
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
   return (
     <div
-      className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
-      style={{ borderTop: `3px solid ${col.border}` }}
+      style={{
+        display: 'flex', flexDirection: 'column',
+        borderRadius: '16px',
+        border: `1px solid ${isOver ? col.border : dark ? '#1e1e22' : 'rgba(0,0,0,0.07)'}`,
+        background: dark ? '#111113' : '#fafafa',
+        overflow: 'hidden',
+        boxShadow: isOver
+          ? `0 0 0 2px ${col.border}30, 0 4px 16px rgba(0,0,0,0.06)`
+          : dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.04)',
+        transition: 'border-color 0.2s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s cubic-bezier(0.4,0,0.2,1)',
+        borderTop: `3px solid ${col.border}`,
+      }}
     >
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: col.dot }} />
-          <span className="text-sm font-semibold text-gray-800">{col.label}</span>
+      <div style={{
+        padding: '12px 14px',
+        borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: dark ? '#18181b' : '#ffffff',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: col.dot, display: 'inline-block' }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: dark ? '#f4f4f5' : '#1f2937', letterSpacing: '-0.01em' }}>{col.label}</span>
         </div>
-        <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{count}</span>
+        <span style={{
+          fontSize: '12px', fontWeight: 500, color: col.dot,
+          background: `${col.dot}18`, padding: '2px 8px', borderRadius: '20px',
+        }}>{count}</span>
       </div>
       <div
         ref={setNodeRef}
-        className="flex-1 p-3 flex flex-col gap-3 min-h-[200px] max-h-[70vh] overflow-y-auto transition-colors duration-150"
-        style={{ backgroundColor: isOver ? col.bg : 'transparent' }}
+        style={{
+          flex: 1, padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px',
+          minHeight: '120px', maxHeight: '72vh', overflowY: 'auto',
+          background: isOver ? col.bg : 'transparent',
+          transition: 'background 0.2s cubic-bezier(0.4,0,0.2,1)',
+          overflowX: 'hidden',
+        }}
       >
         {children}
         {count === 0 && (
-          <div
-            className="flex-1 flex items-center justify-center text-xs py-8 text-center px-2 rounded-lg border-2 border-dashed transition-colors"
-            style={isOver
-              ? { color: col.dot, borderColor: col.dot }
-              : { color: '#d1d5db', borderColor: '#e5e7eb' }
-            }
-          >
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '12px', padding: '28px 0', textAlign: 'center',
+            borderRadius: '10px', border: `2px dashed ${isOver ? col.dot : 'rgba(0,0,0,0.1)'}`,
+            color: isOver ? col.dot : '#d1d5db',
+            transition: 'color 0.2s, border-color 0.2s',
+          }}>
             {isOver ? 'Solte aqui' : 'Sem leads'}
           </div>
         )}
@@ -183,24 +298,31 @@ function DroppableColumn({ col, children, count, isOver }: {
 // ── Overlay Card (shown while dragging) ──────────────────────
 
 function OverlayCard({ lead }: { lead: Lead }) {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+  const color = avatarColor(lead.nome);
   return (
     <div style={{
-      background: '#ffffff',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: '12px',
-      boxShadow: '0 16px 40px rgba(0,0,0,0.18)',
+      background: dark ? '#18181b' : '#ffffff',
+      border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`,
+      borderRadius: '14px',
+      padding: '13px',
+      boxShadow: '0 20px 50px rgba(0,0,0,0.2), 0 4px 14px rgba(0,0,0,0.1)',
       cursor: 'grabbing',
       width: '260px',
-      transform: 'rotate(2deg)',
+      transform: 'rotate(1.5deg) scale(1.02)',
     }}>
-      <div className="flex items-center gap-2.5">
-        <div className={`w-8 h-8 rounded-full ${avatarColor(lead.nome)} flex items-center justify-center text-white text-xs font-bold`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{
+          width: '34px', height: '34px', borderRadius: '10px', background: color,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: '12px', fontWeight: 700,
+        }}>
           {initials(lead.nome)}
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900 truncate">{lead.nome}</p>
-          <p className="text-xs text-gray-400">{lead.whatsapp}</p>
+          <p style={{ fontSize: '13.5px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', margin: 0 }}>{lead.nome}</p>
+          <p style={{ fontSize: '12px', color: dark ? '#71717a' : '#9ca3af', margin: 0 }}>{lead.whatsapp}</p>
         </div>
       </div>
     </div>
@@ -211,18 +333,18 @@ function OverlayCard({ lead }: { lead: Lead }) {
 
 export default function KanbanPage() {
   const { leads, setLeads, updateLead } = useAppStore();
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
   const [menuLead, setMenuLead] = useState<Lead | null>(null);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
-  const [detailLead, setDetailLead] = useState<Lead | null>(null);
-  const [obs, setObs] = useState('');
-  const [saving, setSaving] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Sensor com delay mínimo para não atrapalhar o click
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
   useEffect(() => {
@@ -234,9 +356,12 @@ export default function KanbanPage() {
   useEffect(() => {
     const ch = supabase.channel('kanban-rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
-        // Só adiciona leads novos, não refaz fetch completo
         const newLead = payload.new as unknown as Lead;
         useAppStore.getState().addLead(newLead);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload) => {
+        const updated = payload.new as unknown as Lead;
+        useAppStore.getState().updateLead(updated.id, updated);
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'leads' }, (payload) => {
         const deleted = payload.old as { id: string };
@@ -266,6 +391,7 @@ export default function KanbanPage() {
   function handleDragStart(e: DragStartEvent) {
     const lead = leads.find(l => l.id === e.active.id);
     if (lead) setActiveLead(lead);
+    setMenuLead(null); // fecha menu ao arrastar
   }
 
   async function handleDragEnd(e: DragEndEvent) {
@@ -273,64 +399,55 @@ export default function KanbanPage() {
     setActiveLead(null);
     setOverColId(null);
 
-    console.log('DRAG END — active:', active.id, 'over:', over?.id);
-
-    if (!over) {
-      console.log('DRAG END — sem destino, cancelando');
-      return;
-    }
+    if (!over) return;
 
     const leadId = active.id as string;
     const targetStatus = parseInt(over.id as string);
-
-    console.log('DRAG END — leadId:', leadId, 'targetStatus:', targetStatus);
-
-    if (isNaN(targetStatus)) {
-      console.log('DRAG END — targetStatus inválido');
-      return;
-    }
+    if (isNaN(targetStatus)) return;
 
     const lead = leads.find(l => l.id === leadId);
-    if (!lead) {
-      console.log('DRAG END — lead não encontrado');
-      return;
-    }
+    if (!lead) return;
 
     const currentStatus = lead.status === null || lead.status === undefined ? 0 : Number(lead.status);
-    console.log('DRAG END — currentStatus:', currentStatus, 'targetStatus:', targetStatus);
+    if (currentStatus === targetStatus) return;
 
-    // Atualiza otimisticamente
+    // Atualização otimista — imediato, sem esperar o Supabase
     updateLead(leadId, { status: targetStatus });
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('leads')
-      .update({ status: String(targetStatus) })
-      .eq('id', leadId)
-      .select();
-
-    console.log('SUPABASE UPDATE — data:', data, 'error:', error);
+      .update({ status: targetStatus })
+      .eq('id', leadId);
 
     if (error) {
       updateLead(leadId, { status: currentStatus });
-      toast.error('Erro ao mover lead: ' + error.message);
+      toast.error('Erro ao mover lead', {
+        description: error.message
+      });
     } else {
       const col = COLUMNS.find(c => c.status === targetStatus);
-      toast.success(`${lead.nome} → ${col?.label}`);
+      toast.success('Status Atualizado', {
+        description: `${lead.nome} movido para ${col?.label}`,
+        duration: 3000,
+      });
     }
   }
 
   async function moveToStatus(lead: Lead, newStatus: number) {
     setMenuLead(null);
-    const currentStatus = lead.status ?? 0;
+    const currentStatus = Number(lead.status ?? 0);
     if (currentStatus === newStatus) return;
     updateLead(lead.id, { status: newStatus });
-    if (detailLead?.id === lead.id) setDetailLead({ ...detailLead, status: newStatus });
     const { error } = await supabase.from('leads').update({ status: newStatus }).eq('id', lead.id);
     if (error) {
       updateLead(lead.id, { status: currentStatus });
       toast.error('Erro ao mover lead');
     } else {
-      toast.success(`${lead.nome} → ${COLUMNS.find(c => c.status === newStatus)?.label}`);
+      const col = COLUMNS.find(c => c.status === newStatus);
+      toast.success('Status Atualizado', {
+        description: `${lead.nome} movido para ${col?.label}`,
+        duration: 3000,
+      });
     }
   }
 
@@ -340,31 +457,26 @@ export default function KanbanPage() {
     if (error) toast.error('Erro ao excluir lead');
     else {
       setLeads(leads.filter(l => l.id !== lead.id));
-      toast.success('Lead excluído');
+      toast.success('Lead removido', {
+        description: `${lead.nome} foi excluído do sistema.`,
+      });
     }
-  }
-
-  async function saveObs() {
-    if (!detailLead) return;
-    setSaving(true);
-    await supabase.from('leads').update({ observacoes: obs }).eq('id', detailLead.id);
-    updateLead(detailLead.id, { observacoes: obs });
-    setDetailLead({ ...detailLead, observacoes: obs });
-    setSaving(false);
-    toast.success('Observação salva!');
   }
 
   return (
     <AppLayout leadCount={leads.length}>
-      <div className="p-7 space-y-6">
-        <div className="flex items-center justify-between">
+      <div style={{ padding: '32px 32px 40px', background: dark ? '#090909' : '#f4f4f5', minHeight: '100vh' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Funil CRM</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Arraste os cards entre colunas para atualizar o status</p>
+            <h1 style={{ fontSize: '22px', fontWeight: 700, color: dark ? '#f4f4f5' : '#111827', margin: 0, letterSpacing: '-0.03em' }}>Funil CRM</h1>
+            <p style={{ fontSize: '13px', color: dark ? '#a1a1aa' : '#9ca3af', marginTop: '3px' }}>
+              Arraste os cards para atualizar o status · Clique para ver o perfil
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Tempo real ativo
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: dark ? '#71717a' : '#9ca3af' }}>
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'kpulse 2s ease-in-out infinite' }} />
+            Tempo real
           </div>
         </div>
 
@@ -375,7 +487,7 @@ export default function KanbanPage() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => { setActiveLead(null); setOverColId(null); }}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', alignItems: 'start' }}>
             {COLUMNS.map(col => {
               const colLeads = getColLeads(col.status);
               return (
@@ -389,10 +501,21 @@ export default function KanbanPage() {
                     <DraggableCard
                       key={lead.id}
                       lead={lead}
-                      onCardClick={() => { setDetailLead(lead); setObs(lead.observacoes || ''); }}
-                      onMenuClick={e => { setMenuLead(lead); setMenuPos({ x: e.clientX, y: e.clientY }); }}
-                      onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank'); }}
-                      onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
+                      // Clicar no card → abre LeadDrawer diretamente
+                      onCardClick={() => setViewingLead(lead)}
+                      onMenuClick={e => {
+                        e.stopPropagation();
+                        setMenuLead(lead);
+                        setMenuPos({ x: e.clientX, y: e.clientY });
+                      }}
+                      onWhatsApp={e => {
+                        e.stopPropagation();
+                        window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank');
+                      }}
+                      onViewProfile={e => {
+                        e.stopPropagation();
+                        setViewingLead(lead);
+                      }}
                     />
                   ))}
                 </DroppableColumn>
@@ -400,118 +523,113 @@ export default function KanbanPage() {
             })}
           </div>
 
-          <DragOverlay>
+          <DragOverlay dropAnimation={{
+            duration: 180,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}>
             {activeLead ? <OverlayCard lead={activeLead} /> : null}
           </DragOverlay>
         </DndContext>
       </div>
 
+      {/* Context menu */}
       {menuLead && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 min-w-[210px]"
-          style={{ left: Math.min(menuPos.x, window.innerWidth - 220), top: Math.min(menuPos.y, window.innerHeight - 320) }}
+          style={{
+            position: 'fixed', zIndex: 60,
+            left: Math.min(menuPos.x, window.innerWidth - 224),
+            top: Math.min(menuPos.y, window.innerHeight - 300),
+            background: dark ? '#111113' : '#ffffff',
+            border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`,
+            borderRadius: '13px',
+            boxShadow: dark ? '0 12px 48px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+            padding: '6px',
+            minWidth: '210px',
+            animation: 'kmenu 0.15s cubic-bezier(0.32,0.72,0,1)',
+          }}
         >
-          <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">Mover para</div>
-          {COLUMNS.map(col => (
-            <button key={col.status} onClick={() => moveToStatus(menuLead, col.status)}
-              disabled={(menuLead.status ?? 0) === col.status}
-              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${(menuLead.status ?? 0) === col.status ? 'text-gray-300 cursor-default' : 'text-gray-700 hover:bg-gray-50'}`}
-            >
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: col.dot }} />
-              {col.label}
-              {(menuLead.status ?? 0) === col.status && <span className="ml-auto text-xs text-gray-300">atual</span>}
-            </button>
-          ))}
-          <div className="my-1 border-t border-gray-100" />
+          <div style={{ padding: '4px 10px 6px', fontSize: '10.5px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Mover para
+          </div>
+          {COLUMNS.map(col => {
+            const isCurrent = Number(menuLead.status ?? 0) === col.status;
+            return (
+              <button key={col.status}
+                onClick={() => moveToStatus(menuLead, col.status)}
+                disabled={isCurrent}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px',
+                  border: 'none', background: 'transparent', cursor: isCurrent ? 'default' : 'pointer',
+                  color: isCurrent ? (dark ? '#3f3f46' : '#d1d5db') : (dark ? '#d4d4d8' : '#374151'), fontSize: '13px',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => { if (!isCurrent) (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc'); }}
+                onMouseLeave={e => { (e.currentTarget.style.background = 'transparent'); }}
+              >
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: isCurrent ? (dark ? '#27272a' : '#e5e7eb') : col.dot, flexShrink: 0, display: 'inline-block' }} />
+                {col.label}
+                {isCurrent && <span style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db' }}>atual</span>}
+              </button>
+            );
+          })}
+
+          <div style={{ height: '1px', background: dark ? '#1e1e22' : 'rgba(0,0,0,0.06)', margin: '4px 0' }} />
+
           <button onClick={() => { setViewingLead(menuLead); setMenuLead(null); }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors">
-            <Eye className="w-4 h-4" /> Ver perfil completo
+            style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: dark ? '#d4d4d8' : '#374151', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', transition: 'background 0.12s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <Eye style={{ width: '14px', height: '14px', color: dark ? '#71717a' : '#6b7280' }} /> Ver perfil completo
           </button>
+
           <button onClick={() => { window.open(`https://wa.me/${menuLead.whatsapp?.replace(/\D/g, '')}`, '_blank'); setMenuLead(null); }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors">
-            <MessageCircle className="w-4 h-4" /> Abrir WhatsApp
+            style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: dark ? '#d4d4d8' : '#374151', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', transition: 'background 0.12s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <MessageCircle style={{ width: '14px', height: '14px', color: dark ? '#71717a' : '#6b7280' }} /> Abrir WhatsApp
           </button>
-          <div className="my-1 border-t border-gray-100" />
+
+          <div style={{ height: '1px', background: dark ? '#1e1e22' : 'rgba(0,0,0,0.06)', margin: '4px 0' }} />
+
           <button onClick={() => deleteLead(menuLead)}
-            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
-            <Trash2 className="w-4 h-4" /> Excluir lead
+            style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#dc2626', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', transition: 'background 0.12s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#fff1f2')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <Trash2 style={{ width: '14px', height: '14px' }} /> Excluir lead
           </button>
         </div>
       )}
 
-      <Dialog open={!!detailLead} onOpenChange={open => !open && setDetailLead(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full ${avatarColor(detailLead?.nome || '')} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
-                {initials(detailLead?.nome || '')}
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">{detailLead?.nome}</p>
-                <p className="text-xs text-gray-400 font-normal">{COLUMNS.find(c => c.status === (detailLead?.status ?? 0))?.label}</p>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          {detailLead && (
-            <div className="space-y-4 mt-1">
-              <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 rounded-xl p-3">
-                <div className="flex items-center gap-2">
-                  <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
-                  <div><p className="text-xs text-gray-400">WhatsApp</p><p className="font-medium text-xs">{detailLead.whatsapp || '—'}</p></div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  <div><p className="text-xs text-gray-400">Cidade</p><p className="font-medium text-xs">{detailLead.cidade || '—'}</p></div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-gray-400" />
-                  <div><p className="text-xs text-gray-400">Entrada</p><p className="font-medium text-xs">{getRelativeTime(detailLead.created_at)}</p></div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <User className="w-3.5 h-3.5 text-gray-400" />
-                  <div><p className="text-xs text-gray-400">Status</p><p className="font-medium text-xs">{COLUMNS.find(c => c.status === (detailLead.status ?? 0))?.label}</p></div>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 font-medium mb-2">Mover para</p>
-                <div className="flex gap-2 flex-wrap">
-                  {COLUMNS.map(col => (
-                    <button key={col.status} onClick={() => moveToStatus(detailLead, col.status)}
-                      disabled={(detailLead.status ?? 0) === col.status}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all disabled:opacity-40 disabled:cursor-default"
-                      style={(detailLead.status ?? 0) === col.status
-                        ? { background: col.bg, color: col.dot, borderColor: col.dot }
-                        : { background: '#f9fafb', color: '#6b7280', borderColor: '#e5e7eb' }
-                      }
-                    >{col.label}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 font-medium block mb-1.5">Observações</label>
-                <Textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Adicionar observação..." rows={3} className="text-sm" />
-                <Button onClick={saveObs} size="sm" className="mt-2" disabled={saving}>{saving ? 'Salvando...' : 'Salvar observação'}</Button>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <a href={`https://wa.me/${detailLead.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex-1">
-                  <Button variant="outline" className="w-full"><MessageCircle className="w-4 h-4 mr-2" />WhatsApp</Button>
-                </a>
-                <Button onClick={() => { setDetailLead(null); setViewingLead(detailLead); }} variant="outline" className="flex-1">
-                  <Eye className="w-4 h-4 mr-2" />Ver perfil
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
+      {/* Lead Drawer — abre tanto ao clicar no card quanto no botão Perfil */}
       <LeadDrawer
         lead={viewingLead}
         isOpen={!!viewingLead}
         onClose={() => setViewingLead(null)}
-        onUpdate={updated => { updateLead(updated.id, updated); setViewingLead(updated); }}
+        onUpdate={updated => {
+          updateLead(updated.id, updated);
+          setViewingLead(updated);
+        }}
       />
+
+      <style>{`
+        @keyframes kpulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.85); }
+        }
+        @keyframes kmenu {
+          from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        /* Revela o botão de menu ao hover no card */
+        div:hover > div > .card-menu-btn {
+          opacity: 1 !important;
+        }
+      `}</style>
     </AppLayout>
   );
 }

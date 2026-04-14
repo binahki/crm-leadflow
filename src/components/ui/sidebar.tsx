@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 const NAV_MAIN = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
-  { icon: Users,           label: 'Leads',     href: '/leads',   showBadge: true },
+  { icon: Users,           label: 'Leads',     href: '/leads' },
   { icon: BarChart3,       label: 'Funil CRM', href: '/kanban' },
 ];
 const NAV_META = [
@@ -89,22 +89,6 @@ export function Sidebar({ leadCount = 0 }: SidebarProps) {
               >
                 <item.icon style={{ width: '16px', height: '16px', flexShrink: 0, strokeWidth: active ? 2.2 : 1.8 }} />
                 <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
-                {'showBadge' in item && item.showBadge && leadCount > 0 && (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    padding: '1px 7px',
-                    borderRadius: '20px',
-                    background: active
-                      ? isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'
-                      : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                    color: active
-                      ? isDark ? '#fff' : '#000'
-                      : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-                  }}>
-                    {leadCount}
-                  </span>
-                )}
               </Link>
             );
           })}
@@ -127,79 +111,46 @@ export function Sidebar({ leadCount = 0 }: SidebarProps) {
       {/* Logo */}
       <div style={{ padding: '24px 16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Icon mark */}
           <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '9px',
+            width: '32px', height: '32px', borderRadius: '9px',
             background: isDark ? '#fff' : '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path
-                d="M3 9 C3 5.5 5.5 3 9 3 C11.5 3 13.5 4.5 14.5 6.5"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <circle cx="9" cy="9" r="2" fill={isDark ? '#000' : '#fff'} />
-              <path
-                d="M9 11 C9 11 6 13 6 15"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M9 11 C9 11 12 13 12 15"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
+              <path d="M3 9 C3 5.5 5.5 3 9 3 C11.5 3 13.5 4.5 14.5 6.5"
+                stroke={isDark ? '#000' : '#fff'} strokeWidth="2" strokeLinecap="round" fill="none"/>
+              <circle cx="9" cy="9" r="2" fill={isDark ? '#000' : '#fff'}/>
+              <path d="M9 11 C9 11 6 13 6 15"
+                stroke={isDark ? '#000' : '#fff'} strokeWidth="2" strokeLinecap="round"/>
+              <path d="M9 11 C9 11 12 13 12 15"
+                stroke={isDark ? '#000' : '#fff'} strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
 
-          {/* Wordmark — "fl∞w" style */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0px' }}>
             <span style={{
-              fontSize: '19px',
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
+              fontSize: '19px', fontWeight: 700, letterSpacing: '-0.04em',
               color: isDark ? '#fff' : '#000',
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
               lineHeight: 1,
-            }}>
-              fl
-            </span>
-            {/* Linked oo */}
+            }}>fl</span>
             <svg width="22" height="16" viewBox="0 0 22 14" style={{ marginBottom: '1px' }}>
-              <ellipse cx="6" cy="7" rx="5" ry="5" fill="none" stroke={isDark ? '#fff' : '#000'} strokeWidth="2.2"/>
+              <ellipse cx="6"  cy="7" rx="5" ry="5" fill="none" stroke={isDark ? '#fff' : '#000'} strokeWidth="2.2"/>
               <ellipse cx="16" cy="7" rx="5" ry="5" fill="none" stroke={isDark ? '#fff' : '#000'} strokeWidth="2.2"/>
-              <line x1="11" y1="4" x2="11" y2="10" stroke={isDark ? '#f5f5f7' : '#f5f5f7'} strokeWidth="1.5"/>
+              <line x1="11" y1="4" x2="11" y2="10" stroke={isDark ? '#0f0f11' : '#f5f5f7'} strokeWidth="1.5"/>
             </svg>
             <span style={{
-              fontSize: '19px',
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
+              fontSize: '19px', fontWeight: 700, letterSpacing: '-0.04em',
               color: isDark ? '#fff' : '#000',
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
               lineHeight: 1,
-            }}>
-              w
-            </span>
+            }}>w</span>
           </div>
         </div>
         <p style={{
           fontSize: '11px',
           color: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)',
-          marginTop: '6px',
-          paddingLeft: '42px',
-          letterSpacing: '0.01em',
+          marginTop: '6px', paddingLeft: '42px', letterSpacing: '0.01em',
         }}>
           CRM Intelligence
         </p>
@@ -216,46 +167,21 @@ export function Sidebar({ leadCount = 0 }: SidebarProps) {
       <div style={{
         padding: '12px 8px',
         borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
+        display: 'flex', flexDirection: 'column', gap: '2px',
       }}>
         {[
-          {
-            icon: isDark ? Sun : Moon,
-            label: isDark ? 'Modo claro' : 'Modo escuro',
-            onClick: toggleTheme,
-            danger: false,
-          },
-          {
-            icon: LogOut,
-            label: 'Sair',
-            onClick: signOut,
-            danger: true,
-          },
+          { icon: isDark ? Sun : Moon, label: isDark ? 'Modo claro' : 'Modo escuro', onClick: toggleTheme, danger: false },
+          { icon: LogOut, label: 'Sair', onClick: signOut, danger: true },
         ].map((item, i) => (
-          <button
-            key={i}
-            onClick={item.onClick}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 12px',
-              borderRadius: '10px',
-              fontSize: '13.5px',
-              fontWeight: 500,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: item.danger
-                ? isDark ? 'rgba(255,80,80,0.7)' : 'rgba(200,0,0,0.5)'
-                : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-              transition: 'all 0.15s ease',
-              textAlign: 'left',
-              letterSpacing: '-0.01em',
-            }}
+          <button key={i} onClick={item.onClick} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '9px 12px', borderRadius: '10px', fontSize: '13.5px', fontWeight: 500,
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: item.danger
+              ? isDark ? 'rgba(255,80,80,0.7)' : 'rgba(200,0,0,0.5)'
+              : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+            transition: 'all 0.15s ease', textAlign: 'left', letterSpacing: '-0.01em',
+          }}
             onMouseEnter={e => {
               (e.currentTarget as HTMLElement).style.background = item.danger
                 ? isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)'

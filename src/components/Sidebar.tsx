@@ -1,109 +1,128 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
-  Webhook, MessageCircle, Settings, Sun, Moon, LogOut,
+  Webhook, MessageCircle, Settings, LogOut, ChevronRight, ChevronLeft,
 } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 
 const NAV_MAIN = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
-  { icon: Users,           label: 'Leads',     href: '/leads',   showBadge: true },
-  { icon: BarChart3,       label: 'Funil CRM', href: '/kanban' },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/', badge: false },
+  { icon: Users, label: 'Leads', href: '/leads', badge: true },
+  { icon: BarChart3, label: 'Funil CRM', href: '/kanban', badge: false },
 ];
 const NAV_META = [
-  { icon: Megaphone, label: 'Campanhas', href: '/campanhas' },
-  { icon: ImageIcon, label: 'Criativos', href: '/criativos' },
+  { icon: Megaphone, label: 'Campanhas', href: '/campanhas', badge: false },
+  { icon: ImageIcon, label: 'Criativos', href: '/criativos', badge: false },
 ];
 const NAV_INT = [
-  { icon: Webhook,       label: 'Webhook',      href: '/webhook' },
-  { icon: MessageCircle, label: 'WhatsApp',      href: '/whatsapp' },
-  { icon: Settings,      label: 'Configurações', href: '/configuracoes' },
+  { icon: Webhook, label: 'Webhook', href: '/webhook', badge: false },
+  { icon: MessageCircle, label: 'WhatsApp', href: '/whatsapp', badge: false },
+  { icon: Settings, label: 'Configurações', href: '/configuracoes', badge: false },
 ];
 
-interface SidebarProps {
-  leadCount?: number;
-}
+const COLLAPSE_KEY = 'sidebar_collapsed';
+
+interface SidebarProps { leadCount?: number; }
 
 export function Sidebar({ leadCount = 0 }: SidebarProps) {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-
   const isDark = theme === 'dark';
+
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === 'true'; } catch { return false; }
+  });
+
+  function toggle() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem(COLLAPSE_KEY, String(next)); } catch { }
+  }
 
   function isActive(href: string) {
     return href === '/' ? location.pathname === '/' : location.pathname.startsWith(href);
   }
 
+  // User info — primeiro e segundo nome
+  const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+  const firstName = user?.user_metadata?.first_name || '';
+  const nameParts = (fullName || firstName).trim().split(/\s+/);
+  const displayName = nameParts.length >= 2
+    ? `${nameParts[0]} ${nameParts[1]}`
+    : nameParts[0] || 'Usuário';
+  const userEmail = user?.email || '';
+  const userInitial = displayName[0]?.toUpperCase() || 'U';
+
+  const sideBg = isDark ? '#0f0f11' : '#ffffff';
+  const sideBdr = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
+  const lblClr = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.36)';
+  const mutClr = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.58)';
+  const hovBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+
   function NavGroup({ label, items }: { label: string; items: typeof NAV_MAIN }) {
     return (
-      <div style={{ marginBottom: '24px' }}>
-        <p style={{
-          fontSize: '10px',
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          padding: '0 12px',
-          marginBottom: '6px',
-          color: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)',
-        }}>
-          {label}
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div style={{ marginBottom: '18px' }}>
+        {!collapsed && (
+          <p style={{
+            fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', padding: '0 12px', marginBottom: '4px',
+            color: lblClr,
+          }}>
+            {label}
+          </p>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
           {items.map(item => {
             const active = isActive(item.href);
             return (
               <Link
                 key={item.href}
                 to={item.href}
+                title={collapsed ? item.label : undefined}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
+                  display: 'flex', alignItems: 'center',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
                   gap: '10px',
-                  padding: '9px 12px',
-                  borderRadius: '10px',
-                  fontSize: '13.5px',
-                  fontWeight: active ? 600 : 500,
+                  padding: collapsed ? '10px 0' : '9px 12px',
+                  borderRadius: '8px',
+                  fontSize: '13.5px', fontWeight: active ? 600 : 500,
                   textDecoration: 'none',
-                  transition: 'all 0.15s ease',
-                  background: active
-                    ? isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)'
-                    : 'transparent',
-                  color: active
-                    ? isDark ? '#fff' : '#000'
-                    : isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)',
+                  transition: 'background 0.12s, color 0.12s',
+                  background: active ? '#2563eb' : 'transparent',
+                  color: active ? '#ffffff' : mutClr,
                 }}
                 onMouseEnter={e => {
                   if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-                    (e.currentTarget as HTMLElement).style.color = isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.75)';
+                    (e.currentTarget as HTMLElement).style.background = hovBg;
+                    (e.currentTarget as HTMLElement).style.color = isDark ? '#fff' : '#111';
                   }
                 }}
                 onMouseLeave={e => {
                   if (!active) {
                     (e.currentTarget as HTMLElement).style.background = 'transparent';
-                    (e.currentTarget as HTMLElement).style.color = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+                    (e.currentTarget as HTMLElement).style.color = mutClr;
                   }
                 }}
               >
-                <item.icon style={{ width: '16px', height: '16px', flexShrink: 0, strokeWidth: active ? 2.2 : 1.8 }} />
-                <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
-                {'showBadge' in item && item.showBadge && leadCount > 0 && (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    padding: '1px 7px',
-                    borderRadius: '20px',
-                    background: active
-                      ? isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'
-                      : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                    color: active
-                      ? isDark ? '#fff' : '#000'
-                      : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-                  }}>
-                    {leadCount}
-                  </span>
+                <item.icon style={{ width: '16px', height: '16px', flexShrink: 0, strokeWidth: active ? 2.2 : 1.7 }} />
+                {!collapsed && (
+                  <>
+                    <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
+                    {item.badge && leadCount > 0 && (
+                      <span style={{
+                        fontSize: '11px', fontWeight: 600,
+                        padding: '1px 7px', borderRadius: '20px',
+                        background: active ? 'rgba(255,255,255,0.22)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'),
+                        color: active ? '#fff' : (isDark ? 'rgba(255,255,255,0.8)' : '#374151'),
+                        minWidth: '22px', textAlign: 'center',
+                      }}>
+                        {leadCount}
+                      </span>
+                    )}
+                  </>
                 )}
               </Link>
             );
@@ -115,166 +134,204 @@ export function Sidebar({ leadCount = 0 }: SidebarProps) {
 
   return (
     <aside style={{
-      width: '220px',
+      width: collapsed ? '60px' : '228px',
       flexShrink: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      background: isDark ? '#0f0f11' : '#f5f5f7',
-      borderRight: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
+      display: 'flex', flexDirection: 'column',
+      background: sideBg,
+      borderRight: `1px solid ${sideBdr}`,
       height: '100vh',
+      transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
+      overflow: 'hidden',
     }}>
 
-      {/* Logo */}
-      <div style={{ padding: '24px 16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Icon mark */}
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '9px',
-            background: isDark ? '#fff' : '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path
-                d="M3 9 C3 5.5 5.5 3 9 3 C11.5 3 13.5 4.5 14.5 6.5"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <circle cx="9" cy="9" r="2" fill={isDark ? '#000' : '#fff'} />
-              <path
-                d="M9 11 C9 11 6 13 6 15"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M9 11 C9 11 12 13 12 15"
-                stroke={isDark ? '#000' : '#fff'}
-                strokeWidth="2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
-          </div>
-
-          {/* Wordmark — "fl∞w" style */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0px' }}>
-            <span style={{
-              fontSize: '19px',
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
-              color: isDark ? '#fff' : '#000',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-              lineHeight: 1,
-            }}>
-              fl
-            </span>
-            {/* Linked oo */}
-            <svg width="22" height="16" viewBox="0 0 22 14" style={{ marginBottom: '1px' }}>
-              <ellipse cx="6" cy="7" rx="5" ry="5" fill="none" stroke={isDark ? '#fff' : '#000'} strokeWidth="2.2"/>
-              <ellipse cx="16" cy="7" rx="5" ry="5" fill="none" stroke={isDark ? '#fff' : '#000'} strokeWidth="2.2"/>
-              <line x1="11" y1="4" x2="11" y2="10" stroke={isDark ? '#f5f5f7' : '#f5f5f7'} strokeWidth="1.5"/>
-            </svg>
-            <span style={{
-              fontSize: '19px',
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
-              color: isDark ? '#fff' : '#000',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-              lineHeight: 1,
-            }}>
-              w
-            </span>
-          </div>
-        </div>
-        <p style={{
-          fontSize: '11px',
-          color: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)',
-          marginTop: '6px',
-          paddingLeft: '42px',
-          letterSpacing: '0.01em',
-        }}>
-          CRM Intelligence
-        </p>
-      </div>
-
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
-        <NavGroup label="Principal"   items={NAV_MAIN} />
-        <NavGroup label="Meta Ads"    items={NAV_META} />
-        <NavGroup label="Integrações" items={NAV_INT}  />
-      </nav>
-
-      {/* Bottom */}
+      {/* ── Header / Logo ── */}
       <div style={{
-        padding: '12px 8px',
-        borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
+        height: '60px',
+        padding: collapsed ? '0' : '0 12px',
+        display: 'flex', alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'space-between',
+        borderBottom: `1px solid ${sideBdr}`,
+        flexShrink: 0,
       }}>
-        {[
-          {
-            icon: isDark ? Sun : Moon,
-            label: isDark ? 'Modo claro' : 'Modo escuro',
-            onClick: toggleTheme,
-            danger: false,
-          },
-          {
-            icon: LogOut,
-            label: 'Sair',
-            onClick: signOut,
-            danger: true,
-          },
-        ].map((item, i) => (
-          <button
-            key={i}
-            onClick={item.onClick}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '9px 12px',
-              borderRadius: '10px',
-              fontSize: '13.5px',
-              fontWeight: 500,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: item.danger
-                ? isDark ? 'rgba(255,80,80,0.7)' : 'rgba(200,0,0,0.5)'
-                : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
-              transition: 'all 0.15s ease',
-              textAlign: 'left',
-              letterSpacing: '-0.01em',
-            }}
+        {collapsed ? (
+          /* FL badge quando recolhido — cor #2a2c2b */
+          <button onClick={toggle} title="Expandir sidebar" style={{
+            width: '34px', height: '34px', borderRadius: '9px',
+            background: '#2a2c2b',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', cursor: 'pointer', flexShrink: 0,
+            transition: 'background 0.12s, box-shadow 0.12s',
+            boxShadow: '0 0 0 0 rgba(42,44,43,0)',
+          }}
             onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = item.danger
-                ? isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)'
-                : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-              (e.currentTarget as HTMLElement).style.color = item.danger
-                ? isDark ? 'rgba(255,80,80,1)' : 'rgba(200,0,0,0.8)'
-                : isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.75)';
+              (e.currentTarget as HTMLElement).style.background = '#3a3c3b';
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(42,44,43,0.18)';
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'transparent';
-              (e.currentTarget as HTMLElement).style.color = item.danger
-                ? isDark ? 'rgba(255,80,80,0.7)' : 'rgba(200,0,0,0.5)'
-                : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+              (e.currentTarget as HTMLElement).style.background = '#2a2c2b';
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 0 rgba(42,44,43,0)';
             }}
           >
-            <item.icon style={{ width: '16px', height: '16px', strokeWidth: 1.8, flexShrink: 0 }} />
-            {item.label}
+            <span style={{
+              fontSize: '11px', fontWeight: 800, letterSpacing: '-0.03em',
+              color: '#ffffff',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            }}>FL</span>
           </button>
-        ))}
+        ) : (
+          <>
+            {/* Logo centralizada, 80% do tamanho anterior */}
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <img
+                src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+                alt="floow"
+                style={{ height: '26px', width: 'auto', objectFit: 'contain', display: 'block' }}
+                onError={e => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  const fb = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (fb) fb.style.display = 'flex';
+                }}
+              />
+              {/* Fallback */}
+              <span style={{
+                display: 'none', fontSize: '17px', fontWeight: 700,
+                letterSpacing: '-0.04em', color: isDark ? '#fff' : '#111',
+              }}>floow</span>
+            </div>
+
+            {/* Botão recolher — mesmo lugar, mais evidente */}
+            <button onClick={toggle} style={{
+              width: '26px', height: '26px', borderRadius: '7px',
+              background: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.12s, border-color 0.12s',
+              flexShrink: 0,
+            }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
+              }}
+              title="Recolher sidebar"
+            >
+              <ChevronLeft style={{ width: '13px', height: '13px', color: mutClr }} />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ── Nav ── */}
+      <nav style={{ flex: 1, padding: '14px 6px 0', overflowY: 'auto', overflowX: 'hidden' }}>
+        <NavGroup label="Principal" items={NAV_MAIN} />
+        <NavGroup label="Meta Ads" items={NAV_META} />
+        <NavGroup label="Integrações" items={NAV_INT} />
+      </nav>
+
+      {/* ── Footer ── */}
+      <div style={{ padding: '6px', borderTop: `1px solid ${sideBdr}`, flexShrink: 0 }}>
+
+        {/* Dark mode toggle */}
+        <div
+          onClick={toggleTheme}
+          style={{
+            display: 'flex', alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'space-between',
+            padding: collapsed ? '10px 0' : '9px 12px',
+            borderRadius: '8px', cursor: 'pointer',
+            transition: 'background 0.12s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = hovBg)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          {!collapsed && (
+            <span style={{ fontSize: '13.5px', fontWeight: 500, color: mutClr }}>
+              {isDark ? 'Modo claro' : 'Modo escuro'}
+            </span>
+          )}
+          {/* Toggle switch */}
+          <div style={{
+            width: '34px', height: '18px', borderRadius: '99px',
+            background: isDark ? '#2563eb' : '#d1d5db',
+            position: 'relative', flexShrink: 0,
+            transition: 'background 0.2s',
+          }}>
+            <div style={{
+              position: 'absolute', top: '2px',
+              left: isDark ? '16px' : '2px',
+              width: '14px', height: '14px', borderRadius: '50%',
+              background: '#ffffff',
+              transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
+            }} />
+          </div>
+        </div>
+
+        {/* User info */}
+        {!collapsed && (
+          <div style={{
+            padding: '10px 12px 2px',
+            borderTop: `1px solid ${sideBdr}`,
+            marginTop: '4px',
+          }}>
+            <p style={{
+              fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', marginBottom: '8px',
+              color: lblClr, opacity: 0.8
+            }}>
+              Conta do Usuário
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '6px' }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '50%',
+                background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0,
+              }}>
+                {userInitial}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isDark ? '#f4f4f5' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayName}
+                </p>
+                <p style={{ margin: 0, fontSize: '11px', color: mutClr, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+            <button onClick={signOut} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '7px 4px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: isDark ? 'rgba(255,80,80,0.75)' : 'rgba(200,0,0,0.6)',
+              transition: 'all 0.12s', textAlign: 'left', fontFamily: 'inherit',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8 }} />
+              Sair
+            </button>
+          </div>
+        )}
+
+        {/* Collapsed: só sair */}
+        {collapsed && (
+          <button onClick={signOut} title="Sair" style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '10px 0', borderRadius: '8px', border: 'none', cursor: 'pointer',
+            background: 'transparent',
+            color: isDark ? 'rgba(255,80,80,0.75)' : 'rgba(200,0,0,0.6)',
+            transition: 'background 0.12s',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <LogOut style={{ width: '16px', height: '16px', strokeWidth: 1.8 }} />
+          </button>
+        )}
       </div>
     </aside>
   );
