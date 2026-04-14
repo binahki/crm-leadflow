@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate, Link } from 'react-router-dom';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -16,8 +14,8 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -47,17 +45,22 @@ export default function LoginPage() {
     setSubmitting(false);
   };
 
+  const inputClass = "w-full h-11 bg-white text-black px-3.5 rounded-md text-sm outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#366fec]";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex items-center justify-center bg-black px-4 font-sans">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground font-extrabold text-xl mx-auto mb-4 font-display">
-            L
-          </div>
-          <h1 className="text-2xl font-bold font-display tracking-tight">
+          <img 
+            src="/logo-light.png" 
+            alt="LeadFlow" 
+            className="h-8 w-auto mx-auto mb-6 object-contain"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+          <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
             {isForgot ? 'Recuperar senha' : isSignUp ? 'Criar conta' : 'Entrar no LeadFlow'}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-gray-400">
             {isForgot
               ? 'Insira seu email para receber o link de recuperação'
               : isSignUp
@@ -69,52 +72,57 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider block mb-1.5">
                 Nome completo
               </label>
-              <Input
+              <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Seu nome completo"
                 required={isSignUp}
-                className="h-11"
+                className={inputClass}
               />
             </div>
           )}
           
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
+            <label className="text-xs font-medium text-gray-400 uppercase tracking-wider block mb-1.5">
               Email
             </label>
-            <Input
+            <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
               required
-              className="h-11"
+              className={inputClass}
             />
           </div>
 
           {!isForgot && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider block mb-1.5">
                 Senha
               </label>
-              <Input
+              <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="h-11"
+                className={inputClass}
               />
             </div>
           )}
 
-          <Button type="submit" className="w-full h-11" disabled={submitting}>
+          <button 
+            type="submit" 
+            className="w-full h-11 text-white font-semibold rounded-md transition-opacity hover:opacity-90 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+            style={{ backgroundColor: '#366fec' }}
+            disabled={submitting}
+          >
             {submitting
               ? 'Carregando...'
               : isForgot
@@ -122,36 +130,43 @@ export default function LoginPage() {
               : isSignUp
               ? 'Criar conta'
               : 'Entrar'}
-          </Button>
+          </button>
         </form>
 
-        <div className="mt-6 text-center space-y-2">
+        <div className="mt-6 text-center space-y-3">
           {!isForgot && (
-            <button
-              onClick={() => setIsForgot(true)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Esqueceu a senha?
-            </button>
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsForgot(true)}
+                className="text-sm text-gray-400 hover:text-white transition-colors bg-transparent border-0 cursor-pointer"
+              >
+                Esqueceu a senha?
+              </button>
+            </div>
           )}
           <div>
             <button
+              type="button"
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setIsForgot(false);
               }}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-gray-400 hover:text-white transition-colors bg-transparent border-0 cursor-pointer"
             >
               {isSignUp ? 'Já tem conta? Entrar' : 'Não tem conta? Criar'}
             </button>
           </div>
           {isForgot && (
-            <button
-              onClick={() => setIsForgot(false)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Voltar ao login
-            </button>
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsForgot(false)}
+                className="text-sm text-gray-400 hover:text-white transition-colors bg-transparent border-0 cursor-pointer"
+              >
+                Voltar ao login
+              </button>
+            </div>
           )}
         </div>
       </div>

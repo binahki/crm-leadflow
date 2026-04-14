@@ -276,7 +276,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         {/* User info — expandido */}
         {!isCollapsed && (
           <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
-            <div 
+            <div
               onClick={openProfile}
               style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.12s', marginBottom: '4px' }}
               onMouseEnter={e => (e.currentTarget.style.background = hovBg)}
@@ -343,25 +343,25 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             boxShadow: '0 20px 40px rgba(0,0,0,0.2)', fontFamily: 'inherit'
           }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: isDark ? '#fff' : '#111' }}>Editar Perfil</h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nome</label>
-                <input 
+                <input
                   type="text" value={profName} onChange={e => setProfName(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
                 />
               </div>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Email</label>
-                <input 
+                <input
                   type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
                 />
               </div>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nova Senha (opcional)</label>
-                <input 
+                <input
                   type="password" value={profPass} onChange={e => setProfPass(e.target.value)} placeholder="Deixe em branco para não alterar"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
                 />
@@ -369,13 +369,13 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
+              <button
                 onClick={() => setShowProfile(false)}
                 style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: 'transparent', color: isDark ? '#fff' : '#111', fontWeight: 500, cursor: 'pointer' }}
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 onClick={handleUpdateProfile} disabled={profLoading}
                 style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: profLoading ? 'default' : 'pointer', opacity: profLoading ? 0.7 : 1 }}
               >
