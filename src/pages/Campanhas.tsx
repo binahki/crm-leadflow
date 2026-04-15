@@ -44,6 +44,36 @@ const PERIOD_OPTIONS = [
 function fmt(n: number) { return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtInt(n: number) { return n.toLocaleString('pt-BR'); }
 
+function parseLeadDate(str?: string | null): Date {
+  if (!str) return new Date(0);
+  if (str.includes('T')) return new Date(str);
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+  if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; return new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)); }
+  return new Date(str);
+}
+
+function filterLeadsByPreset(leads: any[], preset: string) {
+  const now = new Date();
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  const ts = startOf(now);
+  const te = endOf(now);
+
+  const inR = (l: any, a: Date, b: Date) => {
+    const d = parseLeadDate(l.created_at);
+    return d >= a && d <= b;
+  };
+
+  switch (preset) {
+    case 'today': return leads.filter(l => inR(l, ts, te));
+    case 'yesterday': { const ys = new Date(ts); ys.setDate(ys.getDate() - 1); const ye = new Date(te); ye.setDate(ye.getDate() - 1); return leads.filter(l => inR(l, ys, ye)); }
+    case 'last_7d': { const a = new Date(ts); a.setDate(a.getDate() - 6); return leads.filter(l => inR(l, a, te)); }
+    case 'last_30d': { const a = new Date(ts); a.setDate(a.getDate() - 29); return leads.filter(l => inR(l, a, te)); }
+    case 'this_month': { const f = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0); return leads.filter(l => inR(l, f, te)); }
+    default: return leads;
+  }
+}
+
 // Gera insights automáticos baseados nas métricas
 function generateInsights(campaigns: Campaign[]): string[] {
   const insights: string[] = [];
@@ -238,6 +268,10 @@ export default function CampanhasPage() {
 
   const insights = useMemo(() => generateInsights(campaigns), [campaigns]);
 
+  const filteredLeads = useMemo(() => filterLeadsByPreset(leads, datePreset), [leads, datePreset]);
+  const leadsFBCount = filteredLeads.filter(l => l.utm_source?.toUpperCase() === 'FB').length;
+  const cplRealTime = leadsFBCount > 0 ? totalSpend / leadsFBCount : 0;
+
   const chartData = filtered.slice(0, 8).map(c => ({
     name: c.name.length > 14 ? c.name.slice(0, 14) + '…' : c.name,
     gasto: c.spend,
@@ -291,9 +325,9 @@ export default function CampanhasPage() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '12px' : '14px', marginBottom: '20px' }}>
           {[
             { label: 'Gasto Total', value: loading ? '…' : `R$ ${fmt(totalSpend)}`, icon: DollarSign, color: '#10b981', bgC: dark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' },
-            { label: 'Leads Gerados', value: loading ? '…' : String(totalLeads), icon: Users, color: '#3b82f6', bgC: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff' },
-            { label: 'Custo por Lead', value: loading ? '…' : (avgCPL > 0 ? `R$ ${fmt(avgCPL)}` : 'R$ —'), icon: TrendingUp, color: '#f97316', bgC: dark ? 'rgba(249,115,22,0.12)' : '#fff7ed' },
-            { label: 'Performance Média', value: loading ? '…' : `${avgPerf.toFixed(0)}%`, icon: Zap, color: '#8b5cf6', bgC: dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff' },
+            { label: 'Leads (Sist. FB)', value: loading ? '…' : String(leadsFBCount), icon: Users, color: '#3b82f6', bgC: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff' },
+            { label: 'CPL Ads (Real)', value: loading ? '…' : (cplRealTime > 0 ? `R$ ${fmt(cplRealTime)}` : 'R$ —'), icon: TrendingUp, color: '#f97316', bgC: dark ? 'rgba(249,115,22,0.12)' : '#fff7ed' },
+            { label: 'Performance', value: loading ? '…' : `${avgPerf.toFixed(0)}%`, icon: Zap, color: '#8b5cf6', bgC: dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff' },
           ].map((c, i) => (
             <div key={i} style={{ background: cardBg, borderRadius: '16px', padding: '20px', border: `1px solid ${border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

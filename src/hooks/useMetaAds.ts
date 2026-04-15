@@ -11,6 +11,7 @@ interface MetaAdsMetrics {
   leads: number;
   cpl: number;
   reach: number;
+  cplRealTime: number; // CPL em tempo real based on FB leads
 }
 
 interface Campaign {
@@ -34,7 +35,7 @@ export function useMetaAds() {
   const { metaAccountId, metaToken, setCampaigns, setCreatives } = useAppStore();
   const [metrics, setMetrics] = useState<MetaAdsMetrics>({
     spend: 0, impressions: 0, clicks: 0,
-    ctr: 0, cpc: 0, leads: 0, cpl: 0, reach: 0,
+    ctr: 0, cpc: 0, leads: 0, cpl: 0, reach: 0, cplRealTime: 0,
   });
   const [loading, setLoading]       = useState(false);
   const [error,   setError]         = useState<string | null>(null);
@@ -105,7 +106,7 @@ export function useMetaAds() {
       // ── 2. Leads do Supabase (últimos 30 dias) ──
       const { data: leadsData } = await supabase
         .from('leads')
-        .select('created_at, status')
+        .select('created_at, status, utm_source')
         .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
       const totalLeadsDB  = leadsData?.length || 0;
@@ -119,7 +120,14 @@ export function useMetaAds() {
       const totalLeadsAds    = campaignsList.reduce((s, c) => s + c.leads_api, 0);
 
       // Usa leads da API se disponível, senão usa Supabase
+      // Total leads captured in our system originating from Facebook (utm_source = "FB")
+      const totalLeadsFB = (leadsData || []).filter((l: any) => l.utm_source && l.utm_source.toUpperCase() === 'FB').length;
+      
+      // Use API leads if available, otherwise fall back to DB count (including all sources)
       const totalLeads = totalLeadsAds > 0 ? totalLeadsAds : totalLeadsDB;
+      
+      // Real‑time CPL based exclusively on FB‑sourced leads
+      const cplRealTimeValue = totalLeadsFB > 0 ? totalSpend / totalLeadsFB : 0;
 
       const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
       const avgCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
@@ -134,7 +142,17 @@ export function useMetaAds() {
         roas: c.spend > 0 ? (convertedLeads * 100) / c.spend : 0,
       }));
 
-      setMetrics({ spend: totalSpend, impressions: totalImpressions, clicks: totalClicks, ctr: avgCTR, cpc: avgCPC, leads: totalLeads, cpl: avgCPL, reach: totalReach });
+      setMetrics({ 
+        spend: totalSpend, 
+        impressions: totalImpressions, 
+        clicks: totalClicks, 
+        ctr: avgCTR, 
+        cpc: avgCPC, 
+        leads: totalLeads, 
+        cpl: avgCPL, 
+        reach: totalReach,
+        cplRealTime: cplRealTimeValue
+      });
       setCampaigns(updatedCampaigns);
       setLastUpdated(new Date());
 

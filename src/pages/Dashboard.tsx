@@ -7,9 +7,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 
-interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; }
+interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
-interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; }
+interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; cplRealTime: number; }
 
 const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
 const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
@@ -99,8 +99,8 @@ function buildChartData(leads:Lead[],period:string,from?:string,to?:string){
   return Object.entries(map).map(([date,cnt])=>({date,leads:cnt}));
 }
 
-async function fetchMetaData(period:string,from?:string,to?:string):Promise<{metrics:MetaMetrics;campaigns:Campaign[]}>{
-  const empty={metrics:{spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0},campaigns:[]};
+async function fetchMetaData(period:string,from?:string,to?:string, leadsList: Lead[] = []):Promise<{metrics:MetaMetrics;campaigns:Campaign[]}>{
+  const empty={metrics:{spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0,cplRealTime:0},campaigns:[]};
   try{
     const presetMap:Record<string,string>={today:'today',yesterday:'yesterday','7days':'last_7d','30days':'last_30d',month:'this_month'};
     const timeParam=period in presetMap?`date_preset=${presetMap[period]}`:period==='custom'&&from&&to?`time_range=%7B%22since%22%3A%22${from}%22%2C%22until%22%3A%22${to}%22%7D`:'date_preset=this_month';
@@ -114,7 +114,9 @@ async function fetchMetaData(period:string,from?:string,to?:string):Promise<{met
     await Promise.all((campData.data||[]).slice(0,20).map(async(c:any)=>{
       try{const r=await fetch(`https://graph.facebook.com/v18.0/${c.id}/insights?fields=spend,actions&${timeParam}&access_token=${META_TOKEN}`);const d=await r.json();const ins=d.data?.[0];const cSpend=parseFloat(ins?.spend||'0');const cLeads=parseInt((ins?.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');if(cSpend>0)campaigns.push({id:c.id,name:c.name,status:c.status,spend:cSpend,leads_api:cLeads});}catch{}
     }));
-    return{metrics:{spend,impressions,clicks,ctr,leads,cpl:leads>0?spend/leads:0},campaigns};
+    const totalLeadsFB = leadsList.filter(l => l.utm_source && l.utm_source.toUpperCase() === 'FB').length;
+    const cplRealTime = totalLeadsFB > 0 ? spend / totalLeadsFB : 0;
+    return{metrics:{spend,impressions,clicks,ctr,leads,cpl:leads>0?spend/leads:0,cplRealTime},campaigns};
   }catch(e){console.error('[Meta]',e);return empty;}
 }
 
@@ -136,7 +138,7 @@ export default function Dashboard() {
   const [showDropdown,setShowDropdown]=useState(false);
   const [showCustom,setShowCustom]=useState(false);
   const [isRefreshing,setIsRefreshing]=useState(false);
-  const [metaMetrics,setMetaMetrics]=useState<MetaMetrics>({spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0});
+  const [metaMetrics,setMetaMetrics]=useState<MetaMetrics>({spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0,cplRealTime:0});
   const [metaCampaigns,setMetaCampaigns]=useState<Campaign[]>([]);
   const [metaLoading,setMetaLoading]=useState(true);
   const [metaError,setMetaError]=useState(false);
@@ -148,11 +150,11 @@ export default function Dashboard() {
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
   useEffect(()=>{function close(e:MouseEvent){if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false);if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false);}document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close);},[]);
 
-  const fetchLeads=async()=>{setLoading(true);const{data,error}=await supabase.from('leads').select('id,nome,cidade,whatsapp,status,created_at').order('created_at',{ascending:false});if(error)console.error('[Dashboard]',error.message);else if(data)setAllLeads(data as Lead[]);setLoading(false);};
-  const loadMeta=async()=>{setMetaLoading(true);setMetaError(false);try{const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo);setMetaMetrics(metrics);setMetaCampaigns(campaigns);if(metrics.spend===0&&campaigns.length===0)setMetaError(true);}catch{setMetaError(true);}setMetaLoading(false);};
+  const fetchLeads=async()=>{setLoading(true);const{data,error}=await supabase.from('leads').select('id,nome,cidade,whatsapp,status,created_at,utm_source').order('created_at',{ascending:false});if(error)console.error('[Dashboard]',error.message);else if(data)setAllLeads(data as Lead[]);setLoading(false);};
+  const loadMeta=async(currentLeads?: Lead[])=>{setMetaLoading(true);setMetaError(false);try{const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo, currentLeads || allLeads);setMetaMetrics(metrics);setMetaCampaigns(campaigns);if(metrics.spend===0&&campaigns.length===0)setMetaError(true);}catch{setMetaError(true);}setMetaLoading(false);};
 
-  useEffect(()=>{if(!user)return;fetchLeads();},[user?.id]); // eslint-disable-line
-  useEffect(()=>{loadMeta();},[selectedPeriod,customFrom,customTo]); // eslint-disable-line
+  useEffect(()=>{if(!user)return;fetchLeads().then((leads) => loadMeta());},[user?.id]); // eslint-disable-line
+  useEffect(()=>{if(allLeads.length > 0) loadMeta();},[selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
   useEffect(()=>{const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe();return()=>{supabase.removeChannel(ch);};},[]);
 
   function selectPeriod(value:string){if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;}setSelectedPeriod(value);localStorage.setItem(STORAGE_KEY,value);setShowDropdown(false);setShowCustom(false);}
@@ -265,9 +267,9 @@ export default function Dashboard() {
         {/* Metric Cards — 1 col mobile, 4 col desktop */}
         <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'16px',marginBottom:'16px'}}>
           {[
-            {label:'Gasto Total',    value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,        trend:'+12.5%',up:true, sub:'Meta Ads'},
-            {label:'Leads',          value:loading?'…':String(totalLeads),                                                           trend:'+8.2%', up:true, sub:periodLabel},
-            {label:'CPL',            value:metaLoading?'…':`R$ ${cplMeta.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`,trend:'-3.1%',up:false,sub:'Meta Ads'},
+            {label:'Gasto Total',    value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,        trend:'+',     up:true, sub:'Meta Ads'},
+            {label:'Leads',          value:loading?'…':String(filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length),   trend:'+',     up:true, sub:'Fonte FB'},
+            {label:'CPL Ads',        value:metaLoading?'…':(filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length > 0 ? `R$ ${(spend / filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : 'R$ —'), trend:'Real Time', up:true, sub:'Base Sistema'},
             {label:'Aprovados',      value:loading?'…':String(approved),                                                             trend:`${convRate}%`,up:Number(convRate)>0,sub:'conversão'},
           ].map((c,i)=>(
             <div key={i} style={{background:cardBg,borderRadius:'14px',padding:isMobile?'14px':'20px',border:`1px solid ${border}`}}>

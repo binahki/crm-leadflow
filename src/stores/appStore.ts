@@ -31,6 +31,7 @@ export interface Lead {
   created_at?: string;
   updated_at?: string;
   user_id?: string;
+  utm_source?: string;
   quiz_data?: Record<string, unknown>;
 }
 
