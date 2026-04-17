@@ -138,6 +138,7 @@ function FilterDropdown({ value, options, onChange, dark }: {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+            maxWidth: '90vw',
             background: dark ? '#111113' : '#fff',
             border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`,
             borderRadius: '10px', padding: '4px', minWidth: '150px', zIndex: 50,
@@ -224,7 +225,7 @@ export default function CriativosPage() {
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [datePreset, setDatePreset] = useState('this_month');
+  const [datePreset, setDatePreset] = useState('today');
   const [sortBy, setSortBy] = useState<'leads' | 'cpl' | 'ctr' | 'spend'>('leads');
   const [statusFilter, setStatusFilter] = useState('all');
 

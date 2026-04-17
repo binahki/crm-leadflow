@@ -303,6 +303,11 @@ export default function LeadsPage() {
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             {isMobile ? (
               <>
+                {selectedIds.size > 0 && (
+                  <button onClick={() => setShowDeleteConf(true)} style={{ ...btnGhost, border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', padding: '7px' }}>
+                    <Trash2 style={{ width: '16px', height: '16px' }} />
+                  </button>
+                )}
                 <button onClick={() => setShowFilters(v => !v)} style={{ ...btnGhost, gap: '4px' }}>
                   <Filter style={{ width: '14px', height: '14px' }} /> Filtros
                 </button>
@@ -393,11 +398,6 @@ export default function LeadsPage() {
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={v => { if (v === 'custom') setShowCustom(true); else { setPeriodFilter(v); setShowCustom(false); } }} dark={dark} />
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width: '13px', height: '13px' }} /></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{ width: '13px', height: '13px' }} /></button>
-                {selectedIds.size > 0 && (
-                  <button onClick={() => setShowDeleteConf(true)} style={{ ...btnGhost, border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626' }}>
-                    <Trash2 style={{ width: '13px', height: '13px' }} /> ({selectedIds.size})
-                  </button>
-                )}
               </div>
             )}
           </div>

@@ -315,7 +315,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         {/* Status */}
         <div style={{ padding: '14px 22px', flexShrink: 0 }}>
           <p style={{ fontSize: '10.5px', fontWeight: 500, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '9px', fontFamily: FONT }}>Status</p>
-          <div style={{ display: 'flex', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {STATUS.map((s, i) => {
               const active = status === i;
               return (

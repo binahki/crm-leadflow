@@ -362,7 +362,7 @@ export default function Dashboard() {
                       {initials(lead.nome)}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome}</p>
+                      <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0, 2).join(' ')}</p>
                       <p style={{fontSize:'11px',color:txtLow,margin:0}}>{lead.cidade||'—'}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px'}}>{STATUS_LABEL[st]??'Aguardando'}</span>
@@ -400,8 +400,8 @@ export default function Dashboard() {
                     <table style={{width:'100%',borderCollapse:'collapse',minWidth:isMobile?'0':'auto'}}>
                       <thead>
                         <tr>
-                          {['Campanha','Gasto','Leads','CPL','Perf.'].map(h=>(
-                            <th key={h} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',whiteSpace:'nowrap',paddingRight:'8px'}}>{h}</th>
+                          {['Campanha','Gasto','Leads','CPL', !isMobile && 'Perf.'].filter(Boolean).map(h=>(
+                            <th key={h as string} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',whiteSpace:'nowrap',paddingRight:'8px'}}>{h as string}</th>
                           ))}
                         </tr>
                       </thead>
@@ -412,14 +412,16 @@ export default function Dashboard() {
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.spend}</td>
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid}}>{row.leads}</td>
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.cpl}</td>
-                            <td style={{padding:'9px 0'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                                <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
-                                  <div style={{height:'100%',width:`${row.perf}%`,background:'#2563eb',borderRadius:'99px'}}/>
+                            {!isMobile && (
+                              <td style={{padding:'9px 0'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                                  <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
+                                    <div style={{height:'100%',width:`${row.perf}%`,background:'#2563eb',borderRadius:'99px'}}/>
+                                  </div>
+                                  <span style={{fontSize:'11px',color:txtLow}}>{row.perf}%</span>
                                 </div>
-                                <span style={{fontSize:'11px',color:txtLow}}>{row.perf}%</span>
-                              </div>
-                            </td>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

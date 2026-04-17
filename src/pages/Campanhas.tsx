@@ -203,6 +203,7 @@ function FilterDropdown({ value, options, onChange, dark }: {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+            maxWidth: '90vw',
             background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`,
             borderRadius: '10px', padding: '4px', minWidth: '150px', zIndex: 50,
             boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.1)',
@@ -232,7 +233,7 @@ export default function CampanhasPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [datePreset, setDatePreset] = useState('this_month');
+  const [datePreset, setDatePreset] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'campanhas' | 'insights'>('campanhas');
   const [isMobile, setIsMobile] = useState(false);
