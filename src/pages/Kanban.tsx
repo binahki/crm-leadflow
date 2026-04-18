@@ -20,10 +20,10 @@ import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
 
 const COLUMNS = [
-  { status: 0, label: 'Aguardando',     border: '#f59e0b', dot: '#f59e0b', bg: 'rgba(245,158,11,0.06)' },
   { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: 'rgba(59,130,246,0.06)' },
   { status: 2, label: 'Reunião',        border: '#8b5cf6', dot: '#8b5cf6', bg: 'rgba(139,92,246,0.06)' },
   { status: 3, label: 'Aprovado',       border: '#10b981', dot: '#10b981', bg: 'rgba(16,185,129,0.06)' },
+  { status: 4, label: 'Reprovado',      border: '#ef4444', dot: '#ef4444', bg: 'rgba(239,68,68,0.06)' },
 ];
 
 const AVATAR_COLORS = [
@@ -382,7 +382,8 @@ export default function KanbanPage() {
 
   function getColLeads(status: number): Lead[] {
     const col = leads.filter(l => {
-      const s = l.status === null || l.status === undefined ? 0 : Number(l.status);
+      let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
+      if (s === 0) s = 1;
       return s === status;
     });
     return [...col].sort((a, b) => parseDate(b.created_at).getTime() - parseDate(a.created_at).getTime());
@@ -408,7 +409,8 @@ export default function KanbanPage() {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
 
-    const currentStatus = lead.status === null || lead.status === undefined ? 0 : Number(lead.status);
+    let currentStatus = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
+    if (currentStatus === 0) currentStatus = 1;
     if (currentStatus === targetStatus) return;
 
     // Atualização otimista — imediato, sem esperar o Supabase
@@ -435,7 +437,8 @@ export default function KanbanPage() {
 
   async function moveToStatus(lead: Lead, newStatus: number) {
     setMenuLead(null);
-    const currentStatus = Number(lead.status ?? 0);
+    let currentStatus = Number(lead.status ?? 1);
+    if (currentStatus === 0) currentStatus = 1;
     if (currentStatus === newStatus) return;
     updateLead(lead.id, { status: newStatus });
     const { error } = await supabase.from('leads').update({ status: newStatus }).eq('id', lead.id);

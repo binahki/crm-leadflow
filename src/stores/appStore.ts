@@ -67,12 +67,13 @@ export interface Creative {
   leads?: number;
 }
 
-export const STATUS_LABELS = ['Aguardando', 'Em atendimento', 'Reunião', 'Aprovado'];
+export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado'];
 export const STATUS_COLORS = [
-  { bg: 'bg-amber-50',   text: 'text-amber-600',   dot: 'bg-amber-400'   },
-  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    },
-  { bg: 'bg-violet-50',  text: 'text-violet-600',   dot: 'bg-violet-400'  },
-  { bg: 'bg-emerald-50', text: 'text-emerald-600',  dot: 'bg-emerald-400' },
+  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    }, // 0: Em atendimento (merged)
+  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    }, // 1: Em atendimento
+  { bg: 'bg-violet-50',  text: 'text-violet-600',   dot: 'bg-violet-400'  }, // 2: Reunião
+  { bg: 'bg-emerald-50', text: 'text-emerald-600',  dot: 'bg-emerald-400' }, // 3: Aprovado
+  { bg: 'bg-rose-50',    text: 'text-rose-600',    dot: 'bg-rose-400'    }, // 4: Reprovado
 ];
 
 interface AppState {

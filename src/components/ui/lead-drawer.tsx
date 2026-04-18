@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime } from '@/utils/relativeTime';
+import { useTheme } from '@/hooks/useTheme';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -17,10 +18,10 @@ interface LeadDrawerProps {
 }
 
 const STATUS = [
-  { label: 'Aguardando', color: '#f59e0b', bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-  { label: 'Em atendimento', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
-  { label: 'Reunião', color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe' },
-  { label: 'Aprovado', color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
+  { id: 1, label: 'Em atendimento', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe', darkBg: 'rgba(59,130,246,0.15)', darkText: '#60a5fa' },
+  { id: 2, label: 'Reunião',        color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe', darkBg: 'rgba(139,92,246,0.15)', darkText: '#a78bfa' },
+  { id: 3, label: 'Aprovado',       color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0', darkBg: 'rgba(16,185,129,0.15)', darkText: '#34d399' },
+  { id: 4, label: 'Reprovado',      color: '#ef4444', bg: '#fee2e2', text: '#991b1b', border: '#fecaca', darkBg: 'rgba(239,68,68,0.15)',  darkText: '#f87171' },
 ];
 
 const GRADIENTS = [
@@ -55,7 +56,7 @@ function WaIcon() {
 // ── Section com accordion fluido ──────────────────────────────
 
 function Section({
-  icon, title, children, openKey, activeKey, setActiveKey,
+  icon, title, children, openKey, activeKey, setActiveKey, dark
 }: {
   icon: React.ReactNode;
   title: string;
@@ -63,6 +64,7 @@ function Section({
   openKey: string;
   activeKey: string | null;
   setActiveKey: (k: string | null) => void;
+  dark: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
@@ -87,8 +89,8 @@ function Section({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#9ca3af', display: 'flex', alignItems: 'center' }}>{icon}</span>
-          <span style={{ fontSize: '13.5px', fontWeight: 500, color: '#1f2937', letterSpacing: '-0.01em', fontFamily: FONT }}>{title}</span>
+          <span style={{ color: dark ? '#52525b' : '#9ca3af', display: 'flex', alignItems: 'center' }}>{icon}</span>
+          <span style={{ fontSize: '13.5px', fontWeight: 500, color: dark ? '#f4f4f5' : '#1f2937', letterSpacing: '-0.01em', fontFamily: FONT }}>{title}</span>
         </div>
         <ChevronDown style={{
           width: '14px', height: '14px', color: '#d1d5db', flexShrink: 0,
@@ -112,42 +114,42 @@ function Section({
   );
 }
 
-function Field({ label, value }: { label: string; value?: string | null }) {
+function Field({ label, value, dark }: { label: string; value?: string | null; dark: boolean }) {
   if (!value || value === '-') return null;
   return (
     <div>
-      <p style={{ fontSize: '10.5px', fontWeight: 500, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontFamily: FONT }}>{label}</p>
-      <p style={{ fontSize: '13.5px', color: '#374151', lineHeight: 1.5, fontFamily: FONT }}>{value}</p>
+      <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontFamily: FONT }}>{label}</p>
+      <p style={{ fontSize: '13.5px', color: dark ? '#d4d4d8' : '#374151', lineHeight: 1.5, fontFamily: FONT }}>{value}</p>
     </div>
   );
 }
 
 // ── Delete confirm ────────────────────────────────────────────
 
-function DeleteConfirm({ name, onConfirm, onCancel, loading }: {
-  name: string; onConfirm: () => void; onCancel: () => void; loading: boolean;
+function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: {
+  name: string; onConfirm: () => void; onCancel: () => void; loading: boolean; dark: boolean;
 }) {
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 62, background: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(2px)' }} onClick={onCancel} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        zIndex: 63, background: '#fff', borderRadius: '16px',
+        zIndex: 63, background: dark ? '#111113' : '#fff', borderRadius: '16px',
         padding: '24px', width: '88%', maxWidth: '340px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06)',
+        boxShadow: dark ? '0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06)',
         fontFamily: FONT, animation: 'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: dark ? 'rgba(220,38,38,0.1)' : '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626' }} />
           </div>
-          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#111827', letterSpacing: '-0.02em', fontFamily: FONT }}>Excluir lead?</h3>
+          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: dark ? '#fff' : '#111827', letterSpacing: '-0.02em', fontFamily: FONT }}>Excluir lead?</h3>
         </div>
-        <p style={{ fontSize: '13.5px', color: '#6b7280', lineHeight: 1.55, margin: '0 0 20px', fontFamily: FONT }}>
-          Tem certeza que deseja excluir <strong style={{ color: '#111827' }}>{name}</strong>? Esta ação não pode ser desfeita.
+        <p style={{ fontSize: '13.5px', color: dark ? '#9ca3af' : '#6b7280', lineHeight: 1.55, margin: '0 0 20px', fontFamily: FONT }}>
+          Tem certeza que deseja excluir <strong style={{ color: dark ? '#fff' : '#111827' }}>{name}</strong>? Esta ação não pode ser desfeita.
         </p>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: '1px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f9fafb', color: dark ? '#d4d4d8' : '#374151', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
             Cancelar
           </button>
           <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: loading ? 'default' : 'pointer', fontFamily: FONT, opacity: loading ? 0.7 : 1 }}>
@@ -162,8 +164,10 @@ function DeleteConfirm({ name, onConfirm, onCancel, loading }: {
 // ── Main ─────────────────────────────────────────────────────
 
 export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [obs, setObs] = useState('');
-  const [status, setStatus] = useState(0);
+  const [status, setStatus] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [obsChanged, setObsChanged] = useState(false);
@@ -173,7 +177,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   useEffect(() => {
     if (lead) {
       setObs(lead.observacoes || '');
-      setStatus(lead.status === null || lead.status === undefined ? 0 : Number(lead.status));
+      let s = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
+      if (s === 0) s = 1;
+      setStatus(s);
       setObsChanged(false);
       setShowDel(false);
       setActiveSection(null);
@@ -190,7 +196,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
       toast.error('Erro ao atualizar status');
     } else {
       onUpdate({ ...lead, status: i });
-      toast.success(STATUS[i].label);
+      const label = STATUS.find(s => s.id === i)?.label || 'Atualizado';
+      toast.success(label);
     }
   }
 
@@ -236,7 +243,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
       }} />
 
       {showDel && (
-        <DeleteConfirm name={lead.nome} onConfirm={handleDelete} onCancel={() => setShowDel(false)} loading={deleting} />
+        <DeleteConfirm name={lead.nome} onConfirm={handleDelete} onCancel={() => setShowDel(false)} loading={deleting} dark={dark} />
       )}
 
       <div style={{
@@ -246,9 +253,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         zIndex: 51, fontFamily: FONT,
         animation: 'ld-up 0.24s cubic-bezier(0.32, 0.72, 0, 1)',
         borderRadius: '22px',
-        background: 'rgba(255,255,255,0.94)',
+        background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)',
         backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7), inset 0 1px 0 rgba(255,255,255,0.9)',
+        boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7), inset 0 1px 0 rgba(255,255,255,0.9)',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
       }}>
@@ -257,15 +264,15 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
           <button onClick={onClose} style={{
             position: 'absolute', top: '16px', right: '16px',
-            width: '26px', height: '26px', background: 'rgba(0,0,0,0.06)',
+            width: '26px', height: '26px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
             border: 'none', borderRadius: '50%', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'background 0.15s',
           }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.1)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
+            onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')}
+            onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)')}
           >
-            <X style={{ width: '12px', height: '12px', color: '#6b7280' }} />
+            <X style={{ width: '12px', height: '12px', color: dark ? '#52525b' : '#6b7280' }} />
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginRight: '36px' }}>
@@ -281,27 +288,27 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>
+              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>
                 {lead.nome}
               </h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '5px' }}>
                 {lead.cidade && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: '#6b7280', fontFamily: FONT }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}>
                     <MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}
                   </span>
                 )}
                 {lead.whatsapp && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: '#6b7280', fontFamily: FONT }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}>
                     <Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.whatsapp}
                   </span>
                 )}
                 {lead.instagram && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: '#6b7280', fontFamily: FONT }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}>
                     <Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.instagram}
                   </span>
                 )}
                 {lead.created_at && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: '#b0b7c3', fontFamily: FONT }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}>
                     <Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}
                   </span>
                 )}
@@ -310,20 +317,20 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           </div>
         </div>
 
-        <div style={{ height: '1px', background: 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
         {/* Status */}
         <div style={{ padding: '14px 22px', flexShrink: 0 }}>
-          <p style={{ fontSize: '10.5px', fontWeight: 500, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '9px', fontFamily: FONT }}>Status</p>
+          <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '9px', fontFamily: FONT }}>Status</p>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {STATUS.map((s, i) => {
-              const active = status === i;
+            {STATUS.map((s) => {
+              const active = status === s.id;
               return (
-                <button key={i} onClick={() => handleStatus(i)} style={{
+                <button key={s.id} onClick={() => handleStatus(s.id)} style={{
                   padding: '5px 11px', borderRadius: '8px', flexShrink: 1,
-                  border: `1px solid ${active ? s.border : '#e5e7eb'}`,
-                  background: active ? s.bg : 'rgba(0,0,0,0.02)',
-                  color: active ? s.text : '#6b7280',
+                  border: `1px solid ${active ? s.border : dark ? '#1e1e22' : '#e5e7eb'}`,
+                  background: active ? (dark ? s.darkBg : s.bg) : 'rgba(0,0,0,0.02)',
+                  color: active ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280'),
                   fontSize: '12px', fontWeight: active ? 600 : 400,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
                   transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
@@ -344,57 +351,57 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           </div>
         </div>
 
-        <div style={{ height: '1px', background: 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
         {/* Scrollable content */}
         <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
           <div style={{ padding: '4px 22px 8px' }}>
-            <p style={{ fontSize: '10.5px', fontWeight: 500, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '8px 0 4px', fontFamily: FONT }}>
+            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '8px 0 4px', fontFamily: FONT }}>
               Informações do Lead
             </p>
 
-            <Section openKey="goals" activeKey={activeSection} setActiveKey={setActiveSection}
+            <Section openKey="goals" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
               icon={<Target style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Objetivos">
-              <Field label="O que mais te atrai" value={lead.o_que_mais_te_atrai} />
-              <Field label="Quanto quer ganhar" value={lead.quanto_ganha} />
-              <Field label="O que quer conquistar" value={lead.o_que_conquistar} />
-              <Field label="Onde se imagina em 6 meses" value={lead.imagina_6_meses} />
+              <Field label="O que mais te atrai" value={lead.o_que_mais_te_atrai} dark={dark} />
+              <Field label="Quanto quer ganhar" value={lead.quanto_ganha} dark={dark} />
+              <Field label="O que quer conquistar" value={lead.o_que_conquistar} dark={dark} />
+              <Field label="Onde se imagina em 6 meses" value={lead.imagina_6_meses} dark={dark} />
             </Section>
 
-            <Section openKey="profile" activeKey={activeSection} setActiveKey={setActiveSection}
+            <Section openKey="profile" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
               icon={<Home style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Perfil Pessoal">
-              <Field label="Idade" value={lead.idade} />
-              <Field label="Tem filhos" value={lead.tem_filhos} />
-              <Field label="Mora com alguém" value={lead.mora_com} />
-              <Field label="Situação atual" value={lead.situacao_atual} />
-              <Field label="Rede de apoio" value={lead.rede_apoio} />
+              <Field label="Idade" value={lead.idade} dark={dark} />
+              <Field label="Tem filhos" value={lead.tem_filhos} dark={dark} />
+              <Field label="Mora com alguém" value={lead.mora_com} dark={dark} />
+              <Field label="Situação atual" value={lead.situacao_atual} dark={dark} />
+              <Field label="Rede de apoio" value={lead.rede_apoio} dark={dark} />
             </Section>
 
-            <Section openKey="exp" activeKey={activeSection} setActiveKey={setActiveSection}
+            <Section openKey="exp" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
               icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Experiência">
-              <Field label="Experiência em vendas" value={lead.experiencia_vendas} />
-              <Field label="Já tentou vender semijoia" value={lead.tentou_semijoia} />
-              <Field label="Consignado" value={lead.consignado} />
-              <Field label="Nome negativado" value={lead.negativado} />
-              <Field label="Aceita regras" value={lead.aceita_regras} />
+              <Field label="Experiência em vendas" value={lead.experiencia_vendas} dark={dark} />
+              <Field label="Já tentou vender semijoia" value={lead.tentou_semijoia} dark={dark} />
+              <Field label="Consignado" value={lead.consignado} dark={dark} />
+              <Field label="Nome negativado" value={lead.negativado} dark={dark} />
+              <Field label="Aceita regras" value={lead.aceita_regras} dark={dark} />
             </Section>
 
             {hasTraffic && (
-              <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection}
+              <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                 icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Origem do Tráfego">
-                <Field label="Fonte" value={l.utm_source} />
-                <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} />
-                <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} />
-                <Field label="Anúncio" value={l.utm_content} />
-                <Field label="Posicionamento" value={l.utm_term} />
-                {l.ip && <Field label="IP" value={l.ip} />}
+                <Field label="Fonte" value={l.utm_source} dark={dark} />
+                <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} dark={dark} />
+                <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} dark={dark} />
+                <Field label="Anúncio" value={l.utm_content} dark={dark} />
+                <Field label="Posicionamento" value={l.utm_term} dark={dark} />
+                {l.ip && <Field label="IP" value={l.ip} dark={dark} />}
               </Section>
             )}
           </div>
 
           {/* Observações */}
           <div style={{ padding: '0 22px 20px' }}>
-            <p style={{ fontSize: '10.5px', fontWeight: 500, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', fontFamily: FONT }}>
+            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', fontFamily: FONT }}>
               Observações
             </p>
             <textarea
@@ -404,9 +411,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               rows={3}
               style={{
                 width: '100%', padding: '10px 12px', fontSize: '13.5px', lineHeight: 1.55,
-                fontFamily: FONT, color: '#374151',
-                background: 'rgba(0,0,0,0.025)',
-                border: '1px solid rgba(0,0,0,0.08)',
+                fontFamily: FONT, color: dark ? '#f4f4f5' : '#374151',
+                background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.025)',
+                border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
                 borderRadius: '10px', resize: 'none', outline: 'none',
                 transition: 'border-color 0.18s cubic-bezier(0.4,0,0.2,1)',
                 boxSizing: 'border-box',
@@ -418,7 +425,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         </div>
 
         {/* Buttons: WhatsApp | Salvar */}
-        <div style={{ padding: '10px 22px 20px', display: 'flex', gap: '8px', borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
+        <div style={{ padding: '10px 22px 20px', display: 'flex', gap: '8px', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, flexShrink: 0 }}>
 
           {/* WhatsApp — botão principal */}
           <button
@@ -445,17 +452,17 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
             disabled={saving || !obsChanged}
             style={{
               flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px',
-              background: obsChanged ? '#f0fdf4' : 'rgba(0,0,0,0.03)',
-              border: `1px solid ${obsChanged ? '#bbf7d0' : 'rgba(0,0,0,0.08)'}`,
-              color: obsChanged ? '#15803d' : '#9ca3af',
+              background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'),
+              border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`,
+              color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'),
               fontSize: '13px', fontWeight: 500,
               cursor: obsChanged ? 'pointer' : 'default',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
               fontFamily: FONT,
             }}
-            onMouseEnter={e => { if (obsChanged) (e.currentTarget.style.background = '#dcfce7'); }}
-            onMouseLeave={e => { if (obsChanged) (e.currentTarget.style.background = '#f0fdf4'); }}
+            onMouseEnter={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.15)' : '#dcfce7'); }}
+            onMouseLeave={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4'); }}
           >
             <Save style={{ width: '13px', height: '13px', strokeWidth: 1.8 }} />
             {saving ? 'Salvando…' : 'Salvar'}

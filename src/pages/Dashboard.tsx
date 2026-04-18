@@ -26,15 +26,14 @@ const PERIOD_FILTERS = [
 ];
 
 const FUNNEL_CONFIG = [
-  { stage: 'Aguardando',     statusId: 0, color: '#3b82f6' },
-  { stage: 'Em atendimento', statusId: 1, color: '#f97316' },
+  { stage: 'Em atendimento', statusId: 1, color: '#3b82f6' },
   { stage: 'Reunião',        statusId: 2, color: '#a855f7' },
   { stage: 'Aprovado',       statusId: 3, color: '#22c55e' },
 ];
 
-const STATUS_LABEL: Record<number,string> = { 0:'Aguardando',1:'Em atendimento',2:'Reunião',3:'Aprovado' };
-const STATUS_DARK:  Record<number,string> = { 0:'bg-amber-100 text-amber-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700' };
-const STATUS_LIGHT: Record<number,string> = { 0:'bg-amber-100 text-amber-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700' };
+const STATUS_LABEL: Record<number,string> = { 0:'Em atendimento',1:'Em atendimento',2:'Reunião',3:'Aprovado', 4:'Reprovado' };
+const STATUS_DARK:  Record<number,string> = { 0:'bg-blue-900/40 text-blue-300',1:'bg-blue-900/40 text-blue-300',2:'bg-purple-900/40 text-purple-300',3:'bg-emerald-900/40 text-emerald-300', 4:'bg-rose-900/40 text-rose-300' };
+const STATUS_LIGHT: Record<number,string> = { 0:'bg-blue-100 text-blue-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700', 4:'bg-rose-100 text-rose-700' };
 const AVATAR_COLORS = ['bg-rose-400','bg-yellow-400','bg-emerald-400','bg-orange-400','bg-cyan-400','bg-violet-400','bg-pink-400'];
 
 function initials(n:string){ return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
@@ -108,12 +107,17 @@ async function fetchMetaData(period:string,from?:string,to?:string, leadsList: L
     const insData=await insRes.json();
     let spend=0,impressions=0,clicks=0,ctr=0,leads=0;
     if(insData.data?.length){const d=insData.data[0];spend=parseFloat(d.spend||'0');impressions=parseInt(d.impressions||'0');clicks=parseInt(d.clicks||'0');ctr=parseFloat(d.ctr||'0');const la=(d.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type));leads=la?parseInt(la.value||'0'):0;}
-    const campRes=await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/campaigns?fields=name,status&limit=20&access_token=${META_TOKEN}`);
-    const campData=await campRes.json();
+    
+    // Optimized: Fetch campaign insights in a single batch call instead of many individual calls
+    const campInsRes=await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${META_TOKEN}`);
+    const campInsData=await campInsRes.json();
     const campaigns:Campaign[]=[];
-    await Promise.all((campData.data||[]).slice(0,20).map(async(c:any)=>{
-      try{const r=await fetch(`https://graph.facebook.com/v18.0/${c.id}/insights?fields=spend,actions&${timeParam}&access_token=${META_TOKEN}`);const d=await r.json();const ins=d.data?.[0];const cSpend=parseFloat(ins?.spend||'0');const cLeads=parseInt((ins?.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');if(cSpend>0)campaigns.push({id:c.id,name:c.name,status:c.status,spend:cSpend,leads_api:cLeads});}catch{}
-    }));
+    (campInsData.data||[]).forEach((ins:any)=>{
+      const cSpend=parseFloat(ins.spend||'0');
+      const cLeads=parseInt((ins.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');
+      if(cSpend>0) campaigns.push({id:ins.campaign_id,name:ins.campaign_name,status:'ACTIVE',spend:cSpend,leads_api:cLeads});
+    });
+
     const totalLeadsFB = leadsList.filter(l => l.utm_source && l.utm_source.toUpperCase() === 'FB').length;
     const cplRealTime = totalLeadsFB > 0 ? spend / totalLeadsFB : 0;
     return{metrics:{spend,impressions,clicks,ctr,leads,cpl:leads>0?spend/leads:0,cplRealTime},campaigns};
@@ -168,7 +172,14 @@ export default function Dashboard() {
   const spend=metaMetrics.spend||0;
   const cplMeta=metaMetrics.cpl||0;
   const chartData=useMemo(()=>buildChartData(filtered,selectedPeriod,customFrom,customTo),[filtered,selectedPeriod,customFrom,customTo]);
-  const funnelData=useMemo(()=>FUNNEL_CONFIG.map(f=>({...f,value:filtered.filter(l=>toNum(l.status)===f.statusId).length})),[filtered]);
+  const funnelData=useMemo(()=>FUNNEL_CONFIG.map(f=>{
+    const value = filtered.filter(l => {
+      let s = toNum(l.status);
+      if (s === 0) s = 1;
+      return s === f.statusId;
+    }).length;
+    return { ...f, value };
+  }), [filtered]);
   const recentLeads=useMemo(()=>[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5),[allLeads]);
   const campRows=useMemo(()=>{
     if(!metaCampaigns.length)return[];
@@ -310,31 +321,78 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
-            <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 4px'}}>Funil</h3>
-            <p style={{fontSize:'11px',color:txtMid,marginBottom:'14px'}}>{periodLabel}</p>
-            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-              {funnelData.map(stage=>{
-                const pct=totalLeads>0?Math.round((stage.value/Math.max(totalLeads,1))*100):0;
-                return(
-                  <div key={stage.stage}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'3px'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                        <div style={{width:'5px',height:'5px',borderRadius:'50%',background:stage.color}}/>
-                        <span style={{fontSize:'11.5px',color:txtMid}}>{stage.stage}</span>
+          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`, position: 'relative', overflow: 'hidden'}}>
+            <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 4px'}}>Funil de leads</h3>
+            <p style={{fontSize:'11px',color:txtMid,marginBottom: '16px'}}>{periodLabel}</p>
+            
+            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              {/* Image-Style Funnel Stages */}
+              {funnelData.map((stage) => {
+                const pct = totalLeads > 0 ? Math.round((stage.value / Math.max(totalLeads, 1)) * 100) : 0;
+                
+                return (
+                  <div key={stage.stage} style={{ 
+                    background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                    border: `1px solid ${border}`,
+                    borderRadius: '10px',
+                    padding: '12px 14px 14px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}>
+                    {/* Left Accent */}
+                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: stage.color }} />
+
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: txtHi }}>{stage.stage}</span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '24px' }}>
+                        <span style={{ fontSize: '18px', fontWeight: 700, color: txtHi }}>{loading ? '…' : stage.value}</span>
+                        <div style={{ 
+                          padding: '4px 10px', 
+                          borderRadius: '8px', 
+                          background: stage.color + '10',
+                          color: stage.color,
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          minWidth: '40px',
+                          textAlign: 'center'
+                        }}>
+                          {loading ? '…' : `${pct}%`}
+                        </div>
                       </div>
-                      <span style={{fontSize:'12px',fontWeight:500,color:txtHi}}>{loading?'…':stage.value}</span>
                     </div>
-                    <div style={{height:'4px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${loading?0:pct}%`,background:stage.color,borderRadius:'99px',transition:'width 0.5s ease'}}/>
+
+                    <div style={{ width: '100%', height: '5px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: '10px' }}>
+                      <div style={{ 
+                        width: `${pct}%`, 
+                        height: '100%', 
+                        background: stage.color, 
+                        borderRadius: '10px',
+                        transition: 'width 0.8s ease'
+                      }} />
                     </div>
                   </div>
                 );
               })}
-            </div>
-            <div style={{marginTop:'14px',paddingTop:'12px',borderTop:`1px solid ${divCls}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <span style={{fontSize:'12px',color:txtMid}}>Conversão</span>
-              <span style={{fontSize:'15px',fontWeight:600,color:'#2563eb'}}>{convRate}%</span>
+
+              {/* Conversion Rate Card */}
+              <div style={{
+                marginTop: '4px',
+                background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                border: `1px solid ${border}`,
+                borderRadius: '10px',
+                padding: '14px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px'
+              }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(34,197,94,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <TrendingUp style={{width: '20px', height: '20px', color: '#22c55e'}} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '11px', color: txtLow, fontWeight: 500, opacity: 0.8 }}>Taxa de conversão</span>
+                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#22c55e' }}>{convRate}%</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

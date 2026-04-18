@@ -16,10 +16,11 @@ import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 
 const STATUS_BADGE = [
-  { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
-  { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
-  { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
-  { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  { bg: 'bg-blue-100 dark:bg-blue-900/40',    text: 'text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500'    }, // 0: Em atendimento
+  { bg: 'bg-blue-100 dark:bg-blue-900/40',    text: 'text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500'    }, // 1: Em atendimento
+  { bg: 'bg-purple-100 dark:bg-purple-900/40',  text: 'text-purple-700 dark:text-purple-300',   dot: 'bg-purple-500'  }, // 2: Reunião
+  { bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300',  dot: 'bg-emerald-500' }, // 3: Aprovado
+  { bg: 'bg-rose-100 dark:bg-rose-900/40',    text: 'text-rose-700 dark:text-rose-300',    dot: 'bg-rose-500'    }, // 4: Reprovado
 ];
 
 const PERIOD_OPTIONS = [
@@ -34,7 +35,7 @@ const PERIOD_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { label: 'Todos os status', value: 'all' },
-  ...STATUS_LABELS.map((l, i) => ({ label: l, value: String(i) })),
+  ...STATUS_LABELS.map((l, i) => ({ label: l, value: String(i) })).filter((_, i) => i !== 0), // Omit index 0
 ];
 
 function getInitials(name: string) {
@@ -109,8 +110,10 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
 }
 
 function toStatusNum(s: any): number {
-  if (s === null || s === undefined || s === '') return 0;
-  const n = Number(s); return isNaN(n) ? 0 : n;
+  if (s === null || s === undefined || s === '') return 1;
+  let n = Number(s); 
+  if (isNaN(n) || n === 0) return 1;
+  return n;
 }
 
 function FilterDropdown({ value, options, onChange, dark }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void; dark: boolean; }) {
@@ -238,7 +241,7 @@ export default function LeadsPage() {
       setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false);
       toast.success('Lead duplicado atualizado!'); return;
     }
-    const { data, error } = await supabase.from('leads').insert({ nome: newLead.nome.trim(), whatsapp: newLead.whatsapp, cidade: cidadeNorm, status: 0, created_at: new Date().toISOString() }).select('*').single();
+    const { data, error } = await supabase.from('leads').insert({ nome: newLead.nome.trim(), whatsapp: newLead.whatsapp, cidade: cidadeNorm, status: 1, created_at: new Date().toISOString() }).select('*').single();
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
     setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false);
@@ -454,7 +457,7 @@ export default function LeadsPage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {selectedIds.size > 0 && (
-                      <input type="checkbox" checked={sel} readOnly style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0, pointerEvents: 'none' }} />
+                      <input type="checkbox" checked={sel} readOnly style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0, pointerEvents: 'none', opacity: 0.5, borderRadius: '4px' }} />
                     )}
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{getInitials(lead.nome)}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -490,7 +493,7 @@ export default function LeadsPage() {
               <thead>
                 <tr className={`border-b ${divider} ${theadBg}`}>
                   <th className="pl-5 pr-2 py-3 w-8">
-                    <input type="checkbox" checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.has(l.id))} onChange={e => { const n = new Set(selectedIds); paginatedLeads.forEach(l => e.target.checked ? n.add(l.id) : n.delete(l.id)); setSelectedIds(n); }} style={{ width: '15px', height: '15px', accentColor: '#2563eb' }} />
+                    <input type="checkbox" checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.has(l.id))} onChange={e => { const n = new Set(selectedIds); paginatedLeads.forEach(l => e.target.checked ? n.add(l.id) : n.delete(l.id)); setSelectedIds(n); }} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.6, borderRadius: '4px', cursor: 'pointer' }} />
                   </th>
                   {['Nome', 'WhatsApp', 'Cidade', 'Status', 'Entrada', 'Ações'].map(h => (
                     <th key={h} className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
@@ -513,7 +516,7 @@ export default function LeadsPage() {
                       onClick={() => setViewingLead(lead)}
                     >
                       <td className="pl-5 pr-2 py-4 w-8" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); }} onClick={e => e.stopPropagation()} style={{ width: '15px', height: '15px', accentColor: '#2563eb' }} />
+                        <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); }} onClick={e => e.stopPropagation()} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.5, borderRadius: '4px', cursor: 'pointer' }} />
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
@@ -536,8 +539,12 @@ export default function LeadsPage() {
                       <td className={`px-4 py-4 text-sm whitespace-nowrap ${muted}`}>{formatEntrada(lead.created_at)}</td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-green-50 inline-flex items-center justify-center text-green-600 hover:bg-green-100 transition-colors"><MessageCircle className="w-4 h-4" /></a>
-                          <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className="w-8 h-8 rounded-lg bg-blue-50 inline-flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors"><Edit className="w-4 h-4" /></button>
+                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                          <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
+                            <Edit className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
