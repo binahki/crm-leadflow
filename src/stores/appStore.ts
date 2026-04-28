@@ -33,6 +33,8 @@ export interface Lead {
   user_id?: string;
   utm_source?: string;
   quiz_data?: Record<string, unknown>;
+  ultimo_status_change?: string;
+  motivo_reprovacao?: string;
 }
 
 export interface Campaign {

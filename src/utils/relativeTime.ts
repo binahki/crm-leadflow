@@ -5,7 +5,10 @@ export function getRelativeTime(dateStr: string | null | undefined): string {
 
   // Suporta formato brasileiro "9/4/2026 15:15" e ISO "2026-04-09T15:15:00"
   if (dateStr.includes('T') || dateStr.endsWith('Z')) {
-    const normalized = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+    let normalized = dateStr;
+    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      normalized += 'Z';
+    }
     data = new Date(normalized);
   } else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
     // formato "D/M/YYYY HH:mm"
@@ -44,7 +47,10 @@ export function formatDate(dateStr: string | null | undefined): string {
 
 function getDateObj(dateStr: string): Date {
   if (dateStr.includes('T') || dateStr.endsWith('Z')) {
-    const normalized = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+    let normalized = dateStr;
+    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:?\d{2}$/)) {
+      normalized += 'Z';
+    }
     return new Date(normalized);
   }
   if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
