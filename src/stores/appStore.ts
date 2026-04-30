@@ -35,6 +35,10 @@ export interface Lead {
   quiz_data?: Record<string, unknown>;
   ultimo_status_change?: string;
   motivo_reprovacao?: string;
+  score?: number | null;
+  faixa?: 'verde' | 'amarelo' | 'vermelho' | null;
+  // Campos dinâmicos do quiz (qualquer campo novo do InLead cai aqui)
+  [key: string]: unknown;
 }
 
 export interface Campaign {
@@ -69,19 +73,64 @@ export interface Creative {
   leads?: number;
 }
 
+export interface CamposPerfil {
+  label: string;
+  campo: string;
+}
+
+// Uma trava: se o campo contém o texto, a trava é ativada
+export interface Trava {
+  campo: string;   // coluna da tabela leads ex: "negativado"
+  contem: string;  // texto que ativa a trava ex: "sim"
+}
+
+export interface Configuracoes {
+  campos_perfil: CamposPerfil[];
+  faixas_score: {
+    travas: Trava[];
+    vermelho_se_todas: boolean; // true = vermelho só se TODAS as travas ativadas
+  };
+}
+
+// Calcula faixa com base nas travas configuradas no Supabase
+// Sem mexer nessa função, funciona para qualquer empresa
+export function calcularFaixa(
+  lead: Lead,
+  config: Configuracoes
+): 'verde' | 'amarelo' | 'vermelho' | null {
+  if (!config?.faixas_score?.travas?.length) return null;
+
+  const { travas, vermelho_se_todas } = config.faixas_score;
+
+  // Conta quantas travas foram ativadas
+  const travaAtivada = (trava: Trava): boolean => {
+    const valor = String(lead[trava.campo] || '').toLowerCase();
+    return valor.includes(trava.contem.toLowerCase());
+  };
+
+  const travaCount = travas.filter(travaAtivada).length;
+
+  if (travaCount === 0) return 'verde';
+
+  if (vermelho_se_todas && travaCount === travas.length) return 'vermelho';
+
+  return 'amarelo';
+}
+
 export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado'];
 export const STATUS_COLORS = [
-  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    }, // 0: Em atendimento (merged)
-  { bg: 'bg-blue-50',    text: 'text-blue-600',     dot: 'bg-blue-400'    }, // 1: Em atendimento
-  { bg: 'bg-violet-50',  text: 'text-violet-600',   dot: 'bg-violet-400'  }, // 2: Reunião
-  { bg: 'bg-emerald-50', text: 'text-emerald-600',  dot: 'bg-emerald-400' }, // 3: Aprovado
-  { bg: 'bg-rose-50',    text: 'text-rose-600',    dot: 'bg-rose-400'    }, // 4: Reprovado
+  { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
+  { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
+  { bg: 'bg-violet-50', text: 'text-violet-600', dot: 'bg-violet-400' },
+  { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-400' },
+  { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-400' },
 ];
 
 interface AppState {
   leads: Lead[];
   campaigns: Campaign[];
   creatives: Creative[];
+  configuracoes: Configuracoes | null;
   metaAccountId: string;
   metaToken: string;
   period: string;
@@ -97,16 +146,20 @@ interface AppState {
   setPeriod: (period: string) => void;
   setMetaAccountId: (id: string) => void;
   setMetaToken: (token: string) => void;
+  setConfiguracoes: (config: Configuracoes) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   leads: [],
   campaigns: [],
   creatives: [],
-  metaAccountId: '1667716164425149',
-  metaToken: 'EAASFxUC4PS0BRKyaU0lCw6uFQowDuH9epT4Afru4AxQNbykYcngh80exvpg0yipFBBxJnvdPKiAgJxuUBTBWzyFZCZBaY0EvhiZBIeSGFNrLe8ZAkcCC29Qfsk8ZCci4j87dZBpJKvHf19aKkMp4186ZAW9NG3fKrL4FFte1UFiSVAHlcRqZAmPGKdOnBZAPEurZAxIm37VQan3gMURGVrfrmkn4V4LwohCMplaYqVl5ENpI4MXt2EsXEuANwrs8ni95eO2H0tVd5GFZAcOephEyuBCgAZCvMb0WjS2ljOfZAZBQZDZD',
+  configuracoes: null,
+  metaAccountId: import.meta.env.VITE_META_ACCOUNT || '',
+  metaToken: import.meta.env.VITE_META_TOKEN || '',
   period: 'last_30d',
-  theme: (typeof window !== 'undefined' ? (localStorage.getItem('theme') as 'light' | 'dark') || 'light' : 'light'),
+  theme: (typeof window !== 'undefined'
+    ? (localStorage.getItem('theme') as 'light' | 'dark') || 'light'
+    : 'light'),
 
   setTheme: (theme) => set({ theme }),
   toggleTheme: () => set((s) => ({ theme: s.theme === 'light' ? 'dark' : 'light' })),
@@ -121,4 +174,5 @@ export const useAppStore = create<AppState>((set) => ({
   setPeriod: (period) => set({ period }),
   setMetaAccountId: (metaAccountId) => set({ metaAccountId }),
   setMetaToken: (metaToken) => set({ metaToken }),
+  setConfiguracoes: (configuracoes) => set({ configuracoes }),
 }));

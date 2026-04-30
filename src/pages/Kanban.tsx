@@ -5,7 +5,7 @@ import {
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, Lead } from '@/stores/appStore';
+import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -98,14 +98,18 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: {
 function ObsBadge({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   return (
-    <div onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)} onPointerDown={e => e.stopPropagation()} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+    <div
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onPointerDown={e => e.stopPropagation()}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0, zIndex: show ? 200 : 1 }}
+    >
       <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#f59e0b', cursor: 'default', background: 'rgba(245,158,11,0.1)', padding: '2px 6px', borderRadius: '20px', fontWeight: 500 }}>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>Obs
       </span>
       {show && (
-        <div style={{ position: 'absolute', bottom: 'calc(100% + 7px)', left: '50%', transform: 'translateX(-50%)', background: '#1f2937', color: '#f9fafb', fontSize: '12px', lineHeight: 1.5, padding: '8px 12px', borderRadius: '9px', maxWidth: '220px', minWidth: '100px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', zIndex: 100, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', transform: 'translateX(-50%)', background: '#1f2937', color: '#f9fafb', fontSize: '12px', lineHeight: 1.5, padding: '8px 12px', borderRadius: '9px', maxWidth: '220px', minWidth: '100px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.35)', pointerEvents: 'none', marginTop: '-60px' }}>
           {text}
-          <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #1f2937' }} />
         </div>
       )}
     </div>
@@ -125,6 +129,8 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
   const dias = getDias(lead);
   const showAlerta = statusNum === 2 && dias >= 3;
   const motivo = (lead as any).motivo_reprovacao as string | undefined;
+  const { configuracoes } = useAppStore();
+  const faixaLead = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
 
   return (
     <div ref={setNodeRef} {...attributes} {...listeners} onClick={onCardClick}
@@ -145,7 +151,12 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
       {/* Nome + menu */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{initials(lead.nome)}</div>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700 }}>{initials(lead.nome)}</div>
+            {faixaLead && faixaLead !== 'vermelho' && (
+              <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '12px', height: '12px', borderRadius: '50%', background: faixaLead === 'verde' ? '#10b981' : '#f59e0b', border: `2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            )}
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '13.5px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'Lead sem nome'}</p>
             <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{lead.whatsapp || '—'}</p>
@@ -156,16 +167,22 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
         </button>
       </div>
 
-      {/* Alerta discreto — inline no tempo */}
+
 
       {/* Cidade + tempo + obs + alerta discreto */}
       <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#9ca3af' }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />{lead.cidade}</span>}
-        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: showAlerta ? '#ef4444' : '#9ca3af' }}>
-          <Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />
-          {getRelativeTime(lead.created_at)}
-          {showAlerta && <span style={{ marginLeft: '2px' }}>· ⚠️ {dias}d parado</span>}
-        </span>
+        {showAlerta ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#ef4444' }}>
+            <Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />
+            ⚠️ {dias}d sem contato
+          </span>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11.5px', color: '#9ca3af' }}>
+            <Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8, flexShrink: 0 }} />
+            {getRelativeTime(lead.created_at)}
+          </span>
+        )}
         {lead.observacoes && lead.observacoes.trim() && <ObsBadge text={lead.observacoes.trim()} />}
       </div>
 

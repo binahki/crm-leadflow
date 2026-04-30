@@ -1,9 +1,6 @@
-// Cole este conteúdo em src/pages/Leads.tsx
-// Adiciona suporte mobile: tabela vira cards empilhados em telas < 768px
-
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, Lead, STATUS_LABELS } from '@/stores/appStore';
+import { useAppStore, Lead, STATUS_LABELS, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -16,11 +13,11 @@ import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 
 const STATUS_BADGE = [
-  { bg: 'bg-blue-100 dark:bg-blue-900/40',    text: 'text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500'    }, // 0: Em atendimento
-  { bg: 'bg-blue-100 dark:bg-blue-900/40',    text: 'text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500'    }, // 1: Em atendimento
-  { bg: 'bg-purple-100 dark:bg-purple-900/40',  text: 'text-purple-700 dark:text-purple-300',   dot: 'bg-purple-500'  }, // 2: Reunião
-  { bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300',  dot: 'bg-emerald-500' }, // 3: Aprovado
-  { bg: 'bg-rose-100 dark:bg-rose-900/40',    text: 'text-rose-700 dark:text-rose-300',    dot: 'bg-rose-500'    }, // 4: Reprovado
+  { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
+  { bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  { bg: 'bg-rose-100 dark:bg-rose-900/40', text: 'text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
 ];
 
 const PERIOD_OPTIONS = [
@@ -35,7 +32,7 @@ const PERIOD_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { label: 'Todos os status', value: 'all' },
-  ...STATUS_LABELS.map((l, i) => ({ label: l, value: String(i) })).filter((_, i) => i !== 0), // Omit index 0
+  ...STATUS_LABELS.map((l, i) => ({ label: l, value: String(i) })).filter((_, i) => i !== 0),
 ];
 
 function getInitials(name: string) {
@@ -111,9 +108,22 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
 
 function toStatusNum(s: any): number {
   if (s === null || s === undefined || s === '') return 1;
-  let n = Number(s); 
-  if (isNaN(n) || n === 0) return 1;
-  return n;
+  const n = Number(s); if (isNaN(n) || n === 0) return 1; return n;
+}
+
+// Bolinha de faixa — mesma lógica do Kanban
+function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
+  const { configuracoes } = useAppStore();
+  const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
+  if (!faixa || faixa === 'vermelho') return null;
+  return (
+    <div style={{
+      width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
+      background: faixa === 'verde' ? '#10b981' : '#f59e0b',
+      border: `2px solid ${dark ? '#111113' : '#ffffff'}`,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+    }} />
+  );
 }
 
 function FilterDropdown({ value, options, onChange, dark }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void; dark: boolean; }) {
@@ -165,7 +175,6 @@ export default function LeadsPage() {
   const dark = theme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
 
@@ -206,11 +215,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     const ch = supabase.channel('leads-rt2')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, p => {
-        const novo = p.new as Lead;
-        setAllLeads(prev => [novo, ...prev]);
-        toast.success(`Novo lead: ${novo.nome || 'Sem nome'}`, { duration: 3000, position: 'bottom-left' });
-      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, p => { const novo = p.new as Lead; setAllLeads(prev => [novo, ...prev]); toast.success(`Novo lead: ${novo.nome || 'Sem nome'}`, { duration: 3000, position: 'bottom-left' }); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, p => { setAllLeads(prev => prev.map(l => l.id === (p.new as Lead).id ? p.new as Lead : l)); })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'leads' }, p => { setAllLeads(prev => prev.filter(l => l.id !== (p.old as { id: string }).id)); })
       .subscribe();
@@ -238,14 +243,12 @@ export default function LeadsPage() {
       const { error } = await supabase.from('leads').update({ nome: newLead.nome.trim(), cidade: cidadeNorm }).eq('id', existing.id);
       if (error) { toast.error(`Erro: ${error.message}`); return; }
       setAllLeads(prev => prev.map(l => l.id === existing.id ? { ...l, nome: newLead.nome.trim(), cidade: cidadeNorm } : l));
-      setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false);
-      toast.success('Lead duplicado atualizado!'); return;
+      setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false); toast.success('Lead duplicado atualizado!'); return;
     }
     const { data, error } = await supabase.from('leads').insert({ nome: newLead.nome.trim(), whatsapp: newLead.whatsapp, cidade: cidadeNorm, status: 1, created_at: new Date().toISOString() }).select('*').single();
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
-    setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false);
-    toast.success('Lead adicionado!');
+    setNewLead({ nome: '', whatsapp: '', cidade: '' }); setIsAddOpen(false); toast.success('Lead adicionado!');
   };
 
   const handleEditLead = async () => {
@@ -255,8 +258,7 @@ export default function LeadsPage() {
     const { error } = await supabase.from('leads').update(updates).eq('id', editingLead.id);
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     setAllLeads(prev => prev.map(l => l.id === editingLead.id ? { ...l, ...updates } : l));
-    updateLead(editingLead.id, updates); setIsEditOpen(false); setEditingLead(null);
-    toast.success('Lead atualizado!');
+    updateLead(editingLead.id, updates); setIsEditOpen(false); setEditingLead(null); toast.success('Lead atualizado!');
   };
 
   const handleDeleteSelected = async () => {
@@ -266,8 +268,7 @@ export default function LeadsPage() {
     setDeleting(false);
     if (error) { toast.error('Erro ao excluir'); return; }
     setAllLeads(prev => prev.filter(l => !selectedIds.has(l.id)));
-    setSelectedIds(new Set()); setShowDeleteConf(false);
-    toast.success(`${ids.length} lead(s) excluído(s)!`);
+    setSelectedIds(new Set()); setShowDeleteConf(false); toast.success(`${ids.length} lead(s) excluído(s)!`);
   };
 
   const exportCSV = () => {
@@ -290,7 +291,6 @@ export default function LeadsPage() {
   const theadBg = dark ? 'bg-[#18181b]' : 'bg-gray-50';
   const hov = dark ? 'hover:bg-[#1a1a1e]' : 'hover:bg-blue-50/50';
   const card = dark ? 'bg-[#111113] border-[#1e1e22]' : 'bg-white border-gray-100';
-
   const inputStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: '9px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f9fafb', color: dark ? '#f4f4f5' : '#111827', fontSize: '13.5px', outline: 'none', fontFamily: 'inherit' };
   const btnGhost: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 10px', borderRadius: '9px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#111113' : '#ffffff', color: dark ? '#a1a1aa' : '#374151', fontSize: '12.5px', cursor: 'pointer', fontFamily: 'inherit' };
 
@@ -300,26 +300,14 @@ export default function LeadsPage() {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', gap: '8px' }}>
-          <div>
-            <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
-          </div>
+          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             {isMobile ? (
               <>
-                {selectedIds.size > 0 && (
-                  <button onClick={() => setShowDeleteConf(true)} style={{ ...btnGhost, border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', padding: '7px' }}>
-                    <Trash2 style={{ width: '16px', height: '16px' }} />
-                  </button>
-                )}
-                <button onClick={() => setShowFilters(v => !v)} style={{ ...btnGhost, gap: '4px' }}>
-                  <Filter style={{ width: '14px', height: '14px' }} /> Filtros
-                </button>
+                {selectedIds.size > 0 && <button onClick={() => setShowDeleteConf(true)} style={{ ...btnGhost, border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', padding: '7px' }}><Trash2 style={{ width: '16px', height: '16px' }} /></button>}
+                <button onClick={() => setShowFilters(v => !v)} style={{ ...btnGhost, gap: '4px' }}><Filter style={{ width: '14px', height: '14px' }} /> Filtros</button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild>
-                    <button style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                      <Plus style={{ width: '14px', height: '14px' }} /> Add
-                    </button>
-                  </DialogTrigger>
+                  <DialogTrigger asChild><button style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}><Plus style={{ width: '14px', height: '14px' }} /> Add</button></DialogTrigger>
                   <DialogContent style={{ background: dark ? '#111113' : '#fff', border: `1px solid ${border}`, borderRadius: '16px' }}>
                     <DialogHeader><DialogTitle style={{ color: dark ? '#fff' : '#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
@@ -370,9 +358,7 @@ export default function LeadsPage() {
                   <Trash2 style={{ width: '13px', height: '13px' }} />{selectedIds.size > 0 && `(${selectedIds.size})`}
                 </button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild>
-                    <button style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}><Plus style={{ width: '14px', height: '14px' }} /> Adicionar</button>
-                  </DialogTrigger>
+                  <DialogTrigger asChild><button style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}><Plus style={{ width: '14px', height: '14px' }} /> Adicionar</button></DialogTrigger>
                   <DialogContent style={{ background: dark ? '#111113' : '#fff', border: `1px solid ${border}`, borderRadius: '16px' }}>
                     <DialogHeader><DialogTitle style={{ color: dark ? '#fff' : '#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
@@ -406,78 +392,47 @@ export default function LeadsPage() {
           </div>
         )}
 
-        {/* Mobile: cards */}
+        {/* Mobile cards */}
         {isMobile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {isLoading ? (
-              [...Array(5)].map((_, i) => <div key={i} style={{ height: '88px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />)
-            ) : paginatedLeads.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: txtMid, fontSize: '13px' }}>Nenhum lead encontrado</div>
-            ) : paginatedLeads.map(lead => {
-              const s = toStatusNum(lead.status);
-              const badge = STATUS_BADGE[s] ?? STATUS_BADGE[0];
-              const sel = selectedIds.has(lead.id);
-              return (
-                <div key={lead.id}
-                  onTouchStart={() => {
-                    longPressTriggered.current = false;
-                    pressTimer.current = setTimeout(() => {
-                      longPressTriggered.current = true;
-                      setSelectedIds(prev => {
-                        const n = new Set(prev);
-                        if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id);
-                        return n;
-                      });
-                      if (window.navigator?.vibrate) window.navigator.vibrate(50);
-                    }, 450);
-                  }}
-                  onTouchEnd={() => pressTimer.current && clearTimeout(pressTimer.current)}
-                  onTouchMove={() => pressTimer.current && clearTimeout(pressTimer.current)}
-                  onContextMenu={(e) => { e.preventDefault(); }} // avoid default browser context menu on long press
-                  onClick={() => {
-                    if (longPressTriggered.current) {
-                      longPressTriggered.current = false;
-                      return;
-                    }
-                    if (selectedIds.size > 0) {
-                      const n = new Set(selectedIds);
-                      if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id);
-                      setSelectedIds(n);
-                    } else {
-                      setViewingLead(lead);
-                    }
-                  }}
-                  style={{
-                    background: cardBg, borderRadius: '12px', padding: '12px 14px',
-                    border: `1px solid ${sel ? '#2563eb' : border}`,
-                    boxShadow: sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)',
-                    cursor: 'pointer', transition: 'all 0.12s',
-                    userSelect: 'none', WebkitUserSelect: 'none',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {selectedIds.size > 0 && (
-                      <input type="checkbox" checked={sel} readOnly style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0, pointerEvents: 'none', opacity: 0.5, borderRadius: '4px' }} />
-                    )}
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>{getInitials(lead.nome)}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || '—'}</p>
-                      <p style={{ fontSize: '12px', color: txtMid, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {lead.cidade ? normalizeCity(lead.cidade) : ''}{lead.cidade && lead.whatsapp ? ' · ' : ''}{lead.whatsapp || ''}
-                      </p>
+            {isLoading ? [...Array(5)].map((_, i) => <div key={i} style={{ height: '88px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />)
+              : paginatedLeads.length === 0 ? <div style={{ textAlign: 'center', padding: '40px 0', color: txtMid, fontSize: '13px' }}>Nenhum lead encontrado</div>
+                : paginatedLeads.map(lead => {
+                  const s = toStatusNum(lead.status);
+                  const badge = STATUS_BADGE[s] ?? STATUS_BADGE[0];
+                  const sel = selectedIds.has(lead.id);
+                  return (
+                    <div key={lead.id}
+                      onTouchStart={() => { longPressTriggered.current = false; pressTimer.current = setTimeout(() => { longPressTriggered.current = true; setSelectedIds(prev => { const n = new Set(prev); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); return n; }); if (window.navigator?.vibrate) window.navigator.vibrate(50); }, 450); }}
+                      onTouchEnd={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                      onTouchMove={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                      onContextMenu={e => e.preventDefault()}
+                      onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } if (selectedIds.size > 0) { const n = new Set(selectedIds); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); setSelectedIds(n); } else { setViewingLead(lead); } }}
+                      style={{ background: cardBg, borderRadius: '12px', padding: '12px 14px', border: `1px solid ${sel ? '#2563eb' : border}`, boxShadow: sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'all 0.12s', userSelect: 'none', WebkitUserSelect: 'none' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width: '15px', height: '15px', accentColor: '#2563eb', flexShrink: 0, pointerEvents: 'none' }} />}
+                        {/* Avatar com bolinha faixa */}
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700 }}>{getInitials(lead.nome)}</div>
+                          <FaixaDot lead={lead} dark={dark} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || '—'}</p>
+                          <p style={{ fontSize: '12px', color: txtMid, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {lead.cidade ? normalizeCity(lead.cidade) : ''}{lead.cidade && lead.whatsapp ? ' · ' : ''}{lead.whatsapp || ''}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />{STATUS_LABELS[s]}
+                          </span>
+                          <span style={{ fontSize: '11px', color: txtMid }}>{formatEntrada(lead.created_at)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />{STATUS_LABELS[s]}
-                      </span>
-                      <span style={{ fontSize: '11px', color: txtMid }}>{formatEntrada(lead.created_at)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Pagination mobile */}
+                  );
+                })}
             {!isLoading && totalPages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '8px 0' }}>
                 <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding: '8px 16px', borderRadius: '8px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: currentPage === 1 ? 'default' : 'pointer', opacity: currentPage === 1 ? 0.4 : 1 }}>Anterior</button>
@@ -487,13 +442,13 @@ export default function LeadsPage() {
             )}
           </div>
         ) : (
-          /* Desktop: tabela original */
+          /* Desktop tabela */
           <div className={`rounded-2xl border overflow-hidden ${card}`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className={`border-b ${divider} ${theadBg}`}>
                   <th className="pl-5 pr-2 py-3 w-8">
-                    <input type="checkbox" checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.has(l.id))} onChange={e => { const n = new Set(selectedIds); paginatedLeads.forEach(l => e.target.checked ? n.add(l.id) : n.delete(l.id)); setSelectedIds(n); }} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.6, borderRadius: '4px', cursor: 'pointer' }} />
+                    <input type="checkbox" checked={paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.has(l.id))} onChange={e => { const n = new Set(selectedIds); paginatedLeads.forEach(l => e.target.checked ? n.add(l.id) : n.delete(l.id)); setSelectedIds(n); }} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.6, cursor: 'pointer' }} />
                   </th>
                   {['Nome', 'WhatsApp', 'Cidade', 'Status', 'Entrada', 'Ações'].map(h => (
                     <th key={h} className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
@@ -512,15 +467,21 @@ export default function LeadsPage() {
                   const obs = (lead as any).observacoes as string | null | undefined;
                   return (
                     <tr key={lead.id}
-                      className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : idx % 2 === 0 ? '' : dark ? 'bg-[#0f0f11]' : 'bg-gray-50/50'} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
+                      className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : idx % 2 === 0 ? '' : (dark ? 'bg-[#0f0f11]' : 'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
                       onClick={() => setViewingLead(lead)}
                     >
                       <td className="pl-5 pr-2 py-4 w-8" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); }} onClick={e => e.stopPropagation()} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.5, borderRadius: '4px', cursor: 'pointer' }} />
+                        <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); }} onClick={e => e.stopPropagation()} style={{ width: '15px', height: '15px', accentColor: '#3b82f6', opacity: 0.5, cursor: 'pointer' }} />
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-[#4b5563] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{getInitials(lead.nome)}</div>
+                          {/* Avatar com bolinha faixa */}
+                          <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <div className="w-8 h-8 rounded-full bg-[#4b5563] flex items-center justify-center text-white text-xs font-bold">{getInitials(lead.nome)}</div>
+                            <div style={{ position: 'absolute', top: '-3px', right: '-3px' }}>
+                              <FaixaDot lead={lead} dark={dark} />
+                            </div>
+                          </div>
                           <p className={`font-medium truncate max-w-[140px] ${bold}`}>{lead.nome || '—'}</p>
                           {obs && obs.trim() && (
                             <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -567,7 +528,6 @@ export default function LeadsPage() {
 
       {showDeleteConf && <DeleteConfirmDialog count={selectedIds.size} onConfirm={handleDeleteSelected} onCancel={() => setShowDeleteConf(false)} loading={deleting} dark={dark} />}
 
-      {/* Edit dialog */}
       <Dialog open={isEditOpen} onOpenChange={open => { setIsEditOpen(open); if (!open) setEditingLead(null); }}>
         <DialogContent style={{ background: dark ? '#111113' : '#fff', border: `1px solid ${border}`, borderRadius: '16px' }}>
           <DialogHeader><DialogTitle style={{ color: dark ? '#fff' : '#111827' }}>Editar Lead</DialogTitle></DialogHeader>
