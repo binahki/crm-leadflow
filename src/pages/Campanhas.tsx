@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -343,6 +344,7 @@ export default function CampanhasPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [insightData, setInsightData] = useState<InsightData>({ age: [], gender: [], placement: [], device: [] });
   const [loading, setLoading] = useState(true);
@@ -502,12 +504,16 @@ export default function CampanhasPage() {
                             {isMobile ? (
                               <div style={{ display: 'flex', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '12px', color: txtMid }}>R$ {fmt(c.spend)}</span>
-                                <span style={{ fontSize: '12px', color: c.leads_api > 0 ? '#10b981' : txtMid, fontWeight: c.leads_api > 0 ? 600 : 400 }}>{c.leads_api} leads</span>
+                                {c.leads_api > 0 ? <button onClick={e => { e.stopPropagation(); navigate(`/leads?campanha=${encodeURIComponent(c.name)}`); }} style={{ fontSize: '12px', color: '#10b981', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>{c.leads_api} leads ↗</button> : <span style={{ fontSize: '12px', color: txtMid }}>0 leads</span>}
                                 {c.cpl && c.cpl > 0 && <span style={{ fontSize: '12px', color: txtMid }}>CPL R$ {fmt(c.cpl)}</span>}
                               </div>
                             ) : (
-                              <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
-                                {[`R$ ${fmt(c.spend)}`, `${fmtInt(c.impressions)} impressões`, `${c.ctr.toFixed(2)}% CTR`, `${c.leads_api} leads`, c.cpl && c.cpl > 0 ? `CPL R$ ${fmt(c.cpl)}` : null].filter(Boolean).map((s, i) => <span key={i} style={{ fontSize: '12px', color: i === 3 && c.leads_api > 0 ? '#10b981' : txtMid, fontWeight: i === 3 && c.leads_api > 0 ? 600 : 400 }}>{s}</span>)}
+                              <div style={{ display: 'flex', gap: '16px', marginTop: '4px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '12px', color: txtMid }}>R$ {fmt(c.spend)}</span>
+                                <span style={{ fontSize: '12px', color: txtMid }}>{fmtInt(c.impressions)} imp</span>
+                                <span style={{ fontSize: '12px', color: txtMid }}>{c.ctr.toFixed(2)}% CTR</span>
+                                {c.leads_api > 0 ? <button onClick={e => { e.stopPropagation(); navigate(`/leads?campanha=${encodeURIComponent(c.name)}`); }} style={{ fontSize: '12px', color: '#10b981', fontWeight: 700, background: dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '6px', cursor: 'pointer', padding: '2px 8px', fontFamily: 'inherit' }}>{c.leads_api} leads ↗</button> : <span style={{ fontSize: '12px', color: txtMid }}>0 leads</span>}
+                                {c.cpl && c.cpl > 0 && <span style={{ fontSize: '12px', color: txtMid }}>CPL R$ {fmt(c.cpl)}</span>}
                               </div>
                             )}
                           </div>
