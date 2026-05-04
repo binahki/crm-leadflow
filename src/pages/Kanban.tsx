@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
   DragStartEvent, DragEndEvent, useDroppable,
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
@@ -66,8 +66,8 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: {
 
   return (
     <>
-      <div style={{ position:'fixed', inset:0, zIndex:80, background:'rgba(0,0,0,0.5)', backdropFilter:'blur(6px)' }} onClick={onCancel}/>
-      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:81, background:dark?'#111113':'#fff', borderRadius:'18px', padding:'24px', width:'90%', maxWidth:'360px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.7)':'0 24px 60px rgba(0,0,0,0.18)', animation:'kmotivo 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
+      <div style={{ position:'fixed', inset:0, zIndex:999998, background:'rgba(0,0,0,0.55)' }} onClick={onCancel}/>
+      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:999999, background:dark?'#111113':'#fff', borderRadius:'18px', padding:'24px', width:'90%', maxWidth:'360px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.7)':'0 24px 60px rgba(0,0,0,0.18)', animation:'kmotivo 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
           <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:'rgba(239,68,68,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'18px' }}>❌</div>
           <div>
@@ -118,9 +118,9 @@ function ObsBadge({ text }: { text: string }) {
 }
 
 // ── Draggable Card ────────────────────────────────────────────
-function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfile }: {
+function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfile, isMobile }: {
   lead: Lead; onCardClick: ()=>void; onMenuClick: (e:React.MouseEvent)=>void;
-  onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void;
+  onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void; isMobile: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
   const { theme } = useTheme();
@@ -134,7 +134,8 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
   const faixaLead = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
 
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners} onClick={onCardClick}
+    <div ref={setNodeRef} {...attributes} {...listeners}
+      onClick={isMobile ? undefined : onCardClick}
       style={{
         background: dark?'#111113':'#ffffff',
         border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.15)'}`,
@@ -144,7 +145,9 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
           : (dark?'0 1px 4px rgba(0,0,0,0.4)':'0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)'),
         cursor: isDragging?'grabbing':'grab',
         opacity: isDragging?0:1,
-        touchAction:'none', userSelect:'none',
+        touchAction: isMobile ? 'manipulation' : 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
         transition:'box-shadow 0.2s, border-color 0.2s',
         outline:'none',
       }}
@@ -163,7 +166,7 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
             <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp||'—'}</p>
           </div>
         </div>
-        <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.color='#374151';(e.currentTarget as HTMLElement).style.background='rgba(0,0,0,0.05)';}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.color='#d1d5db';(e.currentTarget as HTMLElement).style.background='transparent';}}>
+        <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:isMobile?1:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.color='#374151';(e.currentTarget as HTMLElement).style.background='rgba(0,0,0,0.05)';}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.color='#d1d5db';(e.currentTarget as HTMLElement).style.background='transparent';}}>
           <MoreVertical style={{ width:'15px', height:'15px' }}/>
         </button>
       </div>
@@ -223,7 +226,7 @@ function DroppableColumn({ col, children, count, isOver, isMobile }: {
         </div>
         <span style={{ fontSize:'12px', fontWeight:500, color:col.dot, background:`${col.dot}18`, padding:'2px 8px', borderRadius:'20px' }}>{count}</span>
       </div>
-      <div ref={setNodeRef} style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden' }}>
+      <div ref={setNodeRef} style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', WebkitOverflowScrolling:'touch', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden' }}>
         {children}
         {count===0 && <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', padding:'28px 0', textAlign:'center', borderRadius:'10px', border:`2px dashed ${isOver?col.dot:'rgba(0,0,0,0.1)'}`, color:isOver?col.dot:'#d1d5db', transition:'color 0.2s,border-color 0.2s' }}>{isOver?'Solte aqui':'Sem leads'}</div>}
       </div>
@@ -273,9 +276,13 @@ export default function KanbanPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: isMobile ? 12 : 6,  // more distance on mobile to avoid accidental drags
-        delay: isMobile ? 200 : 0,    // small delay on mobile
-        tolerance: isMobile ? 8 : 0,
+        distance: 8,  // desktop: 8px de movimento para iniciar drag
+      }
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 300,      // mobile: segurar 300ms para iniciar drag
+        tolerance: 8,    // permite 8px de movimento enquanto segura sem cancelar
       }
     })
   );
@@ -344,12 +351,16 @@ export default function KanbanPage() {
     const lead = leads.find(l => l.id === e.active.id);
     if (lead) setActiveLead(lead);
     setMenuLead(null);
-    // Disable all CSS transitions during drag for smooth performance
     document.body.classList.add('dragging');
+    // Prevent text selection during drag on mobile
+    document.body.style.userSelect = 'none';
+    (document.body.style as any).webkitUserSelect = 'none';
   }
 
   function handleDragEnd(e: DragEndEvent) {
     document.body.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    (document.body.style as any).webkitUserSelect = '';
     const { active, over } = e;
     setActiveLead(null); setOverColId(null);
     if (!over) return;
@@ -439,14 +450,14 @@ export default function KanbanPage() {
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={e=>setOverColId(e.over?.id?String(e.over.id):null)} onDragEnd={handleDragEnd} onDragCancel={()=>{setActiveLead(null);setOverColId(null);}}>
           {isMobile ? (
-            <div ref={scrollRef} style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType:'x mandatory', scrollBehavior:'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
+            <div ref={scrollRef} style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType: activeLead ? 'none' : 'x mandatory', scrollBehavior: activeLead ? 'auto' : 'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
               {COLUMNS.map(col => {
                 const colLeads = getColLeads(col.status);
                 return (
                   <div key={col.status} style={{ scrollSnapAlign:'start', flexShrink:0, width:'calc(100vw - 48px)' }}>
                     <DroppableColumn col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={true}>
                       {colLeads.map(lead => (
-                        <DraggableCard key={lead.id} lead={lead}
+                        <DraggableCard key={lead.id} lead={lead} isMobile={true}
                           onCardClick={() => setViewingLead(lead)}
                           onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
                           onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
@@ -465,7 +476,7 @@ export default function KanbanPage() {
                 return (
                   <DroppableColumn key={col.status} col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={false}>
                     {colLeads.map(lead => (
-                      <DraggableCard key={lead.id} lead={lead}
+                      <DraggableCard key={lead.id} lead={lead} isMobile={false}
                         onCardClick={() => setViewingLead(lead)}
                         onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
                         onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
@@ -520,7 +531,7 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Modal motivo reprovação — portal para garantir z-index acima de tudo */}
+      {/* Modal motivo reprovação — portal isolado */}
       {motivoCtx && createPortal(
         <MotivoModal
           dark={dark}
@@ -539,10 +550,12 @@ export default function KanbanPage() {
         @keyframes kpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
         body.dragging * { transition: none !important; }
         body.dragging { cursor: grabbing !important; }
+        body.dragging { user-select: none !important; -webkit-user-select: none !important; }
         @keyframes kmenu { from{opacity:0;transform:scale(0.94) translateY(-4px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes kmotivo { from{opacity:0;transform:translate(-50%,-48%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
         div:hover > div > .card-menu-btn { opacity: 1 !important; }
         div::-webkit-scrollbar { display: none; }
+        * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </AppLayout>
   );

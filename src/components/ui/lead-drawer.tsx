@@ -19,41 +19,66 @@ interface LeadDrawerProps {
 
 const STATUS = [
   { id: 1, label: 'Em atendimento', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe', darkBg: 'rgba(59,130,246,0.15)', darkText: '#60a5fa' },
-  { id: 2, label: 'Reunião',        color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe', darkBg: 'rgba(139,92,246,0.15)', darkText: '#a78bfa' },
-  { id: 3, label: 'Aprovado',       color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0', darkBg: 'rgba(16,185,129,0.15)', darkText: '#34d399' },
-  { id: 4, label: 'Reprovado',      color: '#ef4444', bg: '#fee2e2', text: '#991b1b', border: '#fecaca', darkBg: 'rgba(239,68,68,0.15)', darkText: '#f87171' },
+  { id: 2, label: 'Reunião', color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe', darkBg: 'rgba(139,92,246,0.15)', darkText: '#a78bfa' },
+  { id: 3, label: 'Aprovado', color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0', darkBg: 'rgba(16,185,129,0.15)', darkText: '#34d399' },
+  { id: 4, label: 'Reprovado', color: '#ef4444', bg: '#fee2e2', text: '#991b1b', border: '#fecaca', darkBg: 'rgba(239,68,68,0.15)', darkText: '#f87171' },
 ];
 
-const MOTIVOS = ['Sem retorno','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Desistiu','Outro'];
+const MOTIVOS = ['Sem retorno', 'Fora de SP', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Desistiu', 'Outro'];
 
 const GRADIENTS = [
-  ['#a78bfa','#60a5fa'],['#f472b6','#fb923c'],
-  ['#34d399','#60a5fa'],['#fb923c','#fbbf24'],
-  ['#60a5fa','#34d399'],['#c084fc','#f472b6'],
-  ['#fbbf24','#a78bfa'],['#34d399','#a78bfa'],
+  ['#a78bfa', '#60a5fa'], ['#f472b6', '#fb923c'],
+  ['#34d399', '#60a5fa'], ['#fb923c', '#fbbf24'],
+  ['#60a5fa', '#34d399'], ['#c084fc', '#f472b6'],
+  ['#fbbf24', '#a78bfa'], ['#34d399', '#a78bfa'],
 ];
 
 // Campos que NÃO são respostas do quiz — excluídos da seção de perfil
 const SYSTEM_FIELDS = new Set([
-  'id','nome','whatsapp','cidade','instagram','email','status','observacoes',
-  'created_at','updated_at','faixa','score','motivo_reprovacao','ultimo_status_change',
-  'utm_source','utm_campaign','utm_medium','utm_content','utm_term',
-  'ip','platform','user_id',
+  'id', 'nome', 'whatsapp', 'cidade', 'instagram', 'email', 'status', 'observacoes',
+  'created_at', 'updated_at', 'faixa', 'score', 'motivo_reprovacao', 'ultimo_status_change',
+  'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term',
+  'ip', 'platform', 'user_id',
+  // Campos internos de sistema que não têm valor para o usuário
+  'wa_sent', 'quiz_data', 'entrada',
 ]);
+
+// Rótulos em PT-BR para campos conhecidos do quiz
+const CAMPO_LABELS: Record<string, string> = {
+  o_que_mais_te_atrai:                    'O que mais te atrai?',
+  quanto_gostaria_de_ganhar_por_mes:      'Quanto quer ganhar por mês?',
+  o_que_mais_gostaria_de_conquistar:      'O que mais gostaria de conquistar?',
+  onde_se_imagina_em_6_meses:             'Onde se imagina em 6 meses?',
+  qual_sua_idade:                         'Idade',
+  tem_filhos:                             'Tem filhos?',
+  idade_do_filho_mais_novo:               'Idade do filho mais novo',
+  voce_tem_alguma_rede_de_apoio:          'Tem rede de apoio?',
+  voce_mora_com_alguem:                   'Mora com alguém?',
+  por_quais_meios_pretende_vender:        'Por quais meios pretende vender?',
+  quantas_horas_por_semana_vai_se_dedicar:'Horas por semana disponíveis',
+  quando_gostaria_de_comecar:             'Quando quer começar?',
+  situacao_atual:                         'Situação atual',
+  experiencia_em_vendas:                  'Experiência em vendas?',
+  ja_tentou_vender_semijoia:              'Já tentou vender semijoia?',
+  para_comecar_no_consignado:             'Para começar no consignado',
+  seu_nome_esta_negativado:               'Nome negativado?',
+  voce_aceita_as_regras_do_consignado:    'Aceita as regras do consignado?',
+};
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
-function getGradient(name: string) { return GRADIENTS[(name?.charCodeAt(0)||0) % GRADIENTS.length]; }
-function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('').toUpperCase(); }
-function cleanCampaignName(raw?: string|null) { if (!raw) return null; return raw.replace(/\|\d+$/,'').trim(); }
+function getGradient(name: string) { return GRADIENTS[(name?.charCodeAt(0) || 0) % GRADIENTS.length]; }
+function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
+function cleanCampaignName(raw?: string | null) { if (!raw) return null; return raw.replace(/\|\d+$/, '').trim(); }
 function formatLabel(campo: string) {
-  return campo.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  // Usa rótulo em PT-BR se disponível, senão formata o campo automaticamente
+  return CAMPO_LABELS[campo] || campo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function WaIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink:0 }}>
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
     </svg>
   );
 }
@@ -61,7 +86,7 @@ function WaIcon() {
 // ── Section accordion ─────────────────────────────────────────
 function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark }: {
   icon: React.ReactNode; title: string; children: React.ReactNode;
-  openKey: string; activeKey: string|null; setActiveKey: (k:string|null)=>void; dark: boolean;
+  openKey: string; activeKey: string | null; setActiveKey: (k: string | null) => void; dark: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
@@ -70,52 +95,52 @@ function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark
   const open = activeKey === openKey;
   useEffect(() => { if (contentRef.current) setHeight(open ? contentRef.current.scrollHeight : 0); }, [open, children]);
   return (
-    <div style={{ borderBottom:`1px solid ${dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}` }}>
-      <button onClick={() => setActiveKey(open?null:openKey)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 0', background:'none', border:'none', cursor:'pointer', fontFamily:FONT, WebkitTapHighlightColor:'transparent' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          <span style={{ color:dark?'#52525b':'#9ca3af', display:'flex', alignItems:'center' }}>{icon}</span>
-          <span style={{ fontSize:'13.5px', fontWeight:500, color:dark?'#f4f4f5':'#1f2937', fontFamily:FONT }}>{title}</span>
+    <div style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+      <button onClick={() => setActiveKey(open ? null : openKey)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, WebkitTapHighlightColor: 'transparent' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: dark ? '#52525b' : '#9ca3af', display: 'flex', alignItems: 'center' }}>{icon}</span>
+          <span style={{ fontSize: '13.5px', fontWeight: 500, color: dark ? '#f4f4f5' : '#1f2937', fontFamily: FONT }}>{title}</span>
         </div>
-        <ChevronDown style={{ width:'14px', height:'14px', color:'#d1d5db', transform:open?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.25s cubic-bezier(0.4,0,0.2,1)' }}/>
+        <ChevronDown style={{ width: '14px', height: '14px', color: '#d1d5db', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)' }} />
       </button>
-      <div style={{ height:`${height}px`, overflow:'hidden', transition:'height 0.28s cubic-bezier(0.4,0,0.2,1)' }}>
-        <div ref={contentRef} style={{ paddingBottom:'12px', display:'flex', flexDirection:'column', gap:'10px' }}>{children}</div>
+      <div style={{ height: `${height}px`, overflow: 'hidden', transition: 'height 0.28s cubic-bezier(0.4,0,0.2,1)' }}>
+        <div ref={contentRef} style={{ paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>{children}</div>
       </div>
     </div>
   );
 }
 
 // Mostra traço se vazio; se alwaysShow=false e vazio, não renderiza
-function Field({ label, value, dark, alwaysShow=false }: { label: string; value?: string|null; dark: boolean; alwaysShow?: boolean }) {
+function Field({ label, value, dark, alwaysShow = false }: { label: string; value?: string | null; dark: boolean; alwaysShow?: boolean }) {
   const isEmpty = value === null || value === undefined || String(value).trim() === '';
   if (!alwaysShow && isEmpty) return null;
   const display = isEmpty ? '—' : String(value);
   return (
     <div>
-      <p style={{ fontSize:'10.5px', fontWeight:500, color:dark?'#52525b':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'2px', fontFamily:FONT }}>{label}</p>
-      <p style={{ fontSize:'13.5px', color:dark?'#d4d4d8':'#374151', lineHeight:1.5, fontFamily:FONT }}>{display}</p>
+      <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontFamily: FONT }}>{label}</p>
+      <p style={{ fontSize: '13.5px', color: dark ? '#d4d4d8' : '#374151', lineHeight: 1.5, fontFamily: FONT }}>{display}</p>
     </div>
   );
 }
 
 // ── Delete confirm ────────────────────────────────────────────
-function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name:string; onConfirm:()=>void; onCancel:()=>void; loading:boolean; dark:boolean }) {
+function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name: string; onConfirm: () => void; onCancel: () => void; loading: boolean; dark: boolean }) {
   return (
     <>
-      <div style={{ position:'fixed', inset:0, zIndex:62, background:'rgba(0,0,0,0.2)', backdropFilter:'blur(2px)' }} onClick={onCancel}/>
-      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:63, background:dark?'#111113':'#fff', borderRadius:'16px', padding:'24px', width:'88%', maxWidth:'340px', boxShadow:dark?'0 20px 60px rgba(0,0,0,0.5)':'0 20px 60px rgba(0,0,0,0.15)', fontFamily:FONT, animation:'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' }}>
-          <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:dark?'rgba(220,38,38,0.1)':'#fff1f2', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <AlertTriangle style={{ width:'18px', height:'18px', color:'#dc2626' }}/>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 62, background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(2px)' }} onClick={onCancel} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 999999, background: dark ? '#111113' : '#fff', borderRadius: '16px', padding: '24px', width: '88%', maxWidth: '340px', boxShadow: dark ? '0 20px 60px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.15)', fontFamily: FONT, animation: 'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: dark ? 'rgba(220,38,38,0.1)' : '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626' }} />
           </div>
-          <h3 style={{ margin:0, fontSize:'15px', fontWeight:600, color:dark?'#fff':'#111827', fontFamily:FONT }}>Excluir lead?</h3>
+          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: dark ? '#fff' : '#111827', fontFamily: FONT }}>Excluir lead?</h3>
         </div>
-        <p style={{ fontSize:'13.5px', color:dark?'#9ca3af':'#6b7280', lineHeight:1.55, margin:'0 0 20px', fontFamily:FONT }}>
-          Tem certeza que deseja excluir <strong style={{ color:dark?'#fff':'#111827' }}>{name}</strong>? Esta ação não pode ser desfeita.
+        <p style={{ fontSize: '13.5px', color: dark ? '#9ca3af' : '#6b7280', lineHeight: 1.55, margin: '0 0 20px', fontFamily: FONT }}>
+          Tem certeza que deseja excluir <strong style={{ color: dark ? '#fff' : '#111827' }}>{name}</strong>? Esta ação não pode ser desfeita.
         </p>
-        <div style={{ display:'flex', gap:'8px' }}>
-          <button onClick={onCancel} style={{ flex:1, padding:'9px', borderRadius:'9px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#d4d4d8':'#374151', fontSize:'13px', fontWeight:500, cursor:'pointer', fontFamily:FONT }}>Cancelar</button>
-          <button onClick={onConfirm} disabled={loading} style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:'#dc2626', color:'#fff', fontSize:'13px', fontWeight:500, cursor:loading?'default':'pointer', fontFamily:FONT, opacity:loading?0.7:1 }}>{loading?'Excluindo…':'Sim, excluir'}</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f9fafb', color: dark ? '#d4d4d8' : '#374151', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+          <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: loading ? 'default' : 'pointer', fontFamily: FONT, opacity: loading ? 0.7 : 1 }}>{loading ? 'Excluindo…' : 'Sim, excluir'}</button>
         </div>
       </div>
     </>
@@ -123,34 +148,34 @@ function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name:stri
 }
 
 // ── Modal Motivo Reprovação ───────────────────────────────────
-function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm:(m:string)=>void; onCancel:()=>void; dark:boolean; motivoAtual?:string }) {
-  const outroDefault = motivoAtual && !MOTIVOS.slice(0,-1).includes(motivoAtual) ? motivoAtual : '';
-  const selectedDefault = motivoAtual ? (MOTIVOS.slice(0,-1).includes(motivoAtual) ? motivoAtual : 'Outro') : '';
+function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m: string) => void; onCancel: () => void; dark: boolean; motivoAtual?: string }) {
+  const outroDefault = motivoAtual && !MOTIVOS.slice(0, -1).includes(motivoAtual) ? motivoAtual : '';
+  const selectedDefault = motivoAtual ? (MOTIVOS.slice(0, -1).includes(motivoAtual) ? motivoAtual : 'Outro') : '';
   const [selected, setSelected] = useState(selectedDefault);
   const [outro, setOutro] = useState(outroDefault);
   const motivo = selected === 'Outro' ? outro.trim() : selected;
   return (
     <>
-      <div style={{ position:'fixed', inset:0, zIndex:62, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }} onClick={onCancel}/>
-      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:63, background:dark?'#111113':'#fff', borderRadius:'18px', padding:'24px', width:'90%', maxWidth:'360px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.7)':'0 24px 60px rgba(0,0,0,0.18)', fontFamily:FONT, animation:'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
-          <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:'rgba(239,68,68,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px' }}>❌</div>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 999998, background: 'rgba(0,0,0,0.55)' }} onClick={onCancel} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 999999, background: dark ? '#111113' : '#fff', borderRadius: '18px', padding: '24px', width: '90%', maxWidth: '360px', boxShadow: dark ? '0 24px 60px rgba(0,0,0,0.7)' : '0 24px 60px rgba(0,0,0,0.18)', fontFamily: FONT, animation: 'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>❌</div>
           <div>
-            <h3 style={{ margin:0, fontSize:'15px', fontWeight:600, color:dark?'#fff':'#111827' }}>{motivoAtual?'Alterar motivo':'Motivo da reprovação'}</h3>
-            <p style={{ margin:0, fontSize:'12px', color:dark?'#71717a':'#9ca3af' }}>Selecione o motivo para registrar</p>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: dark ? '#fff' : '#111827' }}>{motivoAtual ? 'Alterar motivo' : 'Motivo da reprovação'}</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: dark ? '#71717a' : '#9ca3af' }}>Selecione o motivo para registrar</p>
           </div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginBottom:'14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
           {MOTIVOS.map(m => (
-            <button key={m} onClick={() => setSelected(m)} style={{ width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:'10px', border:`1px solid ${selected===m?'#ef4444':(dark?'#1e1e22':'#e5e7eb')}`, background:selected===m?(dark?'rgba(239,68,68,0.12)':'#fff1f2'):(dark?'rgba(255,255,255,0.02)':'#f9fafb'), color:selected===m?'#ef4444':(dark?'#d4d4d8':'#374151'), fontSize:'13px', fontWeight:selected===m?600:400, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', transition:'all 0.15s', fontFamily:FONT }}>
-              {m}{selected===m && <Check style={{ width:'14px', height:'14px', color:'#ef4444', flexShrink:0 }}/>}
+            <button key={m} onClick={() => setSelected(m)} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${selected === m ? '#ef4444' : (dark ? '#1e1e22' : '#e5e7eb')}`, background: selected === m ? (dark ? 'rgba(239,68,68,0.12)' : '#fff1f2') : (dark ? 'rgba(255,255,255,0.02)' : '#f9fafb'), color: selected === m ? '#ef4444' : (dark ? '#d4d4d8' : '#374151'), fontSize: '13px', fontWeight: selected === m ? 600 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s', fontFamily: FONT }}>
+              {m}{selected === m && <Check style={{ width: '14px', height: '14px', color: '#ef4444', flexShrink: 0 }} />}
             </button>
           ))}
         </div>
-        {selected==='Outro' && <input autoFocus placeholder="Descreva o motivo..." value={outro} onChange={e=>setOutro(e.target.value)} style={{ width:'100%', padding:'10px 12px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', marginBottom:'12px', boxSizing:'border-box' as any, fontFamily:FONT }}/>}
-        <div style={{ display:'flex', gap:'8px' }}>
-          <button onClick={onCancel} style={{ flex:1, padding:'10px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'13px', cursor:'pointer', fontFamily:FONT }}>Cancelar</button>
-          <button onClick={() => motivo && onConfirm(motivo)} disabled={!motivo} style={{ flex:1, padding:'10px', borderRadius:'10px', border:'none', background:motivo?'#ef4444':(dark?'#27272a':'#e5e7eb'), color:motivo?'#fff':(dark?'#52525b':'#9ca3af'), fontSize:'13px', fontWeight:600, cursor:motivo?'pointer':'default', transition:'all 0.15s', fontFamily:FONT }}>Confirmar</button>
+        {selected === 'Outro' && <input autoFocus placeholder="Descreva o motivo..." value={outro} onChange={e => setOutro(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f9fafb', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', marginBottom: '12px', boxSizing: 'border-box' as any, fontFamily: FONT }} />}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: 'transparent', color: dark ? '#a1a1aa' : '#6b7280', fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+          <button onClick={() => motivo && onConfirm(motivo)} disabled={!motivo} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: motivo ? '#ef4444' : (dark ? '#27272a' : '#e5e7eb'), color: motivo ? '#fff' : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 600, cursor: motivo ? 'pointer' : 'default', transition: 'all 0.15s', fontFamily: FONT }}>Confirmar</button>
         </div>
       </div>
     </>
@@ -170,8 +195,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [obsChanged, setObsChanged] = useState(false);
   const [showDel, setShowDel] = useState(false);
   const [showMotivo, setShowMotivo] = useState(false);
-  const [pendingStatus, setPendingStatus] = useState<number|null>(null);
-  const [activeSection, setActiveSection] = useState<string|null>(null);
+  const [pendingStatus, setPendingStatus] = useState<number | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   useEffect(() => {
     if (configuracoes) return;
@@ -207,7 +232,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     if (motivo) updates.motivo_reprovacao = motivo;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); toast.error('Erro ao atualizar status'); }
-    else { onUpdate({ ...lead, status: newStatus, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s=>s.id===newStatus)?.label||'Atualizado'); }
+    else { onUpdate({ ...lead, status: newStatus, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
   }
 
   function handleStatus(i: number) {
@@ -247,94 +272,96 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const faixaCalculada = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
 
-  // Campos configurados no Supabase (quiz)
-  const camposPerfil: { label: string; campo: string }[] = configuracoes?.campos_perfil || [];
+  // Pega SEMPRE todos os campos não-sistema que tiverem valor no lead
+  const camposParaMostrar = Object.keys(l)
+    .filter(k => !SYSTEM_FIELDS.has(k) && l[k] !== null && l[k] !== undefined && String(l[k]).trim() !== '' && String(l[k]) !== 'false')
+    .map(k => ({ label: formatLabel(k), campo: k }));
 
-  // Se não tiver campos no Supabase, detecta automaticamente todos os campos que não são sistema
-  const camposParaMostrar = camposPerfil.length > 0
-    ? camposPerfil
-    : Object.keys(l)
-        .filter(k => !SYSTEM_FIELDS.has(k) && l[k] !== null && l[k] !== undefined && String(l[k]).trim() !== '')
-        .map(k => ({ label: formatLabel(k), campo: k }));
+  // Instagram: busca case-insensitive em todas as chaves do objeto
+  const instagramKey = Object.keys(l).find(k => k.toLowerCase() === 'instagram');
+  const instagramValue = instagramKey ? (l[instagramKey] != null ? String(l[instagramKey]).trim() : '') : '';
 
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.18)', backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)', animation:'ld-fade 0.18s ease' }}/>
-      {showDel && <DeleteConfirm name={lead.nome} onConfirm={handleDelete} onCancel={()=>setShowDel(false)} loading={deleting} dark={dark}/>}
-      {showMotivo && createPortal(<MotivoModal onConfirm={handleMotivoConfirm} onCancel={()=>{setShowMotivo(false);setPendingStatus(null);}} dark={dark} motivoAtual={lead.motivo_reprovacao}/>, document.body)}
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.18)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', animation: 'ld-fade 0.18s ease' }} />
+      {showDel && <DeleteConfirm name={lead.nome} onConfirm={handleDelete} onCancel={() => setShowDel(false)} loading={deleting} dark={dark} />}
+      {showMotivo && createPortal(
+        <MotivoModal onConfirm={handleMotivoConfirm} onCancel={() => { setShowMotivo(false); setPendingStatus(null); }} dark={dark} motivoAtual={lead.motivo_reprovacao} />,
+        document.body
+      )}
 
-      <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'92%', maxWidth:'480px', maxHeight:'90vh', zIndex:51, fontFamily:FONT, animation:'ld-up 0.24s cubic-bezier(0.32, 0.72, 0, 1)', borderRadius:'22px', background:dark?'rgba(18,18,20,0.96)':'rgba(255,255,255,0.94)', backdropFilter:'blur(28px)', WebkitBackdropFilter:'blur(28px)', boxShadow:dark?'0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)':'0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.24s cubic-bezier(0.32, 0.72, 0, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
-        <div style={{ padding:'22px 22px 16px', position:'relative', flexShrink:0 }}>
-          <button onClick={onClose} style={{ position:'absolute', top:'16px', right:'16px', width:'26px', height:'26px', background:dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)', border:'none', borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }} onMouseEnter={e=>(e.currentTarget.style.background=dark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)')} onMouseLeave={e=>(e.currentTarget.style.background=dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)')}>
-            <X style={{ width:'12px', height:'12px', color:dark?'#52525b':'#6b7280' }}/>
+        <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
+          <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', width: '26px', height: '26px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)')}>
+            <X style={{ width: '12px', height: '12px', color: dark ? '#52525b' : '#6b7280' }} />
           </button>
-          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginRight:'36px' }}>
-            <div style={{ position:'relative', flexShrink:0 }}>
-              <div style={{ width:'52px', height:'52px', borderRadius:'14px', background:`linear-gradient(135deg, ${g1}, ${g2})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', fontWeight:700, color:'#fff', boxShadow:`0 4px 14px ${g1}60`, fontFamily:FONT }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginRight: '36px' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${g1}, ${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: '#fff', boxShadow: `0 4px 14px ${g1}60`, fontFamily: FONT }}>
                 {initials(lead.nome)}
               </div>
               {faixaCalculada && faixaCalculada !== 'vermelho' && (
-                <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'14px', height:'14px', borderRadius:'50%', background:faixaCalculada==='verde'?'#10b981':'#f59e0b', border:`2.5px solid ${dark?'rgba(18,18,20,0.96)':'rgba(255,255,255,0.94)'}`, boxShadow:'0 1px 4px rgba(0,0,0,0.25)' }}/>
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '14px', height: '14px', borderRadius: '50%', background: faixaCalculada === 'verde' ? '#10b981' : '#f59e0b', border: `2.5px solid ${dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)'}`, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
               )}
             </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <h2 style={{ margin:0, fontSize:'17px', fontWeight:600, color:dark?'#f4f4f5':'#111827', letterSpacing:'-0.022em', lineHeight:1.25, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontFamily:FONT }}>{lead.nome}</h2>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:'8px', marginTop:'5px' }}>
-                {lead.cidade && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'12px', color:dark?'#71717a':'#6b7280', fontFamily:FONT }}><MapPin style={{ width:'11px', height:'11px', strokeWidth:1.8 }}/>{lead.cidade}</span>}
-                {lead.whatsapp && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'12px', color:dark?'#71717a':'#6b7280', fontFamily:FONT }}><Phone style={{ width:'11px', height:'11px', strokeWidth:1.8 }}/>{lead.whatsapp}</span>}
-                {/* Instagram — lê de l (cast any) para pegar o campo mesmo que não esteja no tipo */}
-                {l.instagram && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'12px', color:dark?'#71717a':'#6b7280', fontFamily:FONT }}><Instagram style={{ width:'11px', height:'11px', strokeWidth:1.8 }}/>{l.instagram}</span>}
-                {lead.created_at && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'12px', color:dark?'#52525b':'#b0b7c3', fontFamily:FONT }}><Clock style={{ width:'11px', height:'11px', strokeWidth:1.8 }}/>{getRelativeTime(lead.created_at)}</span>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '5px' }}>
+                {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
+                {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.whatsapp}</span>}
+                {/* Instagram — busca case-insensitive para garantir que acha o campo do Supabase */}
+                {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
+                {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
               </div>
             </div>
           </div>
         </div>
 
-        <div style={{ height:'1px', background:dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.055)', flexShrink:0 }}/>
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
         {/* Status */}
-        <div style={{ padding:'14px 22px', flexShrink:0 }}>
-          <p style={{ fontSize:'10.5px', fontWeight:500, color:dark?'#52525b':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'9px', fontFamily:FONT }}>Status</p>
-          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+        <div style={{ padding: '14px 22px', flexShrink: 0 }}>
+          <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '9px', fontFamily: FONT }}>Status</p>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {STATUS.map(s => {
               const active = status === s.id;
               return (
-                <button key={s.id} onClick={() => handleStatus(s.id)} style={{ padding:'5px 11px', borderRadius:'8px', flexShrink:1, border:`1px solid ${active?s.border:dark?'#1e1e22':'#e5e7eb'}`, background:active?(dark?s.darkBg:s.bg):'rgba(0,0,0,0.02)', color:active?(dark?s.darkText:s.text):(dark?'#71717a':'#6b7280'), fontSize:'12px', fontWeight:active?600:400, cursor:'pointer', display:'flex', alignItems:'center', gap:'5px', transition:'all 0.18s', fontFamily:FONT, whiteSpace:'nowrap' }}>
-                  <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:s.color, flexShrink:0, transform:active?'scale(1.2)':'scale(1)', transition:'transform 0.18s' }}/>
-                  {active && <Check style={{ width:'10px', height:'10px', strokeWidth:2.5, flexShrink:0 }}/>}
+                <button key={s.id} onClick={() => handleStatus(s.id)} style={{ padding: '5px 11px', borderRadius: '8px', flexShrink: 1, border: `1px solid ${active ? s.border : dark ? '#1e1e22' : '#e5e7eb'}`, background: active ? (dark ? s.darkBg : s.bg) : 'rgba(0,0,0,0.02)', color: active ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280'), fontSize: '12px', fontWeight: active ? 600 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', transition: 'all 0.18s', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.color, flexShrink: 0, transform: active ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.18s' }} />
+                  {active && <Check style={{ width: '10px', height: '10px', strokeWidth: 2.5, flexShrink: 0 }} />}
                   {s.label}
                 </button>
               );
             })}
           </div>
           {status === 4 && lead.motivo_reprovacao && (
-            <div style={{ marginTop:'10px', padding:'7px 12px', borderRadius:'8px', background:dark?'rgba(239,68,68,0.08)':'#fff1f2', border:`1px solid ${dark?'rgba(239,68,68,0.2)':'#fecaca'}`, display:'flex', alignItems:'center', gap:'6px' }}>
-              <span style={{ fontSize:'11px', color:'#ef4444', fontWeight:500, fontFamily:FONT }}>Motivo:</span>
-              <span style={{ fontSize:'12px', color:dark?'#f87171':'#dc2626', fontFamily:FONT }}>{lead.motivo_reprovacao}</span>
+            <div style={{ marginTop: '10px', padding: '7px 12px', borderRadius: '8px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
+              <span style={{ fontSize: '12px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
             </div>
           )}
         </div>
 
-        <div style={{ height:'1px', background:dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.055)', flexShrink:0 }}/>
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
         {/* Conteúdo rolável */}
-        <div style={{ overflowY:'auto', flex:1, WebkitOverflowScrolling:'touch' }}>
-          <div style={{ padding:'4px 22px 8px' }}>
+        <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ padding: '4px 22px 8px' }}>
 
             {/* Respostas do Quiz */}
             {camposParaMostrar.length > 0 && (
               <>
-                <p style={{ fontSize:'10.5px', fontWeight:500, color:dark?'#52525b':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em', padding:'10px 0 4px', fontFamily:FONT }}>
+                <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '10px 0 4px', fontFamily: FONT }}>
                   Respostas do Quiz
                 </p>
                 <Section openKey="quiz" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                  icon={<Briefcase style={{ width:'14px', height:'14px', strokeWidth:1.8 }}/>} title="Perfil e respostas">
+                  icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Perfil e respostas">
                   {camposParaMostrar.map(({ label, campo }) => {
                     const rawVal = l[campo];
                     const val = (rawVal === null || rawVal === undefined) ? null : String(rawVal);
-                    return <Field key={campo} label={label} value={val} dark={dark} alwaysShow={true}/>;
+                    return <Field key={campo} label={label} value={val} dark={dark} alwaysShow={true} />;
                   })}
                 </Section>
               </>
@@ -343,34 +370,34 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
             {/* Origem do Tráfego */}
             {hasTraffic && (
               <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                icon={<Megaphone style={{ width:'14px', height:'14px', strokeWidth:1.8 }}/>} title="Origem do Tráfego">
-                <Field label="Fonte" value={l.utm_source} dark={dark}/>
-                <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} dark={dark}/>
-                <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} dark={dark}/>
-                <Field label="Anúncio" value={l.utm_content} dark={dark}/>
-                {l.ip && <Field label="IP" value={l.ip} dark={dark}/>}
+                icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Origem do Tráfego">
+                <Field label="Fonte" value={l.utm_source} dark={dark} />
+                <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} dark={dark} />
+                <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} dark={dark} />
+                <Field label="Anúncio" value={l.utm_content} dark={dark} />
+                {l.ip && <Field label="IP" value={l.ip} dark={dark} />}
               </Section>
             )}
           </div>
 
           {/* Observações */}
-          <div style={{ padding:'0 22px 20px' }}>
-            <p style={{ fontSize:'10.5px', fontWeight:500, color:dark?'#52525b':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'8px', fontFamily:FONT }}>Observações</p>
-            <textarea value={obs} onChange={e=>{setObs(e.target.value);setObsChanged(true);}} placeholder="Anotações sobre este lead..." rows={3}
-              style={{ width:'100%', padding:'10px 12px', fontSize:'13.5px', lineHeight:1.55, fontFamily:FONT, color:dark?'#f4f4f5':'#374151', background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.025)', border:`1px solid ${dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)'}`, borderRadius:'10px', resize:'none', outline:'none', transition:'border-color 0.18s', boxSizing:'border-box' as any }}
-              onFocus={e=>(e.target.style.borderColor='rgba(59,130,246,0.45)')}
-              onBlur={e=>(e.target.style.borderColor=dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)')}
+          <div style={{ padding: '0 22px 20px' }}>
+            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', fontFamily: FONT }}>Observações</p>
+            <textarea value={obs} onChange={e => { setObs(e.target.value); setObsChanged(true); }} placeholder="Anotações sobre este lead..." rows={3}
+              style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', lineHeight: 1.55, fontFamily: FONT, color: dark ? '#f4f4f5' : '#374151', background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.025)', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, borderRadius: '10px', resize: 'none', outline: 'none', transition: 'border-color 0.18s', boxSizing: 'border-box' as any }}
+              onFocus={e => (e.target.style.borderColor = 'rgba(59,130,246,0.45)')}
+              onBlur={e => (e.target.style.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'10px 22px 20px', display:'flex', gap:'8px', borderTop:`1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}`, flexShrink:0 }}>
-          <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank')} style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#25D366', border:'none', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'7px', transition:'opacity 0.15s', fontFamily:FONT }} onMouseEnter={e=>(e.currentTarget.style.opacity='0.88')} onMouseLeave={e=>(e.currentTarget.style.opacity='1')}>
-            <WaIcon/> Chamar no WhatsApp
+        <div style={{ padding: '10px 22px 20px', display: 'flex', gap: '8px', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, flexShrink: 0 }}>
+          <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank')} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#25D366', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s', fontFamily: FONT }} onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            <WaIcon /> Chamar no WhatsApp
           </button>
-          <button onClick={handleSaveObs} disabled={saving||!obsChanged} style={{ flex:'0 0 auto', padding:'10px 16px', borderRadius:'10px', background:obsChanged?(dark?'rgba(16,185,129,0.1)':'#f0fdf4'):(dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.03)'), border:`1px solid ${obsChanged?(dark?'rgba(16,185,129,0.3)':'#bbf7d0'):(dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)')}`, color:obsChanged?(dark?'#34d399':'#15803d'):(dark?'#52525b':'#9ca3af'), fontSize:'13px', fontWeight:500, cursor:obsChanged?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', transition:'all 0.18s', fontFamily:FONT }} onMouseEnter={e=>{if(obsChanged)(e.currentTarget.style.background=dark?'rgba(16,185,129,0.15)':'#dcfce7');}} onMouseLeave={e=>{if(obsChanged)(e.currentTarget.style.background=dark?'rgba(16,185,129,0.1)':'#f0fdf4');}}>
-            <Save style={{ width:'13px', height:'13px', strokeWidth:1.8 }}/>{saving?'Salvando…':'Salvar'}
+          <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }} onMouseEnter={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.15)' : '#dcfce7'); }} onMouseLeave={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4'); }}>
+            <Save style={{ width: '13px', height: '13px', strokeWidth: 1.8 }} />{saving ? 'Salvando…' : 'Salvar'}
           </button>
         </div>
       </div>

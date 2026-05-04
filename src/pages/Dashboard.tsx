@@ -356,13 +356,13 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:'14px'}}>
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:'14px',overflow:'hidden'}}>
 
           {/* Leads Recentes com bolinha faixa */}
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
+          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,overflow:'hidden',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Leads Recentes</h3>
-              <Link to="/leads" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none'}}>Ver todos</Link>
+              <Link to="/leads" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none',flexShrink:0}}>Ver todos</Link>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
               {loading?[...Array(4)].map((_,i)=><div key={i} style={{height:'44px',borderRadius:'10px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',marginBottom:'2px'}}/>)
@@ -370,7 +370,7 @@ export default function Dashboard() {
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
                 return(
-                  <div key={lead.id} onClick={()=>setViewingLead(lead)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s'}}
+                  <div key={lead.id} onClick={()=>setViewingLead(lead)} style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s',overflow:'hidden'}}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=hov}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
@@ -383,11 +383,12 @@ export default function Dashboard() {
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
-                      <p style={{fontSize:'11px',color:txtLow,margin:0}}>{lead.cidade||'—'}</p>
+                      <p style={{fontSize:'11px',color:txtLow,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade||'—'}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px'}}>{STATUS_LABEL[st]??'Aguardando'}</span>
-                    <span style={{fontSize:'11px',color:txtLow,flexShrink:0,minWidth:'28px',textAlign:'right'}}>{relativeTime(lead.created_at)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px',flexShrink:0}}>{STATUS_LABEL[st]??'Aguardando'}</span>
+                    {!isMobile&&<span style={{fontSize:'11px',color:txtLow,flexShrink:0,minWidth:'28px',textAlign:'right'}}>{relativeTime(lead.created_at)}</span>}
                     <a href={lead.whatsapp?`https://wa.me/55${lead.whatsapp.replace(/\D/g,'')}`:'#'} target="_blank" rel="noreferrer"
+                      onClick={e=>e.stopPropagation()}
                       className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center transition-colors flex-shrink-0">
                       <MessageCircle className="w-3 h-3 text-white"/>
                     </a>
@@ -398,7 +399,7 @@ export default function Dashboard() {
           </div>
 
           {/* Campanhas */}
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
+          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,overflow:'hidden',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                 <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Campanhas</h3>
@@ -407,44 +408,49 @@ export default function Dashboard() {
                   {!metaError&&<div style={{position:'absolute',inset:0,borderRadius:'50%',background:'#22c55e',animation:'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',opacity:0.6}}/>}
                 </div>
               </div>
-              <Link to="/campanhas" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none'}}>Ver todas</Link>
+              <Link to="/campanhas" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none',flexShrink:0}}>Ver todas</Link>
             </div>
             {metaLoading
               ?[...Array(3)].map((_,i)=><div key={i} style={{height:'32px',borderRadius:'8px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',marginBottom:'8px'}}/>)
               :metaError||campRows.length===0
                 ?<div style={{textAlign:'center',padding:'20px 0'}}><p style={{fontSize:'13px',color:txtMid,margin:0}}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
                 :(
-                  <div style={{overflowX:'auto'}}>
-                    <table style={{width:'100%',borderCollapse:'collapse',minWidth:isMobile?'0':'auto'}}>
-                      <thead>
-                        <tr>
-                          {['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'].filter(Boolean).map(h=>(
-                            <th key={h as string} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',whiteSpace:'nowrap',paddingRight:'8px'}}>{h as string}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campRows.map((row,i)=>(
-                          <tr key={i} style={{borderTop:`1px solid ${divCls}`}}>
-                            <td style={{padding:'9px 8px 9px 0',fontSize:'12px',fontWeight:500,color:txtHi,maxWidth:'110px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</td>
-                            <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.spend}</td>
-                            <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid}}>{row.leads}</td>
-                            <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.cpl}</td>
-                            {!isMobile&&(
-                              <td style={{padding:'9px 0'}}>
-                                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                                  <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
-                                    <div style={{height:'100%',width:`${row.perf}%`,background:'#2563eb',borderRadius:'99px'}}/>
-                                  </div>
-                                  <span style={{fontSize:'11px',color:txtLow}}>{row.perf}%</span>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
+                  <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
+                    <colgroup>
+                      <col style={{width:isMobile?'40%':'45%'}}/>
+                      <col style={{width:isMobile?'25%':'20%'}}/>
+                      <col style={{width:'15%'}}/>
+                      <col style={{width:isMobile?'20%':'20%'}}/>
+                      {!isMobile&&<col style={{width:'15%'}}/>}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        {['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'].filter(Boolean).map(h=>(
+                          <th key={h as string} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',paddingRight:'6px'}}>{h as string}</th>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campRows.map((row,i)=>(
+                        <tr key={i} style={{borderTop:`1px solid ${divCls}`}}>
+                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</td>
+                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.spend}</td>
+                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid}}>{row.leads}</td>
+                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.cpl}</td>
+                          {!isMobile&&(
+                            <td style={{padding:'9px 0'}}>
+                              <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                                <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
+                                  <div style={{height:'100%',width:`${row.perf}%`,background:'#2563eb',borderRadius:'99px'}}/>
+                                </div>
+                                <span style={{fontSize:'11px',color:txtLow}}>{row.perf}%</span>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )
             }
           </div>
