@@ -6,8 +6,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
+import { useAppStore, calcularFaixa, Lead as AppLead } from '@/stores/appStore';
+import { LeadDrawer } from '@/components/ui/lead-drawer';
 
-interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; }
+interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
 interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; cplRealTime: number; }
 
@@ -31,9 +33,9 @@ const FUNNEL_CONFIG = [
   { stage: 'Aprovado',       statusId: 3, color: '#22c55e' },
 ];
 
-const STATUS_LABEL: Record<number,string> = { 0:'Em atendimento',1:'Em atendimento',2:'Reunião',3:'Aprovado', 4:'Reprovado' };
-const STATUS_DARK:  Record<number,string> = { 0:'bg-blue-900/40 text-blue-300',1:'bg-blue-900/40 text-blue-300',2:'bg-purple-900/40 text-purple-300',3:'bg-emerald-900/40 text-emerald-300', 4:'bg-rose-900/40 text-rose-300' };
-const STATUS_LIGHT: Record<number,string> = { 0:'bg-blue-100 text-blue-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700', 4:'bg-rose-100 text-rose-700' };
+const STATUS_LABEL: Record<number,string> = { 0:'Em atendimento',1:'Em atendimento',2:'Reunião',3:'Aprovado',4:'Reprovado' };
+const STATUS_DARK:  Record<number,string> = { 0:'bg-blue-900/40 text-blue-300',1:'bg-blue-900/40 text-blue-300',2:'bg-purple-900/40 text-purple-300',3:'bg-emerald-900/40 text-emerald-300',4:'bg-rose-900/40 text-rose-300' };
+const STATUS_LIGHT: Record<number,string> = { 0:'bg-blue-100 text-blue-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700',4:'bg-rose-100 text-rose-700' };
 const AVATAR_COLORS = ['bg-rose-400','bg-yellow-400','bg-emerald-400','bg-orange-400','bg-cyan-400','bg-violet-400','bg-pink-400'];
 
 function initials(n:string){ return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
@@ -57,11 +59,7 @@ function relativeTime(str?:string|null):string{
 
 function startOfDay(d:Date){return new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0,0);}
 function endOfDay(d:Date){return new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999);}
-
-function isoToBR(iso:string):string{
-  if(!iso||!iso.includes('-'))return iso||'';
-  const[y,m,d]=iso.split('-');return `${d}/${m}/${y}`;
-}
+function isoToBR(iso:string):string{ if(!iso||!iso.includes('-'))return iso||''; const[y,m,d]=iso.split('-');return `${d}/${m}/${y}`; }
 
 function filterByPeriod(leads:Lead[],period:string,from?:string,to?:string):Lead[]{
   const now=new Date();const ts=startOfDay(now);const te=endOfDay(now);
@@ -98,7 +96,7 @@ function buildChartData(leads:Lead[],period:string,from?:string,to?:string){
   return Object.entries(map).map(([date,cnt])=>({date,leads:cnt}));
 }
 
-async function fetchMetaData(period:string,from?:string,to?:string, leadsList: Lead[] = []):Promise<{metrics:MetaMetrics;campaigns:Campaign[]}>{
+async function fetchMetaData(period:string,from?:string,to?:string,leadsList:Lead[]=[]):Promise<{metrics:MetaMetrics;campaigns:Campaign[]}>{
   const empty={metrics:{spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0,cplRealTime:0},campaigns:[]};
   try{
     const presetMap:Record<string,string>={today:'today',yesterday:'yesterday','7days':'last_7d','30days':'last_30d',month:'this_month'};
@@ -107,8 +105,6 @@ async function fetchMetaData(period:string,from?:string,to?:string, leadsList: L
     const insData=await insRes.json();
     let spend=0,impressions=0,clicks=0,ctr=0,leads=0;
     if(insData.data?.length){const d=insData.data[0];spend=parseFloat(d.spend||'0');impressions=parseInt(d.impressions||'0');clicks=parseInt(d.clicks||'0');ctr=parseFloat(d.ctr||'0');const la=(d.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type));leads=la?parseInt(la.value||'0'):0;}
-    
-    // Optimized: Fetch campaign insights in a single batch call instead of many individual calls
     const campInsRes=await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${META_TOKEN}`);
     const campInsData=await campInsRes.json();
     const campaigns:Campaign[]=[];
@@ -117,11 +113,27 @@ async function fetchMetaData(period:string,from?:string,to?:string, leadsList: L
       const cLeads=parseInt((ins.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');
       if(cSpend>0) campaigns.push({id:ins.campaign_id,name:ins.campaign_name,status:'ACTIVE',spend:cSpend,leads_api:cLeads});
     });
-
-    const totalLeadsFB = leadsList.filter(l => l.utm_source && l.utm_source.toUpperCase() === 'FB').length;
-    const cplRealTime = totalLeadsFB > 0 ? spend / totalLeadsFB : 0;
+    const totalLeadsFB=leadsList.filter(l=>l.utm_source&&l.utm_source.toUpperCase()==='FB').length;
+    const cplRealTime=totalLeadsFB>0?spend/totalLeadsFB:0;
     return{metrics:{spend,impressions,clicks,ctr,leads,cpl:leads>0?spend/leads:0,cplRealTime},campaigns};
   }catch(e){console.error('[Meta]',e);return empty;}
+}
+
+// Bolinha de faixa — igual Kanban/Leads
+function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
+  const { configuracoes } = useAppStore();
+  const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead as any, configuracoes) : null);
+  if (!faixa || faixa === 'vermelho') return null;
+  return (
+    <div style={{
+      position: 'absolute', top: '-2px', right: '-2px',
+      width: '10px', height: '10px', borderRadius: '50%',
+      background: faixa === 'verde' ? '#10b981' : '#f59e0b',
+      border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+      zIndex: 2,
+    }}/>
+  );
 }
 
 export default function Dashboard() {
@@ -130,7 +142,6 @@ export default function Dashboard() {
   const dark=theme==='dark';
 
   const firstName=user?.user_metadata?.first_name||user?.user_metadata?.full_name?.split(' ')[0]||'';
-  // Padrão: hoje. Mantém o que estava salvo se já foi setado
   const savedPeriod=localStorage.getItem(STORAGE_KEY)||'today';
   const savedCustom=(()=>{try{return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}');}catch{return{};}})();
 
@@ -147,6 +158,7 @@ export default function Dashboard() {
   const [metaLoading,setMetaLoading]=useState(true);
   const [metaError,setMetaError]=useState(false);
   const [isMobile,setIsMobile]=useState(false);
+  const [viewingLead,setViewingLead]=useState<Lead|null>(null);
 
   const dropRef=useRef<HTMLDivElement>(null);
   const customRef=useRef<HTMLDivElement>(null);
@@ -154,11 +166,11 @@ export default function Dashboard() {
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
   useEffect(()=>{function close(e:MouseEvent){if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false);if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false);}document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close);},[]);
 
-  const fetchLeads=async()=>{setLoading(true);const{data,error}=await supabase.from('leads').select('id,nome,cidade,whatsapp,status,created_at,utm_source').order('created_at',{ascending:false});if(error)console.error('[Dashboard]',error.message);else if(data)setAllLeads(data as Lead[]);setLoading(false);};
-  const loadMeta=async(currentLeads?: Lead[])=>{setMetaLoading(true);setMetaError(false);try{const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo, currentLeads || allLeads);setMetaMetrics(metrics);setMetaCampaigns(campaigns);if(metrics.spend===0&&campaigns.length===0)setMetaError(true);}catch{setMetaError(true);}setMetaLoading(false);};
+  const fetchLeads=async()=>{setLoading(true);const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false});if(error)console.error('[Dashboard]',error.message);else if(data)setAllLeads(data as Lead[]);setLoading(false);};
+  const loadMeta=async(currentLeads?:Lead[])=>{setMetaLoading(true);setMetaError(false);try{const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads);setMetaMetrics(metrics);setMetaCampaigns(campaigns);if(metrics.spend===0&&campaigns.length===0)setMetaError(true);}catch{setMetaError(true);}setMetaLoading(false);};
 
-  useEffect(()=>{if(!user)return;fetchLeads().then((leads) => loadMeta());},[user?.id]); // eslint-disable-line
-  useEffect(()=>{if(allLeads.length > 0) loadMeta();},[selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
+  useEffect(()=>{if(!user)return;fetchLeads().then(()=>loadMeta());},[user?.id]); // eslint-disable-line
+  useEffect(()=>{if(allLeads.length>0)loadMeta();},[selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
   useEffect(()=>{const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe();return()=>{supabase.removeChannel(ch);};},[]);
 
   function selectPeriod(value:string){if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;}setSelectedPeriod(value);localStorage.setItem(STORAGE_KEY,value);setShowDropdown(false);setShowCustom(false);}
@@ -170,16 +182,8 @@ export default function Dashboard() {
   const approved=filtered.filter(l=>toNum(l.status)===3).length;
   const convRate=totalLeads>0?((approved/totalLeads)*100).toFixed(1):'0.0';
   const spend=metaMetrics.spend||0;
-  const cplMeta=metaMetrics.cpl||0;
   const chartData=useMemo(()=>buildChartData(filtered,selectedPeriod,customFrom,customTo),[filtered,selectedPeriod,customFrom,customTo]);
-  const funnelData=useMemo(()=>FUNNEL_CONFIG.map(f=>{
-    const value = filtered.filter(l => {
-      let s = toNum(l.status);
-      if (s === 0) s = 1;
-      return s === f.statusId;
-    }).length;
-    return { ...f, value };
-  }), [filtered]);
+  const funnelData=useMemo(()=>FUNNEL_CONFIG.map(f=>{const value=filtered.filter(l=>{let s=toNum(l.status);if(s===0)s=1;return s===f.statusId;}).length;return{...f,value};}), [filtered]);
   const recentLeads=useMemo(()=>[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5),[allLeads]);
   const campRows=useMemo(()=>{
     if(!metaCampaigns.length)return[];
@@ -201,12 +205,11 @@ export default function Dashboard() {
   const cardBg=dark?'#111113':'#ffffff';
   const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827';
-  const txtMid=dark?'#71717a':'#6b7280';
-  const txtLow=dark?'#52525b':'#9ca3af';
+  const txtMid=dark?'#71717a':'#374151';
+  const txtLow=dark?'#52525b':'#6b7280';
   const gridLn=dark?'#1e1e22':'#f0f0f0';
   const divCls=dark?'#1e1e22':'#f3f4f6';
   const hov=dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';
-  // Mobile: padding lateral maior para não colar nas bordas
   const pad=isMobile?'20px 16px':'32px';
   const btnBase:React.CSSProperties={display:'flex',alignItems:'center',gap:'6px',padding:'8px 12px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',transition:'all 0.12s',fontFamily:'inherit'};
   const statusClass=dark?STATUS_DARK:STATUS_LIGHT;
@@ -220,13 +223,9 @@ export default function Dashboard() {
           <div>
             <h1 style={{fontSize:isMobile?'20px':'26px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0,display:'flex',alignItems:'center',gap:'8px'}}>
               {getGreeting()}{firstName?`, ${firstName}`:''}!{' '}
-              <img src="/wave.png" alt="👋" style={{width:'26px',height:'26px',objectFit:'contain'}}
-                onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}
-              />
+              <img src="/wave.png" alt="👋" style={{width:'26px',height:'26px',objectFit:'contain'}} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
             </h1>
-            <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>
-              {new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}
-            </p>
+            <p style={{fontSize:'13px',color:txtLow,marginTop:'4px'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
             <div style={{position:'relative'}} ref={dropRef}>
@@ -275,16 +274,16 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Metric Cards — 1 col mobile, 4 col desktop */}
+        {/* Metric Cards */}
         <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'16px',marginBottom:'16px'}}>
           {[
-            {label:'Gasto Total',    value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,        trend:'+',     up:true, sub:'Meta Ads'},
-            {label:'Leads',          value:loading?'…':String(filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length),   trend:'+',     up:true, sub:'Fonte FB'},
-            {label:'CPL Ads',        value:metaLoading?'…':(filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length > 0 ? `R$ ${(spend / filtered.filter(l => l.utm_source?.toUpperCase() === 'FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : 'R$ —'), trend:'Real Time', up:true, sub:'Base Sistema'},
-            {label:'Aprovados',      value:loading?'…':String(approved),                                                             trend:`${convRate}%`,up:Number(convRate)>0,sub:'conversão'},
+            {label:'Gasto Total',value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,trend:'+',up:true,sub:'Meta Ads'},
+            {label:'Leads',value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length),trend:'+',up:true,sub:'Fonte FB'},
+            {label:'CPL Ads',value:metaLoading?'…':(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length>0?`R$ ${(spend/filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —'),trend:'Real Time',up:true,sub:'Base Sistema'},
+            {label:'Aprovados',value:loading?'…':String(approved),trend:`${convRate}%`,up:Number(convRate)>0,sub:'conversão'},
           ].map((c,i)=>(
             <div key={i} style={{background:cardBg,borderRadius:'14px',padding:isMobile?'14px':'20px',border:`1px solid ${border}`}}>
-              <p style={{fontSize:'12px',color:txtMid,marginBottom:'4px'}}>{c.label}</p>
+              <p style={{fontSize:'12px',color:txtLow,marginBottom:'4px'}}>{c.label}</p>
               <p style={{fontSize:isMobile?'22px':'26px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>{c.value}</p>
               <p style={{fontSize:'11px',display:'flex',alignItems:'center',gap:'3px',margin:0}}>
                 {c.up?<TrendingUp style={{width:'11px',height:'11px',color:'#10b981'}}/>:<TrendingDown style={{width:'11px',height:'11px',color:'#ef4444'}}/>}
@@ -301,7 +300,7 @@ export default function Dashboard() {
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <div>
                 <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Evolução de Leads</h3>
-                <p style={{fontSize:'11px',color:txtMid,marginTop:'2px'}}>{periodLabel}</p>
+                <p style={{fontSize:'11px',color:txtLow,marginTop:'2px'}}>{periodLabel}</p>
               </div>
               <button style={{padding:'4px',borderRadius:'8px',border:'none',background:'transparent',cursor:'pointer'}}>
                 <MoreHorizontal style={{width:'14px',height:'14px',color:txtLow}}/>
@@ -312,8 +311,8 @@ export default function Dashboard() {
                 <AreaChart data={chartData.length?chartData:[{date:'—',leads:0}]} margin={{top:10,right:10,left:-20,bottom:0}}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
-                  <XAxis dataKey="date" tick={{fill:txtMid,fontSize:10}} axisLine={false} tickLine={false}/>
-                  <YAxis allowDecimals={false} tick={{fill:txtMid,fontSize:10}} axisLine={false} tickLine={false} width={24}/>
+                  <XAxis dataKey="date" tick={{fill:txtLow,fontSize:10}} axisLine={false} tickLine={false}/>
+                  <YAxis allowDecimals={false} tick={{fill:txtLow,fontSize:10}} axisLine={false} tickLine={false} width={24}/>
                   <Tooltip contentStyle={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',fontSize:'12px',color:txtHi}}/>
                   <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#glLeads)" name="Leads"/>
                 </AreaChart>
@@ -321,76 +320,35 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`, position: 'relative', overflow: 'hidden'}}>
+          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,position:'relative',overflow:'hidden'}}>
             <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 4px'}}>Funil de leads</h3>
-            <p style={{fontSize:'11px',color:txtMid,marginBottom: '16px'}}>{periodLabel}</p>
-            
+            <p style={{fontSize:'11px',color:txtLow,marginBottom:'16px'}}>{periodLabel}</p>
             <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-              {/* Image-Style Funnel Stages */}
-              {funnelData.map((stage) => {
-                const pct = totalLeads > 0 ? Math.round((stage.value / Math.max(totalLeads, 1)) * 100) : 0;
-                
-                return (
-                  <div key={stage.stage} style={{ 
-                    background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-                    border: `1px solid ${border}`,
-                    borderRadius: '10px',
-                    padding: '12px 14px 14px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}>
-                    {/* Left Accent */}
-                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: stage.color }} />
-
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: txtHi }}>{stage.stage}</span>
-                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '24px' }}>
-                        <span style={{ fontSize: '18px', fontWeight: 700, color: txtHi }}>{loading ? '…' : stage.value}</span>
-                        <div style={{ 
-                          padding: '4px 10px', 
-                          borderRadius: '8px', 
-                          background: stage.color + '10',
-                          color: stage.color,
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          minWidth: '40px',
-                          textAlign: 'center'
-                        }}>
-                          {loading ? '…' : `${pct}%`}
-                        </div>
+              {funnelData.map((stage)=>{
+                const pct=totalLeads>0?Math.round((stage.value/Math.max(totalLeads,1))*100):0;
+                return(
+                  <div key={stage.stage} style={{background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)',border:`1px solid ${border}`,borderRadius:'10px',padding:'12px 14px 14px',position:'relative',overflow:'hidden'}}>
+                    <div style={{position:'absolute',left:0,top:0,bottom:0,width:'4px',background:stage.color}}/>
+                    <div style={{display:'flex',alignItems:'center',marginBottom:'14px'}}>
+                      <span style={{fontSize:'14px',fontWeight:600,color:txtHi}}>{stage.stage}</span>
+                      <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'24px'}}>
+                        <span style={{fontSize:'18px',fontWeight:700,color:txtHi}}>{loading?'…':stage.value}</span>
+                        <div style={{padding:'4px 10px',borderRadius:'8px',background:stage.color+'10',color:stage.color,fontSize:'11px',fontWeight:800,minWidth:'40px',textAlign:'center'}}>{loading?'…':`${pct}%`}</div>
                       </div>
                     </div>
-
-                    <div style={{ width: '100%', height: '5px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: '10px' }}>
-                      <div style={{ 
-                        width: `${pct}%`, 
-                        height: '100%', 
-                        background: stage.color, 
-                        borderRadius: '10px',
-                        transition: 'width 0.8s ease'
-                      }} />
+                    <div style={{width:'100%',height:'5px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',borderRadius:'10px'}}>
+                      <div style={{width:`${pct}%`,height:'100%',background:stage.color,borderRadius:'10px',transition:'width 0.8s ease'}}/>
                     </div>
                   </div>
                 );
               })}
-
-              {/* Conversion Rate Card */}
-              <div style={{
-                marginTop: '4px',
-                background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-                border: `1px solid ${border}`,
-                borderRadius: '10px',
-                padding: '14px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px'
-              }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(34,197,94,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <TrendingUp style={{width: '20px', height: '20px', color: '#22c55e'}} />
+              <div style={{marginTop:'4px',background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)',border:`1px solid ${border}`,borderRadius:'10px',padding:'14px 16px',display:'flex',alignItems:'center',gap:'14px'}}>
+                <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'rgba(34,197,94,0.08)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <TrendingUp style={{width:'20px',height:'20px',color:'#22c55e'}}/>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '11px', color: txtLow, fontWeight: 500, opacity: 0.8 }}>Taxa de conversão</span>
-                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#22c55e' }}>{convRate}%</span>
+                <div style={{display:'flex',flexDirection:'column'}}>
+                  <span style={{fontSize:'11px',color:txtLow,fontWeight:500}}>Taxa de conversão</span>
+                  <span style={{fontSize:'22px',fontWeight:800,color:'#22c55e'}}>{convRate}%</span>
                 </div>
               </div>
             </div>
@@ -400,7 +358,7 @@ export default function Dashboard() {
         {/* Bottom */}
         <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:'14px'}}>
 
-          {/* Leads Recentes */}
+          {/* Leads Recentes com bolinha faixa */}
           <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Leads Recentes</h3>
@@ -412,15 +370,19 @@ export default function Dashboard() {
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
                 return(
-                  <div key={lead.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s'}}
+                  <div key={lead.id} onClick={()=>setViewingLead(lead)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s'}}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=hov}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
-                    <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
-                      {initials(lead.nome)}
+                    {/* Avatar com bolinha faixa */}
+                    <div style={{position:'relative',flexShrink:0}}>
+                      <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
+                        {initials(lead.nome)}
+                      </div>
+                      <FaixaDot lead={lead} dark={dark}/>
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0, 2).join(' ')}</p>
+                      <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
                       <p style={{fontSize:'11px',color:txtLow,margin:0}}>{lead.cidade||'—'}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px'}}>{STATUS_LABEL[st]??'Aguardando'}</span>
@@ -435,7 +397,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Campanhas — com todas as métricas visíveis */}
+          {/* Campanhas */}
           <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
@@ -447,18 +409,16 @@ export default function Dashboard() {
               </div>
               <Link to="/campanhas" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none'}}>Ver todas</Link>
             </div>
-
             {metaLoading
               ?[...Array(3)].map((_,i)=><div key={i} style={{height:'32px',borderRadius:'8px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',marginBottom:'8px'}}/>)
               :metaError||campRows.length===0
                 ?<div style={{textAlign:'center',padding:'20px 0'}}><p style={{fontSize:'13px',color:txtMid,margin:0}}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
                 :(
-                  /* Tabela compacta com todas as métricas */
                   <div style={{overflowX:'auto'}}>
                     <table style={{width:'100%',borderCollapse:'collapse',minWidth:isMobile?'0':'auto'}}>
                       <thead>
                         <tr>
-                          {['Campanha','Gasto','Leads','CPL', !isMobile && 'Perf.'].filter(Boolean).map(h=>(
+                          {['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'].filter(Boolean).map(h=>(
                             <th key={h as string} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',whiteSpace:'nowrap',paddingRight:'8px'}}>{h as string}</th>
                           ))}
                         </tr>
@@ -470,7 +430,7 @@ export default function Dashboard() {
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.spend}</td>
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid}}>{row.leads}</td>
                             <td style={{padding:'9px 8px 9px 0',fontSize:'12px',color:txtMid,whiteSpace:'nowrap'}}>{row.cpl}</td>
-                            {!isMobile && (
+                            {!isMobile&&(
                               <td style={{padding:'9px 0'}}>
                                 <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
                                   <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
@@ -490,6 +450,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
