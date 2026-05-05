@@ -37,7 +37,6 @@ export interface Lead {
   motivo_reprovacao?: string;
   score?: number | null;
   faixa?: 'verde' | 'amarelo' | 'vermelho' | null;
-  // Campos dinâmicos do quiz (qualquer campo novo do InLead cai aqui)
   [key: string]: unknown;
 }
 
@@ -78,31 +77,40 @@ export interface CamposPerfil {
   campo: string;
 }
 
-// Uma trava: se o campo contém o texto, a trava é ativada
 export interface Trava {
-  campo: string;   // coluna da tabela leads ex: "negativado"
-  contem: string;  // texto que ativa a trava ex: "sim"
+  campo: string;
+  contem: string;
 }
 
 export interface Configuracoes {
   campos_perfil: CamposPerfil[];
   faixas_score: {
     travas: Trava[];
-    vermelho_se_todas: boolean; // true = vermelho só se TODAS as travas ativadas
+    vermelho_se_todas: boolean;
   };
 }
 
-// Calcula faixa com base nas travas configuradas no Supabase
-// Sem mexer nessa função, funciona para qualquer empresa
+// Calcula faixa com base no score (lógica principal) ou travas (fallback para leads antigos)
 export function calcularFaixa(
   lead: Lead,
   config: Configuracoes
 ): 'verde' | 'amarelo' | 'vermelho' | null {
+  // 1. Se o lead já tem faixa salva no banco, usa ela
+  if (lead.faixa) return lead.faixa;
+
+  // 2. Se tem score, calcula pela pontuação
+  if (lead.score != null) {
+    const score = Number(lead.score);
+    if (score < 55) return 'vermelho';
+    if (score >= 70) return 'verde';
+    return 'amarelo';
+  }
+
+  // 3. Fallback: lógica antiga por travas (leads sem score)
   if (!config?.faixas_score?.travas?.length) return null;
 
   const { travas, vermelho_se_todas } = config.faixas_score;
 
-  // Conta quantas travas foram ativadas
   const travaAtivada = (trava: Trava): boolean => {
     const valor = String(lead[trava.campo] || '').toLowerCase();
     return valor.includes(trava.contem.toLowerCase());
@@ -111,9 +119,7 @@ export function calcularFaixa(
   const travaCount = travas.filter(travaAtivada).length;
 
   if (travaCount === 0) return 'verde';
-
   if (vermelho_se_todas && travaCount === travas.length) return 'vermelho';
-
   return 'amarelo';
 }
 
