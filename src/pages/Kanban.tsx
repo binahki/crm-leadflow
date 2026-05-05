@@ -8,7 +8,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react';
+import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime } from '@/utils/relativeTime';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -30,20 +30,13 @@ function initials(name: string) { if (!name) return '?'; return name.split(' ').
 function parseDateMs(str?: string | null): number {
   if (!str) return 0;
   try {
-    // ISO format com T — mais comum do Supabase
-    if (str.includes('T') || str.endsWith('Z')) {
-      return new Date(str).getTime();
-    }
-    // dd/mm/yyyy hh:mm
+    if (str.includes('T') || str.endsWith('Z')) return new Date(str).getTime();
     const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
-    if (m) {
-      return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), Number(m[4]||0), Number(m[5]||0)).getTime();
-    }
+    if (m) return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), Number(m[4]||0), Number(m[5]||0)).getTime();
     return new Date(str).getTime();
   } catch { return 0; }
 }
 
-// Calcula dias desde a última mudança de status (ou criação)
 function getDias(lead: Lead): number {
   const l = lead as any;
   const ref = l.ultimo_status_change || lead.created_at;
@@ -52,18 +45,33 @@ function getDias(lead: Lead): number {
   return Math.floor((Date.now() - ms) / 86400000);
 }
 
+// ── Score Tag ─────────────────────────────────────────────────
+function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
+  if (score == null) return null;
+  const isVerde = faixa === 'verde';
+  const isAmarelo = faixa === 'amarelo';
+  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
+  const bg = isVerde
+    ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5')
+    : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7')
+    : (dark ? 'rgba(107,114,128,0.15)' : '#f3f4f6');
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '99px', background: bg, border: `1px solid ${color}30`, flexShrink: 0 }}>
+      <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: color }} />
+      <span style={{ fontSize: '11px', fontWeight: 700, color }}>{score} pts</span>
+    </div>
+  );
+}
+
 // ── Modal Motivo ──────────────────────────────────────────────
 function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: {
   onConfirm: (m: string) => void; onCancel: () => void; dark: boolean; motivoAtual?: string;
 }) {
   const outroDefault = motivoAtual && !MOTIVOS.slice(0,-1).includes(motivoAtual) ? motivoAtual : '';
-  const selectedDefault = motivoAtual
-    ? (MOTIVOS.slice(0,-1).includes(motivoAtual) ? motivoAtual : 'Outro')
-    : '';
+  const selectedDefault = motivoAtual ? (MOTIVOS.slice(0,-1).includes(motivoAtual) ? motivoAtual : 'Outro') : '';
   const [selected, setSelected] = useState(selectedDefault);
   const [outro, setOutro] = useState(outroDefault);
   const motivo = selected === 'Outro' ? outro.trim() : selected;
-
   return (
     <>
       <div style={{ position:'fixed', inset:0, zIndex:999998, background:'rgba(0,0,0,0.55)' }} onClick={onCancel}/>
@@ -78,14 +86,11 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: {
         <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginBottom:'14px' }}>
           {MOTIVOS.map(m => (
             <button key={m} onClick={() => setSelected(m)} style={{ width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:'10px', border:`1px solid ${selected===m?'#ef4444':(dark?'#1e1e22':'#e5e7eb')}`, background:selected===m?(dark?'rgba(239,68,68,0.12)':'#fff1f2'):(dark?'rgba(255,255,255,0.02)':'#f9fafb'), color:selected===m?'#ef4444':(dark?'#d4d4d8':'#374151'), fontSize:'13px', fontWeight:selected===m?600:400, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', transition:'all 0.15s' }}>
-              {m}
-              {selected===m && <Check style={{ width:'14px', height:'14px', color:'#ef4444', flexShrink:0 }}/>}
+              {m}{selected===m && <Check style={{ width:'14px', height:'14px', color:'#ef4444', flexShrink:0 }}/>}
             </button>
           ))}
         </div>
-        {selected==='Outro' && (
-          <input autoFocus placeholder="Descreva o motivo..." value={outro} onChange={e=>setOutro(e.target.value)} style={{ width:'100%', padding:'10px 12px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', marginBottom:'12px', boxSizing:'border-box' as any }}/>
-        )}
+        {selected==='Outro' && <input autoFocus placeholder="Descreva o motivo..." value={outro} onChange={e=>setOutro(e.target.value)} style={{ width:'100%', padding:'10px 12px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', marginBottom:'12px', boxSizing:'border-box' as any }}/>}
         <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
           <button onClick={onCancel} style={{ flex:1, padding:'10px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'13px', cursor:'pointer' }}>Cancelar</button>
           <button onClick={() => motivo && onConfirm(motivo)} disabled={!motivo} style={{ flex:1, padding:'10px', borderRadius:'10px', border:'none', background:motivo?'#ef4444':(dark?'#27272a':'#e5e7eb'), color:motivo?'#fff':(dark?'#52525b':'#9ca3af'), fontSize:'13px', fontWeight:600, cursor:motivo?'pointer':'default', transition:'all 0.15s' }}>Confirmar</button>
@@ -99,12 +104,7 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: {
 function ObsBadge({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   return (
-    <div
-      onMouseEnter={()=>setShow(true)}
-      onMouseLeave={()=>setShow(false)}
-      onPointerDown={e=>e.stopPropagation()}
-      style={{ position:'relative', display:'inline-flex', alignItems:'center', flexShrink:0, zIndex: show ? 200 : 1 }}
-    >
+    <div onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)} onPointerDown={e=>e.stopPropagation()} style={{ position:'relative', display:'inline-flex', alignItems:'center', flexShrink:0, zIndex: show ? 200 : 1 }}>
       <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:'#f59e0b', cursor:'default', background:'rgba(245,158,11,0.1)', padding:'2px 6px', borderRadius:'20px', fontWeight:500 }}>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Obs
       </span>
@@ -130,8 +130,9 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
   const dias = getDias(lead);
   const showAlerta = statusNum === 2 && dias >= 3;
   const motivo = (lead as any).motivo_reprovacao as string | undefined;
-  const { configuracoes } = useAppStore();
-  const faixaLead = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
+  const l = lead as any;
+  const score = l.score != null ? Number(l.score) : null;
+  const faixa = l.faixa || null;
 
   return (
     <div ref={setNodeRef} {...attributes} {...listeners}
@@ -142,49 +143,48 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
         borderRadius:'14px', padding:'13px',
         boxShadow: isDragging
           ? (dark?'0 12px 32px rgba(0,0,0,0.5)':'0 12px 32px rgba(0,0,0,0.18)')
-          : (dark?'0 1px 4px rgba(0,0,0,0.4)':'0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)'),
+          : (dark?'0 1px 4px rgba(0,0,0,0.4)':'0 2px 8px rgba(0,0,0,0.08)'),
         cursor: isDragging?'grabbing':'grab',
         opacity: isDragging?0:1,
         touchAction: isMobile ? 'manipulation' : 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        transition:'box-shadow 0.2s, border-color 0.2s',
-        outline:'none',
+        userSelect: 'none', WebkitUserSelect: 'none',
+        transition:'box-shadow 0.2s, border-color 0.2s', outline:'none',
       }}
     >
-      {/* Nome + menu */}
+      {/* Header: avatar + nome + score (desktop) + menu */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px', flex:1, minWidth:0 }}>
+          {/* Avatar — bolinha de faixa SÓ no mobile */}
           <div style={{ position:'relative', flexShrink:0 }}>
             <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
-            {faixaLead && faixaLead !== 'vermelho' && (
-              <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
+            {isMobile && faixa && faixa !== 'vermelho' && (
+              <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
             )}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.nome||'Lead sem nome'}</p>
+            {/* Nome + score tag lado a lado no desktop */}
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
+              <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{lead.nome||'Lead sem nome'}</p>
+              {!isMobile && <ScoreTag score={score} faixa={faixa} dark={dark} />}
+            </div>
             <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp||'—'}</p>
           </div>
         </div>
-        <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:isMobile?1:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.color='#374151';(e.currentTarget as HTMLElement).style.background='rgba(0,0,0,0.05)';}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.color='#d1d5db';(e.currentTarget as HTMLElement).style.background='transparent';}}>
+        <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:isMobile?1:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick}>
           <MoreVertical style={{ width:'15px', height:'15px' }}/>
         </button>
       </div>
 
-
-
-      {/* Cidade + tempo + obs + alerta discreto */}
+      {/* Cidade + tempo + obs + alerta */}
       <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
         {lead.cidade && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280' }}><MapPin style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>{lead.cidade}</span>}
         {showAlerta ? (
           <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:'#ef4444' }}>
-            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>
-            ⚠️ {dias}d sem contato
+            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>⚠️ {dias}d sem contato
           </span>
         ) : (
           <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280' }}>
-            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>
-            {getRelativeTime(lead.created_at)}
+            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>{getRelativeTime(lead.created_at)}
           </span>
         )}
         {lead.observacoes && lead.observacoes.trim() && <ObsBadge text={lead.observacoes.trim()}/>}
@@ -264,32 +264,16 @@ export default function KanbanPage() {
   const [activeColIndex, setActiveColIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  // Modal motivo — guarda o lead e status pendente
   const [motivoCtx, setMotivoCtx] = useState<{ lead: Lead; targetStatus: number; currentStatus: number } | null>(null);
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check(); window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+  useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,  // desktop: 8px de movimento para iniciar drag
-      }
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 300,      // mobile: segurar 300ms para iniciar drag
-        tolerance: 8,    // permite 8px de movimento enquanto segura sem cancelar
-      }
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
 
-  useEffect(() => {
-    supabase.from('leads').select('*').then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); });
-  }, []);
+  useEffect(() => { supabase.from('leads').select('*').then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); }); }, []);
 
   useEffect(() => {
     const ch = supabase.channel('kanban-rt')
@@ -322,29 +306,16 @@ export default function KanbanPage() {
   }, [isMobile]);
 
   function getColLeads(status: number): Lead[] {
-    return [...leads.filter(l => {
-      let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
-      if (s === 0) s = 1;
-      return s === status;
-    })].sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
+    return [...leads.filter(l => { let s = l.status === null || l.status === undefined ? 1 : Number(l.status); if (s === 0) s = 1; return s === status; })].sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
   }
 
-  // Aplica status + motivo no Supabase e no store
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
-    // Atualiza store imediatamente (otimista)
     const patch: any = { status: newStatus, ultimo_status_change: new Date().toISOString() };
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;
     updateLead(lead.id, patch);
-
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
-    if (error) {
-      // Reverte
-      updateLead(lead.id, { status: currentStatus });
-      toast.error('Erro ao mover lead');
-    } else {
-      const col = COLUMNS.find(c => c.status === newStatus);
-      toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 });
-    }
+    if (error) { updateLead(lead.id, { status: currentStatus }); toast.error('Erro ao mover lead'); }
+    else { const col = COLUMNS.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 }); }
   }
 
   function handleDragStart(e: DragStartEvent) {
@@ -352,7 +323,6 @@ export default function KanbanPage() {
     if (lead) setActiveLead(lead);
     setMenuLead(null);
     document.body.classList.add('dragging');
-    // Prevent text selection during drag on mobile
     document.body.style.userSelect = 'none';
     (document.body.style as any).webkitUserSelect = 'none';
   }
@@ -372,25 +342,16 @@ export default function KanbanPage() {
     let currentStatus = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
     if (currentStatus === 0) currentStatus = 1;
     if (currentStatus === targetStatus) return;
-
-    if (targetStatus === 4) {
-      setMotivoCtx({ lead, targetStatus, currentStatus });
-    } else {
-      applyStatus(lead, targetStatus, currentStatus);
-    }
+    if (targetStatus === 4) { setMotivoCtx({ lead, targetStatus, currentStatus }); }
+    else { applyStatus(lead, targetStatus, currentStatus); }
   }
 
   function handleMenuMove(lead: Lead, newStatus: number) {
     setMenuLead(null);
     let currentStatus = Number(lead.status ?? 1);
     if (currentStatus === 0) currentStatus = 1;
-
-    if (newStatus === 4) {
-      // Sempre abre modal ao mover para reprovado (inclusive para editar motivo quando já está reprovado)
-      setMotivoCtx({ lead, targetStatus: newStatus, currentStatus });
-    } else if (currentStatus !== newStatus) {
-      applyStatus(lead, newStatus, currentStatus);
-    }
+    if (newStatus === 4) { setMotivoCtx({ lead, targetStatus: newStatus, currentStatus }); }
+    else if (currentStatus !== newStatus) { applyStatus(lead, newStatus, currentStatus); }
   }
 
   async function handleMotivoConfirm(motivo: string) {
@@ -412,20 +373,16 @@ export default function KanbanPage() {
   return (
     <AppLayout leadCount={leads.length}>
       <div style={{ padding:isMobile?'16px 16px 24px':'32px 32px 40px', background:bg, minHeight:'100vh' }}>
-
-        {/* Header */}
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'12px' }}>
           <div>
             <h1 style={{ fontSize:isMobile?'20px':'22px', fontWeight:700, color:dark?'#f4f4f5':'#111827', margin:0, letterSpacing:'-0.03em' }}>Funil CRM</h1>
             {!isMobile && <p style={{ fontSize:'13px', color:dark?'#a1a1aa':'#9ca3af', marginTop:'3px' }}>Arraste os cards para atualizar o status · Clique para ver o perfil</p>}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#71717a':'#9ca3af' }}>
-            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>
-            Tempo real
+            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
           </div>
         </div>
 
-        {/* Mobile nav */}
         {isMobile && (
           <>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
@@ -433,9 +390,7 @@ export default function KanbanPage() {
                 <ChevronLeft style={{ width:'16px', height:'16px' }}/>
               </button>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-                {COLUMNS.map((col,i) => (
-                  <button key={i} onClick={() => scrollToCol(i)} style={{ width:i===activeColIndex?'24px':'7px', height:'7px', borderRadius:'99px', border:'none', background:i===activeColIndex?col.dot:(dark?'#27272a':'#d1d5db'), cursor:'pointer', padding:0, transition:'all 0.2s ease' }}/>
-                ))}
+                {COLUMNS.map((col,i) => <button key={i} onClick={() => scrollToCol(i)} style={{ width:i===activeColIndex?'24px':'7px', height:'7px', borderRadius:'99px', border:'none', background:i===activeColIndex?col.dot:(dark?'#27272a':'#d1d5db'), cursor:'pointer', padding:0, transition:'all 0.2s ease' }}/>)}
               </div>
               <button onClick={() => scrollToCol(Math.min(COLUMNS.length-1, activeColIndex+1))} disabled={activeColIndex===COLUMNS.length-1} style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#a1a1aa':'#374151', cursor:activeColIndex===COLUMNS.length-1?'default':'pointer', opacity:activeColIndex===COLUMNS.length-1?0.3:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <ChevronRight style={{ width:'16px', height:'16px' }}/>
@@ -488,14 +443,12 @@ export default function KanbanPage() {
               })}
             </div>
           )}
-
           <DragOverlay dropAnimation={{ duration:180, easing:'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
             {activeLead ? <OverlayCard lead={activeLead}/> : null}
           </DragOverlay>
         </DndContext>
       </div>
 
-      {/* Context menu */}
       {menuLead && (
         <div ref={menuRef} style={{ position:'fixed', zIndex:60, left:Math.min(menuPos.x, window.innerWidth-224), top:Math.min(menuPos.y, window.innerHeight-320), background:dark?'#111113':'#ffffff', border:`1px solid ${dark?'#1e1e22':'rgba(0,0,0,0.08)'}`, borderRadius:'13px', boxShadow:dark?'0 12px 48px rgba(0,0,0,0.6)':'0 8px 32px rgba(0,0,0,0.12)', padding:'6px', minWidth:'215px', animation:'kmenu 0.15s cubic-bezier(0.32,0.72,0,1)' }}>
           <div style={{ padding:'4px 10px 6px', fontSize:'10.5px', fontWeight:600, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em' }}>Mover para</div>
@@ -504,9 +457,7 @@ export default function KanbanPage() {
             const isCurrent = currentSt === col.status;
             const canEditMotivo = isCurrent && col.status === 4;
             return (
-              <button key={col.status}
-                onClick={() => handleMenuMove(menuLead, col.status)}
-                disabled={isCurrent && col.status !== 4}
+              <button key={col.status} onClick={() => handleMenuMove(menuLead, col.status)} disabled={isCurrent && col.status !== 4}
                 style={{ width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:(isCurrent && col.status !== 4)?'default':'pointer', color:(isCurrent && col.status !== 4)?(dark?'#3f3f46':'#d1d5db'):(dark?'#d4d4d8':'#374151'), fontSize:'13px', display:'flex', alignItems:'center', gap:'8px', transition:'background 0.12s' }}
                 onMouseEnter={e=>{ if (!isCurrent || canEditMotivo) (e.currentTarget.style.background=dark?'rgba(255,255,255,0.04)':'#f8fafc'); }}
                 onMouseLeave={e=>{ (e.currentTarget.style.background='transparent'); }}
@@ -531,14 +482,8 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Modal motivo reprovação — portal isolado */}
       {motivoCtx && createPortal(
-        <MotivoModal
-          dark={dark}
-          motivoAtual={(motivoCtx.lead as any).motivo_reprovacao}
-          onConfirm={handleMotivoConfirm}
-          onCancel={() => setMotivoCtx(null)}
-        />,
+        <MotivoModal dark={dark} motivoAtual={(motivoCtx.lead as any).motivo_reprovacao} onConfirm={handleMotivoConfirm} onCancel={() => setMotivoCtx(null)}/>,
         document.body
       )}
 
@@ -549,8 +494,7 @@ export default function KanbanPage() {
       <style>{`
         @keyframes kpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
         body.dragging * { transition: none !important; }
-        body.dragging { cursor: grabbing !important; }
-        body.dragging { user-select: none !important; -webkit-user-select: none !important; }
+        body.dragging { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
         @keyframes kmenu { from{opacity:0;transform:scale(0.94) translateY(-4px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes kmotivo { from{opacity:0;transform:translate(-50%,-48%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
         div:hover > div > .card-menu-btn { opacity: 1 !important; }

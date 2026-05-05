@@ -9,7 +9,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, calcularFaixa, Lead as AppLead } from '@/stores/appStore';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 
-interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
+interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; score?: number | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
 interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; cplRealTime: number; }
 
@@ -119,20 +119,31 @@ async function fetchMetaData(period:string,from?:string,to?:string,leadsList:Lea
   }catch(e){console.error('[Meta]',e);return empty;}
 }
 
-// Bolinha de faixa — igual Kanban/Leads
+// ── Bolinha faixa — só mobile ────────────────────────────────
 function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
   const { configuracoes } = useAppStore();
   const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead as any, configuracoes) : null);
   if (!faixa || faixa === 'vermelho') return null;
   return (
-    <div style={{
-      position: 'absolute', top: '-2px', right: '-2px',
-      width: '10px', height: '10px', borderRadius: '50%',
-      background: faixa === 'verde' ? '#10b981' : '#f59e0b',
-      border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`,
-      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-      zIndex: 2,
-    }}/>
+    <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/>
+  );
+}
+
+// ── Score mini tag — só desktop ──────────────────────────────
+function ScoreMini({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
+  if (score == null) return null;
+  const isVerde = faixa === 'verde';
+  const isAmarelo = faixa === 'amarelo';
+  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
+  const bg = isVerde
+    ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5')
+    : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7')
+    : (dark ? 'rgba(107,114,128,0.15)' : '#f3f4f6');
+  return (
+    <div style={{ display:'inline-flex', alignItems:'center', gap:'3px', padding:'1px 6px', borderRadius:'99px', background:bg, border:`1px solid ${color}30`, marginTop:'2px' }}>
+      <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:color }}/>
+      <span style={{ fontSize:'10px', fontWeight:700, color }}>{score} pts</span>
+    </div>
   );
 }
 
@@ -358,7 +369,7 @@ export default function Dashboard() {
         {/* Bottom */}
         <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:'14px',overflow:'hidden'}}>
 
-          {/* Leads Recentes com bolinha faixa */}
+          {/* Leads Recentes */}
           <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,overflow:'hidden',minWidth:0}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
               <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Leads Recentes</h3>
@@ -369,22 +380,33 @@ export default function Dashboard() {
               :recentLeads.length===0?<p style={{fontSize:'13px',color:txtMid,textAlign:'center',padding:'20px 0'}}>Nenhum lead</p>
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
+                const la = lead as any;
                 return(
                   <div key={lead.id} onClick={()=>setViewingLead(lead)} style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s',overflow:'hidden'}}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=hov}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
-                    {/* Avatar com bolinha faixa */}
+                    {/* Avatar: bolinha faixa SÓ mobile */}
                     <div style={{position:'relative',flexShrink:0}}>
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
                         {initials(lead.nome)}
                       </div>
-                      <FaixaDot lead={lead} dark={dark}/>
+                      {isMobile && <FaixaDot lead={lead} dark={dark}/>}
                     </div>
-                    <div style={{flex:1,minWidth:0}}>
+
+                    {/* Nome + cidade */}
+                    <div style={{flex:1,minWidth:0,overflow:'hidden'}}>
                       <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
                       <p style={{fontSize:'11px',color:txtLow,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade||'—'}</p>
                     </div>
+
+                    {/* Score tag — só desktop, entre nome e status */}
+                    {!isMobile && la.score != null && (() => {
+                      const isVerde = la.faixa === 'verde'; const isAmarelo = la.faixa === 'amarelo';
+                      const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
+                      const bg = isVerde ? (dark?'rgba(16,185,129,0.12)':'#dcfce7') : isAmarelo ? (dark?'rgba(245,158,11,0.12)':'#fef9c3') : (dark?'rgba(107,114,128,0.12)':'#f3f4f6');
+                      return <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'6px',background:bg,fontSize:'11px',fontWeight:700,color,whiteSpace:'nowrap',flexShrink:0}}><span style={{width:'4px',height:'4px',borderRadius:'50%',background:color,display:'inline-block'}}/>{Number(la.score)} pts</span>;
+                    })()}
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px',flexShrink:0}}>{STATUS_LABEL[st]??'Aguardando'}</span>
                     {!isMobile&&<span style={{fontSize:'11px',color:txtLow,flexShrink:0,minWidth:'28px',textAlign:'right'}}>{relativeTime(lead.created_at)}</span>}
                     <a href={lead.whatsapp?`https://wa.me/55${lead.whatsapp.replace(/\D/g,'')}`:'#'} target="_blank" rel="noreferrer"
@@ -425,8 +447,8 @@ export default function Dashboard() {
                     </colgroup>
                     <thead>
                       <tr>
-                        {['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'].filter(Boolean).map(h=>(
-                          <th key={h as string} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',paddingRight:'6px'}}>{h as string}</th>
+                        {(['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'] as any[]).filter(Boolean).map((h:string)=>(
+                          <th key={h} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',paddingRight:'6px'}}>{h}</th>
                         ))}
                       </tr>
                     </thead>

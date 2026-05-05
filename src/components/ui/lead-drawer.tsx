@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lead, useAppStore, calcularFaixa } from '@/stores/appStore';
+import { Lead, useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
@@ -33,46 +33,46 @@ const GRADIENTS = [
   ['#fbbf24', '#a78bfa'], ['#34d399', '#a78bfa'],
 ];
 
-// Campos que NÃO são respostas do quiz — excluídos da seção de perfil
-const SYSTEM_FIELDS = new Set([
-  'id', 'nome', 'whatsapp', 'cidade', 'instagram', 'email', 'status', 'observacoes',
-  'created_at', 'updated_at', 'faixa', 'score', 'motivo_reprovacao', 'ultimo_status_change',
-  'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term',
-  'ip', 'platform', 'user_id',
-  // Campos internos de sistema que não têm valor para o usuário
-  'wa_sent', 'quiz_data', 'entrada',
-]);
-
-// Rótulos em PT-BR para campos conhecidos do quiz
-const CAMPO_LABELS: Record<string, string> = {
-  o_que_mais_te_atrai:                    'O que mais te atrai?',
-  quanto_gostaria_de_ganhar_por_mes:      'Quanto quer ganhar por mês?',
-  o_que_mais_gostaria_de_conquistar:      'O que mais gostaria de conquistar?',
-  onde_se_imagina_em_6_meses:             'Onde se imagina em 6 meses?',
-  qual_sua_idade:                         'Idade',
-  tem_filhos:                             'Tem filhos?',
-  idade_do_filho_mais_novo:               'Idade do filho mais novo',
-  voce_tem_alguma_rede_de_apoio:          'Tem rede de apoio?',
-  voce_mora_com_alguem:                   'Mora com alguém?',
-  por_quais_meios_pretende_vender:        'Por quais meios pretende vender?',
-  quantas_horas_por_semana_vai_se_dedicar:'Horas por semana disponíveis',
-  quando_gostaria_de_comecar:             'Quando quer começar?',
-  situacao_atual:                         'Situação atual',
-  experiencia_em_vendas:                  'Experiência em vendas?',
-  ja_tentou_vender_semijoia:              'Já tentou vender semijoia?',
-  para_comecar_no_consignado:             'Para começar no consignado',
-  seu_nome_esta_negativado:               'Nome negativado?',
-  voce_aceita_as_regras_do_consignado:    'Aceita as regras do consignado?',
-};
+// Perguntas do quiz em ordem exata
+const QUIZ_FIELDS = [
+  { label: 'O que mais te atrai?',            campo: 'o_que_mais_te_atrai' },
+  { label: 'Quanto quer ganhar por mês?',      campo: 'quanto_ganha' },
+  { label: 'Idade',                            campo: 'idade' },
+  { label: 'Tem filhos?',                      campo: 'tem_filhos' },
+  { label: 'Idade do filho mais novo',         campo: 'idade_filho' },
+  { label: 'Tem rede de apoio?',               campo: 'rede_apoio' },
+  { label: 'Mora com companheiro?',            campo: 'mora_com' },
+  { label: 'Situação atual',                   campo: 'situacao_atual' },
+  { label: 'Área de atuação',                  campo: 'area_atuacao' },
+  { label: 'Já vende algum produto?',          campo: 'ja_vende' },
+  { label: 'Por quais meios pretende vender?', campo: 'meios_venda' },
+  { label: 'Horas por semana disponíveis',     campo: 'horas_semana' },
+  { label: 'Quando quer começar?',             campo: 'quando_comecar' },
+  { label: 'Já tentou vender semijoia?',       campo: 'tentou_semijoia' },
+  { label: 'Instagram ativo?',                 campo: 'instagram_ativo' },
+  { label: 'Para começar no consignado',       campo: 'consignado' },
+  { label: 'Nome negativado?',                 campo: 'negativado' },
+  { label: 'Aceita as regras do consignado?',  campo: 'aceita_regras' },
+];
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 function getGradient(name: string) { return GRADIENTS[(name?.charCodeAt(0) || 0) % GRADIENTS.length]; }
 function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
 function cleanCampaignName(raw?: string | null) { if (!raw) return null; return raw.replace(/\|\d+$/, '').trim(); }
-function formatLabel(campo: string) {
-  // Usa rótulo em PT-BR se disponível, senão formata o campo automaticamente
-  return CAMPO_LABELS[campo] || campo.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
+  if (score == null || score === undefined) return null;
+  const isVerde = faixa === 'verde';
+  const isAmarelo = faixa === 'amarelo';
+  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
+  const bg = isVerde ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7') : (dark ? 'rgba(107,114,128,0.15)' : '#f3f4f6');
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 9px', borderRadius: '99px', background: bg, border: `1px solid ${color}30` }}>
+      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: '12px', fontWeight: 700, color, fontFamily: FONT }}>{score} pts</span>
+    </div>
+  );
 }
 
 function WaIcon() {
@@ -83,15 +83,12 @@ function WaIcon() {
   );
 }
 
-// ── Section accordion ─────────────────────────────────────────
 function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark }: {
   icon: React.ReactNode; title: string; children: React.ReactNode;
   openKey: string; activeKey: string | null; setActiveKey: (k: string | null) => void; dark: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
-  const kids = Array.isArray(children) ? children.filter(Boolean) : [children].filter(Boolean);
-  if (!kids.length) return null;
   const open = activeKey === openKey;
   useEffect(() => { if (contentRef.current) setHeight(open ? contentRef.current.scrollHeight : 0); }, [open, children]);
   return (
@@ -110,20 +107,16 @@ function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark
   );
 }
 
-// Mostra traço se vazio; se alwaysShow=false e vazio, não renderiza
-function Field({ label, value, dark, alwaysShow = false }: { label: string; value?: string | null; dark: boolean; alwaysShow?: boolean }) {
-  const isEmpty = value === null || value === undefined || String(value).trim() === '';
-  if (!alwaysShow && isEmpty) return null;
-  const display = isEmpty ? '—' : String(value);
+function Field({ label, value, dark }: { label: string; value?: string | null; dark: boolean }) {
+  const display = (!value || String(value).trim() === '' || value === 'false') ? '—' : String(value);
   return (
     <div>
       <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontFamily: FONT }}>{label}</p>
-      <p style={{ fontSize: '13.5px', color: dark ? '#d4d4d8' : '#374151', lineHeight: 1.5, fontFamily: FONT }}>{display}</p>
+      <p style={{ fontSize: '13.5px', color: display === '—' ? (dark ? '#3f3f46' : '#d1d5db') : (dark ? '#d4d4d8' : '#374151'), lineHeight: 1.5, fontFamily: FONT }}>{display}</p>
     </div>
   );
 }
 
-// ── Delete confirm ────────────────────────────────────────────
 function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name: string; onConfirm: () => void; onCancel: () => void; loading: boolean; dark: boolean }) {
   return (
     <>
@@ -147,7 +140,6 @@ function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name: str
   );
 }
 
-// ── Modal Motivo Reprovação ───────────────────────────────────
 function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m: string) => void; onCancel: () => void; dark: boolean; motivoAtual?: string }) {
   const outroDefault = motivoAtual && !MOTIVOS.slice(0, -1).includes(motivoAtual) ? motivoAtual : '';
   const selectedDefault = motivoAtual ? (MOTIVOS.slice(0, -1).includes(motivoAtual) ? motivoAtual : 'Outro') : '';
@@ -182,11 +174,10 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m
   );
 }
 
-// ── Main ─────────────────────────────────────────────────────
 export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const { configuracoes, setConfiguracoes } = useAppStore();
+  const { updateLead } = useAppStore();
 
   const [obs, setObs] = useState('');
   const [status, setStatus] = useState(1);
@@ -197,18 +188,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [showMotivo, setShowMotivo] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (configuracoes) return;
-    supabase.from('configuracoes').select('*').eq('id', 1).single().then(({ data }) => {
-      if (data) {
-        setConfiguracoes({
-          campos_perfil: data.campos_perfil || [],
-          faixas_score: data.faixas_score || { verde: { min: 37 }, amarelo: { min: 22 } },
-        });
-      }
-    });
-  }, [configuracoes, setConfiguracoes]);
 
   useEffect(() => {
     if (lead) {
@@ -270,16 +249,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [g1, g2] = getGradient(lead.nome);
   const l = lead as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
-  const faixaCalculada = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
-
-  // Pega SEMPRE todos os campos não-sistema que tiverem valor no lead
-  const camposParaMostrar = Object.keys(l)
-    .filter(k => !SYSTEM_FIELDS.has(k) && l[k] !== null && l[k] !== undefined && String(l[k]).trim() !== '' && String(l[k]) !== 'false')
-    .map(k => ({ label: formatLabel(k), campo: k }));
-
-  // Instagram: busca case-insensitive em todas as chaves do objeto
-  const instagramKey = Object.keys(l).find(k => k.toLowerCase() === 'instagram');
-  const instagramValue = instagramKey ? (l[instagramKey] != null ? String(l[instagramKey]).trim() : '') : '';
+  const score = l.score != null ? Number(l.score) : null;
+  const faixa = l.faixa || null;
+  const instagramValue = l.instagram ? String(l.instagram).trim() : '';
 
   return (
     <>
@@ -302,16 +274,15 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${g1}, ${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: '#fff', boxShadow: `0 4px 14px ${g1}60`, fontFamily: FONT }}>
                 {initials(lead.nome)}
               </div>
-              {faixaCalculada && faixaCalculada !== 'vermelho' && (
-                <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '14px', height: '14px', borderRadius: '50%', background: faixaCalculada === 'verde' ? '#10b981' : '#f59e0b', border: `2.5px solid ${dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)'}`, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
-              )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '5px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
+                <ScoreTag score={score} faixa={faixa} dark={dark} />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
                 {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.whatsapp}</span>}
-                {/* Instagram — busca case-insensitive para garantir que acha o campo do Supabase */}
                 {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
                 {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
               </div>
@@ -350,22 +321,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
           <div style={{ padding: '4px 22px 8px' }}>
 
-            {/* Respostas do Quiz */}
-            {camposParaMostrar.length > 0 && (
-              <>
-                <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '10px 0 4px', fontFamily: FONT }}>
-                  Respostas do Quiz
-                </p>
-                <Section openKey="quiz" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                  icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Perfil e respostas">
-                  {camposParaMostrar.map(({ label, campo }) => {
-                    const rawVal = l[campo];
-                    const val = (rawVal === null || rawVal === undefined) ? null : String(rawVal);
-                    return <Field key={campo} label={label} value={val} dark={dark} alwaysShow={true} />;
-                  })}
-                </Section>
-              </>
-            )}
+            {/* Respostas do Quiz — SEMPRE todas as perguntas em ordem */}
+            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '10px 0 4px', fontFamily: FONT }}>
+              Respostas do Quiz
+            </p>
+            <Section openKey="quiz" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
+              icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Perfil e respostas">
+              {QUIZ_FIELDS.map(({ label, campo }) => (
+                <Field key={campo} label={label} value={l[campo]} dark={dark} />
+              ))}
+            </Section>
 
             {/* Origem do Tráfego */}
             {hasTraffic && (
@@ -396,7 +361,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank')} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#25D366', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s', fontFamily: FONT }} onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
             <WaIcon /> Chamar no WhatsApp
           </button>
-          <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }} onMouseEnter={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.15)' : '#dcfce7'); }} onMouseLeave={e => { if (obsChanged) (e.currentTarget.style.background = dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4'); }}>
+          <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }}>
             <Save style={{ width: '13px', height: '13px', strokeWidth: 1.8 }} />{saving ? 'Salvando…' : 'Salvar'}
           </button>
         </div>

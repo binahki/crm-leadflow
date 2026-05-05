@@ -14,10 +14,8 @@ const STATUS_STYLE = [
   { lightBg:'#dbeafe', lightText:'#1d4ed8', darkBg:'rgba(59,130,246,0.15)', darkText:'#60a5fa', dot:'#3b82f6' },
   { lightBg:'#ede9fe', lightText:'#5b21b6', darkBg:'rgba(139,92,246,0.15)', darkText:'#a78bfa', dot:'#8b5cf6' },
   { lightBg:'#d1fae5', lightText:'#065f46', darkBg:'rgba(16,185,129,0.15)', darkText:'#34d399', dot:'#10b981' },
-  { lightBg:'#fee2e2', lightText:'#991b1b', darkBg:'rgba(239,68,68,0.15)',  darkText:'#f87171', dot:'#ef4444' },
+  { lightBg:'#fee2e2', lightText:'#991b1b', darkBg:'rgba(239,68,68,0.15)', darkText:'#f87171', dot:'#ef4444' },
 ];
-// Keep for mobile compat
-const STATUS_BADGE = STATUS_STYLE.map(s => ({ bg:'', text:'', dot:'' }));
 
 const PERIOD_OPTIONS = [
   { label: 'Todos', value: 'all' },
@@ -81,9 +79,9 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
   switch(period){
     case 'today': return leads.filter(l=>inR(l,ts,te));
     case 'yesterday': { const ys=new Date(ts); ys.setDate(ys.getDate()-1); const ye=new Date(te); ye.setDate(ye.getDate()-1); return leads.filter(l=>inR(l,ys,ye)); }
-    case '7days':  { const a=new Date(ts); a.setDate(a.getDate()-6); return leads.filter(l=>inR(l,a,te)); }
+    case '7days': { const a=new Date(ts); a.setDate(a.getDate()-6); return leads.filter(l=>inR(l,a,te)); }
     case '30days': { const a=new Date(ts); a.setDate(a.getDate()-29); return leads.filter(l=>inR(l,a,te)); }
-    case 'month':  { const f=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0); return leads.filter(l=>inR(l,f,te)); }
+    case 'month': { const f=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0); return leads.filter(l=>inR(l,f,te)); }
     case 'custom': { if(!customFrom||!customTo)return leads; const[fy,fm,fd]=customFrom.split('-').map(Number); const[ty,tm,td]=customTo.split('-').map(Number); if(!fy||!ty)return leads; return leads.filter(l=>inR(l,new Date(fy,fm-1,fd,0,0,0,0),new Date(ty,tm-1,td,23,59,59,999))); }
     default: return leads;
   }
@@ -93,25 +91,37 @@ function toStatusNum(s: any): number {
   if(s===null||s===undefined||s==='')return 1; const n=Number(s); if(isNaN(n)||n===0)return 1; return n;
 }
 
-function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
-  const { configuracoes } = useAppStore();
-  const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
-  if (!faixa || faixa === 'vermelho') return null;
-  return <div style={{ width:'10px', height:'10px', borderRadius:'50%', flexShrink:0, background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>;
+// ── Score Tag compacta ────────────────────────────────────────
+function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
+  if (score == null) return <span style={{color:dark?'#3f3f46':'#d1d5db',fontSize:'12px'}}>—</span>;
+  const isVerde = faixa === 'verde';
+  const isAmarelo = faixa === 'amarelo';
+  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
+  const bg = isVerde ? (dark?'rgba(16,185,129,0.12)':'#dcfce7') : isAmarelo ? (dark?'rgba(245,158,11,0.12)':'#fef9c3') : (dark?'rgba(107,114,128,0.12)':'#f3f4f6');
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'6px',background:bg,fontSize:'12px',fontWeight:700,color,whiteSpace:'nowrap'}}>
+      <span style={{width:'5px',height:'5px',borderRadius:'50%',background:color,display:'inline-block',flexShrink:0}}/>
+      {score} pts
+    </span>
+  );
 }
 
-// FilterDropdown com position:fixed para não vazar na tela
+function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
+  const { configuracoes } = useAppStore();
+  const faixa = (lead as any).faixa || (configuracoes ? calcularFaixa(lead, configuracoes) : null);
+  if (!faixa || faixa === 'vermelho') return null;
+  return <div style={{ width:'10px', height:'10px', borderRadius:'50%', flexShrink:0, background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}` }}/>;
+}
+
 function FilterDropdown({ value, options, onChange, dark }: { value:string; options:{label:string;value:string}[]; onChange:(v:string)=>void; dark:boolean }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const selected = options.find(o => o.value === value);
-
   function handleOpen() {
     if (btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const menuWidth = 180;
-      // Garante que não vaze para a direita nem para a esquerda
       let left = r.right - menuWidth;
       if (left < 8) left = 8;
       if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
@@ -119,7 +129,6 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
     }
     setOpen(v => !v);
   }
-
   return (
     <div style={{ position:'relative' }}>
       <button ref={btnRef} onClick={handleOpen} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
@@ -137,15 +146,10 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
   );
 }
 
-// Modal de período personalizado — sempre centralizado, funciona em mobile e desktop
 function CustomDateModal({ dark, customFrom, customTo, setCustomFrom, setCustomTo, onApply, onClear, onClose }: {
-  dark:boolean; customFrom:string; customTo:string;
-  setCustomFrom:(v:string)=>void; setCustomTo:(v:string)=>void;
-  onApply:()=>void; onClear:()=>void; onClose:()=>void;
+  dark:boolean; customFrom:string; customTo:string; setCustomFrom:(v:string)=>void; setCustomTo:(v:string)=>void; onApply:()=>void; onClear:()=>void; onClose:()=>void;
 }) {
-  const border = dark?'#1e1e22':'#e5e7eb';
-  const txtHi = dark?'#f4f4f5':'#111827';
-  const txtMid = dark?'#71717a':'#374151';
+  const border=dark?'#1e1e22':'#e5e7eb'; const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#374151';
   const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'14px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any };
   return (
     <>
@@ -156,14 +160,8 @@ function CustomDateModal({ dark, customFrom, customTo, setCustomFrom, setCustomT
           <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-          <div>
-            <label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data inicial</label>
-            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/>
-          </div>
-          <div>
-            <label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data final</label>
-            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/>
-          </div>
+          <div><label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data inicial</label><input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/></div>
+          <div><label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data final</label><input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/></div>
           <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
             <button onClick={onApply} style={{ flex:1, padding:'10px', borderRadius:'9px', background:'#2563eb', border:'none', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Aplicar</button>
             <button onClick={onClear} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Limpar</button>
@@ -196,26 +194,17 @@ function DeleteConfirmDialog({ count, onConfirm, onCancel, loading, dark }: { co
   );
 }
 
-
-// Tooltip de observação — funciona em hover (desktop) e toque (mobile)
 function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   const [show, setShow] = useState(false);
   return (
-    <div
-      style={{ position: 'relative', display: 'inline-flex', flexShrink: 0, zIndex: show ? 9991 : 1 }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-      onClick={e => { e.stopPropagation(); setShow(v => !v); }}
-    >
-      <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={dark ? '#9ca3af' : '#6b7280'} strokeWidth="2.2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
+    <div style={{ position:'relative', display:'inline-flex', flexShrink:0, zIndex:show?9991:1 }} onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)} onClick={e=>{e.stopPropagation();setShow(v=>!v);}}>
+      <div style={{ width:'16px', height:'16px', borderRadius:'50%', background:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={dark?'#9ca3af':'#6b7280'} strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
       {show && (
-        <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1f2937', color: '#f9fafb', fontSize: '12px', lineHeight: 1.5, padding: '8px 12px', borderRadius: '9px', maxWidth: '240px', minWidth: '120px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', boxShadow: '0 4px 16px rgba(0,0,0,0.3)', pointerEvents: 'none' }}>
+        <div style={{ position:'absolute', bottom:'calc(100% + 8px)', left:'50%', transform:'translateX(-50%)', zIndex:9999, background:'#1f2937', color:'#f9fafb', fontSize:'12px', lineHeight:1.5, padding:'8px 12px', borderRadius:'9px', maxWidth:'240px', minWidth:'120px', whiteSpace:'pre-wrap', wordBreak:'break-word', boxShadow:'0 4px 16px rgba(0,0,0,0.3)', pointerEvents:'none' }}>
           {text}
-          <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #1f2937' }}/>
+          <div style={{ position:'absolute', top:'100%', left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'5px solid transparent', borderRight:'5px solid transparent', borderTop:'5px solid #1f2937' }}/>
         </div>
       )}
     </div>
@@ -237,8 +226,6 @@ export default function LeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [campanhaFilter, setCampanhaFilter] = useState('');
-  const [showCampanhaSearch, setShowCampanhaSearch] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -254,14 +241,12 @@ export default function LeadsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConf, setShowDeleteConf] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [allSystemSelected, setAllSystemSelected] = useState(false);
 
-  // Lê parâmetros da URL (redirect da página de Campanhas)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const camp = params.get('campanha');
     const periodo = params.get('periodo');
-    if (camp) { setCampanhaFilter(decodeURIComponent(camp)); }
-    if (periodo) { setPeriodFilter(periodo); }
+    if (periodo) setPeriodFilter(periodo);
   }, []);
 
   const fetchLeads = useCallback(async () => {
@@ -287,14 +272,34 @@ export default function LeadsPage() {
     let r=[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime());
     r=filterByPeriod(r,periodFilter,customFrom,customTo);
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
-    if(search.trim()){ const q=search.toLowerCase(); r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||(la.utm_campaign||'').toLowerCase().includes(q)||(la.utm_medium||'').toLowerCase().includes(q)||(la.utm_content||'').toLowerCase().includes(q)||(la.utm_source||'').toLowerCase().includes(q); }); }
-    if(campanhaFilter.trim()){ const q=campanhaFilter.toLowerCase(); r=r.filter(l=>{ const la=l as any; return (la.utm_campaign||'').toLowerCase().includes(q)||(la.utm_source||'').toLowerCase().includes(q)||(la.utm_medium||'').toLowerCase().includes(q); }); }
+    if(search.trim()){ const q=search.toLowerCase(); r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||(la.utm_campaign||'').toLowerCase().includes(q); }); }
     return r;
   }, [allLeads, periodFilter, statusFilter, search, customFrom, customTo]);
 
-  useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); }, [periodFilter, statusFilter, search, campanhaFilter]);
+  useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search]);
+
   const totalPages = Math.ceil(filtered.length/leadsPerPage);
   const paginatedLeads = useMemo(() => filtered.slice((currentPage-1)*leadsPerPage, currentPage*leadsPerPage), [filtered, currentPage]);
+
+  const pageIds = paginatedLeads.map(l => l.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
+
+  function handleCheckboxHeader() {
+    const n = new Set(selectedIds);
+    if (allPageSelected) { pageIds.forEach(id => n.delete(id)); setAllSystemSelected(false); }
+    else { pageIds.forEach(id => n.add(id)); }
+    setSelectedIds(n);
+  }
+
+  function handleSelectAllSystem() {
+    setSelectedIds(new Set(allLeads.map(l => l.id)));
+    setAllSystemSelected(true);
+  }
+
+  function handleClearSelection() {
+    setSelectedIds(new Set());
+    setAllSystemSelected(false);
+  }
 
   const handleAddLead = async () => {
     if(!newLead.nome.trim()||!newLead.whatsapp.trim()){ toast.error('Nome e WhatsApp são obrigatórios'); return; }
@@ -313,7 +318,7 @@ export default function LeadsPage() {
 
   const handleDeleteSelected = async () => {
     setDeleting(true); const ids=Array.from(selectedIds); const{error}=await supabase.from('leads').delete().in('id',ids); setDeleting(false);
-    if(error){toast.error('Erro ao excluir');return;} setAllLeads(prev=>prev.filter(l=>!selectedIds.has(l.id))); setSelectedIds(new Set()); setShowDeleteConf(false); toast.success(`${ids.length} lead(s) excluído(s)!`);
+    if(error){toast.error('Erro ao excluir');return;} setAllLeads(prev=>prev.filter(l=>!selectedIds.has(l.id))); setSelectedIds(new Set()); setAllSystemSelected(false); setShowDeleteConf(false); toast.success(`${ids.length} lead(s) excluído(s)!`);
   };
 
   const exportCSV = () => {
@@ -328,31 +333,13 @@ export default function LeadsPage() {
     else { setPeriodFilter(v); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }
   }
 
-  function handleApplyCustom() {
-    if (customFrom && customTo) { setPeriodFilter('custom'); setShowCustom(false); }
-  }
-
-  function handleClearCustom() {
-    setCustomFrom(''); setCustomTo(''); setPeriodFilter('all'); setShowCustom(false);
-  }
-
-  const bg = dark?'#090909':'#f4f4f5';
-  const cardBg = dark?'#111113':'#ffffff';
-  const border = dark?'#1e1e22':'#e5e7eb';
-  const txtHi = dark?'#f4f4f5':'#111827';
-  const txtMid = dark?'#71717a':'#6b7280';
-  const divider = dark?'border-[#1e1e22]':'border-gray-100';
-  const bold = dark?'text-white':'text-gray-900';
-  const muted = dark?'text-gray-500':'text-gray-600';
-  const theadBg = dark?'bg-[#18181b]':'bg-gray-50';
-  const hov = dark?'hover:bg-[#1a1a1e]':'hover:bg-blue-50/50';
-  const card = dark?'bg-[#111113] border-[#1e1e22]':'bg-white border-gray-100';
+  const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
+  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280';
+  const divider=dark?'border-[#1e1e22]':'border-gray-100'; const bold=dark?'text-white':'text-gray-900';
+  const muted=dark?'text-gray-500':'text-gray-600'; const theadBg=dark?'bg-[#18181b]':'bg-gray-50';
+  const hov=dark?'hover:bg-[#1a1a1e]':'hover:bg-blue-50/50'; const card=dark?'bg-[#111113] border-[#1e1e22]':'bg-white border-gray-100';
   const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
   const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
-
-  const periodLabel = periodFilter === 'custom' && customFrom && customTo
-    ? `${customFrom.split('-').reverse().join('/')} → ${customTo.split('-').reverse().join('/')}`
-    : PERIOD_OPTIONS.find(o => o.value === periodFilter)?.label || 'Período';
 
   return (
     <AppLayout leadCount={allLeads.length}>
@@ -373,7 +360,7 @@ export default function LeadsPage() {
                     <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
                       <input placeholder="Nome completo" value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
                       <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade (ex: Valinhos/SP)" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
+                      <input placeholder="Cidade" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
                       <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:500,cursor:'pointer'}}>Salvar</button>
                     </div>
                   </DialogContent>
@@ -385,13 +372,12 @@ export default function LeadsPage() {
                   <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:dark?'#71717a':'#9ca3af'}}/>
                   <input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:'32px',paddingRight:'12px',paddingTop:'7px',paddingBottom:'7px',borderRadius:'9px',border:`1px solid ${border}`,background:dark?'#111113':'#fff',color:dark?'#d4d4d8':'#374151',fontSize:'13px',outline:'none',width:'180px',fontFamily:'inherit'}}/>
                 </div>
-
                 <FilterDropdown value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={()=>selectedIds.size>0?setShowDeleteConf(true):undefined} style={{...btnGhost,border:`1px solid ${selectedIds.size>0?'#fecaca':border}`,background:selectedIds.size>0?'#fff1f2':(dark?'#111113':'#fff'),color:selectedIds.size>0?'#dc2626':(dark?'#3f3f46':'#d1d5db'),cursor:selectedIds.size>0?'pointer':'default'}}>
-                  <Trash2 style={{width:'13px',height:'13px'}}/>{selectedIds.size>0&&`(${selectedIds.size})`}
+                  <Trash2 style={{width:'13px',height:'13px'}}/>{selectedIds.size>0&&` (${selectedIds.size})`}
                 </button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                   <DialogTrigger asChild><button style={{display:'flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:500,cursor:'pointer'}}><Plus style={{width:'14px',height:'14px'}}/> Adicionar</button></DialogTrigger>
@@ -400,7 +386,7 @@ export default function LeadsPage() {
                     <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
                       <input placeholder="Nome completo" value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
                       <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade (ex: Valinhos/SP)" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
+                      <input placeholder="Cidade" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
                       <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:500,cursor:'pointer'}}>Salvar</button>
                     </div>
                   </DialogContent>
@@ -410,7 +396,6 @@ export default function LeadsPage() {
           </div>
         </div>
 
-        {/* Mobile search + filters */}
         {isMobile && (
           <div style={{marginBottom:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
             <div style={{position:'relative'}}>
@@ -428,16 +413,32 @@ export default function LeadsPage() {
           </div>
         )}
 
-        {/* Modal período personalizado — funciona em mobile e desktop */}
         {showCustom && (
-          <CustomDateModal
-            dark={dark}
-            customFrom={customFrom} customTo={customTo}
-            setCustomFrom={setCustomFrom} setCustomTo={setCustomTo}
-            onApply={handleApplyCustom}
-            onClear={handleClearCustom}
+          <CustomDateModal dark={dark} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo}
+            onApply={() => { if(customFrom&&customTo){setPeriodFilter('custom');setShowCustom(false);} }}
+            onClear={() => { setCustomFrom('');setCustomTo('');setPeriodFilter('all');setShowCustom(false); }}
             onClose={() => setShowCustom(false)}
           />
+        )}
+
+        {/* Banner de seleção — aparece quando tem algum selecionado */}
+        {!isMobile && selectedIds.size > 0 && (
+          <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 14px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'10px', marginBottom:'10px', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'13px', fontWeight:500, color:dark?'#93c5fd':'#1d4ed8' }}>
+              {allSystemSelected ? `Todos os ${allLeads.length} leads selecionados` : `${selectedIds.size} lead${selectedIds.size>1?'s':''} selecionado${selectedIds.size>1?'s':''} nesta página`}
+            </span>
+            {!allSystemSelected && (
+              <>
+                <span style={{color:dark?'rgba(147,197,253,0.3)':'#bfdbfe',fontSize:'13px'}}>·</span>
+                <button onClick={handleSelectAllSystem} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#60a5fa':'#2563eb', fontWeight:600, fontSize:'13px', padding:0, textDecoration:'underline' }}>
+                  Selecionar todos os {allLeads.length} leads do sistema
+                </button>
+              </>
+            )}
+            <button onClick={handleClearSelection} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'12px', padding:0, marginLeft:'auto' }}>
+              Limpar seleção
+            </button>
+          </div>
         )}
 
         {/* Mobile cards */}
@@ -446,7 +447,7 @@ export default function LeadsPage() {
             {isLoading?[...Array(5)].map((_,i)=><div key={i} style={{height:'88px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',animation:'pulse 1.5s ease-in-out infinite'}}/>)
             :paginatedLeads.length===0?<div style={{textAlign:'center',padding:'40px 0',color:txtMid,fontSize:'13px'}}>Nenhum lead encontrado</div>
             :paginatedLeads.map(lead=>{
-              const s=toStatusNum(lead.status); const badge=STATUS_BADGE[s]??STATUS_BADGE[0]; const sel=selectedIds.has(lead.id);
+              const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id);
               return(
                 <div key={lead.id}
                   onTouchStart={()=>{longPressTriggered.current=false;pressTimer.current=setTimeout(()=>{longPressTriggered.current=true;setSelectedIds(prev=>{const n=new Set(prev);if(n.has(lead.id))n.delete(lead.id);else n.add(lead.id);return n;});if(window.navigator?.vibrate)window.navigator.vibrate(50);},450);}}
@@ -467,8 +468,8 @@ export default function LeadsPage() {
                       <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):''}{lead.cidade&&lead.whatsapp?' · ':''}{lead.whatsapp||''}</p>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
-                      <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11px', fontWeight:600, background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg, color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText }}>
-                        <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                      <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
+                        <span style={{width:'5px',height:'5px',borderRadius:'50%',background:STATUS_STYLE[s]?.dot,flexShrink:0,display:'inline-block'}}/>{STATUS_LABELS[s]}
                       </span>
                       <span style={{fontSize:'11px',color:txtMid}}>{formatEntrada(lead.created_at)}</span>
                     </div>
@@ -486,45 +487,60 @@ export default function LeadsPage() {
           </div>
         ) : (
           <div className={`rounded-2xl border overflow-hidden ${card}`}>
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{tableLayout:'fixed'}}>
+              <colgroup>
+                <col style={{width:'40px'}}/>
+                <col style={{width:'23%'}}/>
+                <col style={{width:'88px'}}/>
+                <col style={{width:'14%'}}/>
+                <col style={{width:'18%'}}/>
+                <col style={{width:'120px'}}/>
+                <col style={{width:'120px'}}/>
+                <col style={{width:'72px'}}/>
+              </colgroup>
               <thead>
                 <tr className={`border-b ${divider} ${theadBg}`}>
-                  <th className="pl-5 pr-2 py-3 w-8">
-                    <input type="checkbox" checked={paginatedLeads.length>0&&paginatedLeads.every(l=>selectedIds.has(l.id))} onChange={e=>{const n=new Set(selectedIds);paginatedLeads.forEach(l=>e.target.checked?n.add(l.id):n.delete(l.id));setSelectedIds(n);}} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
+                  <th className="pl-4 pr-2 py-3">
+                    <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
                   </th>
-                  {['Nome','WhatsApp','Cidade','Status','Entrada','Ações'].map(h=>(
-                    <th key={h} className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
+                  {['Nome','Score','WhatsApp','Cidade','Status','Entrada','Ações'].map(h=>(
+                    <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {isLoading?(<tr><td colSpan={7} className="px-6 py-12 text-center"><Loader2 className={`w-6 h-6 animate-spin mx-auto ${muted}`}/></td></tr>)
-                :paginatedLeads.length===0?(<tr><td colSpan={7} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
+                {isLoading?(<tr><td colSpan={8} className="px-6 py-12 text-center"><Loader2 className={`w-6 h-6 animate-spin mx-auto ${muted}`}/></td></tr>)
+                :paginatedLeads.length===0?(<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
                 :paginatedLeads.map((lead,idx)=>{
-                  const s=toStatusNum(lead.status); const badge=STATUS_BADGE[s]??STATUS_BADGE[0]; const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined;
+                  const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined; const la=lead as any;
                   return(
                     <tr key={lead.id} className={`${sel?(dark?'bg-blue-950/30':'bg-blue-50/60'):idx%2===0?'':(dark?'bg-[#0f0f11]':'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={()=>setViewingLead(lead)}>
-                      <td className="pl-5 pr-2 py-4 w-8" onClick={e=>e.stopPropagation()}>
-                        <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
+                      <td className="pl-4 pr-2 py-3" onClick={e=>e.stopPropagation()}>
+                        <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);if(!e.target.checked)setAllSystemSelected(false);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div style={{position:'relative',flexShrink:0}}>
-                            <div className="w-8 h-8 rounded-full bg-[#4b5563] flex items-center justify-center text-white text-xs font-bold">{getInitials(lead.nome)}</div>
-                            <div style={{position:'absolute',top:'-3px',right:'-3px'}}><FaixaDot lead={lead} dark={dark}/></div>
-                          </div>
-                          <p className={`font-medium truncate max-w-[140px] ${bold}`}>{lead.nome||'—'}</p>
-                          {obs&&obs.trim()&&(<ObsTooltip text={obs} dark={dark}/>)}
+                      <td className="px-3 py-3" style={{overflow:'hidden'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
+                          <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700,flexShrink:0}}>{getInitials(lead.nome)}</div>
+                          <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{lead.nome||'—'}</span>
+                          {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
                         </div>
                       </td>
-                      <td className="px-4 py-4" style={{color:dark?'#71717a':'#374151',fontSize:'13px'}}>{lead.whatsapp||'—'}</td>
-                      <td className="px-4 py-4" style={{color:dark?'#71717a':'#374151',fontSize:'13px'}}>{lead.cidade?normalizeCity(lead.cidade):'—'}</td>
-                      <td className="px-4 py-4"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium`} style={{ background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg, color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText }}><span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}</span></td>
-                      <td className="px-4 py-4 whitespace-nowrap" style={{color:dark?'#71717a':'#374151',fontSize:'13px'}}>{formatEntrada(lead.created_at)}</td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2" onClick={e=>e.stopPropagation()}>
-                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-all ${dark?'bg-green-500/15 text-green-500 hover:bg-green-500/25':'bg-green-50 text-green-600 hover:bg-green-100'}`}><MessageCircle className="w-4 h-4"/></a>
-                          <button onClick={()=>{setEditingLead(lead);setIsEditOpen(true);}} className={`w-8 h-8 rounded-xl inline-flex items-center justify-center transition-all ${dark?'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25':'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-4 h-4"/></button>
+                      {/* Score — compacto, sem overflow */}
+                      <td className="px-3 py-3" style={{whiteSpace:'nowrap'}}>
+                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={la.faixa} dark={dark}/>
+                      </td>
+                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp||'—'}</td>
+                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):'—'}</td>
+                      <td className="px-3 py-3">
+                        <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,whiteSpace:'nowrap',background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
+                          <span style={{width:'5px',height:'5px',borderRadius:'50%',background:STATUS_STYLE[s]?.dot,flexShrink:0,display:'inline-block'}}/>{STATUS_LABELS[s]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12px',whiteSpace:'nowrap'}}>{formatEntrada(lead.created_at)}</td>
+                      <td className="px-3 py-3">
+                        <div style={{display:'flex',alignItems:'center',gap:'5px'}} onClick={e=>e.stopPropagation()}>
+                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-green-500/15 text-green-500 hover:bg-green-500/25':'bg-green-50 text-green-600 hover:bg-green-100'}`}><MessageCircle className="w-3.5 h-3.5"/></a>
+                          <button onClick={()=>{setEditingLead(lead);setIsEditOpen(true);}} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25':'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
                         </div>
                       </td>
                     </tr>
@@ -563,7 +579,6 @@ export default function LeadsPage() {
       </Dialog>
 
       <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{updateLead(updated.id,updated);setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated:l));setViewingLead(updated);}}/>
-
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </AppLayout>
   );
