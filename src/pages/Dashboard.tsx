@@ -1,414 +1,462 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Bell, RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, calcularFaixa, Lead as AppLead } from '@/stores/appStore';
+import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 
-interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; score?: number | null; [key: string]: unknown; }
+interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
 interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; cplRealTime: number; }
 
-const META_TOKEN   = import.meta.env.VITE_META_TOKEN;
+const META_TOKEN = import.meta.env.VITE_META_TOKEN;
 const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
-const STORAGE_KEY    = 'dashboard_period';
+const STORAGE_KEY = 'dashboard_period';
 const STORAGE_CUSTOM = 'dashboard_custom_range';
 
 const PERIOD_FILTERS = [
-  { label: 'Hoje',          value: 'today'     },
-  { label: 'Ontem',         value: 'yesterday' },
-  { label: '7 dias',        value: '7days'     },
-  { label: '30 dias',       value: '30days'    },
-  { label: 'Este mês',      value: 'month'     },
-  { label: 'Personalizado', value: 'custom'    },
+  { label: 'Hoje', value: 'today' },
+  { label: 'Ontem', value: 'yesterday' },
+  { label: '7 dias', value: '7days' },
+  { label: '30 dias', value: '30days' },
+  { label: 'Este mês', value: 'month' },
+  { label: 'Personalizado', value: 'custom' },
 ];
 
 const FUNNEL_CONFIG = [
   { stage: 'Em atendimento', statusId: 1, color: '#3b82f6' },
-  { stage: 'Reunião',        statusId: 2, color: '#a855f7' },
-  { stage: 'Aprovado',       statusId: 3, color: '#22c55e' },
+  { stage: 'Reunião', statusId: 2, color: '#a855f7' },
+  { stage: 'Aprovado', statusId: 3, color: '#22c55e' },
 ];
 
-const STATUS_LABEL: Record<number,string> = { 0:'Em atendimento',1:'Em atendimento',2:'Reunião',3:'Aprovado',4:'Reprovado' };
-const STATUS_DARK:  Record<number,string> = { 0:'bg-blue-900/40 text-blue-300',1:'bg-blue-900/40 text-blue-300',2:'bg-purple-900/40 text-purple-300',3:'bg-emerald-900/40 text-emerald-300',4:'bg-rose-900/40 text-rose-300' };
-const STATUS_LIGHT: Record<number,string> = { 0:'bg-blue-100 text-blue-700',1:'bg-blue-100 text-blue-700',2:'bg-purple-100 text-purple-700',3:'bg-emerald-100 text-emerald-700',4:'bg-rose-100 text-rose-700' };
-const AVATAR_COLORS = ['bg-rose-400','bg-yellow-400','bg-emerald-400','bg-orange-400','bg-cyan-400','bg-violet-400','bg-pink-400'];
+const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado' };
+const STATUS_DARK: Record<number, string> = { 0: 'bg-blue-900/40 text-blue-300', 1: 'bg-blue-900/40 text-blue-300', 2: 'bg-purple-900/40 text-purple-300', 3: 'bg-emerald-900/40 text-emerald-300', 4: 'bg-rose-900/40 text-rose-300' };
+const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700' };
+const AVATAR_COLORS = ['bg-rose-400', 'bg-yellow-400', 'bg-emerald-400', 'bg-orange-400', 'bg-cyan-400', 'bg-violet-400', 'bg-pink-400'];
 
-function initials(n:string){ return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
-function getGreeting(){ const h=new Date().getHours(); if(h>=5&&h<12)return 'Bom dia'; if(h>=12&&h<18)return 'Boa tarde'; return 'Boa noite'; }
-function toNum(s:any):number{ if(s===null||s===undefined||s==='')return 0; const n=Number(s); return isNaN(n)?0:n; }
-
-function parseLeadDate(str?:string|null):Date{
-  if(!str)return new Date(0);
-  if(str.includes('T'))return new Date(str);
-  const m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-  if(m){const[,d,mo,y,h='0',mi='0']=m;return new Date(Number(y),Number(mo)-1,Number(d),Number(h),Number(mi));}
+// ── Utilitários de data — Brasília ────────────────────────────
+function parseLeadDate(str?: string | null): Date {
+  if (!str) return new Date(0);
+  if (str.includes('T')) return new Date(str);
+  if (/^\d{4}-\d{2}-\d{2} /.test(str))
+    return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z'));
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+  if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`); }
   return new Date(str);
 }
 
-function relativeTime(str?:string|null):string{
-  if(!str)return '—';
-  const diff=Date.now()-parseLeadDate(str).getTime();
-  const min=Math.floor(diff/60000);const h=Math.floor(min/60);const days=Math.floor(h/24);
-  if(min<1)return 'agora';if(min<60)return `${min}m`;if(h<24)return `${h}h`;if(days===1)return '1d';return `${days}d`;
+function leadDateBR(str?: string | null): string {
+  const d = parseLeadDate(str);
+  if (d.getTime() === 0) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
 }
 
-function startOfDay(d:Date){return new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0,0);}
-function endOfDay(d:Date){return new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999);}
-function isoToBR(iso:string):string{ if(!iso||!iso.includes('-'))return iso||''; const[y,m,d]=iso.split('-');return `${d}/${m}/${y}`; }
+function todayBR(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
 
-function filterByPeriod(leads:Lead[],period:string,from?:string,to?:string):Lead[]{
-  const now=new Date();const ts=startOfDay(now);const te=endOfDay(now);
-  function inR(l:Lead,a:Date,b:Date){const d=parseLeadDate(l.created_at);return d>=a&&d<=b;}
-  switch(period){
-    case 'today':return leads.filter(l=>inR(l,ts,te));
-    case 'yesterday':{const ys=new Date(ts);ys.setDate(ys.getDate()-1);const ye=new Date(te);ye.setDate(ye.getDate()-1);return leads.filter(l=>inR(l,ys,ye));}
-    case '7days':{const a=new Date(ts);a.setDate(a.getDate()-6);return leads.filter(l=>inR(l,a,te));}
-    case '30days':{const a=new Date(ts);a.setDate(a.getDate()-29);return leads.filter(l=>inR(l,a,te));}
-    case 'month':{const f=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0);return leads.filter(l=>inR(l,f,te));}
-    case 'custom':{if(!from||!to)return leads;const f=startOfDay(new Date(from+'T00:00:00'));const t=endOfDay(new Date(to+'T00:00:00'));if(isNaN(f.getTime())||isNaN(t.getTime()))return leads;return leads.filter(l=>inR(l,f,t));}
-    default:return leads;
+function subDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function filterByPeriod(leads: Lead[], period: string, from?: string, to?: string): Lead[] {
+  if (period === 'all') return leads;
+  const today = todayBR();
+  const ok = (l: Lead, a: string, b: string) => { const d = leadDateBR(l.created_at); return !!d && d >= a && d <= b; };
+  switch (period) {
+    case 'today':     return leads.filter(l => ok(l, today, today));
+    case 'yesterday': { const y = subDays(today, 1); return leads.filter(l => ok(l, y, y)); }
+    case '7days':     { const f = subDays(today, 6);  return leads.filter(l => ok(l, f, today)); }
+    case '30days':    { const f = subDays(today, 29); return leads.filter(l => ok(l, f, today)); }
+    case 'month':     { const f = today.slice(0,7) + '-01'; return leads.filter(l => ok(l, f, today)); }
+    case 'custom':    { if (!from || !to) return leads; return leads.filter(l => ok(l, from, to)); }
+    default: return leads;
   }
 }
 
-function buildChartData(leads:Lead[],period:string,from?:string,to?:string){
-  const now=new Date();const ts=startOfDay(now);
-  let days=30;let startDate=new Date(ts);startDate.setDate(ts.getDate()-29);
-  if(period==='today'){days=1;startDate=new Date(ts);}
-  else if(period==='yesterday'){days=1;startDate=new Date(ts);startDate.setDate(startDate.getDate()-1);}
-  else if(period==='7days'){days=7;startDate=new Date(ts);startDate.setDate(startDate.getDate()-6);}
-  else if(period==='month'){startDate=new Date(now.getFullYear(),now.getMonth(),1);days=now.getDate();}
-  else if(period==='custom'&&from&&to){const f=startOfDay(new Date(from+'T00:00:00'));const t=startOfDay(new Date(to+'T00:00:00'));if(!isNaN(f.getTime())&&!isNaN(t.getTime())){days=Math.max(1,Math.round((t.getTime()-f.getTime())/86400000)+1);startDate=f;}}
-  if(days===1){
-    const slots:Record<string,number>={};
-    for(let h=0;h<24;h+=2)slots[`${String(h).padStart(2,'0')}h`]=0;
-    const ds=startOfDay(startDate);const de=endOfDay(startDate);
-    leads.forEach(l=>{const d=parseLeadDate(l.created_at);if(d>=ds&&d<=de){const sh=Math.floor(d.getHours()/2)*2;const k=`${String(sh).padStart(2,'0')}h`;if(k in slots)slots[k]++;}});
-    return Object.entries(slots).map(([date,cnt])=>({date,leads:cnt}));
+function buildChartData(leads: Lead[], period: string, from?: string, to?: string) {
+  const today = todayBR();
+  let days = 30;
+  let startDate = subDays(today, 29);
+
+  if (period === 'today')     { days = 1; startDate = today; }
+  else if (period === 'yesterday') { days = 1; startDate = subDays(today, 1); }
+  else if (period === '7days')  { days = 7; startDate = subDays(today, 6); }
+  else if (period === '30days') { days = 30; startDate = subDays(today, 29); }
+  else if (period === 'month')  { startDate = today.slice(0,7) + '-01'; days = parseInt(today.slice(8,10)); }
+  else if (period === 'custom' && from && to) {
+    startDate = from;
+    const ms = new Date(to+'T12:00:00Z').getTime() - new Date(from+'T12:00:00Z').getTime();
+    days = Math.max(1, Math.round(ms/86400000)+1);
   }
-  const map:Record<string,number>={};
-  for(let i=0;i<days;i++){const d=new Date(startDate);d.setDate(startDate.getDate()+i);map[d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})]=0;}
-  leads.forEach(l=>{const k=parseLeadDate(l.created_at).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});if(k in map)map[k]++;});
-  return Object.entries(map).map(([date,cnt])=>({date,leads:cnt}));
+
+  if (days === 1) {
+    const slots: Record<string, number> = {};
+    for (let h = 0; h < 24; h += 2) slots[`${String(h).padStart(2,'0')}h`] = 0;
+    leads.forEach(l => {
+      if (leadDateBR(l.created_at) !== startDate) return;
+      const d = parseLeadDate(l.created_at);
+      const hStr = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
+      const sh = Math.floor(parseInt(hStr) / 2) * 2;
+      const k = `${String(sh).padStart(2,'0')}h`;
+      if (k in slots) slots[k]++;
+    });
+    return Object.entries(slots).map(([date, cnt]) => ({ date, leads: cnt }));
+  }
+
+  const dayMap: Record<string, number> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startDate + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + i);
+    dayMap[d.toISOString().slice(0,10)] = 0;
+  }
+  leads.forEach(l => {
+    const k = leadDateBR(l.created_at);
+    if (k && k in dayMap) dayMap[k]++;
+  });
+  return Object.entries(dayMap).map(([iso, cnt]) => ({
+    date: new Date(iso+'T12:00:00Z').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
+    leads: cnt,
+  }));
 }
 
-async function fetchMetaData(period:string,from?:string,to?:string,leadsList:Lead[]=[]):Promise<{metrics:MetaMetrics;campaigns:Campaign[]}>{
-  const empty={metrics:{spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0,cplRealTime:0},campaigns:[]};
-  try{
-    const presetMap:Record<string,string>={today:'today',yesterday:'yesterday','7days':'last_7d','30days':'last_30d',month:'this_month'};
-    const timeParam=period in presetMap?`date_preset=${presetMap[period]}`:period==='custom'&&from&&to?`time_range=%7B%22since%22%3A%22${from}%22%2C%22until%22%3A%22${to}%22%7D`:'date_preset=this_month';
-    const insRes=await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=spend,impressions,clicks,ctr,actions&${timeParam}&access_token=${META_TOKEN}`);
-    const insData=await insRes.json();
-    let spend=0,impressions=0,clicks=0,ctr=0,leads=0;
-    if(insData.data?.length){const d=insData.data[0];spend=parseFloat(d.spend||'0');impressions=parseInt(d.impressions||'0');clicks=parseInt(d.clicks||'0');ctr=parseFloat(d.ctr||'0');const la=(d.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type));leads=la?parseInt(la.value||'0'):0;}
-    const campInsRes=await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${META_TOKEN}`);
-    const campInsData=await campInsRes.json();
-    const campaigns:Campaign[]=[];
-    (campInsData.data||[]).forEach((ins:any)=>{
+function isoToBR(iso: string): string {
+  if (!iso || !iso.includes('-')) return iso || '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function relativeTime(str?: string | null): string {
+  if (!str) return '—';
+  const diff = Date.now() - parseLeadDate(str).getTime();
+  const min = Math.floor(diff/60000); const h = Math.floor(min/60); const days = Math.floor(h/24);
+  if (min < 1) return 'agora'; if (min < 60) return `${min}m`; if (h < 24) return `${h}h`; if (days === 1) return '1d'; return `${days}d`;
+}
+
+function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
+function initials(n: string) { return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
+function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
+
+async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = []): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
+  const empty = { metrics: { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 }, campaigns: [] };
+  try {
+    const presetMap: Record<string,string> = { today:'today', yesterday:'yesterday', '7days':'last_7d', '30days':'last_30d', month:'this_month' };
+    const timeParam = period in presetMap ? `date_preset=${presetMap[period]}` : period==='custom'&&from&&to ? `time_range=%7B%22since%22%3A%22${from}%22%2C%22until%22%3A%22${to}%22%7D` : 'date_preset=this_month';
+    const insRes = await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=spend,impressions,clicks,ctr,actions&${timeParam}&access_token=${META_TOKEN}`);
+    const insData = await insRes.json();
+    let spend=0, impressions=0, clicks=0, ctr=0, leads=0;
+    if (insData.data?.length) { const d=insData.data[0]; spend=parseFloat(d.spend||'0'); impressions=parseInt(d.impressions||'0'); clicks=parseInt(d.clicks||'0'); ctr=parseFloat(d.ctr||'0'); const la=(d.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type)); leads=la?parseInt(la.value||'0'):0; }
+    const campRes = await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${META_TOKEN}`);
+    const campData = await campRes.json();
+    const campaigns: Campaign[] = [];
+    (campData.data||[]).forEach((ins:any) => {
       const cSpend=parseFloat(ins.spend||'0');
       const cLeads=parseInt((ins.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');
-      if(cSpend>0) campaigns.push({id:ins.campaign_id,name:ins.campaign_name,status:'ACTIVE',spend:cSpend,leads_api:cLeads});
+      if (cSpend>0) campaigns.push({ id:ins.campaign_id, name:ins.campaign_name, status:'ACTIVE', spend:cSpend, leads_api:cLeads });
     });
-    const totalLeadsFB=leadsList.filter(l=>l.utm_source&&l.utm_source.toUpperCase()==='FB').length;
-    const cplRealTime=totalLeadsFB>0?spend/totalLeadsFB:0;
-    return{metrics:{spend,impressions,clicks,ctr,leads,cpl:leads>0?spend/leads:0,cplRealTime},campaigns};
-  }catch(e){console.error('[Meta]',e);return empty;}
+    const totalLeadsFB = leadsList.filter(l=>l.utm_source&&l.utm_source.toUpperCase()==='FB').length;
+    return { metrics:{ spend, impressions, clicks, ctr, leads, cpl:leads>0?spend/leads:0, cplRealTime:totalLeadsFB>0?spend/totalLeadsFB:0 }, campaigns };
+  } catch (e) { console.error('[Meta]',e); return empty; }
 }
 
-// ── Bolinha faixa — só mobile ────────────────────────────────
 function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
   const { configuracoes } = useAppStore();
   const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead as any, configuracoes) : null);
   if (!faixa || faixa === 'vermelho') return null;
-  return (
-    <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/>
-  );
-}
-
-// ── Score mini tag — só desktop ──────────────────────────────
-function ScoreMini({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
-  if (score == null) return null;
-  const isVerde = faixa === 'verde';
-  const isAmarelo = faixa === 'amarelo';
-  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
-  const bg = isVerde
-    ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5')
-    : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7')
-    : (dark ? 'rgba(107,114,128,0.15)' : '#f3f4f6');
-  return (
-    <div style={{ display:'inline-flex', alignItems:'center', gap:'3px', padding:'1px 6px', borderRadius:'99px', background:bg, border:`1px solid ${color}30`, marginTop:'2px' }}>
-      <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:color }}/>
-      <span style={{ fontSize:'10px', fontWeight:700, color }}>{score} pts</span>
-    </div>
-  );
+  return <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/>;
 }
 
 export default function Dashboard() {
-  const { user }=useAuth();
-  const { theme }=useTheme();
-  const dark=theme==='dark';
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const navigate = useNavigate();
+  const dark = theme === 'dark';
 
-  const firstName=user?.user_metadata?.first_name||user?.user_metadata?.full_name?.split(' ')[0]||'';
-  const savedPeriod=localStorage.getItem(STORAGE_KEY)||'today';
-  const savedCustom=(()=>{try{return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}');}catch{return{};}})();
+  const firstName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
+  const savedPeriod = localStorage.getItem(STORAGE_KEY) || 'today';
+  const savedCustom = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}'); } catch { return {}; } })();
 
-  const [allLeads,setAllLeads]=useState<Lead[]>([]);
-  const [loading,setLoading]=useState(true);
-  const [selectedPeriod,setSelectedPeriod]=useState(savedPeriod);
-  const [customFrom,setCustomFrom]=useState<string>(savedCustom.from||'');
-  const [customTo,setCustomTo]=useState<string>(savedCustom.to||'');
-  const [showDropdown,setShowDropdown]=useState(false);
-  const [showCustom,setShowCustom]=useState(false);
-  const [isRefreshing,setIsRefreshing]=useState(false);
-  const [metaMetrics,setMetaMetrics]=useState<MetaMetrics>({spend:0,leads:0,cpl:0,impressions:0,clicks:0,ctr:0,cplRealTime:0});
-  const [metaCampaigns,setMetaCampaigns]=useState<Campaign[]>([]);
-  const [metaLoading,setMetaLoading]=useState(true);
-  const [metaError,setMetaError]=useState(false);
-  const [isMobile,setIsMobile]=useState(false);
-  const [viewingLead,setViewingLead]=useState<Lead|null>(null);
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState(savedPeriod);
+  const [customFrom, setCustomFrom] = useState<string>(savedCustom.from||'');
+  const [customTo, setCustomTo] = useState<string>(savedCustom.to||'');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [metaMetrics, setMetaMetrics] = useState<MetaMetrics>({ spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 });
+  const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
+  const [metaError, setMetaError] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [viewingLead, setViewingLead] = useState<Lead|null>(null);
 
-  const dropRef=useRef<HTMLDivElement>(null);
-  const customRef=useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const customRef = useRef<HTMLDivElement>(null);
 
-  useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
-  useEffect(()=>{function close(e:MouseEvent){if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false);if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false);}document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close);},[]);
+  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
+  useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
-  const fetchLeads=async()=>{setLoading(true);const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false});if(error)console.error('[Dashboard]',error.message);else if(data)setAllLeads(data as Lead[]);setLoading(false);};
-  const loadMeta=async(currentLeads?:Lead[])=>{setMetaLoading(true);setMetaError(false);try{const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads);setMetaMetrics(metrics);setMetaCampaigns(campaigns);if(metrics.spend===0&&campaigns.length===0)setMetaError(true);}catch{setMetaError(true);}setMetaLoading(false);};
+  const fetchLeads = async () => { setLoading(true); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
+  const loadMeta = async (currentLeads?: Lead[]) => { setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
 
-  useEffect(()=>{if(!user)return;fetchLeads().then(()=>loadMeta());},[user?.id]); // eslint-disable-line
-  useEffect(()=>{if(allLeads.length>0)loadMeta();},[selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
-  useEffect(()=>{const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe();return()=>{supabase.removeChannel(ch);};},[]);
+  useEffect(() => { if(!user)return; fetchLeads().then(()=>loadMeta()); }, [user?.id]); // eslint-disable-line
+  useEffect(() => { if(allLeads.length>0)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
+  useEffect(() => { const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, []);
 
-  function selectPeriod(value:string){if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;}setSelectedPeriod(value);localStorage.setItem(STORAGE_KEY,value);setShowDropdown(false);setShowCustom(false);}
-  function applyCustom(){if(!customFrom||!customTo)return;setSelectedPeriod('custom');localStorage.setItem(STORAGE_KEY,'custom');localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo}));setShowCustom(false);}
-  async function handleRefresh(){setIsRefreshing(true);await Promise.all([fetchLeads(),loadMeta()]);setTimeout(()=>setIsRefreshing(false),600);}
+  function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); localStorage.setItem(STORAGE_KEY,value); setShowDropdown(false); setShowCustom(false); }
+  function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); setShowCustom(false); }
+  async function handleRefresh() { setIsRefreshing(true); await Promise.all([fetchLeads(),loadMeta()]); setTimeout(()=>setIsRefreshing(false),600); }
 
-  const filtered=useMemo(()=>filterByPeriod(allLeads,selectedPeriod,customFrom,customTo),[allLeads,selectedPeriod,customFrom,customTo]);
-  const totalLeads=filtered.length;
-  const approved=filtered.filter(l=>toNum(l.status)===3).length;
-  const convRate=totalLeads>0?((approved/totalLeads)*100).toFixed(1):'0.0';
-  const spend=metaMetrics.spend||0;
-  const chartData=useMemo(()=>buildChartData(filtered,selectedPeriod,customFrom,customTo),[filtered,selectedPeriod,customFrom,customTo]);
-  const funnelData=useMemo(()=>FUNNEL_CONFIG.map(f=>{const value=filtered.filter(l=>{let s=toNum(l.status);if(s===0)s=1;return s===f.statusId;}).length;return{...f,value};}), [filtered]);
-  const recentLeads=useMemo(()=>[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5),[allLeads]);
-  const campRows=useMemo(()=>{
-    if(!metaCampaigns.length)return[];
-    const withSpend=metaCampaigns.filter(c=>Number(c.spend)>0);
-    if(!withSpend.length)return[];
-    const maxSpend=Math.max(...withSpend.map(c=>Number(c.spend)),1);
+  // Navega para leads filtrados por campanha + período atual
+  function goToLeads(campanhaNome: string) {
+    const PERIOD_MAP: Record<string,string> = { today:'today', yesterday:'yesterday', '7days':'7days', '30days':'30days', month:'month', custom:'custom' };
+    const p = PERIOD_MAP[selectedPeriod] || 'all';
+    const customQ = selectedPeriod==='custom'&&customFrom&&customTo ? `&de=${customFrom}&ate=${customTo}` : '';
+    navigate(`/leads?campanha=${encodeURIComponent(campanhaNome.split('|')[0].trim())}&periodo=${p}${customQ}`);
+  }
+
+  const filtered = useMemo(() => filterByPeriod(allLeads, selectedPeriod, customFrom, customTo), [allLeads, selectedPeriod, customFrom, customTo]);
+  const totalLeads = filtered.length;
+  // Aprovados: conta pelo dia em que o status mudou para aprovado (ultimo_status_change)
+  const approved = useMemo(() => {
+    const today = todayBR();
+    const ok = (dateStr: string | null | undefined, from: string, to: string) => {
+      const d = leadDateBR(dateStr);
+      return !!d && d >= from && d <= to;
+    };
+    return allLeads.filter(l => {
+      if (toNum(l.status) !== 3) return false;
+      const changeDate = (l as any).ultimo_status_change || l.created_at;
+      switch (selectedPeriod) {
+        case 'today':     { const t = today; return ok(changeDate, t, t); }
+        case 'yesterday': { const y = subDays(today,1); return ok(changeDate, y, y); }
+        case '7days':     { return ok(changeDate, subDays(today,6), today); }
+        case '30days':    { return ok(changeDate, subDays(today,29), today); }
+        case 'month':     { return ok(changeDate, today.slice(0,7)+'-01', today); }
+        case 'custom':    { if(!customFrom||!customTo) return true; return ok(changeDate, customFrom, customTo); }
+        default: return true;
+      }
+    }).length;
+  }, [allLeads, selectedPeriod, customFrom, customTo]);
+  const convRate = totalLeads>0 ? ((approved/totalLeads)*100).toFixed(1) : '0.0';
+  const spend = metaMetrics.spend||0;
+  const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
+  const funnelData = useMemo(() => FUNNEL_CONFIG.map(f => { const value=filtered.filter(l=>{let s=toNum(l.status);if(s===0)s=1;return s===f.statusId;}).length; return{...f,value}; }), [filtered]);
+  const recentLeads = useMemo(() => [...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5), [allLeads]);
+  const campRows = useMemo(() => {
+    if (!metaCampaigns.length) return [];
+    const withSpend = metaCampaigns.filter(c=>Number(c.spend)>0);
+    if (!withSpend.length) return [];
+    const maxSpend = Math.max(...withSpend.map(c=>Number(c.spend)),1);
     return withSpend.sort((a,b)=>{const pA=a.leads_api>0?a.leads_api/a.spend:0;const pB=b.leads_api>0?b.leads_api/b.spend:0;if(pA!==pB)return pB-pA;return b.spend-a.spend;}).slice(0,5).map(c=>({
-      name:c.name.length>24?c.name.slice(0,24)+'…':c.name,
-      spend:`R$ ${Number(c.spend||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,
-      leads:c.leads_api||0,
-      cpl:c.leads_api>0&&c.spend>0?`R$ ${(c.spend/c.leads_api).toLocaleString('pt-BR',{minimumFractionDigits:2})}`:'—',
-      perf:Math.round((Number(c.spend)/maxSpend)*100),
+      name: c.name.length>24?c.name.slice(0,24)+'…':c.name,
+      fullName: c.name,
+      spend: `R$ ${Number(c.spend||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,
+      leads: c.leads_api||0,
+      cpl: c.leads_api>0&&c.spend>0 ? `R$ ${(c.spend/c.leads_api).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—',
+      perf: Math.round((Number(c.spend)/maxSpend)*100),
     }));
-  },[metaCampaigns]);
+  }, [metaCampaigns]);
 
-  const periodLabel=selectedPeriod==='custom'&&customFrom&&customTo?`${isoToBR(customFrom)} – ${isoToBR(customTo)}`:PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
+  const periodLabel = selectedPeriod==='custom'&&customFrom&&customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
 
-  const bg=dark?'#090909':'#f4f4f5';
-  const cardBg=dark?'#111113':'#ffffff';
-  const border=dark?'#1e1e22':'#e5e7eb';
-  const txtHi=dark?'#f4f4f5':'#111827';
-  const txtMid=dark?'#71717a':'#374151';
-  const txtLow=dark?'#52525b':'#6b7280';
-  const gridLn=dark?'#1e1e22':'#f0f0f0';
-  const divCls=dark?'#1e1e22':'#f3f4f6';
-  const hov=dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';
+  const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
+  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#374151'; const txtLow=dark?'#52525b':'#6b7280';
+  const gridLn=dark?'#1e1e22':'#f0f0f0'; const divCls=dark?'#1e1e22':'#f3f4f6'; const hov=dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';
   const pad=isMobile?'20px 16px':'32px';
-  const btnBase:React.CSSProperties={display:'flex',alignItems:'center',gap:'6px',padding:'8px 12px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',transition:'all 0.12s',fontFamily:'inherit'};
-  const statusClass=dark?STATUS_DARK:STATUS_LIGHT;
+  const btnBase: React.CSSProperties = { display:'flex', alignItems:'center', gap:'6px', padding:'8px 12px', borderRadius:'10px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:'pointer', transition:'all 0.12s', fontFamily:'inherit' };
+  const statusClass = dark?STATUS_DARK:STATUS_LIGHT;
 
-  return(
+  return (
     <AppLayout leadCount={allLeads.length}>
-      <div style={{padding:pad,background:bg,minHeight:'100vh'}}>
+      <div style={{ padding:pad, background:bg, minHeight:'100vh', overflowX:'hidden' }}>
 
         {/* Header */}
-        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'20px',flexWrap:'wrap',gap:'10px'}}>
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'10px' }}>
           <div>
-            <h1 style={{fontSize:isMobile?'20px':'26px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0,display:'flex',alignItems:'center',gap:'8px'}}>
+            <h1 style={{ fontSize:isMobile?'20px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:'8px' }}>
               {getGreeting()}{firstName?`, ${firstName}`:''}!{' '}
-              <img src="/wave.png" alt="👋" style={{width:'26px',height:'26px',objectFit:'contain'}} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
+              <img src="/wave.png" alt="👋" style={{ width:'26px', height:'26px', objectFit:'contain' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
             </h1>
-            <p style={{fontSize:'13px',color:txtLow,marginTop:'4px'}}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
+            <p style={{ fontSize:'13px', color:txtLow, marginTop:'4px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-            <div style={{position:'relative'}} ref={dropRef}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
+            <div style={{ position:'relative' }} ref={dropRef}>
               <button onClick={()=>{setShowDropdown(v=>!v);setShowCustom(false);}} style={btnBase}>
                 {periodLabel}
-                <ChevronDown style={{width:'14px',height:'14px',color:txtLow,transform:showDropdown?'rotate(180deg)':'',transition:'transform 0.18s'}}/>
+                <ChevronDown style={{ width:'14px', height:'14px', color:txtLow, transform:showDropdown?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
               </button>
-              {showDropdown&&(
-                <div style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:cardBg,border:`1px solid ${border}`,borderRadius:'12px',padding:'4px',minWidth:'168px',zIndex:50,boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)'}}>
+              {showDropdown && (
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'12px', padding:'4px', minWidth:'168px', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)' }}>
                   {PERIOD_FILTERS.map(f=>(
-                    <button key={f.value} onClick={()=>selectPeriod(f.value)} style={{width:'100%',padding:'7px 10px',borderRadius:'8px',border:'none',background:selectedPeriod===f.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent',color:selectedPeriod===f.value?(dark?'#60a5fa':'#2563eb'):txtMid,fontSize:'13px',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+                    <button key={f.value} onClick={()=>selectPeriod(f.value)} style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:'none', background:selectedPeriod===f.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent', color:selectedPeriod===f.value?(dark?'#60a5fa':'#2563eb'):txtMid, fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
                       {f.label}
                     </button>
                   ))}
                 </div>
               )}
-              {showCustom&&(
-                <div ref={customRef} style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:cardBg,border:`1px solid ${border}`,borderRadius:'14px',padding:'16px',zIndex:50,minWidth:'260px',boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.12)'}}>
-                  <p style={{fontSize:'11px',fontWeight:600,color:txtLow,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:'12px'}}>Período personalizado</p>
-                  <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+              {showCustom && (
+                <div ref={customRef} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'14px', padding:'16px', zIndex:50, minWidth:'260px', boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.12)' }}>
+                  <p style={{ fontSize:'11px', fontWeight:600, color:txtLow, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:'12px' }}>Período personalizado</p>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                     {[{label:'Data inicial',val:customFrom,set:setCustomFrom},{label:'Data final',val:customTo,set:setCustomTo}].map(({label,val,set})=>(
                       <div key={label}>
-                        <label style={{fontSize:'11px',color:txtMid,display:'block',marginBottom:'4px'}}>{label}</label>
-                        <div style={{position:'relative'}}>
-                          <input type="date" value={val} onChange={e=>set(e.target.value)} style={{width:'100%',padding:'8px 10px',borderRadius:'8px',border:`1px solid ${border}`,background:dark?'#18181b':cardBg,color:'transparent',fontSize:'13px',outline:'none',fontFamily:'inherit',boxSizing:'border-box' as any,cursor:'pointer'}}/>
-                          <span style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',fontSize:'13px',color:val?txtHi:txtLow,pointerEvents:'none'}}>{val?isoToBR(val):'dd/mm/aaaa'}</span>
+                        <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px' }}>{label}</label>
+                        <div style={{ position:'relative' }}>
+                          <input type="date" value={val} onChange={e=>set(e.target.value)} style={{ width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${border}`, background:dark?'#18181b':cardBg, color:'transparent', fontSize:'13px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any, cursor:'pointer' }}/>
+                          <span style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', fontSize:'13px', color:val?txtHi:txtLow, pointerEvents:'none' }}>{val?isoToBR(val):'dd/mm/aaaa'}</span>
                         </div>
                       </div>
                     ))}
-                    <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-                      <button onClick={applyCustom} style={{flex:1,padding:'8px',borderRadius:'8px',background:'#2563eb',border:'none',color:'#fff',fontSize:'13px',fontWeight:500,cursor:'pointer',fontFamily:'inherit'}}>Aplicar</button>
-                      <button onClick={()=>setShowCustom(false)} style={{flex:1,padding:'8px',borderRadius:'8px',border:`1px solid ${border}`,background:'transparent',color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>Cancelar</button>
+                    <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
+                      <button onClick={applyCustom} style={{ flex:1, padding:'8px', borderRadius:'8px', background:'#2563eb', border:'none', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>Aplicar</button>
+                      <button onClick={()=>setShowCustom(false)} style={{ flex:1, padding:'8px', borderRadius:'8px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
             <button onClick={handleRefresh} style={btnBase}>
-              <RefreshCw style={{width:'14px',height:'14px',color:txtMid,animation:isRefreshing?'spin 1s linear infinite':''}}/>
+              <RefreshCw style={{ width:'14px', height:'14px', color:txtMid, animation:isRefreshing?'spin 1s linear infinite':'' }}/>
             </button>
-            {!isMobile&&(
-              <button style={{...btnBase,background:'#2563eb',border:'none',color:'#fff',fontWeight:500}}>
-                <Download style={{width:'14px',height:'14px'}}/> Exportar
+            {!isMobile && (
+              <button style={{ ...btnBase, background:'#2563eb', border:'none', color:'#fff', fontWeight:500 }}>
+                <Download style={{ width:'14px', height:'14px' }}/> Exportar
               </button>
             )}
           </div>
         </div>
 
         {/* Metric Cards */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'16px',marginBottom:'16px'}}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
           {[
-            {label:'Gasto Total',value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,trend:'+',up:true,sub:'Meta Ads'},
-            {label:'Leads',value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length),trend:'+',up:true,sub:'Fonte FB'},
-            {label:'CPL Ads',value:metaLoading?'…':(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length>0?`R$ ${(spend/filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —'),trend:'Real Time',up:true,sub:'Base Sistema'},
-            {label:'Aprovados',value:loading?'…':String(approved),trend:`${convRate}%`,up:Number(convRate)>0,sub:'conversão'},
+            { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
+            { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
+            { label:'CPL Ads', value:metaLoading?'…':(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length>0?`R$ ${(spend/filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —'), trend:'Real Time', up:true, sub:'Base Sistema' },
+            { label:'Aprovados', value:loading?'…':String(approved), trend:`${convRate}%`, up:Number(convRate)>0, sub:'conversão' },
           ].map((c,i)=>(
-            <div key={i} style={{background:cardBg,borderRadius:'14px',padding:isMobile?'14px':'20px',border:`1px solid ${border}`}}>
-              <p style={{fontSize:'12px',color:txtLow,marginBottom:'4px'}}>{c.label}</p>
-              <p style={{fontSize:isMobile?'22px':'26px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>{c.value}</p>
-              <p style={{fontSize:'11px',display:'flex',alignItems:'center',gap:'3px',margin:0}}>
-                {c.up?<TrendingUp style={{width:'11px',height:'11px',color:'#10b981'}}/>:<TrendingDown style={{width:'11px',height:'11px',color:'#ef4444'}}/>}
-                <span style={{fontWeight:500,color:c.up?'#10b981':'#ef4444'}}>{c.trend}</span>
-                <span style={{color:txtLow,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.sub}</span>
+            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'14px':'20px', border:`1px solid ${border}` }}>
+              <p style={{ fontSize:'12px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
+              <p style={{ fontSize:isMobile?'22px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
+              <p style={{ fontSize:'11px', display:'flex', alignItems:'center', gap:'3px', margin:0 }}>
+                {c.up?<TrendingUp style={{ width:'11px', height:'11px', color:'#10b981' }}/>:<TrendingDown style={{ width:'11px', height:'11px', color:'#ef4444' }}/>}
+                <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444' }}>{c.trend}</span>
+                <span style={{ color:txtLow, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.sub}</span>
               </p>
             </div>
           ))}
         </div>
 
         {/* Charts */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'2fr 1fr',gap:'14px',marginBottom:'16px'}}>
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'2fr 1fr', gap:'14px', marginBottom:'16px' }}>
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}` }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
               <div>
-                <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Evolução de Leads</h3>
-                <p style={{fontSize:'11px',color:txtLow,marginTop:'2px'}}>{periodLabel}</p>
+                <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0 }}>Evolução de Leads</h3>
+                <p style={{ fontSize:'11px', color:txtLow, marginTop:'2px' }}>{periodLabel}</p>
               </div>
-              <button style={{padding:'4px',borderRadius:'8px',border:'none',background:'transparent',cursor:'pointer'}}>
-                <MoreHorizontal style={{width:'14px',height:'14px',color:txtLow}}/>
+              <button style={{ padding:'4px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer' }}>
+                <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            <div style={{height:isMobile?'160px':'200px'}}>
+            <div style={{ height:isMobile?'160px':'200px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData.length?chartData:[{date:'—',leads:0}]} margin={{top:10,right:10,left:-20,bottom:0}}>
+                <AreaChart data={chartData.length?chartData:[{date:'—',leads:0}]} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
-                  <XAxis dataKey="date" tick={{fill:txtLow,fontSize:10}} axisLine={false} tickLine={false}/>
-                  <YAxis allowDecimals={false} tick={{fill:txtLow,fontSize:10}} axisLine={false} tickLine={false} width={24}/>
-                  <Tooltip contentStyle={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',fontSize:'12px',color:txtHi}}/>
+                  <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
+                  <YAxis allowDecimals={false} tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false} width={24}/>
+                  <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }}/>
                   <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#glLeads)" name="Leads"/>
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,position:'relative',overflow:'hidden'}}>
-            <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 4px'}}>Funil de leads</h3>
-            <p style={{fontSize:'11px',color:txtLow,marginBottom:'16px'}}>{periodLabel}</p>
-            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-              {funnelData.map((stage)=>{
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, position:'relative', overflow:'hidden' }}>
+            <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:'0 0 4px' }}>Funil de leads</h3>
+            <p style={{ fontSize:'11px', color:txtLow, marginBottom:'16px' }}>{periodLabel}</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+              {funnelData.map(stage=>{
                 const pct=totalLeads>0?Math.round((stage.value/Math.max(totalLeads,1))*100):0;
-                return(
-                  <div key={stage.stage} style={{background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)',border:`1px solid ${border}`,borderRadius:'10px',padding:'12px 14px 14px',position:'relative',overflow:'hidden'}}>
-                    <div style={{position:'absolute',left:0,top:0,bottom:0,width:'4px',background:stage.color}}/>
-                    <div style={{display:'flex',alignItems:'center',marginBottom:'14px'}}>
-                      <span style={{fontSize:'14px',fontWeight:600,color:txtHi}}>{stage.stage}</span>
-                      <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'24px'}}>
-                        <span style={{fontSize:'18px',fontWeight:700,color:txtHi}}>{loading?'…':stage.value}</span>
-                        <div style={{padding:'4px 10px',borderRadius:'8px',background:stage.color+'10',color:stage.color,fontSize:'11px',fontWeight:800,minWidth:'40px',textAlign:'center'}}>{loading?'…':`${pct}%`}</div>
+                return (
+                  <div key={stage.stage} style={{ background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)', border:`1px solid ${border}`, borderRadius:'10px', padding:'12px 14px 14px', position:'relative', overflow:'hidden' }}>
+                    <div style={{ position:'absolute', left:0, top:0, bottom:0, width:'4px', background:stage.color }}/>
+                    <div style={{ display:'flex', alignItems:'center', marginBottom:'14px' }}>
+                      <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>{stage.stage}</span>
+                      <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'24px' }}>
+                        <span style={{ fontSize:'18px', fontWeight:700, color:txtHi }}>{loading?'…':stage.value}</span>
+                        <div style={{ padding:'4px 10px', borderRadius:'8px', background:stage.color+'10', color:stage.color, fontSize:'11px', fontWeight:800, minWidth:'40px', textAlign:'center' }}>{loading?'…':`${pct}%`}</div>
                       </div>
                     </div>
-                    <div style={{width:'100%',height:'5px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',borderRadius:'10px'}}>
-                      <div style={{width:`${pct}%`,height:'100%',background:stage.color,borderRadius:'10px',transition:'width 0.8s ease'}}/>
+                    <div style={{ width:'100%', height:'5px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', borderRadius:'10px' }}>
+                      <div style={{ width:`${pct}%`, height:'100%', background:stage.color, borderRadius:'10px', transition:'width 0.8s ease' }}/>
                     </div>
                   </div>
                 );
               })}
-              <div style={{marginTop:'4px',background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)',border:`1px solid ${border}`,borderRadius:'10px',padding:'14px 16px',display:'flex',alignItems:'center',gap:'14px'}}>
-                <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'rgba(34,197,94,0.08)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <TrendingUp style={{width:'20px',height:'20px',color:'#22c55e'}}/>
+              <div style={{ marginTop:'4px', background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)', border:`1px solid ${border}`, borderRadius:'10px', padding:'14px 16px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom: spend > 0 && approved > 0 ? '10px' : 0 }}>
+                  <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'rgba(34,197,94,0.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <TrendingUp style={{ width:'18px', height:'18px', color:'#22c55e' }}/>
+                  </div>
+                  <div>
+                    <span style={{ fontSize:'11px', color:txtLow, fontWeight:500, display:'block' }}>Taxa de conversão</span>
+                    <span style={{ fontSize:'22px', fontWeight:800, color:'#22c55e' }}>{convRate}%</span>
+                  </div>
                 </div>
-                <div style={{display:'flex',flexDirection:'column'}}>
-                  <span style={{fontSize:'11px',color:txtLow,fontWeight:500}}>Taxa de conversão</span>
-                  <span style={{fontSize:'22px',fontWeight:800,color:'#22c55e'}}>{convRate}%</span>
-                </div>
+                {spend > 0 && approved > 0 && (
+                  <div style={{ paddingTop:'10px', borderTop:`1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:'11px', color:txtLow, fontWeight:500 }}>Custo por revendedora</span>
+                    <span style={{ fontSize:'16px', fontWeight:700, color:txtHi }}>
+                      R$ {(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 })}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Bottom */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:'14px',overflow:'hidden'}}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'1fr 1fr', gap:'14px', minWidth:0, overflow:'hidden' }}>
 
           {/* Leads Recentes */}
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,overflow:'hidden',minWidth:0}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
-              <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Leads Recentes</h3>
-              <Link to="/leads" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none',flexShrink:0}}>Ver todos</Link>
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
+              <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0 }}>Leads Recentes</h3>
+              <Link to="/leads" style={{ fontSize:'12px', color:'#2563eb', fontWeight:500, textDecoration:'none' }}>Ver todos</Link>
             </div>
-            <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
-              {loading?[...Array(4)].map((_,i)=><div key={i} style={{height:'44px',borderRadius:'10px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',marginBottom:'2px'}}/>)
-              :recentLeads.length===0?<p style={{fontSize:'13px',color:txtMid,textAlign:'center',padding:'20px 0'}}>Nenhum lead</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
+              {loading?[...Array(4)].map((_,i)=><div key={i} style={{ height:'44px', borderRadius:'10px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', marginBottom:'2px' }}/>)
+              :recentLeads.length===0?<p style={{ fontSize:'13px', color:txtMid, textAlign:'center', padding:'20px 0' }}>Nenhum lead</p>
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
-                const la = lead as any;
-                return(
-                  <div key={lead.id} onClick={()=>setViewingLead(lead)} style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.12s',overflow:'hidden'}}
+                return (
+                  <div key={lead.id} onClick={()=>setViewingLead(lead)}
+                    style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 8px', borderRadius:'10px', cursor:'pointer', transition:'background 0.12s' }}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background=hov}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
-                    {/* Avatar: bolinha faixa SÓ mobile */}
-                    <div style={{position:'relative',flexShrink:0}}>
+                    <div style={{ position:'relative', flexShrink:0 }}>
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
                         {initials(lead.nome)}
                       </div>
-                      {isMobile && <FaixaDot lead={lead} dark={dark}/>}
+                      <FaixaDot lead={lead} dark={dark}/>
                     </div>
-
-                    {/* Nome + cidade */}
-                    <div style={{flex:1,minWidth:0,overflow:'hidden'}}>
-                      <p style={{fontSize:'12.5px',fontWeight:500,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
-                      <p style={{fontSize:'11px',color:txtLow,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade||'—'}</p>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:'12.5px', fontWeight:500, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
+                      <p style={{ fontSize:'11px', color:txtLow, margin:0 }}>{lead.cidade||'—'}</p>
                     </div>
-
-                    {/* Score tag — só desktop, entre nome e status */}
-                    {!isMobile && la.score != null && (() => {
-                      const isVerde = la.faixa === 'verde'; const isAmarelo = la.faixa === 'amarelo';
-                      const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
-                      const bg = isVerde ? (dark?'rgba(16,185,129,0.12)':'#dcfce7') : isAmarelo ? (dark?'rgba(245,158,11,0.12)':'#fef9c3') : (dark?'rgba(107,114,128,0.12)':'#f3f4f6');
-                      return <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'6px',background:bg,fontSize:'11px',fontWeight:700,color,whiteSpace:'nowrap',flexShrink:0}}><span style={{width:'4px',height:'4px',borderRadius:'50%',background:color,display:'inline-block'}}/>{Number(la.score)} pts</span>;
-                    })()}
-                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{fontSize:'10.5px',flexShrink:0}}>{STATUS_LABEL[st]??'Aguardando'}</span>
-                    {!isMobile&&<span style={{fontSize:'11px',color:txtLow,flexShrink:0,minWidth:'28px',textAlign:'right'}}>{relativeTime(lead.created_at)}</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{ fontSize:'10.5px' }}>{STATUS_LABEL[st]??'Aguardando'}</span>
+                    <span style={{ fontSize:'11px', color:txtLow, flexShrink:0, minWidth:'28px', textAlign:'right' }}>{relativeTime(lead.created_at)}</span>
                     <a href={lead.whatsapp?`https://wa.me/55${lead.whatsapp.replace(/\D/g,'')}`:'#'} target="_blank" rel="noreferrer"
                       onClick={e=>e.stopPropagation()}
                       className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center transition-colors flex-shrink-0">
@@ -421,51 +469,49 @@ export default function Dashboard() {
           </div>
 
           {/* Campanhas */}
-          <div style={{background:cardBg,borderRadius:'14px',padding:isMobile?'16px':'24px',border:`1px solid ${border}`,overflow:'hidden',minWidth:0}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Campanhas</h3>
-                <div style={{position:'relative',width:'7px',height:'7px'}}>
-                  <div style={{width:'7px',height:'7px',borderRadius:'50%',background:metaError?'#ef4444':'#22c55e'}}/>
-                  {!metaError&&<div style={{position:'absolute',inset:0,borderRadius:'50%',background:'#22c55e',animation:'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',opacity:0.6}}/>}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0 }}>Campanhas</h3>
+                <div style={{ position:'relative', width:'7px', height:'7px' }}>
+                  <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:metaError?'#ef4444':'#22c55e' }}/>
+                  {!metaError&&<div style={{ position:'absolute', inset:0, borderRadius:'50%', background:'#22c55e', animation:'ping 1.5s cubic-bezier(0,0,0.2,1) infinite', opacity:0.6 }}/>}
                 </div>
               </div>
-              <Link to="/campanhas" style={{fontSize:'12px',color:'#2563eb',fontWeight:500,textDecoration:'none',flexShrink:0}}>Ver todas</Link>
+              <Link to="/campanhas" style={{ fontSize:'12px', color:'#2563eb', fontWeight:500, textDecoration:'none' }}>Ver todas</Link>
             </div>
             {metaLoading
-              ?[...Array(3)].map((_,i)=><div key={i} style={{height:'32px',borderRadius:'8px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',marginBottom:'8px'}}/>)
+              ?[...Array(3)].map((_,i)=><div key={i} style={{ height:'32px', borderRadius:'8px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', marginBottom:'8px' }}/>)
               :metaError||campRows.length===0
-                ?<div style={{textAlign:'center',padding:'20px 0'}}><p style={{fontSize:'13px',color:txtMid,margin:0}}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
+                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
                 :(
-                  <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                    <colgroup>
-                      <col style={{width:isMobile?'40%':'45%'}}/>
-                      <col style={{width:isMobile?'25%':'20%'}}/>
-                      <col style={{width:'15%'}}/>
-                      <col style={{width:isMobile?'20%':'20%'}}/>
-                      {!isMobile&&<col style={{width:'15%'}}/>}
-                    </colgroup>
+                  <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
                     <thead>
                       <tr>
                         {(['Campanha','Gasto','Leads','CPL',!isMobile&&'Perf.'] as any[]).filter(Boolean).map((h:string)=>(
-                          <th key={h} style={{textAlign:'left',fontSize:'10px',fontWeight:600,color:txtLow,paddingBottom:'8px',letterSpacing:'0.05em',textTransform:'uppercase',paddingRight:'6px'}}>{h}</th>
+                          <th key={h} style={{ textAlign:'left', fontSize:'10px', fontWeight:600, color:txtLow, paddingBottom:'8px', letterSpacing:'0.05em', textTransform:'uppercase', paddingRight:'6px', overflow:'hidden' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {campRows.map((row,i)=>(
-                        <tr key={i} style={{borderTop:`1px solid ${divCls}`}}>
-                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</td>
-                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.spend}</td>
-                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid}}>{row.leads}</td>
-                          <td style={{padding:'9px 6px 9px 0',fontSize:'12px',color:txtMid,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.cpl}</td>
+                        <tr key={i} style={{ borderTop:`1px solid ${divCls}` }}>
+                          <td style={{ padding:'9px 6px 9px 0', fontSize:'12px', fontWeight:500, color:txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{row.name}</td>
+                          <td style={{ padding:'9px 6px 9px 0', fontSize:'12px', color:txtMid, whiteSpace:'nowrap', overflow:'hidden' }}>{row.spend}</td>
+                          <td style={{ padding:'9px 6px 9px 0', fontSize:'12px' }}>
+                            {row.leads>0
+                              ? <button onClick={()=>goToLeads(row.fullName)} style={{ background:'none', border:'none', cursor:'pointer', color:'#2563eb', fontWeight:600, fontSize:'12px', padding:0, fontFamily:'inherit', textDecoration:'underline' }}>{row.leads}</button>
+                              : <span style={{ color:txtMid }}>{row.leads}</span>
+                            }
+                          </td>
+                          <td style={{ padding:'9px 6px 9px 0', fontSize:'12px', color:txtMid, whiteSpace:'nowrap', overflow:'hidden' }}>{row.cpl}</td>
                           {!isMobile&&(
-                            <td style={{padding:'9px 0'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                                <div style={{height:'4px',width:'36px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)',overflow:'hidden',flexShrink:0}}>
-                                  <div style={{height:'100%',width:`${row.perf}%`,background:'#2563eb',borderRadius:'99px'}}/>
+                            <td style={{ padding:'9px 0' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                                <div style={{ height:'4px', width:'36px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)', overflow:'hidden', flexShrink:0 }}>
+                                  <div style={{ height:'100%', width:`${row.perf}%`, background:'#2563eb', borderRadius:'99px' }}/>
                                 </div>
-                                <span style={{fontSize:'11px',color:txtLow}}>{row.perf}%</span>
+                                <span style={{ fontSize:'11px', color:txtLow }}>{row.perf}%</span>
                               </div>
                             </td>
                           )}

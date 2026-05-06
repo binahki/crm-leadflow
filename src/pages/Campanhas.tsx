@@ -53,17 +53,33 @@ function parseLeadDate(str?: string | null): Date {
   return new Date(str);
 }
 
+function parseLeadDateCamp(str?: string | null): Date {
+  if (!str) return new Date(0);
+  if (str.includes('T')) return new Date(str);
+  if (/^\d{4}-\d{2}-\d{2} /.test(str))
+    return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z'));
+  return new Date(str);
+}
+function leadDateBRCamp(str?: string | null): string {
+  const d = parseLeadDateCamp(str);
+  if (d.getTime() === 0) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+}
+function todayBRCamp(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+}
+function subDaysCamp(s: string, n: number): string {
+  const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0,10);
+}
 function filterLeadsByPreset(leads: any[], preset: string) {
-  const now = new Date();
-  const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0,0);
-  const te = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
-  const inR = (l: any, a: Date, b: Date) => { const d = parseLeadDate(l.created_at); return d >= a && d <= b; };
+  const today = todayBRCamp();
+  const ok = (l: any, a: string, b: string) => { const d = leadDateBRCamp(l.created_at); return !!d && d >= a && d <= b; };
   switch (preset) {
-    case 'today':      return leads.filter(l => inR(l, ts, te));
-    case 'yesterday':  { const ys=new Date(ts); ys.setDate(ys.getDate()-1); const ye=new Date(te); ye.setDate(ye.getDate()-1); return leads.filter(l => inR(l,ys,ye)); }
-    case 'last_7d':    { const a=new Date(ts); a.setDate(a.getDate()-6); return leads.filter(l => inR(l,a,te)); }
-    case 'last_30d':   { const a=new Date(ts); a.setDate(a.getDate()-29); return leads.filter(l => inR(l,a,te)); }
-    case 'this_month': { const f=new Date(now.getFullYear(),now.getMonth(),1); return leads.filter(l => inR(l,f,te)); }
+    case 'today':      return leads.filter(l => ok(l, today, today));
+    case 'yesterday':  { const y=subDaysCamp(today,1); return leads.filter(l => ok(l,y,y)); }
+    case 'last_7d':    { return leads.filter(l => ok(l,subDaysCamp(today,6),today)); }
+    case 'last_30d':   { return leads.filter(l => ok(l,subDaysCamp(today,29),today)); }
+    case 'this_month': { return leads.filter(l => ok(l,today.slice(0,7)+'-01',today)); }
     default: return leads;
   }
 }
