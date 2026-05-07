@@ -248,22 +248,54 @@ export default function Dashboard() {
   const convRate = totalLeads>0 ? ((approved/totalLeads)*100).toFixed(1) : '0.0';
   const spend = metaMetrics.spend||0;
   const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
-  const funnelData = useMemo(() => FUNNEL_CONFIG.map(f => { const value=filtered.filter(l=>{let s=toNum(l.status);if(s===0)s=1;return s===f.statusId;}).length; return{...f,value}; }), [filtered]);
+  // Funil: cada status conta pelo dia que a pessoa foi movida para aquele status
+  const funnelData = useMemo(() => FUNNEL_CONFIG.map(f => {
+    const today = todayBR();
+    const ok = (dateStr: string|null|undefined, from: string, to: string) => {
+      const d = leadDateBR(dateStr); return !!d && d >= from && d <= to;
+    };
+    const value = allLeads.filter(l => {
+      let s = toNum(l.status); if(s===0) s=1;
+      if (s !== f.statusId) return false;
+      const changeDate = (l as any).ultimo_status_change || l.created_at;
+      switch(selectedPeriod) {
+        case 'today':     { const t=today; return ok(changeDate,t,t); }
+        case 'yesterday': { const y=subDays(today,1); return ok(changeDate,y,y); }
+        case '7days':     { return ok(changeDate,subDays(today,6),today); }
+        case '30days':    { return ok(changeDate,subDays(today,29),today); }
+        case 'month':     { return ok(changeDate,today.slice(0,7)+'-01',today); }
+        case 'custom':    { if(!customFrom||!customTo) return true; return ok(changeDate,customFrom,customTo); }
+        default: return true;
+      }
+    }).length;
+    return {...f, value};
+  }), [allLeads, selectedPeriod, customFrom, customTo]);
   const recentLeads = useMemo(() => [...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime()).slice(0,5), [allLeads]);
   const campRows = useMemo(() => {
     if (!metaCampaigns.length) return [];
     const withSpend = metaCampaigns.filter(c=>Number(c.spend)>0);
     if (!withSpend.length) return [];
     const maxSpend = Math.max(...withSpend.map(c=>Number(c.spend)),1);
-    return withSpend.sort((a,b)=>{const pA=a.leads_api>0?a.leads_api/a.spend:0;const pB=b.leads_api>0?b.leads_api/b.spend:0;if(pA!==pB)return pB-pA;return b.spend-a.spend;}).slice(0,5).map(c=>({
-      name: c.name.length>24?c.name.slice(0,24)+'…':c.name,
-      fullName: c.name,
-      spend: `R$ ${Number(c.spend||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,
-      leads: c.leads_api||0,
-      cpl: c.leads_api>0&&c.spend>0 ? `R$ ${(c.spend/c.leads_api).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—',
-      perf: Math.round((Number(c.spend)/maxSpend)*100),
-    }));
-  }, [metaCampaigns]);
+    return withSpend.sort((a,b)=>{const pA=a.leads_api>0?a.leads_api/a.spend:0;const pB=b.leads_api>0?b.leads_api/b.spend:0;if(pA!==pB)return pB-pA;return b.spend-a.spend;}).slice(0,5).map(c=>{
+      // Conta leads no CRM pela utm_campaign (mais rápido que FB API, sem delay)
+      const nameLower = c.name.toLowerCase().split('|')[0].trim();
+      const leadsCRM = filtered.filter(l=>{
+        const la = l as any;
+        const camp = (la.utm_campaign||'').toLowerCase().split('|')[0].trim();
+        return camp && camp.includes(nameLower.slice(0,20));
+      }).length;
+      const leadsCount = leadsCRM || c.leads_api||0;
+      return {
+        name: c.name.length>24?c.name.slice(0,24)+'…':c.name,
+        fullName: c.name,
+        spend: `R$ ${Number(c.spend||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,
+        leads: leadsCount,
+        cpl: leadsCount>0&&c.spend>0 ? `R$ ${(c.spend/leadsCount).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—',
+        perf: Math.round((Number(c.spend)/maxSpend)*100),
+        isCRM: leadsCRM > 0,
+      };
+    });
+  }, [metaCampaigns, filtered]);
 
   const periodLabel = selectedPeriod==='custom'&&customFrom&&customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
 
@@ -340,7 +372,7 @@ export default function Dashboard() {
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
             { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
             { label:'CPL Ads', value:metaLoading?'…':(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length>0?`R$ ${(spend/filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —'), trend:'Real Time', up:true, sub:'Base Sistema' },
-            { label:'Aprovados', value:loading?'…':String(approved), trend:`${convRate}%`, up:Number(convRate)>0, sub:'conversão' },
+            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?`R$ ${(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?'custo/revendedora':'conversão' },
           ].map((c,i)=>(
             <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'14px':'20px', border:`1px solid ${border}` }}>
               <p style={{ fontSize:'12px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
@@ -403,7 +435,7 @@ export default function Dashboard() {
                 );
               })}
               <div style={{ marginTop:'4px', background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)', border:`1px solid ${border}`, borderRadius:'10px', padding:'14px 16px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom: spend > 0 && approved > 0 ? '10px' : 0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
                   <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'rgba(34,197,94,0.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                     <TrendingUp style={{ width:'18px', height:'18px', color:'#22c55e' }}/>
                   </div>
@@ -412,14 +444,7 @@ export default function Dashboard() {
                     <span style={{ fontSize:'22px', fontWeight:800, color:'#22c55e' }}>{convRate}%</span>
                   </div>
                 </div>
-                {spend > 0 && approved > 0 && (
-                  <div style={{ paddingTop:'10px', borderTop:`1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <span style={{ fontSize:'11px', color:txtLow, fontWeight:500 }}>Custo por revendedora</span>
-                    <span style={{ fontSize:'16px', fontWeight:700, color:txtHi }}>
-                      R$ {(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 })}
-                    </span>
-                  </div>
-                )}
+
               </div>
             </div>
           </div>
@@ -500,8 +525,8 @@ export default function Dashboard() {
                           <td style={{ padding:'9px 6px 9px 0', fontSize:'12px', color:txtMid, whiteSpace:'nowrap', overflow:'hidden' }}>{row.spend}</td>
                           <td style={{ padding:'9px 6px 9px 0', fontSize:'12px' }}>
                             {row.leads>0
-                              ? <button onClick={()=>goToLeads(row.fullName)} style={{ background:'none', border:'none', cursor:'pointer', color:'#2563eb', fontWeight:600, fontSize:'12px', padding:0, fontFamily:'inherit', textDecoration:'underline' }}>{row.leads}</button>
-                              : <span style={{ color:txtMid }}>{row.leads}</span>
+                              ? <button onClick={()=>goToLeads(row.fullName)} style={{ background:'none', border:'none', cursor:'pointer', color:(row as any).isCRM?'#10b981':'#2563eb', fontWeight:600, fontSize:'12px', padding:0, fontFamily:'inherit', textDecoration:'underline' }} >{row.leads}</button>
+                              : <span style={{ color:txtMid }}>0</span>
                             }
                           </td>
                           <td style={{ padding:'9px 6px 9px 0', fontSize:'12px', color:txtMid, whiteSpace:'nowrap', overflow:'hidden' }}>{row.cpl}</td>

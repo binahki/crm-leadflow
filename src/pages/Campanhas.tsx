@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 
 interface AdSet {
@@ -14,347 +14,169 @@ interface AdSet {
 interface Ad {
   id: string; name: string; status: string;
   spend: number; leads_api: number; cpl: number; ctr: number; thumbnail_url: string | null;
-  adset_id?: string;
 }
 interface BreakdownItem { label: string; leads: number; spend: number; cpl: number; }
-interface InsightData {
-  age: BreakdownItem[];
-  gender: BreakdownItem[];
-  placement: BreakdownItem[];
-  device: BreakdownItem[];
-}
+interface InsightData { age: BreakdownItem[]; gender: BreakdownItem[]; placement: BreakdownItem[]; device: BreakdownItem[]; }
 interface Campaign {
   id: string; name: string; status: string;
   spend: number; impressions: number; clicks: number; ctr: number; cpm: number;
   leads_api: number; cpl?: number; adsets?: AdSet[]; ads?: Ad[];
 }
 
-const META_TOKEN = import.meta.env.VITE_META_TOKEN;
+const META_TOKEN  = import.meta.env.VITE_META_TOKEN;
 const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
-const LEAD_ACTIONS = ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'];
+const LEAD_ACTIONS = ['lead','offsite_conversion.fb_pixel_lead','onsite_conversion.lead_grouped'];
 
 const PERIOD_OPTIONS = [
-  { label: 'Hoje', value: 'today' },
-  { label: 'Ontem', value: 'yesterday' },
-  { label: '7 dias', value: 'last_7d' },
-  { label: '30 dias', value: 'last_30d' },
-  { label: 'Este mês', value: 'this_month' },
+  { label:'Hoje',      value:'today' },
+  { label:'Ontem',     value:'yesterday' },
+  { label:'7 dias',   value:'last_7d' },
+  { label:'30 dias',  value:'last_30d' },
+  { label:'Este mês', value:'this_month' },
 ];
 
-function fmt(n: number) { return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const PERIOD_MAP: Record<string,string> = {
+  today:'today', yesterday:'yesterday', last_7d:'7days', last_30d:'30days', this_month:'month',
+};
+
+function fmt(n: number) { return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtInt(n: number) { return n.toLocaleString('pt-BR'); }
-function getLeads(actions: any[]) { return parseInt(actions?.find((a:any) => LEAD_ACTIONS.includes(a.action_type))?.value || '0'); }
+function getLeads(actions: any[]) { return parseInt(actions?.find((a:any)=>LEAD_ACTIONS.includes(a.action_type))?.value||'0'); }
 
-function parseLeadDate(str?: string | null): Date {
-  if (!str) return new Date(0);
-  if (str.includes('T')) return new Date(str);
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-  if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; return new Date(Number(y), Number(mo)-1, Number(d), Number(h), Number(mi)); }
-  return new Date(str);
+// ── Datas Brasília ────────────────────────────────────────────
+function parseLeadDateCamp(str?: string|null): Date {
+  try {
+    if (!str) return new Date(0);
+    if (str.includes('T')) { const d=new Date(str); return isNaN(d.getTime())?new Date(0):d; }
+    if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
+      const d=new Date(str.replace(' ','T').replace('+00:00','Z').replace('+00','Z'));
+      return isNaN(d.getTime())?new Date(0):d;
+    }
+    const d=new Date(str); return isNaN(d.getTime())?new Date(0):d;
+  } catch { return new Date(0); }
 }
-
-function parseLeadDateCamp(str?: string | null): Date {
-  if (!str) return new Date(0);
-  if (str.includes('T')) return new Date(str);
-  if (/^\d{4}-\d{2}-\d{2} /.test(str))
-    return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z'));
-  return new Date(str);
+function leadDateBRCamp(str?: string|null): string {
+  try { const d=parseLeadDateCamp(str); if(d.getTime()===0)return ''; return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(d); } catch { return ''; }
 }
-function leadDateBRCamp(str?: string | null): string {
-  const d = parseLeadDateCamp(str);
-  if (d.getTime() === 0) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
-}
-function todayBRCamp(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-}
-function subDaysCamp(s: string, n: number): string {
-  const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0,10);
+function todayBRCamp(): string { return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date()); }
+function subDaysCamp(s:string,n:number): string {
+  try { const d=new Date(s+'T12:00:00Z'); if(isNaN(d.getTime()))return s; d.setUTCDate(d.getUTCDate()-n); return d.toISOString().slice(0,10); } catch { return s; }
 }
 function filterLeadsByPreset(leads: any[], preset: string) {
-  const today = todayBRCamp();
-  const ok = (l: any, a: string, b: string) => { const d = leadDateBRCamp(l.created_at); return !!d && d >= a && d <= b; };
-  switch (preset) {
-    case 'today':      return leads.filter(l => ok(l, today, today));
-    case 'yesterday':  { const y=subDaysCamp(today,1); return leads.filter(l => ok(l,y,y)); }
-    case 'last_7d':    { return leads.filter(l => ok(l,subDaysCamp(today,6),today)); }
-    case 'last_30d':   { return leads.filter(l => ok(l,subDaysCamp(today,29),today)); }
-    case 'this_month': { return leads.filter(l => ok(l,today.slice(0,7)+'-01',today)); }
+  const today=todayBRCamp();
+  const ok=(l:any,a:string,b:string)=>{const d=leadDateBRCamp(l.created_at);return !!d&&d>=a&&d<=b;};
+  switch(preset){
+    case 'today':      return leads.filter(l=>ok(l,today,today));
+    case 'yesterday':  {const y=subDaysCamp(today,1);return leads.filter(l=>ok(l,y,y));}
+    case 'last_7d':    return leads.filter(l=>ok(l,subDaysCamp(today,6),today));
+    case 'last_30d':   return leads.filter(l=>ok(l,subDaysCamp(today,29),today));
+    case 'this_month': return leads.filter(l=>ok(l,today.slice(0,7)+'-01',today));
     default: return leads;
   }
 }
 
-// ── Fetch campanhas com filhos ────────────────────────────────
-// Estratégia: busca campanhas + adsets + ads da conta toda de uma vez
-// e agrupa no client por campaign_id — evita chamadas individuais que dão 400
+// ── Fetch campanhas ───────────────────────────────────────────
 async function fetchCampaignsWithChildren(datePreset: string): Promise<Campaign[]> {
-  const tok = META_TOKEN;
-  const base = 'https://graph.facebook.com/v18.0';
-  const dp = datePreset;
-
-  function getLeadsFromActions(actions: any[]) {
-    return parseInt(actions?.find((a:any) => LEAD_ACTIONS.includes(a.action_type))?.value || '0');
-  }
-
+  const tok=META_TOKEN; const base='https://graph.facebook.com/v18.0'; const dp=datePreset;
+  function getLeadsFromActions(actions:any[]){return parseInt(actions?.find((a:any)=>LEAD_ACTIONS.includes(a.action_type))?.value||'0');}
   try {
-    // 1. Campanhas com insights embutidos via fields
-    const campUrl = new URL(`${base}/act_${META_ACCOUNT}/campaigns`);
-    campUrl.searchParams.set('fields', `id,name,status,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
-    campUrl.searchParams.set('limit', '20');
-    campUrl.searchParams.set('access_token', tok);
-    const campRes = await fetch(campUrl.toString());
-    const campData = await campRes.json();
-    if (!campData.data?.length) return [];
+    const campUrl=new URL(`${base}/act_${META_ACCOUNT}/campaigns`);
+    campUrl.searchParams.set('fields',`id,name,status,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
+    campUrl.searchParams.set('limit','20'); campUrl.searchParams.set('access_token',tok);
+    const campData=await(await fetch(campUrl.toString())).json();
+    if(!campData.data?.length) return [];
 
-    // 2. Adsets da conta com insights embutidos
-    const asUrl = new URL(`${base}/act_${META_ACCOUNT}/adsets`);
-    asUrl.searchParams.set('fields', `id,name,status,campaign_id,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
-    asUrl.searchParams.set('limit', '50');
-    asUrl.searchParams.set('access_token', tok);
-    const asRes = await fetch(asUrl.toString());
-    const asData = await asRes.json();
+    const asUrl=new URL(`${base}/act_${META_ACCOUNT}/adsets`);
+    asUrl.searchParams.set('fields',`id,name,status,campaign_id,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
+    asUrl.searchParams.set('limit','50'); asUrl.searchParams.set('access_token',tok);
+    const asData=await(await fetch(asUrl.toString())).json();
 
-    // 3. Ads da conta com insights embutidos + thumbnail
-    const adUrl = new URL(`${base}/act_${META_ACCOUNT}/ads`);
-    adUrl.searchParams.set('fields', `id,name,status,campaign_id,adset_id,creative{thumbnail_url},insights.date_preset(${dp}){spend,ctr,actions}`);
-    adUrl.searchParams.set('limit', '50');
-    adUrl.searchParams.set('access_token', tok);
-    const adRes = await fetch(adUrl.toString());
-    const adData = await adRes.json();
+    const adUrl=new URL(`${base}/act_${META_ACCOUNT}/ads`);
+    adUrl.searchParams.set('fields',`id,name,status,campaign_id,adset_id,creative{thumbnail_url},insights.date_preset(${dp}){spend,ctr,actions}`);
+    adUrl.searchParams.set('limit','50'); adUrl.searchParams.set('access_token',tok);
+    const adData=await(await fetch(adUrl.toString())).json();
 
-    // Agrupa adsets por campaign_id
-    const adsetsByCampaign: Record<string, AdSet[]> = {};
-    for (const as of (asData.data || []) as any[]) {
-      const cid = as.campaign_id;
-      if (!cid) continue;
-      if (!adsetsByCampaign[cid]) adsetsByCampaign[cid] = [];
-      const ins = as.insights?.data?.[0];
-      const spend = parseFloat(ins?.spend || '0');
-      const leads = getLeadsFromActions(ins?.actions || []);
-      adsetsByCampaign[cid].push({
-        id: as.id, name: as.name, status: as.status,
-        spend, impressions: parseInt(ins?.impressions || '0'),
-        clicks: parseInt(ins?.clicks || '0'), ctr: parseFloat(ins?.ctr || '0'),
-        leads_api: leads, cpl: leads > 0 ? spend / leads : 0,
-      });
+    const adsetsByCampaign:Record<string,AdSet[]>={};
+    for(const as of(asData.data||[])as any[]){
+      const cid=as.campaign_id; if(!cid)continue;
+      if(!adsetsByCampaign[cid])adsetsByCampaign[cid]=[];
+      const ins=as.insights?.data?.[0];
+      const spend=parseFloat(ins?.spend||'0'); const leads=getLeadsFromActions(ins?.actions||[]);
+      adsetsByCampaign[cid].push({id:as.id,name:as.name,status:as.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),leads_api:leads,cpl:leads>0?spend/leads:0});
     }
 
-    // Agrupa ads por campaign_id e por adset_id
-    const adsByCampaign: Record<string, Ad[]> = {};
-    const adsByAdset: Record<string, Ad[]> = {};
-    for (const ad of (adData.data || []) as any[]) {
-      const cid = ad.campaign_id;
-      if (!cid) continue;
-      if (!adsByCampaign[cid]) adsByCampaign[cid] = [];
-      const ins = ad.insights?.data?.[0];
-      const spend = parseFloat(ins?.spend || '0');
-      const leads = getLeadsFromActions(ins?.actions || []);
-      const adObj: Ad = {
-        id: ad.id, name: ad.name, status: ad.status,
-        spend, leads_api: leads, cpl: leads > 0 ? spend / leads : 0,
-        ctr: parseFloat(ins?.ctr || '0'),
-        thumbnail_url: ad.creative?.thumbnail_url || null,
-        adset_id: ad.adset_id || undefined,
-      };
+    const adsByCampaign:Record<string,Ad[]>={}; const adsByAdset:Record<string,Ad[]>={};
+    for(const ad of(adData.data||[])as any[]){
+      const cid=ad.campaign_id; if(!cid)continue;
+      if(!adsByCampaign[cid])adsByCampaign[cid]=[];
+      const ins=ad.insights?.data?.[0]; const spend=parseFloat(ins?.spend||'0'); const leads=getLeadsFromActions(ins?.actions||[]);
+      const adObj:Ad={id:ad.id,name:ad.name,status:ad.status,spend,leads_api:leads,cpl:leads>0?spend/leads:0,ctr:parseFloat(ins?.ctr||'0'),thumbnail_url:ad.creative?.thumbnail_url||null};
       adsByCampaign[cid].push(adObj);
-      // Também agrupa por adset
-      const asid = ad.adset_id;
-      if (asid) {
-        if (!adsByAdset[asid]) adsByAdset[asid] = [];
-        adsByAdset[asid].push(adObj);
-      }
+      const asid=ad.adset_id; if(asid){if(!adsByAdset[asid])adsByAdset[asid]=[];adsByAdset[asid].push(adObj);}
     }
 
-    // Monta campanhas com filhos
-    const results: Campaign[] = [];
-    for (const c of campData.data as any[]) {
-      const ins = c.insights?.data?.[0];
-      const spend = parseFloat(ins?.spend || '0');
-      const leads = getLeadsFromActions(ins?.actions || []);
-      const adsets = (adsetsByCampaign[c.id] || []).map(as => ({ ...as, ads: (adsByAdset[as.id] || []).sort((a,b) => b.leads_api - a.leads_api || (a.cpl||999) - (b.cpl||999)) })).sort((a,b) => b.leads_api - a.leads_api || (a.cpl||999) - (b.cpl||999));
-      const ads    = (adsByCampaign[c.id]    || []).sort((a,b) => b.leads_api - a.leads_api || (a.cpl||999) - (b.cpl||999));
-      results.push({
-        id: c.id, name: c.name, status: c.status,
-        spend, impressions: parseInt(ins?.impressions || '0'),
-        clicks: parseInt(ins?.clicks || '0'), ctr: parseFloat(ins?.ctr || '0'),
-        cpm: parseFloat(ins?.cpm || '0'),
-        leads_api: leads, cpl: leads > 0 ? spend / leads : 0,
-        adsets, ads,
-      });
+    const results:Campaign[]=[];
+    for(const c of campData.data as any[]){
+      const ins=c.insights?.data?.[0]; const spend=parseFloat(ins?.spend||'0'); const leads=getLeadsFromActions(ins?.actions||[]);
+      const adsets=(adsetsByCampaign[c.id]||[]).map(as=>({...as,ads:(adsByAdset[as.id]||[]).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999))})).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999));
+      const ads=(adsByCampaign[c.id]||[]).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999));
+      results.push({id:c.id,name:c.name,status:c.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),cpm:parseFloat(ins?.cpm||'0'),leads_api:leads,cpl:leads>0?spend/leads:0,adsets,ads});
     }
-
-    return results
-      .filter(c => c.spend > 0 || c.status === 'ACTIVE')
-      .sort((a,b) => b.leads_api - a.leads_api || (a.cpl||999) - (b.cpl||999) || b.spend - a.spend);
-
-  } catch (e) { console.error('[Campanhas]', e); return []; }
+    return results.filter(c=>c.spend>0||c.status==='ACTIVE').sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);
+  } catch(e){console.error('[Campanhas]',e);return [];}
 }
 
-// ── Fetch breakdowns para insights reais ─────────────────────
-async function fetchInsightData(datePreset: string): Promise<InsightData> {
-  const base = `https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights`;
-  const fields = 'spend,actions';
-  const token = `access_token=${META_TOKEN}`;
-  const preset = `date_preset=${datePreset}`;
-
-  function parseBreakdown(data: any[], labelKey: string): BreakdownItem[] {
-    const map: Record<string, {leads:number;spend:number}> = {};
-    for (const row of data) {
-      const label = row[labelKey] || 'Desconhecido';
-      const leads = getLeads(row.actions||[]);
-      const spend = parseFloat(row.spend||'0');
-      if (!map[label]) map[label] = {leads:0,spend:0};
-      map[label].leads += leads;
-      map[label].spend += spend;
-    }
-    return Object.entries(map)
-      .map(([label,{leads,spend}]) => ({ label, leads, spend, cpl:leads>0?spend/leads:0 }))
-      .sort((a,b) => b.leads-a.leads || a.cpl-b.cpl)
-      .slice(0,5);
+// ── Fetch insights ────────────────────────────────────────────
+async function fetchInsightData(datePreset:string):Promise<InsightData>{
+  const base=`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights`;
+  const fields='spend,actions'; const token=`access_token=${META_TOKEN}`; const preset=`date_preset=${datePreset}`;
+  function parseBreakdown(data:any[],labelKey:string):BreakdownItem[]{
+    const map:Record<string,{leads:number;spend:number}>={};
+    for(const row of data){const label=row[labelKey]||'Desconhecido';const leads=getLeads(row.actions||[]);const spend=parseFloat(row.spend||'0');if(!map[label])map[label]={leads:0,spend:0};map[label].leads+=leads;map[label].spend+=spend;}
+    return Object.entries(map).map(([label,{leads,spend}])=>({label,leads,spend,cpl:leads>0?spend/leads:0})).sort((a,b)=>b.leads-a.leads||a.cpl-b.cpl).slice(0,5);
   }
-
-  const PLACEMENT_LABELS: Record<string,string> = {
-    'feed':'Feed do Facebook','facebook_stories':'Stories Facebook','instagram_stories':'Stories Instagram','instagram_stream':'Feed do Instagram','reels':'Reels','marketplace':'Marketplace','right_hand_column':'Coluna direita','video_feeds':'Vídeo feeds','instagram_reels':'Reels Instagram','audience_network_rewarded_video':'Audience Network',
-  };
-  const GENDER_LABELS: Record<string,string> = { 'male':'Homens','female':'Mulheres','unknown':'Desconhecido' };
-
-  try {
-    const [ageRes, genderRes, placementRes, deviceRes] = await Promise.all([
-      fetch(`${base}?fields=${fields}&breakdowns=age&${preset}&${token}&limit=50`),
-      fetch(`${base}?fields=${fields}&breakdowns=gender&${preset}&${token}&limit=10`),
-      fetch(`${base}?fields=${fields}&breakdowns=publisher_platform,platform_position&${preset}&${token}&limit=50`),
-      fetch(`${base}?fields=${fields}&breakdowns=device_platform&${preset}&${token}&limit=20`),
-    ]);
-    const [ageData, genderData, placementData, deviceData] = await Promise.all([ageRes.json(), genderRes.json(), placementRes.json(), deviceRes.json()]);
-
-    const age = parseBreakdown(ageData.data||[], 'age');
-    const gender = parseBreakdown(genderData.data||[], 'gender').map(g => ({ ...g, label: GENDER_LABELS[g.label]||g.label }));
-    const placement = parseBreakdown((placementData.data||[]).map((r:any) => ({...r, placement_key:`${r.publisher_platform}/${r.platform_position}`})), 'placement_key')
-      .map(p => ({ ...p, label: PLACEMENT_LABELS[p.label.split('/')[1]] || PLACEMENT_LABELS[p.label] || p.label }));
-    const device = parseBreakdown(deviceData.data||[], 'device_platform');
-
-    return { age, gender, placement, device };
-  } catch {
-    return { age:[], gender:[], placement:[], device:[] };
-  }
+  const PLACEMENT_LABELS:Record<string,string>={'feed':'Feed do Facebook','instagram_stream':'Feed do Instagram','instagram_stories':'Stories Instagram','facebook_stories':'Stories Facebook','reels':'Reels','instagram_reels':'Reels Instagram','marketplace':'Marketplace'};
+  const GENDER_LABELS:Record<string,string>={male:'Homens',female:'Mulheres',unknown:'Desconhecido'};
+  try{
+    const[ageRes,genderRes,placementRes,deviceRes]=await Promise.all([fetch(`${base}?fields=${fields}&breakdowns=age&${preset}&${token}&limit=50`),fetch(`${base}?fields=${fields}&breakdowns=gender&${preset}&${token}&limit=10`),fetch(`${base}?fields=${fields}&breakdowns=publisher_platform,platform_position&${preset}&${token}&limit=50`),fetch(`${base}?fields=${fields}&breakdowns=device_platform&${preset}&${token}&limit=20`)]);
+    const[ageData,genderData,placementData,deviceData]=await Promise.all([ageRes.json(),genderRes.json(),placementRes.json(),deviceRes.json()]);
+    const age=parseBreakdown(ageData.data||[],'age');
+    const gender=parseBreakdown(genderData.data||[],'gender').map(g=>({...g,label:GENDER_LABELS[g.label]||g.label}));
+    const placement=parseBreakdown((placementData.data||[]).map((r:any)=>({...r,placement_key:`${r.publisher_platform}/${r.platform_position}`})),'placement_key').map(p=>({...p,label:PLACEMENT_LABELS[p.label.split('/')[1]]||PLACEMENT_LABELS[p.label]||p.label}));
+    const device=parseBreakdown(deviceData.data||[],'device_platform');
+    return{age,gender,placement,device};
+  }catch{return{age:[],gender:[],placement:[],device:[]};}
 }
 
-// ── Gera análise textual como gestor de tráfego ──────────────
-function generateAnalysis(campaigns: Campaign[], insightData: InsightData, totalSpend: number, totalLeads: number, avgCPL: number): string[] {
-  const insights: string[] = [];
-  if (!campaigns.length) return ['Nenhuma campanha com dados disponíveis para análise.'];
-
-  // Performance geral
-  if (avgCPL > 0 && avgCPL <= 15) insights.push(`✅ CPL médio de R$ ${fmt(avgCPL)} está excelente. Escale as campanhas ativas com confiança — aumentar o orçamento em até 30% ao dia sem quebrar o aprendizado.`);
-  else if (avgCPL > 0 && avgCPL <= 30) insights.push(`📊 CPL médio de R$ ${fmt(avgCPL)} está aceitável. Foque em otimizar os conjuntos com CPL mais alto antes de escalar.`);
-  else if (avgCPL > 30) insights.push(`⚠️ CPL médio de R$ ${fmt(avgCPL)} está elevado. Revise os criativos e a segmentação — o problema provavelmente está no público ou na página de destino.`);
-
-  // Melhor e pior campanha
-  const withLeads = campaigns.filter(c => c.leads_api > 0);
-  if (withLeads.length > 0) {
-    const best = withLeads[0];
-    insights.push(`🏆 Melhor campanha: "${best.name.slice(0,45)}" com ${best.leads_api} leads a R$ ${fmt(best.leads_api>0?best.spend/best.leads_api:0)} CPL. Essa é a campanha para duplicar e testar variações.`);
-    if (withLeads.length > 1) {
-      const worst = [...withLeads].sort((a,b) => (b.spend/b.leads_api)-(a.spend/a.leads_api))[0];
-      if (worst.id !== best.id) insights.push(`📉 Campanha com CPL mais caro: "${worst.name.slice(0,40)}" a R$ ${fmt(worst.spend/worst.leads_api)}. Considere pausar e redirecionar o budget para a melhor.`);
-    }
-  }
-
-  const inactive = campaigns.filter(c => c.spend > totalSpend * 0.15 && c.leads_api === 0);
-  if (inactive.length > 0) insights.push(`🔴 "${inactive[0].name.slice(0,40)}" consumiu R$ ${fmt(inactive[0].spend)} sem gerar nenhum lead. Pause imediatamente e revise o criativo ou o público.`);
-
-  // Análise de idade
-  if (insightData.age.length > 0) {
-    const bestAge = insightData.age[0];
-    const agesWithLeads = insightData.age.filter(a => a.leads > 0);
-    if (bestAge.leads > 0) {
-      insights.push(`👥 Faixa etária mais eficiente: ${bestAge.label} com ${bestAge.leads} leads${bestAge.cpl>0?` (CPL R$ ${fmt(bestAge.cpl)})`:''}. Concentre a verba nessa faixa.`);
-    }
-    if (agesWithLeads.length > 1) {
-      const second = agesWithLeads[1];
-      insights.push(`📌 Segunda melhor faixa etária: ${second.label} com ${second.leads} leads. Juntas, essas duas faixas representam seu público principal — ajuste a segmentação para priorizar.`);
-    }
-    const badAge = insightData.age.find(a => a.spend > totalSpend*0.1 && a.leads === 0);
-    if (badAge) insights.push(`🚫 A faixa ${badAge.label} consumiu R$ ${fmt(badAge.spend)} sem converter. Exclua essa faixa etária dos próximos conjuntos para reduzir desperdício.`);
-  }
-
-  // Análise de gênero
-  if (insightData.gender.length > 0) {
-    const withGLeads = insightData.gender.filter(g => g.leads > 0);
-    if (withGLeads.length > 0) {
-      const bestG = withGLeads[0];
-      const totalGLeads = withGLeads.reduce((s,g) => s+g.leads, 0);
-      const pct = totalGLeads > 0 ? Math.round(bestG.leads/totalGLeads*100) : 0;
-      insights.push(`⚡ ${pct}% dos leads vêm de ${bestG.label}${bestG.cpl>0?` com CPL de R$ ${fmt(bestG.cpl)}`:''}. ${pct > 70 ? 'Segmente exclusivamente para esse gênero para reduzir CPL.' : 'Público equilibrado — mantenha segmentação aberta.'}`);
-    }
-  }
-
-  // Análise de posicionamento
-  if (insightData.placement.length > 0) {
-    const bestP = insightData.placement.filter(p => p.leads > 0)[0];
-    const worstP = insightData.placement.find(p => p.spend > 20 && p.leads === 0);
-    if (bestP) insights.push(`📱 Melhor posicionamento: ${bestP.label} com ${bestP.leads} leads${bestP.cpl>0?` (CPL R$ ${fmt(bestP.cpl)})`:''}. Crie campanhas segmentadas por posicionamento para isolar e escalar esse canal.`);
-    if (worstP) insights.push(`❌ Posicionamento ${worstP.label} gastou R$ ${fmt(worstP.spend)} sem leads. Remova manualmente dos conjuntos ativos em Posicionamentos Manuais.`);
-  }
-
-  // Análise de device
-  if (insightData.device.length > 0) {
-    const bestD = insightData.device.filter(d => d.leads > 0)[0];
-    if (bestD) insights.push(`📲 ${bestD.label} é o dispositivo que mais converte${bestD.cpl>0?` (CPL R$ ${fmt(bestD.cpl)})`:''}. Garanta que a landing page esteja 100% otimizada para esse device.`);
-  }
-
-  // Públicos potenciais para testar
-  insights.push(`💡 Sugestões de públicos para testar: Lookalike 1% das leads aprovadas, mulheres 25-44 interessadas em moda/beleza/empreendedorismo, retargeting de quem visitou a página do quiz mas não completou.`);
-
-  // CTR
-  const lowCTR = campaigns.filter(c => c.ctr < 1 && c.impressions > 5000);
-  if (lowCTR.length > 0) insights.push(`🎯 ${lowCTR.length} campanha(s) com CTR abaixo de 1% e alto volume de impressões. O hook dos criativos não está chamando atenção. Teste variações de thumbnail e primeiros 3 segundos do vídeo.`);
-
+function generateAnalysis(campaigns:Campaign[],insightData:InsightData,totalSpend:number,totalLeads:number,avgCPL:number):string[]{
+  const insights:string[]=[]; if(!campaigns.length)return['Nenhuma campanha com dados disponíveis para análise.'];
+  if(avgCPL>0&&avgCPL<=15)insights.push(`✅ CPL médio de R$ ${fmt(avgCPL)} está excelente. Escale as campanhas ativas com confiança.`);
+  else if(avgCPL>0&&avgCPL<=30)insights.push(`📊 CPL médio de R$ ${fmt(avgCPL)} está aceitável. Otimize os conjuntos com CPL mais alto antes de escalar.`);
+  else if(avgCPL>30)insights.push(`⚠️ CPL médio de R$ ${fmt(avgCPL)} está elevado. Revise criativos e segmentação.`);
+  const withLeads=campaigns.filter(c=>c.leads_api>0);
+  if(withLeads.length>0){const best=withLeads[0];insights.push(`🏆 Melhor campanha: "${best.name.slice(0,45)}" com ${best.leads_api} leads a R$ ${fmt(best.leads_api>0?best.spend/best.leads_api:0)} CPL.`);if(withLeads.length>1){const worst=[...withLeads].sort((a,b)=>(b.spend/b.leads_api)-(a.spend/a.leads_api))[0];if(worst.id!==best.id)insights.push(`📉 CPL mais caro: "${worst.name.slice(0,40)}" a R$ ${fmt(worst.spend/worst.leads_api)}. Redirecione o budget para a melhor.`);}}
+  const inactive=campaigns.filter(c=>c.spend>totalSpend*0.15&&c.leads_api===0);
+  if(inactive.length>0)insights.push(`🔴 "${inactive[0].name.slice(0,40)}" consumiu R$ ${fmt(inactive[0].spend)} sem gerar nenhum lead. Pause e revise.`);
+  if(insightData.age.length>0){const bestAge=insightData.age[0];if(bestAge.leads>0)insights.push(`👥 Faixa etária mais eficiente: ${bestAge.label} com ${bestAge.leads} leads${bestAge.cpl>0?` (CPL R$ ${fmt(bestAge.cpl)})`:''}.`);}
+  if(insightData.gender.length>0){const wG=insightData.gender.filter(g=>g.leads>0);if(wG.length>0){const bG=wG[0];const tot=wG.reduce((s,g)=>s+g.leads,0);const pct=tot>0?Math.round(bG.leads/tot*100):0;insights.push(`⚡ ${pct}% dos leads vêm de ${bG.label}${bG.cpl>0?` (CPL R$ ${fmt(bG.cpl)})`:''}.`);}}
+  if(insightData.placement.length>0){const bP=insightData.placement.filter(p=>p.leads>0)[0];if(bP)insights.push(`📱 Melhor posicionamento: ${bP.label} com ${bP.leads} leads${bP.cpl>0?` (CPL R$ ${fmt(bP.cpl)})`:''}.`);}
+  insights.push(`💡 Sugestões: Lookalike 1% das leads aprovadas, mulheres 25-44 interessadas em moda/beleza/empreendedorismo, retargeting de visitantes do quiz.`);
+  const lowCTR=campaigns.filter(c=>c.ctr<1&&c.impressions>5000);
+  if(lowCTR.length>0)insights.push(`🎯 ${lowCTR.length} campanha(s) com CTR abaixo de 1%. Teste variações de thumbnail e primeiros 3 segundos do vídeo.`);
   return insights;
 }
 
-// ── FilterDropdown com position fixed ────────────────────────
-function FilterDropdown({ value, options, onChange, dark }: { value:string; options:{label:string;value:string}[]; onChange:(v:string)=>void; dark:boolean }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top:0, left:0, width:180 });
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const sel = options.find(o => o.value === value);
-  function handleOpen() {
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      const mw = 180;
-      let left = r.right - mw;
-      if (left < 8) left = 8;
-      if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
-      setPos({ top: r.bottom + 6, left, width: mw });
-    }
-    setOpen(v => !v);
-  }
-  return (
-    <div style={{ position:'relative' }}>
-      <button ref={btnRef} onClick={handleOpen} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'8px 14px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#d4d4d8':'#374151', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
-        {sel?.label}<ChevronDown style={{ width:'14px', height:'14px', transform:open?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
-      </button>
-      {open && (<>
-        <div onClick={()=>setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
-        <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
-          {options.map(o => (<button key={o.value} onClick={()=>{ onChange(o.value); setOpen(false); }} style={{ width:'100%', padding:'7px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#60a5fa':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>{o.label}</button>))}
-        </div>
-      </>)}
-    </div>
-  );
+function FilterDropdown({value,options,onChange,dark}:{value:string;options:{label:string;value:string}[];onChange:(v:string)=>void;dark:boolean}){
+  const[open,setOpen]=useState(false);const[pos,setPos]=useState({top:0,left:0,width:180});const btnRef=useRef<HTMLButtonElement>(null);const sel=options.find(o=>o.value===value);
+  function handleOpen(){if(btnRef.current){const r=btnRef.current.getBoundingClientRect();const mw=180;let left=r.right-mw;if(left<8)left=8;if(left+mw>window.innerWidth-8)left=window.innerWidth-mw-8;setPos({top:r.bottom+6,left,width:mw});}setOpen(v=>!v);}
+  return(<div style={{position:'relative'}}><button ref={btnRef} onClick={handleOpen} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,background:dark?'#111113':'#fff',color:dark?'#d4d4d8':'#374151',fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>{sel?.label}<ChevronDown style={{width:'14px',height:'14px',transform:open?'rotate(180deg)':'',transition:'transform 0.18s'}}/></button>{open&&(<><div onClick={()=>setOpen(false)} style={{position:'fixed',inset:0,zIndex:9998}}/><div style={{position:'fixed',top:pos.top,left:pos.left,width:pos.width,background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,borderRadius:'10px',padding:'4px',zIndex:9999,boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)'}}>{options.map(o=>(<button key={o.value} onClick={()=>{onChange(o.value);setOpen(false);}} style={{width:'100%',padding:'7px 10px',borderRadius:'7px',border:'none',background:value===o.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent',color:value===o.value?(dark?'#60a5fa':'#2563eb'):(dark?'#a1a1aa':'#374151'),fontSize:'13px',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>{o.label}</button>))}</div></>)}</div>);
 }
 
-function Thumbnail({ url, name, size=36 }: { url:string|null; name:string; size?:number }) {
-  const [err, setErr] = useState(false);
-  const initials = name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
-  const colors = ['#3b82f6','#8b5cf6','#f97316','#10b981','#f59e0b','#ec4899'];
-  const color = colors[name.charCodeAt(0)%colors.length];
-  if (!url||err) return <div style={{ width:size, height:size, borderRadius:'6px', background:color+'22', border:`1px solid ${color}44`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size>40?'12px':'9px', fontWeight:700, color, flexShrink:0 }}>{initials}</div>;
-  return <img src={url} alt={name} onError={()=>setErr(true)} style={{ width:size, height:size, borderRadius:'6px', objectFit:'cover', flexShrink:0, border:'1px solid rgba(0,0,0,0.08)' }}/>;
+function Thumbnail({url,name,size=36}:{url:string|null;name:string;size?:number}){
+  const[err,setErr]=useState(false);const initials=name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';const colors=['#3b82f6','#8b5cf6','#f97316','#10b981','#f59e0b','#ec4899'];const color=colors[name.charCodeAt(0)%colors.length];
+  if(!url||err)return<div style={{width:size,height:size,borderRadius:'6px',background:color+'22',border:`1px solid ${color}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>40?'12px':'9px',fontWeight:700,color,flexShrink:0}}>{initials}</div>;
+  return<img src={url} alt={name} onError={()=>setErr(true)} style={{width:size,height:size,borderRadius:'6px',objectFit:'cover',flexShrink:0,border:'1px solid rgba(0,0,0,0.08)'}}/>;
 }
-
-
 
 export default function CampanhasPage() {
   const { leads } = useAppStore();
@@ -362,7 +184,7 @@ export default function CampanhasPage() {
   const dark = theme === 'dark';
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [insightData, setInsightData] = useState<InsightData>({ age:[], gender:[], placement:[], device:[] });
+  const [insightData, setInsightData] = useState<InsightData>({age:[],gender:[],placement:[],device:[]});
   const [loading, setLoading] = useState(true);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [error, setError] = useState(false);
@@ -373,230 +195,300 @@ export default function CampanhasPage() {
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(false);
 
-  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
+  useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
-  const load = async () => {
-    setLoading(true); setError(false);
-    const data = await fetchCampaignsWithChildren(datePreset);
-    if (!data.length) setError(true);
-    setCampaigns(data);
-    setLoading(false);
-  };
+  const load=async()=>{setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
+  const loadInsights=async()=>{setLoadingInsights(true);const data=await fetchInsightData(datePreset);setInsightData(data);setLoadingInsights(false);};
+  useEffect(()=>{load();},[datePreset]); // eslint-disable-line
+  useEffect(()=>{if(activeTab==='insights')loadInsights();},[activeTab,datePreset]); // eslint-disable-line
 
-  const loadInsights = async () => {
-    setLoadingInsights(true);
-    const data = await fetchInsightData(datePreset);
-    setInsightData(data);
-    setLoadingInsights(false);
-  };
+  const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
-  useEffect(() => { load(); }, [datePreset]); // eslint-disable-line
+  // Leads do CRM filtrados pelo período
+  const filteredLeads = useMemo(()=>filterLeadsByPreset(leads,datePreset),[leads,datePreset]);
 
-  useEffect(() => {
-    if (activeTab === 'insights') loadInsights();
-  }, [activeTab, datePreset]); // eslint-disable-line
-
-  const filtered = useMemo(() => {
-    const base = statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);
-    return [...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);
-  }, [campaigns, statusFilter]);
+  // ── Mesma lógica exata do Dashboard ──────────────────────────
+  // utm_campaign contém o nome da campanha do FB (verificado no Dashboard)
+  function crmLeads(campName: string): number {
+    const nameLower = campName.toLowerCase().split('|')[0].trim();
+    return filteredLeads.filter(l => {
+      const camp = ((l as any).utm_campaign||'').toLowerCase().split('|')[0].trim();
+      return camp && camp.includes(nameLower.slice(0,20));
+    }).length;
+  }
+  function crmRevs(campName: string): number {
+    const nameLower = campName.toLowerCase().split('|')[0].trim();
+    return filteredLeads.filter(l => {
+      const camp = ((l as any).utm_campaign||'').toLowerCase().split('|')[0].trim();
+      return camp && camp.includes(nameLower.slice(0,20)) && Number((l as any).status) === 3;
+    }).length;
+  }
 
   const totalSpend = campaigns.reduce((s,c)=>s+c.spend,0);
   const totalLeads = campaigns.reduce((s,c)=>s+c.leads_api,0);
   const avgCPL = totalLeads>0?totalSpend/totalLeads:0;
   const maxSpend = Math.max(...campaigns.map(c=>c.spend),1);
-  const avgPerf = campaigns.length>0?campaigns.reduce((s,c)=>s+(c.spend/maxSpend)*100,0)/campaigns.length:0;
-  const filteredLeads = useMemo(()=>filterLeadsByPreset(leads,datePreset),[leads,datePreset]);
-  const leadsFBCount = filteredLeads.filter(l=>l.utm_source?.toUpperCase()==='FB').length;
-  const cplRealTime = leadsFBCount>0?totalSpend/leadsFBCount:0;
-  const chartData = filtered.slice(0,8).map(c=>({ name:c.name.length>14?c.name.slice(0,14)+'…':c.name, gasto:c.spend, leads:c.leads_api }));
-  const analysis = useMemo(()=>generateAnalysis(campaigns,insightData,totalSpend,totalLeads,avgCPL),[campaigns,insightData,totalSpend,totalLeads,avgCPL]);
 
-  const bg = dark?'#090909':'#f4f4f5';
-  const cardBg = dark?'#111113':'#ffffff';
-  const border = dark?'#1e1e22':'#e5e7eb';
-  const txtHi = dark?'#f4f4f5':'#111827';
-  const txtMid = dark?'#71717a':'#6b7280';
-  const txtLow = dark?'#52525b':'#9ca3af';
-  const divCls = dark?'#1e1e22':'#f3f4f6';
-  const gridLn = dark?'#1e1e22':'#f0f0f0';
-  const pad = isMobile?'16px':'32px';
+  // Cards: usa contagem CRM total do período (todos com utm_source=FB)
+  const leadsCRMTotal = filteredLeads.filter(l=>((l as any).utm_source||'').toUpperCase()==='FB').length;
+  const revsCRMTotal  = filteredLeads.filter(l=>((l as any).utm_source||'').toUpperCase()==='FB'&&Number((l as any).status)===3).length;
+  const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
+  const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
-  function toggleExpand(id: string) { setExpandedIds(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; }); }
-  function toggleExpandAdset(id: string) { setExpandedAdsetIds(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; }); }
+  // Gráfico: barras horizontais com dados CRM por campanha
+  const chartRows = useMemo(()=>{
+    return filtered.slice(0,8).map(c=>{
+      const l = crmLeads(c.name);
+      const r = crmRevs(c.name);
+      return {
+        name: c.name.length>16?c.name.slice(0,16)+'…':c.name,
+        leads: l,
+        rev:   r,
+        cpl:   l>0&&c.spend>0 ? Math.round(c.spend/l) : 0,
+        cpr:   r>0&&c.spend>0 ? Math.round(c.spend/r) : 0,
+      };
+    });
+  },[filtered,filteredLeads]); // eslint-disable-line
+
+  const analysis=useMemo(()=>generateAnalysis(campaigns,insightData,totalSpend,totalLeads,avgCPL),[campaigns,insightData,totalSpend,totalLeads,avgCPL]);
+
+  const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
+  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
+  const divCls=dark?'#1e1e22':'#f3f4f6'; const gridLn=dark?'#1e1e22':'#f0f0f0';
+  const pad=isMobile?'16px':'32px';
+  const dot=<span style={{fontSize:'11px',color:txtLow,margin:'0 2px'}}>·</span>;
+
+  function toggleExpand(id:string){setExpandedIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});}
+  function toggleExpandAdset(id:string){setExpandedAdsetIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});}
 
   return (
     <AppLayout leadCount={leads.length}>
-      <div style={{ padding:pad, background:bg, minHeight:'100vh' }}>
+      <div style={{padding:pad,background:bg,minHeight:'100vh'}}>
 
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'10px' }}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'20px',flexWrap:'wrap',gap:'10px'}}>
           <div>
-            <h1 style={{ fontSize:isMobile?'20px':'24px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0 }}>Campanhas Meta Ads</h1>
-            <p style={{ fontSize:'13px', color:txtMid, marginTop:'4px' }}>Dados em tempo real via API do Facebook</p>
+            <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
+            <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
           </div>
-          <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
             <FilterDropdown value={statusFilter} options={[{label:'Todas',value:'all'},{label:'Ativas',value:'ACTIVE'},{label:'Pausadas',value:'PAUSED'}]} onChange={setStatusFilter} dark={dark}/>
-            <button onClick={load} disabled={loading} style={{ display:'flex', alignItems:'center', gap:'6px', padding:'8px 14px', borderRadius:'10px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
-              <RefreshCw style={{ width:'14px', height:'14px', animation:loading?'spin 1s linear infinite':'' }}/>
+            <button onClick={load} disabled={loading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+              <RefreshCw style={{width:'14px',height:'14px',animation:loading?'spin 1s linear infinite':''}}/>
               {loading?'Carregando…':'Atualizar'}
             </button>
           </div>
         </div>
 
-        {/* Cards */}
-        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)', gap:isMobile?'10px':'14px', marginBottom:'16px' }}>
+        {/* Cards: Gasto | Leads | CPL | CPR */}
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
           {[
-            { label:'Gasto Total', value:loading?'…':`R$ ${fmt(totalSpend)}`, icon:DollarSign, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5' },
-            { label:'Leads (FB)', value:loading?'…':String(leadsFBCount), icon:Users, color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff' },
-            { label:'CPL Real', value:loading?'…':(cplRealTime>0?`R$ ${fmt(cplRealTime)}`:'R$ —'), icon:TrendingUp, color:'#f97316', bgC:dark?'rgba(249,115,22,0.12)':'#fff7ed' },
-            { label:'Performance', value:loading?'…':`${avgPerf.toFixed(0)}%`, icon:Zap, color:'#8b5cf6', bgC:dark?'rgba(139,92,246,0.12)':'#f5f3ff' },
+            {label:'Gasto Total',    value:loading?'…':`R$ ${fmt(totalSpend)}`,             icon:DollarSign, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5', sub:null},
+            {label:'Leads',         value:loading?'…':String(leadsCRMTotal),                icon:Users,      color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff',  sub:`período · CRM`},
+            {label:'Custo por Lead',value:loading?'…':(cplCard>0?`R$ ${fmt(cplCard)}`:'—'), icon:TrendingUp, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5',  sub:`${leadsCRMTotal} leads`},
+            {label:'Custo por Rev', value:loading?'…':(cprCard>0?`R$ ${fmt(cprCard)}`:'—'),icon:Zap,        color:'#a855f7', bgC:dark?'rgba(168,85,247,0.12)':'#faf5ff',  sub:`${revsCRMTotal} aprovadas`},
           ].map((c,i)=>(
-            <div key={i} style={{ background:cardBg, borderRadius:'16px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
-                <span style={{ fontSize:'12px', color:txtMid }}>{c.label}</span>
-                <div style={{ width:'30px', height:'30px', borderRadius:'8px', background:c.bgC, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <c.icon style={{ width:'14px', height:'14px', color:c.color }}/>
+            <div key={i} style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
+                <span style={{fontSize:'12px',color:txtMid}}>{c.label}</span>
+                <div style={{width:'30px',height:'30px',borderRadius:'8px',background:c.bgC,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <c.icon style={{width:'14px',height:'14px',color:c.color}}/>
                 </div>
               </div>
-              <p style={{ fontSize:isMobile?'20px':'24px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0 }}>{c.value}</p>
+              <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 2px'}}>{c.value}</p>
+              {c.sub&&<p style={{fontSize:'11px',color:txtLow,margin:0}}>{c.sub}</p>}
             </div>
           ))}
         </div>
 
-        {/* Chart desktop */}
-        {!isMobile && (
-          <div style={{ background:cardBg, borderRadius:'16px', padding:'20px', border:`1px solid ${border}`, marginBottom:'16px' }}>
-            <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:'0 0 16px' }}>Desempenho por Campanha</h3>
-            <div style={{ height:'180px' }}>
-              {loading?<div style={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:txtMid, fontSize:'13px' }}>Carregando…</div>
-              :chartData.length>0?(
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
-                    <XAxis dataKey="name" tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false}/>
-                    <YAxis tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false}/>
-                    <Tooltip contentStyle={{background:cardBg,border:`1px solid ${border}`,borderRadius:'12px',fontSize:'12px',color:txtHi}}/>
-                    <Bar dataKey="gasto" fill="#3b82f6" radius={[6,6,0,0]} name="Gasto (R$)"/>
-                    <Bar dataKey="leads" fill="#10b981" radius={[6,6,0,0]} name="Leads"/>
-                  </BarChart>
-                </ResponsiveContainer>
-              ):<div style={{ height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:txtMid, fontSize:'13px' }}>Nenhum dado</div>}
+        {/* Gráfico horizontal — barras por campanha */}
+        {!isMobile&&(
+          <div style={{background:cardBg,borderRadius:'16px',padding:'20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'8px'}}>
+              <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Desempenho por Campanha</h3>
+              <div style={{display:'flex',gap:'14px',alignItems:'center'}}>
+                {[{color:'#10b981',label:'Leads'},{color:'#a855f7',label:'Rev'},{color:'#3b82f6',label:'CPL (R$)'},{color:'#f97316',label:'CPR (R$)'}].map(({color,label})=>(
+                  <div key={label} style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                    <div style={{width:'8px',height:'8px',borderRadius:'2px',background:color}}/>
+                    <span style={{fontSize:'11px',color:txtMid}}>{label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+            {loading
+              ?<div style={{height:'60px',display:'flex',alignItems:'center',justifyContent:'center',color:txtMid,fontSize:'13px'}}>Carregando…</div>
+              :chartRows.length===0
+                ?<div style={{height:'60px',display:'flex',alignItems:'center',justifyContent:'center',color:txtMid,fontSize:'13px'}}>Nenhum dado</div>
+                :(()=>{
+                  const maxLeads=Math.max(...chartRows.map(r=>r.leads),1);
+                  const maxCpl=Math.max(...chartRows.map(r=>r.cpl),1);
+                  const maxCpr=Math.max(...chartRows.map(r=>r.cpr),1);
+                  return(
+                    <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+                      {chartRows.map((row,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px',alignItems:'center'}}>
+                          <span style={{fontSize:'11px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:'right',paddingRight:'10px'}}>{row.name}</span>
+                          <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                            {[
+                              {val:row.leads,max:maxLeads,color:'#10b981',fmt:(v:number)=>String(v),w:'30px'},
+                              {val:row.rev,  max:maxLeads,color:'#a855f7',fmt:(v:number)=>String(v),w:'30px'},
+                              {val:row.cpl,  max:maxCpl,  color:'#3b82f6',fmt:(v:number)=>v>0?`R$${v}`:'-',w:'50px'},
+                              {val:row.cpr,  max:maxCpr,  color:'#f97316',fmt:(v:number)=>v>0?`R$${v}`:'-',w:'50px'},
+                            ].map(({val,max,color,fmt:f,w},j)=>(
+                              <div key={j} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                                <div style={{flex:1,height:'9px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',borderRadius:'99px',overflow:'hidden'}}>
+                                  <div style={{height:'100%',width:`${(val/max)*100}%`,background:color,borderRadius:'99px',transition:'width 0.6s ease'}}/>
+                                </div>
+                                <span style={{fontSize:'11px',color,fontWeight:700,width:w,textAlign:'right',flexShrink:0}}>{f(val)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+            }
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{ background:cardBg, borderRadius:'16px', border:`1px solid ${border}`, overflow:'hidden' }}>
-          <div style={{ display:'flex', borderBottom:`1px solid ${border}`, overflowX:'auto' }}>
+        <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden'}}>
+          <div style={{display:'flex',borderBottom:`1px solid ${border}`,overflowX:'auto'}}>
             {[{key:'campanhas',label:'Campanhas',icon:TrendingUp},{key:'insights',label:'Insights',icon:Lightbulb}].map(tab=>(
-              <button key={tab.key} onClick={()=>setActiveTab(tab.key as any)} style={{ display:'flex', alignItems:'center', gap:'7px', padding:'14px 16px', border:'none', cursor:'pointer', background:activeTab===tab.key?cardBg:'transparent', color:activeTab===tab.key?txtHi:txtMid, fontSize:'13px', fontWeight:activeTab===tab.key?600:400, borderBottom:activeTab===tab.key?'2px solid #2563eb':'2px solid transparent', transition:'all 0.15s', fontFamily:'inherit', marginBottom:'-1px', whiteSpace:'nowrap' }}>
+              <button key={tab.key} onClick={()=>setActiveTab(tab.key as any)} style={{display:'flex',alignItems:'center',gap:'7px',padding:'14px 16px',border:'none',cursor:'pointer',background:activeTab===tab.key?cardBg:'transparent',color:activeTab===tab.key?txtHi:txtMid,fontSize:'13px',fontWeight:activeTab===tab.key?600:400,borderBottom:activeTab===tab.key?'2px solid #2563eb':'2px solid transparent',transition:'all 0.15s',fontFamily:'inherit',marginBottom:'-1px',whiteSpace:'nowrap'}}>
                 <tab.icon style={{width:'14px',height:'14px'}}/>{tab.label}
               </button>
             ))}
           </div>
 
           {/* Tab Campanhas */}
-          {activeTab==='campanhas' && (
+          {activeTab==='campanhas'&&(
             <div>
-              {loading?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
-              :error||filtered.length===0?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{error?'⚠️ Erro ao conectar ao Meta Ads.':'Nenhuma campanha encontrada.'}</div>
-              :filtered.map(c=>{
-                const isExpanded=expandedIds.has(c.id);
-                const perf=Math.round((c.spend/maxSpend)*100);
-                return(
-                  <div key={c.id} style={{borderBottom:`1px solid ${divCls}`}}>
-                    {/* Campanha */}
-                    <div onClick={()=>toggleExpand(c.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:isMobile?'14px':'12px 16px',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
-                      <ChevronRight style={{width:'14px',height:'14px',color:txtLow,transform:isExpanded?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                          <span style={{fontSize:'13.5px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:isMobile?'170px':'320px'}}>{c.name}</span>
-                          <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:500,background:c.status==='ACTIVE'?(dark?'rgba(16,185,129,0.15)':'#d1fae5'):(dark?'rgba(255,255,255,0.06)':'#f3f4f6'),color:c.status==='ACTIVE'?'#10b981':txtMid,flexShrink:0}}>
-                            <span style={{width:'4px',height:'4px',borderRadius:'50%',background:c.status==='ACTIVE'?'#10b981':txtLow}}/>{c.status==='ACTIVE'?'Ativa':'Pausada'}
-                          </span>
+              {loading
+                ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
+                :error||filtered.length===0
+                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{error?'⚠️ Erro ao conectar ao Meta Ads.':'Nenhuma campanha encontrada.'}</div>
+                  :filtered.map(c=>{
+                    const isExpanded=expandedIds.has(c.id);
+                    const perf=Math.round((c.spend/maxSpend)*100);
+                    const periodo=PERIOD_MAP[datePreset]||'all';
+                    const cL=crmLeads(c.name);
+                    const cR=crmRevs(c.name);
+                    const cplVal=cL>0&&c.spend>0?c.spend/cL:(c.cpl&&c.cpl>0?c.cpl:null);
+                    const cprVal=cR>0&&c.spend>0?c.spend/cR:null;
+                    return(
+                      <div key={c.id} style={{borderBottom:`1px solid ${divCls}`}}>
+                        <div onClick={()=>toggleExpand(c.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:isMobile?'14px':'12px 16px',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
+                          <ChevronRight style={{width:'14px',height:'14px',color:txtLow,transform:isExpanded?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            {/* Nome + status indicator */}
+                            <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                              {c.status==='ACTIVE'&&(
+                                <div style={{position:'relative',width:'6px',height:'6px',flexShrink:0}}>
+                                  <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#10b981'}}/>
+                                  <div style={{position:'absolute',inset:0,borderRadius:'50%',background:'#10b981',animation:'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',opacity:0.5}}/>
+                                </div>
+                              )}
+                              <span style={{fontSize:'13.5px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:isMobile?'160px':'300px'}}>{c.name}</span>
+                              {c.status!=='ACTIVE'&&(
+                                <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:500,background:dark?'rgba(255,255,255,0.06)':'#f3f4f6',color:txtMid,flexShrink:0}}>
+                                  <span style={{width:'4px',height:'4px',borderRadius:'50%',background:txtLow}}/>Pausada
+                                </span>
+                              )}
+                            </div>
+                            {/* Métricas */}
+                            <div style={{display:'flex',gap:'4px',marginTop:'5px',alignItems:'center',flexWrap:'wrap'}}>
+                              <span style={{fontSize:'12px',color:txtMid}}>R$ {fmt(c.spend)}</span>
+                              {!isMobile&&<>{dot}<span style={{fontSize:'12px',color:txtMid}}>{fmtInt(c.impressions)} imp</span>{dot}<span style={{fontSize:'12px',color:txtMid}}>{(c.ctr||0).toFixed(2)}% CTR</span></>}
+                              {dot}
+                              {/* Tag Leads — verde */}
+                              <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
+                                {cL} leads ↗
+                              </button>
+                              {cplVal&&<span style={{fontSize:'12px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(cplVal)}</span>}
+                              {dot}
+                              {/* Tag Rev — roxo */}
+                              <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}&status=3`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
+                                {cR} rev ↗
+                              </button>
+                              {cprVal&&<span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>CPR R$ {fmt(cprVal)}</span>}
+                            </div>
+                          </div>
+                          {!isMobile&&(
+                            <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
+                              <div style={{height:'4px',width:'60px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
+                                <div style={{height:'100%',width:`${perf}%`,background:perf>60?'#10b981':perf>30?'#f97316':'#3b82f6',borderRadius:'99px'}}/>
+                              </div>
+                              <span style={{fontSize:'11px',color:txtLow}}>{perf}%</span>
+                            </div>
+                          )}
                         </div>
-                        {isMobile?(
-                          <div style={{display:'flex',gap:'10px',marginTop:'4px',flexWrap:'wrap'}}>
-                            <span style={{fontSize:'12px',color:txtMid}}>R$ {fmt(c.spend)}</span>
-                            {c.leads_api>0?<button onClick={e=>{e.stopPropagation();const periodMap:Record<string,string>={'today':'today','yesterday':'yesterday','last_7d':'7days','last_30d':'30days','this_month':'month'}; navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodMap[datePreset]||'all'}`);}} style={{fontSize:'12px',color:'#10b981',fontWeight:700,background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>{c.leads_api} leads ↗</button>:<span style={{fontSize:'12px',color:txtMid}}>0 leads</span>}
-                            {c.cpl&&c.cpl>0&&<span style={{fontSize:'12px',color:txtMid}}>CPL R$ {fmt(c.cpl)}</span>}
-                          </div>
-                        ):(
-                          <div style={{display:'flex',gap:'16px',marginTop:'4px',alignItems:'center'}}>
-                            <span style={{fontSize:'12px',color:txtMid}}>R$ {fmt(c.spend)}</span>
-                            <span style={{fontSize:'12px',color:txtMid}}>{fmtInt(c.impressions)} imp</span>
-                            <span style={{fontSize:'12px',color:txtMid}}>{c.ctr.toFixed(2)}% CTR</span>
-                            {c.leads_api>0?<button onClick={e=>{e.stopPropagation();const periodMap:Record<string,string>={'today':'today','yesterday':'yesterday','last_7d':'7days','last_30d':'30days','this_month':'month'}; navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodMap[datePreset]||'all'}`);}} style={{fontSize:'12px',color:'#10b981',fontWeight:700,background:dark?'rgba(16,185,129,0.1)':'#f0fdf4',border:'1px solid rgba(16,185,129,0.25)',borderRadius:'6px',cursor:'pointer',padding:'2px 8px',fontFamily:'inherit'}}>{c.leads_api} leads ↗</button>:<span style={{fontSize:'12px',color:txtMid}}>0 leads</span>}
-                            {c.cpl&&c.cpl>0&&<span style={{fontSize:'12px',color:txtMid}}>CPL R$ {fmt(c.cpl)}</span>}
-                          </div>
-                        )}
-                      </div>
-                      {!isMobile&&(
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
-                          <div style={{height:'4px',width:'60px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                            <div style={{height:'100%',width:`${perf}%`,background:perf>60?'#10b981':perf>30?'#f97316':'#3b82f6',borderRadius:'99px'}}/>
-                          </div>
-                          <span style={{fontSize:'11px',color:txtLow}}>{perf}%</span>
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Conjuntos */}
-                    {isExpanded&&(
-                      <div style={{background:dark?'rgba(255,255,255,0.012)':'rgba(0,0,0,0.012)',borderTop:`1px solid ${divCls}`}}>
-                        {c.adsets&&c.adsets.length>0&&(
-                          <div style={{padding:isMobile?'8px 12px':'8px 16px'}}>
-                            <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px',paddingLeft:'20px'}}>Conjuntos</p>
-                            {c.adsets.map(as=>{
-                              const asEx=expandedAdsetIds.has(as.id);
-                              return(
-                                <div key={as.id} style={{marginBottom:'4px',borderRadius:'10px',border:`1px solid ${divCls}`,overflow:'hidden'}}>
-                                  <div onClick={()=>toggleExpandAdset(as.id)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 10px 9px 20px',background:dark?'rgba(255,255,255,0.015)':'rgba(0,0,0,0.01)',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
-                                    <ChevronRight style={{width:'12px',height:'12px',color:txtLow,transform:asEx?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
-                                    <div style={{width:'6px',height:'6px',borderRadius:'50%',background:as.status==='ACTIVE'?'#10b981':txtLow,flexShrink:0}}/>
-                                    <div style={{flex:1,minWidth:0}}>
-                                      <p style={{margin:0,fontSize:'12.5px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{as.name}</p>
-                                      <div style={{display:'flex',gap:'8px',marginTop:'2px',flexWrap:'wrap'}}>
-                                        <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(as.spend)}</span>
-                                        <span style={{fontSize:'11px',color:as.leads_api>0?'#10b981':txtMid,fontWeight:as.leads_api>0?600:400}}>{as.leads_api} leads</span>
-                                        {as.cpl>0&&<span style={{fontSize:'11px',color:txtMid}}>CPL R$ {fmt(as.cpl)}</span>}
-                                        <span style={{fontSize:'11px',color:txtMid}}>{as.ctr.toFixed(2)}% CTR</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {/* Anúncios */}
-                                  {asEx&&as.ads&&as.ads.length>0&&(
-                                    <div style={{background:dark?'rgba(255,255,255,0.008)':'rgba(0,0,0,0.015)',borderTop:`1px solid ${divCls}`,padding:'6px 10px 8px 34px'}}>
-                                      <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px'}}>Anúncios</p>
-                                      {as.ads!.map(ad=>(
-                                        <div key={ad.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'7px 8px',borderRadius:'8px',marginBottom:'3px',background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)'}}>
-                                          <Thumbnail url={ad.thumbnail_url} name={ad.name} size={32}/>
-                                          <div style={{flex:1,minWidth:0}}>
-                                            <p style={{margin:0,fontSize:'12px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.name}</p>
-                                            <div style={{display:'flex',gap:'8px',marginTop:'2px',flexWrap:'wrap'}}>
-                                              <span style={{fontSize:'11px',color:ad.status==='ACTIVE'?'#10b981':txtMid}}>{ad.status==='ACTIVE'?'● Ativo':'○ Pausado'}</span>
-                                              <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(ad.spend)}</span>
-                                              <span style={{fontSize:'11px',color:ad.leads_api>0?'#10b981':txtMid,fontWeight:ad.leads_api>0?600:400}}>{ad.leads_api} leads</span>
-                                              {ad.cpl>0&&<span style={{fontSize:'11px',color:txtMid}}>CPL R$ {fmt(ad.cpl)}</span>}
-                                              <span style={{fontSize:'11px',color:txtMid}}>{ad.ctr.toFixed(2)}% CTR</span>
-                                            </div>
+                        {/* Conjuntos */}
+                        {isExpanded&&(
+                          <div style={{background:dark?'rgba(255,255,255,0.012)':'rgba(0,0,0,0.012)',borderTop:`1px solid ${divCls}`}}>
+                            {c.adsets&&c.adsets.length>0&&(
+                              <div style={{padding:isMobile?'8px 12px':'8px 16px'}}>
+                                <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px',paddingLeft:'20px'}}>Conjuntos</p>
+                                {c.adsets.map(as=>{
+                                  const asEx=expandedAdsetIds.has(as.id);
+                                  return(
+                                    <div key={as.id} style={{marginBottom:'4px',borderRadius:'10px',border:`1px solid ${divCls}`,overflow:'hidden'}}>
+                                      <div onClick={()=>toggleExpandAdset(as.id)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 10px 9px 20px',background:dark?'rgba(255,255,255,0.015)':'rgba(0,0,0,0.01)',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
+                                        <ChevronRight style={{width:'12px',height:'12px',color:txtLow,transform:asEx?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
+                                        <div style={{width:'6px',height:'6px',borderRadius:'50%',background:as.status==='ACTIVE'?'#10b981':txtLow,flexShrink:0}}/>
+                                        <div style={{flex:1,minWidth:0}}>
+                                          <p style={{margin:0,fontSize:'12.5px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{as.name}</p>
+                                          <div style={{display:'flex',gap:'4px',marginTop:'2px',flexWrap:'wrap',alignItems:'center'}}>
+                                            <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(as.spend)}</span>
+                                            {dot}
+                                            <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{as.leads_api} leads</span>
+                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981'}}>CPL R$ {fmt(as.cpl)}</span>}
+                                            {dot}
+                                            <span style={{fontSize:'11px',color:'#a855f7',fontWeight:600}}>{cR} rev</span>
+                                            {cprVal&&<span style={{fontSize:'11px',color:'#a855f7'}}>CPR R$ {fmt(cprVal)}</span>}
+                                            {dot}
+                                            <span style={{fontSize:'11px',color:txtMid}}>{(as.ctr||0).toFixed(2)}% CTR</span>
                                           </div>
                                         </div>
-                                      ))}
+                                      </div>
+                                      {/* Anúncios */}
+                                      {asEx&&as.ads&&as.ads.length>0&&(
+                                        <div style={{background:dark?'rgba(255,255,255,0.008)':'rgba(0,0,0,0.015)',borderTop:`1px solid ${divCls}`,padding:'6px 10px 8px 34px'}}>
+                                          <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px'}}>Anúncios</p>
+                                          {as.ads!.map(ad=>(
+                                            <div key={ad.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'7px 8px',borderRadius:'8px',marginBottom:'3px',background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)'}}>
+                                              <Thumbnail url={ad.thumbnail_url} name={ad.name} size={32}/>
+                                              <div style={{flex:1,minWidth:0}}>
+                                                <p style={{margin:0,fontSize:'12px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.name}</p>
+                                                <div style={{display:'flex',gap:'4px',marginTop:'2px',flexWrap:'wrap',alignItems:'center'}}>
+                                                  <span style={{fontSize:'11px',color:ad.status==='ACTIVE'?'#10b981':txtMid}}>{ad.status==='ACTIVE'?'● Ativo':'○ Pausado'}</span>
+                                                  {dot}
+                                                  <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(ad.spend)}</span>
+                                                  {dot}
+                                                  <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{ad.leads_api} leads</span>
+                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981'}}>CPL R$ {fmt(ad.cpl)}</span>}
+                                                  {dot}
+                                                  <span style={{fontSize:'11px',color:txtMid}}>{(ad.ctr||0).toFixed(2)}% CTR</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })
+              }
             </div>
           )}
 
@@ -612,97 +504,98 @@ export default function CampanhasPage() {
                   <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Período: {PERIOD_OPTIONS.find(p=>p.value===datePreset)?.label} · Dados reais da API</p>
                 </div>
               </div>
-              {loading||loadingInsights?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Analisando dados de campanhas…</div>:(
-                <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-                  {analysis.map((a,i)=>(
-                    <div key={i} style={{padding:'14px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
-                      <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
-                      <p style={{margin:0,fontSize:'13.5px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{a}</p>
+              {loading||loadingInsights
+                ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Analisando dados de campanhas…</div>
+                :(
+                  <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                    {analysis.map((a,i)=>(
+                      <div key={i} style={{padding:'14px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
+                        <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
+                        <p style={{margin:0,fontSize:'13.5px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{a}</p>
+                      </div>
+                    ))}
+                    <div style={{marginTop:'4px',padding:'16px',borderRadius:'12px',background:dark?'rgba(37,99,235,0.1)':'#eff6ff',border:`1px solid ${dark?'rgba(59,130,246,0.2)':'#bfdbfe'}`}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
+                        <ArrowUpRight style={{width:'14px',height:'14px',color:'#2563eb'}}/>
+                        <span style={{fontSize:'13px',fontWeight:600,color:dark?'#93c5fd':'#1e40af'}}>Resumo do Período</span>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:'12px'}}>
+                        {[{label:'Total Investido',value:`R$ ${fmt(totalSpend)}`},{label:'Leads Gerados',value:String(totalLeads)},{label:'CPL Médio',value:avgCPL>0?`R$ ${fmt(avgCPL)}`:'—'}].map((s,i)=>(
+                          <div key={i}>
+                            <p style={{margin:0,fontSize:'11px',color:dark?'#93c5fd':'#3b82f6',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'2px'}}>{s.label}</p>
+                            <p style={{margin:0,fontSize:'18px',fontWeight:700,color:dark?'#fff':'#1e40af'}}>{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-
-                  {/* Resumo numérico */}
-                  <div style={{marginTop:'4px',padding:'16px',borderRadius:'12px',background:dark?'rgba(37,99,235,0.1)':'#eff6ff',border:`1px solid ${dark?'rgba(59,130,246,0.2)':'#bfdbfe'}`}}>
-                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
-                      <ArrowUpRight style={{width:'14px',height:'14px',color:'#2563eb'}}/>
-                      <span style={{fontSize:'13px',fontWeight:600,color:dark?'#93c5fd':'#1e40af'}}>Resumo do Período</span>
-                    </div>
-                    <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:'12px'}}>
-                      {[
-                        {label:'Total Investido',value:`R$ ${fmt(totalSpend)}`},
-                        {label:'Leads Gerados',value:String(totalLeads)},
-                        {label:'CPL Médio',value:avgCPL>0?`R$ ${fmt(avgCPL)}`:'—'},
-                      ].map((s,i)=>(
-                        <div key={i}>
-                          <p style={{margin:0,fontSize:'11px',color:dark?'#93c5fd':'#3b82f6',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'2px'}}>{s.label}</p>
-                          <p style={{margin:0,fontSize:'18px',fontWeight:700,color:dark?'#fff':'#1e40af'}}>{s.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Breakdowns visuais */}
-                  {insightData.age.length>0&&(
-                    <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                      <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Faixa etária</p>
-                      {insightData.age.map((item,i)=>{
-                        const max=Math.max(...insightData.age.map(a=>a.leads),1);
-                        return(
+                    {insightData.age.length>0&&(
+                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
+                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Faixa etária</p>
+                        {insightData.age.map((item,i)=>{const max=Math.max(...insightData.age.map(a=>a.leads),1);return(
                           <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
                             <span style={{fontSize:'12px',color:txtMid,width:'50px',flexShrink:0}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                              <div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#8b5cf6',borderRadius:'99px'}}/>
-                            </div>
+                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#8b5cf6',borderRadius:'99px'}}/></div>
                             <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
                             {item.cpl>0&&<span style={{fontSize:'11px',color:txtLow,flexShrink:0}}>R${fmt(item.cpl)}</span>}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {insightData.gender.length>0&&(
-                    <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                      <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Gênero</p>
-                      {insightData.gender.map((item,i)=>{
-                        const max=Math.max(...insightData.gender.map(g=>g.leads),1);
-                        return(
+                        );})}
+                      </div>
+                    )}
+                    {insightData.gender.length>0&&(
+                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
+                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Gênero</p>
+                        {insightData.gender.map((item,i)=>{const max=Math.max(...insightData.gender.map(g=>g.leads),1);return(
                           <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
                             <span style={{fontSize:'12px',color:txtMid,width:'70px',flexShrink:0}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                              <div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#3b82f6',borderRadius:'99px'}}/>
-                            </div>
+                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#3b82f6',borderRadius:'99px'}}/></div>
                             <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {insightData.placement.length>0&&(
-                    <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                      <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Posicionamento</p>
-                      {insightData.placement.map((item,i)=>{
-                        const max=Math.max(...insightData.placement.map(p=>p.leads),1);
-                        return(
+                        );})}
+                      </div>
+                    )}
+                    {insightData.placement.length>0&&(
+                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
+                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Posicionamento</p>
+                        {insightData.placement.map((item,i)=>{const max=Math.max(...insightData.placement.map(p=>p.leads),1);return(
                           <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
                             <span style={{fontSize:'11.5px',color:txtMid,width:'120px',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                              <div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#10b981',borderRadius:'99px'}}/>
-                            </div>
+                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#10b981',borderRadius:'99px'}}/></div>
                             <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                        );})}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
             </div>
           )}
         </div>
+
+        {/* Mobile: gráfico simples de barras */}
+        {isMobile&&!loading&&chartRows.length>0&&(
+          <div style={{background:cardBg,borderRadius:'16px',padding:'16px',border:`1px solid ${border}`,marginTop:'14px'}}>
+            <h3 style={{fontSize:'13px',fontWeight:600,color:txtHi,margin:'0 0 12px'}}>Leads por Campanha</h3>
+            <div style={{height:'140px'}}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartRows} barGap={2} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
+                  <XAxis dataKey="name" tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false}/>
+                  <YAxis allowDecimals={false} tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false} width={20}/>
+                  <Tooltip contentStyle={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',fontSize:'11px',color:txtHi}}/>
+                  <Bar dataKey="leads" fill="#10b981" radius={[4,4,0,0]} name="Leads" maxBarSize={24}/>
+                  <Bar dataKey="rev"   fill="#a855f7" radius={[4,4,0,0]} name="Rev"   maxBarSize={24}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+      <style>{`
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+      `}</style>
     </AppLayout>
   );
 }
