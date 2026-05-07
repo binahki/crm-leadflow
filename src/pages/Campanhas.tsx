@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { TrendingUp, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -45,15 +46,12 @@ function getLeads(actions: any[]) { return parseInt(actions?.find((a:any)=>LEAD_
 
 // ── Datas Brasília ────────────────────────────────────────────
 function parseLeadDateCamp(str?: string|null): Date {
-  try {
-    if (!str) return new Date(0);
-    if (str.includes('T')) { const d=new Date(str); return isNaN(d.getTime())?new Date(0):d; }
-    if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
-      const d=new Date(str.replace(' ','T').replace('+00:00','Z').replace('+00','Z'));
-      return isNaN(d.getTime())?new Date(0):d;
-    }
-    const d=new Date(str); return isNaN(d.getTime())?new Date(0):d;
-  } catch { return new Date(0); }
+  if (!str) return new Date(0);
+  if (str.includes('T')) return new Date(str);
+  if (/^\d{4}-\d{2}-\d{2} /.test(str)) return new Date(str.replace(' ','T').replace('+00:00','Z').replace('+00','Z'));
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+  if (m) { const [, d, mo, y, h='0', mi='0'] = m; return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`); }
+  return new Date(str);
 }
 function leadDateBRCamp(str?: string|null): string {
   try { const d=parseLeadDateCamp(str); if(d.getTime()===0)return ''; return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(d); } catch { return ''; }
@@ -194,8 +192,30 @@ export default function CampanhasPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [expandedAdsetIds, setExpandedAdsetIds] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(false);
+  // Leads direto do Supabase com select('*') para garantir utm_campaign
+  const [allLeads, setAllLeads] = useState<any[]>([]);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
+
+  // Busca leads com select('*') — garante utm_campaign, utm_source, status
+  useEffect(()=>{
+    supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at')
+      .order('created_at',{ascending:false})
+      .then(({data})=>{ if(data) setAllLeads(data); });
+  },[]);
+
+  // Realtime: atualiza allLeads ao receber novos leads
+  useEffect(()=>{
+    const ch = supabase.channel('camp-leads-rt')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{
+        setAllLeads(prev=>[p.new as any,...prev]);
+      })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{
+        setAllLeads(prev=>prev.map(l=>l.id===(p.new as any).id?p.new as any:l));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  },[]);
 
   const load=async()=>{setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
   const loadInsights=async()=>{setLoadingInsights(true);const data=await fetchInsightData(datePreset);setInsightData(data);setLoadingInsights(false);};
@@ -205,41 +225,80 @@ export default function CampanhasPage() {
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
   // Leads do CRM filtrados pelo período
-  const filteredLeads = useMemo(()=>filterLeadsByPreset(leads,datePreset),[leads,datePreset]);
+  // usa allLeads (select * direto) para ter utm_campaign garantido
+  const filteredLeads = useMemo(()=>filterLeadsByPreset(allLeads,datePreset),[allLeads,datePreset]);
 
-  // ── Mesma lógica exata do Dashboard ──────────────────────────
-  // utm_campaign contém o nome da campanha do FB (verificado no Dashboard)
-  function crmLeads(campName: string): number {
-    const nameLower = campName.toLowerCase().split('|')[0].trim();
-    return filteredLeads.filter(l => {
-      const camp = ((l as any).utm_campaign||'').toLowerCase().split('|')[0].trim();
-      return camp && camp.includes(nameLower.slice(0,20));
-    }).length;
-  }
-  function crmRevs(campName: string): number {
-    const nameLower = campName.toLowerCase().split('|')[0].trim();
-    return filteredLeads.filter(l => {
-      const camp = ((l as any).utm_campaign||'').toLowerCase().split('|')[0].trim();
-      return camp && camp.includes(nameLower.slice(0,20)) && Number((l as any).status) === 3;
-    }).length;
-  }
+  // ── Mapeamento Único: Garante que um lead pertença a apenas 1 campanha
+  const campLeadsMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    campaigns.forEach(c => map.set(c.id, []));
+
+    for (const l of filteredLeads) {
+      const la = l as any;
+      const utmRaw = (la.utm_campaign || '').trim();
+      if (!utmRaw) continue;
+
+      const utm = utmRaw.toLowerCase().split('|')[0].trim();
+      let bestMatch: string | null = null;
+      let maxMatchLen = 0;
+
+      for (const c of campaigns) {
+        if (utm === c.id) { bestMatch = c.id; break; }
+        const cn = c.name.toLowerCase().split('|')[0].trim();
+        if (!cn || cn.length < 3) continue;
+        if (utm === cn) { bestMatch = c.id; break; }
+
+        if (utm.includes(cn.slice(0, 20))) {
+          // Em caso de nomes similares (ex: "Vendas", "Vendas V2"),
+          // atribui à campanha com o nome mais longo (mais específico)
+          if (cn.length > maxMatchLen) {
+            maxMatchLen = cn.length;
+            bestMatch = c.id;
+          }
+        }
+      }
+
+      if (bestMatch) {
+        const arr = map.get(bestMatch) || [];
+        arr.push(l);
+        map.set(bestMatch, arr);
+      }
+    }
+    return map;
+  }, [filteredLeads, campaigns]);
+
+  const getCampLeads = useCallback((campName: string, campId: string) => {
+    return campLeadsMap.get(campId) || [];
+  }, [campLeadsMap]);
 
   const totalSpend = campaigns.reduce((s,c)=>s+c.spend,0);
   const totalLeads = campaigns.reduce((s,c)=>s+c.leads_api,0);
   const avgCPL = totalLeads>0?totalSpend/totalLeads:0;
   const maxSpend = Math.max(...campaigns.map(c=>c.spend),1);
 
-  // Cards: usa contagem CRM total do período (todos com utm_source=FB)
-  const leadsCRMTotal = filteredLeads.filter(l=>((l as any).utm_source||'').toUpperCase()==='FB').length;
-  const revsCRMTotal  = filteredLeads.filter(l=>((l as any).utm_source||'').toUpperCase()==='FB'&&Number((l as any).status)===3).length;
+  // Cards: filtrando leads CRM do FB
+  const leadsCRMTotal = useMemo(()=>
+    filteredLeads.filter(l=>{
+      const la=l as any;
+      return (la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0;
+    }).length
+  ,[filteredLeads]);
+  const revsCRMTotal = useMemo(()=>
+    filteredLeads.filter(l=>{
+      const la=l as any;
+      return ((la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0)
+        && Number(la.status)===3;
+    }).length
+  ,[filteredLeads]);
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
   // Gráfico: barras horizontais com dados CRM por campanha
   const chartRows = useMemo(()=>{
     return filtered.slice(0,8).map(c=>{
-      const l = crmLeads(c.name);
-      const r = crmRevs(c.name);
+      const campLeads = getCampLeads(c.name, c.id);
+      const l = campLeads.length > 0 ? campLeads.length : c.leads_api;
+      const r = campLeads.filter(x => Number((x as any).status) === 3).length;
       return {
         name: c.name.length>16?c.name.slice(0,16)+'…':c.name,
         leads: l,
@@ -248,7 +307,7 @@ export default function CampanhasPage() {
         cpr:   r>0&&c.spend>0 ? Math.round(c.spend/r) : 0,
       };
     });
-  },[filtered,filteredLeads]); // eslint-disable-line
+  },[filtered, getCampLeads]); // eslint-disable-line
 
   const analysis=useMemo(()=>generateAnalysis(campaigns,insightData,totalSpend,totalLeads,avgCPL),[campaigns,insightData,totalSpend,totalLeads,avgCPL]);
 
@@ -302,6 +361,8 @@ export default function CampanhasPage() {
           ))}
         </div>
 
+
+
         {/* Gráfico horizontal — barras por campanha */}
         {!isMobile&&(
           <div style={{background:cardBg,borderRadius:'16px',padding:'20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
@@ -325,22 +386,36 @@ export default function CampanhasPage() {
                   const maxCpl=Math.max(...chartRows.map(r=>r.cpl),1);
                   const maxCpr=Math.max(...chartRows.map(r=>r.cpr),1);
                   return(
-                    <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
                       {chartRows.map((row,i)=>(
-                        <div key={i} style={{display:'grid',gridTemplateColumns:'120px 1fr',gap:'10px',alignItems:'center'}}>
-                          <span style={{fontSize:'11px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:'right',paddingRight:'10px'}}>{row.name}</span>
-                          <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                        <div key={i} style={{
+                          display:'grid',
+                          gridTemplateColumns:'130px 1fr',
+                          gap:'12px',
+                          alignItems:'center',
+                          paddingBottom:'16px',
+                          borderBottom:i<chartRows.length-1?`1px solid ${divCls}`:'none',
+                        }}>
+                          {/* Nome da campanha */}
+                          <span style={{
+                            fontSize:'12px',fontWeight:600,color:txtHi,
+                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                            textAlign:'right',paddingRight:'12px',lineHeight:1.3,
+                          }}>{row.name}</span>
+                          {/* 4 barras com labels */}
+                          <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                             {[
-                              {val:row.leads,max:maxLeads,color:'#10b981',fmt:(v:number)=>String(v),w:'30px'},
-                              {val:row.rev,  max:maxLeads,color:'#a855f7',fmt:(v:number)=>String(v),w:'30px'},
-                              {val:row.cpl,  max:maxCpl,  color:'#3b82f6',fmt:(v:number)=>v>0?`R$${v}`:'-',w:'50px'},
-                              {val:row.cpr,  max:maxCpr,  color:'#f97316',fmt:(v:number)=>v>0?`R$${v}`:'-',w:'50px'},
-                            ].map(({val,max,color,fmt:f,w},j)=>(
-                              <div key={j} style={{display:'flex',alignItems:'center',gap:'6px'}}>
-                                <div style={{flex:1,height:'9px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',borderRadius:'99px',overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:`${(val/max)*100}%`,background:color,borderRadius:'99px',transition:'width 0.6s ease'}}/>
+                              {val:row.leads, max:maxLeads, color:'#10b981', label:'Leads', valFmt:(v:number)=>String(v)},
+                              {val:row.rev,   max:maxLeads, color:'#a855f7', label:'Rev',   valFmt:(v:number)=>String(v)},
+                              {val:row.cpl,   max:maxCpl,   color:'#3b82f6', label:'CPL',   valFmt:(v:number)=>v>0?`R$${v}`:'-'},
+                              {val:row.cpr,   max:maxCpr,   color:'#f97316', label:'CPR',   valFmt:(v:number)=>v>0?`R$${v}`:'-'},
+                            ].map(({val,max,color,label,valFmt},j)=>(
+                              <div key={j} style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                                <span style={{fontSize:'10px',color:txtLow,width:'28px',textAlign:'right',flexShrink:0}}>{label}</span>
+                                <div style={{flex:1,height:'10px',background:dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)',borderRadius:'99px',overflow:'hidden'}}>
+                                  <div style={{height:'100%',width:max>0?`${(val/max)*100}%`:'0%',background:color,borderRadius:'99px',transition:'width 0.7s ease'}}/>
                                 </div>
-                                <span style={{fontSize:'11px',color,fontWeight:700,width:w,textAlign:'right',flexShrink:0}}>{f(val)}</span>
+                                <span style={{fontSize:'11px',color,fontWeight:700,width:'52px',textAlign:'right',flexShrink:0}}>{valFmt(val)}</span>
                               </div>
                             ))}
                           </div>
@@ -374,10 +449,12 @@ export default function CampanhasPage() {
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);
                     const periodo=PERIOD_MAP[datePreset]||'all';
-                    const cL=crmLeads(c.name);
-                    const cR=crmRevs(c.name);
-                    const cplVal=cL>0&&c.spend>0?c.spend/cL:(c.cpl&&c.cpl>0?c.cpl:null);
-                    const cprVal=cR>0&&c.spend>0?c.spend/cR:null;
+                    const campCRMLeads = getCampLeads(c.name, c.id);
+                    const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
+                    const cR = campCRMLeads.filter(x => Number((x as any).status) === 3).length;
+                    const leadsDisplay = cL;
+                    const cplVal = leadsDisplay>0&&c.spend>0 ? c.spend/leadsDisplay : null;
+                    const cprVal = cR>0&&c.spend>0 ? c.spend/cR : null;
                     return(
                       <div key={c.id} style={{borderBottom:`1px solid ${divCls}`}}>
                         <div onClick={()=>toggleExpand(c.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:isMobile?'14px':'12px 16px',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
@@ -405,7 +482,7 @@ export default function CampanhasPage() {
                               {dot}
                               {/* Tag Leads — verde */}
                               <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
-                                {cL} leads ↗
+                                {leadsDisplay} leads ↗
                               </button>
                               {cplVal&&<span style={{fontSize:'12px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(cplVal)}</span>}
                               {dot}
@@ -413,7 +490,7 @@ export default function CampanhasPage() {
                               <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}&status=3`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
                                 {cR} rev ↗
                               </button>
-                              {cprVal&&<span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>CPR R$ {fmt(cprVal)}</span>}
+                              <span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>CPR {cprVal?`R$ ${fmt(cprVal)}`:'—'}</span>
                             </div>
                           </div>
                           {!isMobile&&(
@@ -444,11 +521,10 @@ export default function CampanhasPage() {
                                           <div style={{display:'flex',gap:'4px',marginTop:'2px',flexWrap:'wrap',alignItems:'center'}}>
                                             <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(as.spend)}</span>
                                             {dot}
-                                            <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{as.leads_api} leads</span>
-                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981'}}>CPL R$ {fmt(as.cpl)}</span>}
+                                            <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{as.leads_api} leads</span>
+                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(as.cpl)}</span>}
                                             {dot}
-                                            <span style={{fontSize:'11px',color:'#a855f7',fontWeight:600}}>{cR} rev</span>
-                                            {cprVal&&<span style={{fontSize:'11px',color:'#a855f7'}}>CPR R$ {fmt(cprVal)}</span>}
+                                            {(()=>{const asRev=as.leads_api>0&&c.leads_api>0?Math.round(cR*as.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{asRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{asRev>0&&as.spend>0?`CPR R$ ${fmt(as.spend/asRev)}`:'CPR —'}</span></>;})()}
                                             {dot}
                                             <span style={{fontSize:'11px',color:txtMid}}>{(as.ctr||0).toFixed(2)}% CTR</span>
                                           </div>
@@ -468,8 +544,10 @@ export default function CampanhasPage() {
                                                   {dot}
                                                   <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(ad.spend)}</span>
                                                   {dot}
-                                                  <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{ad.leads_api} leads</span>
-                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981'}}>CPL R$ {fmt(ad.cpl)}</span>}
+                                                  <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{ad.leads_api} leads</span>
+                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(ad.cpl)}</span>}
+                                                  {dot}
+                                                  {(()=>{const adRev=ad.leads_api>0&&c.leads_api>0?Math.round(cR*ad.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{adRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{adRev>0&&ad.spend>0?`CPR R$ ${fmt(ad.spend/adRev)}`:'CPR —'}</span></>;})()}
                                                   {dot}
                                                   <span style={{fontSize:'11px',color:txtMid}}>{(ad.ctr||0).toFixed(2)}% CTR</span>
                                                 </div>
