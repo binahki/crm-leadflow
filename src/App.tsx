@@ -8,6 +8,7 @@ import LoginPage from "./pages/Login";
 import ResetPasswordPage from "./pages/ResetPassword";
 import CadastroPage from "./pages/Cadastro";
 import AdminPage from "./pages/Admin";
+import OnboardingPage from "./pages/Onboarding";
 import DashboardPage from "./pages/Dashboard";
 import LeadsPage from "./pages/Leads";
 import KanbanPage from "./pages/Kanban";
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/cadastro" element={<CadastroPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+          <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
           <Route path="/kanban" element={<ProtectedRoute><KanbanPage /></ProtectedRoute>} />
