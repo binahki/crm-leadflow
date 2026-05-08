@@ -611,6 +611,17 @@ export default function CampanhasPage() {
                 ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Analisando dados de campanhas…</div>
                 :(
                   <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                    {aiLog?.insights?.length>0&&(
+                      <>
+                        <div style={{padding:'12px 14px',borderRadius:'10px',background:dark?'rgba(139,92,246,0.08)':'#faf5ff',border:'1px solid rgba(139,92,246,0.2)'}}>
+                          <p style={{margin:'0 0 8px',fontSize:'11px',fontWeight:700,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.06em'}}>⚡ IA hoje</p>
+                          {aiLog.insights.map((insight:any,i:number)=>(
+                            <p key={i} style={{margin:i<aiLog.insights.length-1?'0 0 4px':0,fontSize:'12.5px',color:dark?'#d4d4d8':'#374151',lineHeight:1.5}}>{typeof insight==='string'?insight:insight.mensagem}</p>
+                          ))}
+                        </div>
+                        <div style={{height:'1px',background:border}}/>
+                      </>
+                    )}
                     {analysis.map((a,i)=>(
                       <div key={i} style={{padding:'14px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
                         <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
@@ -698,67 +709,40 @@ export default function CampanhasPage() {
       {showAiPanel&&aiLog&&(
         <>
           <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
-          <div style={{position:'fixed',right:0,top:0,bottom:0,width:'420px',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'24px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)'}}>
+          <div style={{position:'fixed',right:0,top:0,bottom:0,width:'300px',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'18px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)'}}>
             {/* Header */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'20px'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <div style={{width:'32px',height:'32px',borderRadius:'8px',background:'rgba(139,92,246,0.15)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <Zap style={{width:'16px',height:'16px',color:'#8b5cf6'}}/>
-                </div>
-                <div>
-                  <p style={{margin:0,fontSize:'14px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>Otimizações de hoje</p>
-                  <p style={{margin:0,fontSize:'11px',color:dark?'#71717a':'#6b7280'}}>{new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
-                </div>
-              </div>
-              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280'}}>
-                <X style={{width:'18px',height:'18px'}}/>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
+              <span style={{fontSize:'13px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>IA • hoje às {new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280',padding:'2px',display:'flex'}}>
+                <X style={{width:'15px',height:'15px'}}/>
               </button>
             </div>
             {/* Resumo */}
             {aiLog.resumo&&(
-              <div style={{padding:'14px',borderRadius:'12px',marginBottom:'16px',background:dark?'rgba(139,92,246,0.08)':'#faf5ff',border:'1px solid rgba(139,92,246,0.2)'}}>
-                <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.6}}>{aiLog.resumo}</p>
-              </div>
+              <p style={{margin:'0 0 10px',fontSize:'12.5px',color:dark?'#a1a1aa':'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{aiLog.resumo}</p>
             )}
             {/* Alerta */}
             {aiLog.alerta&&(
-              <div style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'16px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)',display:'flex',gap:'10px',alignItems:'flex-start'}}>
-                <AlertTriangle style={{width:'14px',height:'14px',color:'#ef4444',flexShrink:0,marginTop:'2px'}}/>
-                <p style={{margin:0,fontSize:'12.5px',color:'#ef4444',lineHeight:1.5}}>{aiLog.alerta}</p>
+              <div style={{padding:'5px 10px',borderRadius:'7px',marginBottom:'10px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)'}}>
+                <p style={{margin:0,fontSize:'12px',color:'#ef4444',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{aiLog.alerta}</p>
               </div>
             )}
             {/* Ações executadas */}
             {aiLog.acoes_executadas?.length>0&&(
-              <div style={{marginBottom:'16px'}}>
-                <p style={{fontSize:'11px',fontWeight:700,color:dark?'#52525b':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px'}}>Ações executadas</p>
-                {aiLog.acoes_executadas.map((acao:any,i:number)=>(
-                  <div key={i} style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'6px',background:dark?'rgba(255,255,255,0.03)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'10px',alignItems:'flex-start'}}>
-                    <div style={{flexShrink:0,marginTop:'2px'}}>
-                      {acao.acao==='pausar'&&<Pause style={{width:'14px',height:'14px',color:'#ef4444'}}/>}
-                      {acao.acao==='aumentar_budget'&&<TrendingUp style={{width:'14px',height:'14px',color:'#10b981'}}/>}
-                      {acao.acao==='diminuir_budget'&&<TrendingDown style={{width:'14px',height:'14px',color:'#f97316'}}/>}
+              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                {aiLog.acoes_executadas.map((acao:any,i:number)=>{
+                  const isUp=acao.acao==='aumentar_budget';
+                  const isDown=acao.acao==='diminuir_budget';
+                  const isPause=acao.acao==='pausar';
+                  const color=isUp?'#10b981':isDown?'#f97316':'#ef4444';
+                  const icon=isUp?'↑':isDown?'↓':'⏸';
+                  const val=isPause?'pausada':(acao.novo_budget?`R$${acao.novo_budget}/dia`:'');
+                  return(
+                    <div key={i} style={{padding:'7px 10px',borderRadius:'8px',background:dark?'rgba(255,255,255,0.03)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
+                      <span style={{fontSize:'12.5px',fontWeight:600,color}}>{icon} {acao.campanha_nome}{val?` — ${val}`:''}</span>
                     </div>
-                    <div>
-                      <p style={{margin:'0 0 2px',fontSize:'12.5px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>{acao.campanha_nome}</p>
-                      <p style={{margin:'0 0 2px',fontSize:'11.5px',color:dark?'#71717a':'#6b7280'}}>{acao.motivo}</p>
-                      {acao.novo_budget&&(
-                        <p style={{margin:0,fontSize:'11px',color:'#10b981',fontWeight:500}}>Novo budget: R$ {acao.novo_budget}/dia</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Insights */}
-            {aiLog.insights?.length>0&&(
-              <div>
-                <p style={{fontSize:'11px',fontWeight:700,color:dark?'#52525b':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px'}}>Insights</p>
-                {aiLog.insights.map((insight:any,i:number)=>(
-                  <div key={i} style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'6px',background:dark?'rgba(255,255,255,0.02)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'10px'}}>
-                    <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
-                    <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.6}}>{typeof insight==='string'?insight:insight.mensagem}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
