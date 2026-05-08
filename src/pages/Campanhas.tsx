@@ -139,7 +139,7 @@ function Thumbnail({url,name,size=36}:{url:string|null;name:string;size?:number}
 export default function CampanhasPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
-  const { metaToken, metaAccount } = useMetaConfig();
+  const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const dark = theme === 'dark';
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -190,8 +190,8 @@ export default function CampanhasPage() {
       });
   },[]);
 
-  const load=async()=>{if(!metaToken||!metaAccount)return;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
-  useEffect(()=>{load();},[datePreset,metaToken,metaAccount]); // eslint-disable-line
+  const load=async()=>{if(!metaReady||!metaToken||!metaAccount)return;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
+  useEffect(()=>{load();},[datePreset,metaToken,metaAccount,metaReady]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 

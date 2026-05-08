@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
-import { AppLayout } from '@/components/AppLayout';
 import { toast } from 'sonner';
 
 const ADMIN_EMAIL = 'murilosilvestredias@gmail.com';
@@ -142,9 +141,36 @@ export default function AdminPage() {
     return `${date} (${diff}d)`;
   }
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate('/login');
+  }
+
   return (
-    <AppLayout leadCount={0}>
-      <div style={{ padding: '32px', background: bg, minHeight: '100vh', fontFamily: FONT }}>
+    <div style={{ minHeight: '100vh', background: bg, fontFamily: FONT }}>
+
+      {/* Header fixo */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', background: dark ? 'rgba(9,9,9,0.92)' : 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'linear-gradient(135deg, #10b981, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: txt, letterSpacing: '-0.02em' }}>Floow CRM</span>
+          <span style={{ fontSize: '11px', fontWeight: 500, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '99px', marginLeft: '4px' }}>Admin</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '12.5px', color: txtMid }}>{user?.email}</span>
+          <button onClick={handleSignOut} style={{ padding: '6px 14px', borderRadius: '8px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12.5px', cursor: 'pointer', fontFamily: FONT, transition: 'color 0.15s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+            onMouseLeave={e => (e.currentTarget.style.color = txtMid)}>
+            Sair
+          </button>
+        </div>
+      </div>
+
+      {/* Conteúdo */}
+      <div style={{ paddingTop: '56px' }}>
+      <div style={{ padding: '32px' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -215,6 +241,7 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+      </div>
 
       {/* Modal novo cliente */}
       {showModal && (
@@ -249,6 +276,6 @@ export default function AdminPage() {
           </div>
         </>
       )}
-    </AppLayout>
+    </div>
   );
 }

@@ -176,7 +176,7 @@ function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { metaToken, metaAccount } = useMetaConfig();
+  const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const dark = theme === 'dark';
@@ -209,8 +209,8 @@ export default function Dashboard() {
   const fetchLeads = async () => { setLoading(true); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
   const loadMeta = async (currentLeads?: Lead[]) => { setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
 
-  useEffect(() => { if(!user||!metaToken||!metaAccount)return; fetchLeads().then(()=>loadMeta()); }, [user?.id,metaToken,metaAccount]); // eslint-disable-line
-  useEffect(() => { if(allLeads.length>0&&metaToken&&metaAccount)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaToken,metaAccount]); // eslint-disable-line
+  useEffect(() => { if(!user||!metaReady)return; fetchLeads().then(()=>loadMeta()); }, [user?.id,metaReady]); // eslint-disable-line
+  useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
   useEffect(() => { const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, []);
 
   function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }
