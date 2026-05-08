@@ -12,12 +12,12 @@ const FONT        = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetic
 
 interface Org {
   id: string;
-  nome_empresa: string;
+  nome: string;
+  email_admin: string;
+  plano: string;
   created_at: string;
-  plan?: string;
   status?: string;
   trial_ends_at?: string;
-  admin_email?: string;
 }
 
 export default function AdminPage() {
@@ -50,51 +50,28 @@ export default function AdminPage() {
   async function fetchOrgs() {
     setLoading(true);
     try {
-      // organizations
-      const { data: orgData } = await supabase
+      const { data, error } = await supabase
         .from('organizations')
-        .select('*')
+        .select('*, subscriptions(*)')
         .order('created_at', { ascending: false });
 
-      // memberships para pegar admin email
-      const { data: memberData } = await supabase
-        .from('memberships')
-        .select('org_id, user_id, role');
+      if (error) throw error;
 
-      // subscriptions
-      const { data: subData } = await supabase
-        .from('subscriptions')
-        .select('org_id, plan, status, trial_ends_at');
-
-      const orgsRaw = (orgData || []) as any[];
-      const members = (memberData || []) as any[];
-      const subs    = (subData   || []) as any[];
-
-      // Para cada org, pega email do admin via auth (só disponível se tiver acesso)
-      // Usa memberships como proxy — buscamos profiles se existir
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, email');
-
-      const profileMap: Record<string, string> = {};
-      (profiles || []).forEach((p: any) => { profileMap[p.id] = p.email; });
-
-      const merged: Org[] = orgsRaw.map(org => {
-        const sub    = subs.find(s => s.org_id === org.id);
-        const member = members.find(m => m.org_id === org.id && m.role === 'admin');
+      const merged: Org[] = (data || []).map((org: any) => {
+        const sub = org.subscriptions?.[0] || null;
         return {
-          id:           org.id,
-          nome_empresa: org.nome_empresa || org.name || '—',
-          created_at:   org.created_at,
-          plan:         sub?.plan        || 'trial',
-          status:       sub?.status      || 'trial',
+          id:            org.id,
+          nome:          org.nome          || '—',
+          email_admin:   org.email_admin   || '—',
+          plano:         org.plano         || '—',
+          created_at:    org.created_at,
+          status:        sub?.status       || null,
           trial_ends_at: sub?.trial_ends_at || null,
-          admin_email:  member ? (profileMap[member.user_id] || '—') : '—',
         };
       });
 
       setOrgs(merged);
-    } catch (err) {
+    } catch {
       toast.error('Erro ao carregar dados');
     }
     setLoading(false);
@@ -126,7 +103,7 @@ export default function AdminPage() {
   // ── Métricas ──────────────────────────────────────────────────
   const total  = orgs.length;
   const ativas = orgs.filter(o => o.status === 'active').length;
-  const trials = orgs.filter(o => o.status === 'trial').length;
+  const trials = orgs.filter(o => o.status === 'trialing').length;
   const mrr    = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // ── Estilos base ──────────────────────────────────────────────
@@ -136,14 +113,14 @@ export default function AdminPage() {
   const txtMid  = dark ? '#a1a1aa' : '#6b7280';
   const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#0d0d0f' : '#f8fafc', color: txt, fontSize: '13px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box' };
 
-  function StatusBadge({ status }: { status?: string }) {
+  function StatusBadge({ status }: { status?: string | null }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
-      active:   { label: 'Ativo',    color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-      trial:    { label: 'Trial',    color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-      inactive: { label: 'Inativo',  color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
-      canceled: { label: 'Cancelado',color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+      active:   { label: 'Ativo',     color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+      trialing: { label: 'Trial',     color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+      inactive: { label: 'Inativo',   color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
+      canceled: { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
     };
-    const s = map[status || 'trial'] || map.trial;
+    const s = map[status || ''] || { label: '—', color: '#71717a', bg: 'rgba(113,113,122,0.12)' };
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: '99px', background: s.bg, fontSize: '11.5px', fontWeight: 600, color: s.color }}>
         <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: s.color }} />
@@ -152,11 +129,17 @@ export default function AdminPage() {
     );
   }
 
-  function trialDays(dateStr?: string | null) {
+  function fmtDate(dateStr?: string | null) {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  }
+
+  function trialInfo(dateStr?: string | null) {
     if (!dateStr) return '—';
     const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
-    if (diff < 0) return 'Expirado';
-    return `${diff}d restantes`;
+    const date = new Date(dateStr).toLocaleDateString('pt-BR');
+    if (diff < 0) return `Expirado (${date})`;
+    return `${date} (${diff}d)`;
   }
 
   return (
@@ -212,12 +195,12 @@ export default function AdminPage() {
                 <tbody>
                   {orgs.map((org, i) => (
                     <tr key={org.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
-                      <td style={{ padding: '12px 16px', color: txt, fontWeight: 500, whiteSpace: 'nowrap' }}>{org.nome_empresa}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.admin_email}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{org.plan || 'trial'}</td>
+                      <td style={{ padding: '12px 16px', color: txt, fontWeight: 500, whiteSpace: 'nowrap' }}>{org.nome}</td>
+                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.email_admin}</td>
+                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{org.plano}</td>
                       <td style={{ padding: '12px 16px' }}><StatusBadge status={org.status} /></td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialDays(org.trial_ends_at)}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{new Date(org.created_at).toLocaleDateString('pt-BR')}</td>
+                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
+                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
                       <td style={{ padding: '12px 16px' }}>
                         <button onClick={() => toast.info(`org_id: ${org.id}`)}
                           style={{ padding: '5px 12px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>
