@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/useTheme';
 const COLUMNS = [
   { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: 'rgba(59,130,246,0.06)' },
   { status: 2, label: 'Reunião',        border: '#8b5cf6', dot: '#8b5cf6', bg: 'rgba(139,92,246,0.06)'  },
+  { status: 5, label: 'Contrato/App',  border: '#f59e0b', dot: '#f59e0b', bg: 'rgba(245,158,11,0.06)'  },
   { status: 3, label: 'Aprovado',       border: '#10b981', dot: '#10b981', bg: 'rgba(16,185,129,0.06)' },
   { status: 4, label: 'Reprovado',      border: '#ef4444', dot: '#ef4444', bg: 'rgba(239,68,68,0.06)'   },
 ];
@@ -226,7 +227,7 @@ function DroppableColumn({ col, children, count, isOver, isMobile }: {
         </div>
         <span style={{ fontSize:'12px', fontWeight:500, color:col.dot, background:`${col.dot}18`, padding:'2px 8px', borderRadius:'20px' }}>{count}</span>
       </div>
-      <div ref={setNodeRef} style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', WebkitOverflowScrolling:'touch', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden' }}>
+      <div ref={setNodeRef} className="kanban-col-scroll" style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', WebkitOverflowScrolling:'touch', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden' }}>
         {children}
         {count===0 && <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', padding:'28px 0', textAlign:'center', borderRadius:'10px', border:`2px dashed ${isOver?col.dot:'rgba(0,0,0,0.1)'}`, color:isOver?col.dot:'#d1d5db', transition:'color 0.2s,border-color 0.2s' }}>{isOver?'Solte aqui':'Sem leads'}</div>}
       </div>
@@ -405,7 +406,7 @@ export default function KanbanPage() {
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={e=>setOverColId(e.over?.id?String(e.over.id):null)} onDragEnd={handleDragEnd} onDragCancel={()=>{setActiveLead(null);setOverColId(null);}}>
           {isMobile ? (
-            <div ref={scrollRef} style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType: activeLead ? 'none' : 'x mandatory', scrollBehavior: activeLead ? 'auto' : 'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
+            <div ref={scrollRef} className="kanban-mobile" style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType: activeLead ? 'none' : 'x mandatory', scrollBehavior: activeLead ? 'auto' : 'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
               {COLUMNS.map(col => {
                 const colLeads = getColLeads(col.status);
                 return (
@@ -425,20 +426,22 @@ export default function KanbanPage() {
               })}
             </div>
           ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'14px', alignItems:'start' }}>
+            <div className="kanban-desktop" style={{ display:'flex', gap:'14px', alignItems:'start', overflowX:'auto', paddingBottom:'12px', minWidth:0 }}>
               {COLUMNS.map(col => {
                 const colLeads = getColLeads(col.status);
                 return (
-                  <DroppableColumn key={col.status} col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={false}>
-                    {colLeads.map(lead => (
-                      <DraggableCard key={lead.id} lead={lead} isMobile={false}
-                        onCardClick={() => setViewingLead(lead)}
-                        onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
-                        onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
-                        onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
-                      />
-                    ))}
-                  </DroppableColumn>
+                  <div key={col.status} style={{ flex:'0 0 260px', minWidth:'220px' }}>
+                    <DroppableColumn col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={false}>
+                      {colLeads.map(lead => (
+                        <DraggableCard key={lead.id} lead={lead} isMobile={false}
+                          onCardClick={() => setViewingLead(lead)}
+                          onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
+                          onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
+                          onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
+                        />
+                      ))}
+                    </DroppableColumn>
+                  </div>
                 );
               })}
             </div>
@@ -498,7 +501,12 @@ export default function KanbanPage() {
         @keyframes kmenu { from{opacity:0;transform:scale(0.94) translateY(-4px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes kmotivo { from{opacity:0;transform:translate(-50%,-48%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
         div:hover > div > .card-menu-btn { opacity: 1 !important; }
-        div::-webkit-scrollbar { display: none; }
+        .kanban-col-scroll::-webkit-scrollbar { display: none; }
+        .kanban-mobile::-webkit-scrollbar { display: none; }
+        .kanban-desktop { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
+        .kanban-desktop::-webkit-scrollbar { height: 6px; }
+        .kanban-desktop::-webkit-scrollbar-track { background: transparent; }
+        .kanban-desktop::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
         * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </AppLayout>

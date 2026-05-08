@@ -15,6 +15,7 @@ const STATUS_STYLE = [
   { lightBg:'#ede9fe', lightText:'#5b21b6', darkBg:'rgba(139,92,246,0.15)', darkText:'#a78bfa', dot:'#8b5cf6' },
   { lightBg:'#d1fae5', lightText:'#065f46', darkBg:'rgba(16,185,129,0.15)', darkText:'#34d399', dot:'#10b981' },
   { lightBg:'#fee2e2', lightText:'#991b1b', darkBg:'rgba(239,68,68,0.15)', darkText:'#f87171', dot:'#ef4444' },
+  { lightBg:'#fef3c7', lightText:'#92400e', darkBg:'rgba(245,158,11,0.15)', darkText:'#fbbf24', dot:'#f59e0b' },
 ];
 
 const PERIOD_OPTIONS = [

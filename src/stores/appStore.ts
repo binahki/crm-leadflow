@@ -123,13 +123,14 @@ export function calcularFaixa(
   return 'amarelo';
 }
 
-export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado'];
+export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado', 'Contrato/App'];
 export const STATUS_COLORS = [
   { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
   { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
   { bg: 'bg-violet-50', text: 'text-violet-600', dot: 'bg-violet-400' },
   { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-400' },
   { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-400' },
+  { bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
 ];
 
 interface AppState {

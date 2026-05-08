@@ -30,12 +30,13 @@ const PERIOD_FILTERS = [
 const FUNNEL_CONFIG = [
   { stage: 'Em atendimento', statusId: 1, color: '#3b82f6' },
   { stage: 'Reunião', statusId: 2, color: '#a855f7' },
+  { stage: 'Contrato/App', statusId: 5, color: '#f59e0b' },
   { stage: 'Aprovado', statusId: 3, color: '#22c55e' },
 ];
 
-const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado' };
-const STATUS_DARK: Record<number, string> = { 0: 'bg-blue-900/40 text-blue-300', 1: 'bg-blue-900/40 text-blue-300', 2: 'bg-purple-900/40 text-purple-300', 3: 'bg-emerald-900/40 text-emerald-300', 4: 'bg-rose-900/40 text-rose-300' };
-const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700' };
+const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App' };
+const STATUS_DARK: Record<number, string> = { 0: 'bg-blue-900/40 text-blue-300', 1: 'bg-blue-900/40 text-blue-300', 2: 'bg-purple-900/40 text-purple-300', 3: 'bg-emerald-900/40 text-emerald-300', 4: 'bg-rose-900/40 text-rose-300', 5: 'bg-amber-900/40 text-amber-300' };
+const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700' };
 const AVATAR_COLORS = ['bg-rose-400', 'bg-yellow-400', 'bg-emerald-400', 'bg-orange-400', 'bg-cyan-400', 'bg-violet-400', 'bg-pink-400'];
 
 // ── Utilitários de data — Brasília ────────────────────────────

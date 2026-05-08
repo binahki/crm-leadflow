@@ -20,6 +20,7 @@ interface LeadDrawerProps {
 const STATUS = [
   { id: 1, label: 'Em atendimento', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe', darkBg: 'rgba(59,130,246,0.15)', darkText: '#60a5fa' },
   { id: 2, label: 'Reunião', color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe', darkBg: 'rgba(139,92,246,0.15)', darkText: '#a78bfa' },
+  { id: 5, label: 'Contrato/App', color: '#f59e0b', bg: '#fef3c7', text: '#92400e', border: '#fde68a', darkBg: 'rgba(245,158,11,0.15)', darkText: '#fbbf24' },
   { id: 3, label: 'Aprovado', color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0', darkBg: 'rgba(16,185,129,0.15)', darkText: '#34d399' },
   { id: 4, label: 'Reprovado', color: '#ef4444', bg: '#fee2e2', text: '#991b1b', border: '#fecaca', darkBg: 'rgba(239,68,68,0.15)', darkText: '#f87171' },
 ];
