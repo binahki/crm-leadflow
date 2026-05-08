@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,8 +16,6 @@ interface Ad {
   id: string; name: string; status: string;
   spend: number; leads_api: number; cpl: number; ctr: number; thumbnail_url: string | null;
 }
-interface BreakdownItem { label: string; leads: number; spend: number; cpl: number; }
-interface InsightData { age: BreakdownItem[]; gender: BreakdownItem[]; placement: BreakdownItem[]; device: BreakdownItem[]; }
 interface Campaign {
   id: string; name: string; status: string;
   spend: number; impressions: number; clicks: number; ctr: number; cpm: number;
@@ -124,45 +122,6 @@ async function fetchCampaignsWithChildren(datePreset: string): Promise<Campaign[
   } catch(e){console.error('[Campanhas]',e);return [];}
 }
 
-// ── Fetch insights ────────────────────────────────────────────
-async function fetchInsightData(datePreset:string):Promise<InsightData>{
-  const base=`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights`;
-  const fields='spend,actions'; const token=`access_token=${META_TOKEN}`; const preset=`date_preset=${datePreset}`;
-  function parseBreakdown(data:any[],labelKey:string):BreakdownItem[]{
-    const map:Record<string,{leads:number;spend:number}>={};
-    for(const row of data){const label=row[labelKey]||'Desconhecido';const leads=getLeads(row.actions||[]);const spend=parseFloat(row.spend||'0');if(!map[label])map[label]={leads:0,spend:0};map[label].leads+=leads;map[label].spend+=spend;}
-    return Object.entries(map).map(([label,{leads,spend}])=>({label,leads,spend,cpl:leads>0?spend/leads:0})).sort((a,b)=>b.leads-a.leads||a.cpl-b.cpl).slice(0,5);
-  }
-  const PLACEMENT_LABELS:Record<string,string>={'feed':'Feed do Facebook','instagram_stream':'Feed do Instagram','instagram_stories':'Stories Instagram','facebook_stories':'Stories Facebook','reels':'Reels','instagram_reels':'Reels Instagram','marketplace':'Marketplace'};
-  const GENDER_LABELS:Record<string,string>={male:'Homens',female:'Mulheres',unknown:'Desconhecido'};
-  try{
-    const[ageRes,genderRes,placementRes,deviceRes]=await Promise.all([fetch(`${base}?fields=${fields}&breakdowns=age&${preset}&${token}&limit=50`),fetch(`${base}?fields=${fields}&breakdowns=gender&${preset}&${token}&limit=10`),fetch(`${base}?fields=${fields}&breakdowns=publisher_platform,platform_position&${preset}&${token}&limit=50`),fetch(`${base}?fields=${fields}&breakdowns=device_platform&${preset}&${token}&limit=20`)]);
-    const[ageData,genderData,placementData,deviceData]=await Promise.all([ageRes.json(),genderRes.json(),placementRes.json(),deviceRes.json()]);
-    const age=parseBreakdown(ageData.data||[],'age');
-    const gender=parseBreakdown(genderData.data||[],'gender').map(g=>({...g,label:GENDER_LABELS[g.label]||g.label}));
-    const placement=parseBreakdown((placementData.data||[]).map((r:any)=>({...r,placement_key:`${r.publisher_platform}/${r.platform_position}`})),'placement_key').map(p=>({...p,label:PLACEMENT_LABELS[p.label.split('/')[1]]||PLACEMENT_LABELS[p.label]||p.label}));
-    const device=parseBreakdown(deviceData.data||[],'device_platform');
-    return{age,gender,placement,device};
-  }catch{return{age:[],gender:[],placement:[],device:[]};}
-}
-
-function generateAnalysis(campaigns:Campaign[],insightData:InsightData,totalSpend:number,totalLeads:number,avgCPL:number):string[]{
-  const insights:string[]=[]; if(!campaigns.length)return['Nenhuma campanha com dados disponíveis para análise.'];
-  if(avgCPL>0&&avgCPL<=15)insights.push(`✅ CPL médio de R$ ${fmt(avgCPL)} está excelente. Escale as campanhas ativas com confiança.`);
-  else if(avgCPL>0&&avgCPL<=30)insights.push(`📊 CPL médio de R$ ${fmt(avgCPL)} está aceitável. Otimize os conjuntos com CPL mais alto antes de escalar.`);
-  else if(avgCPL>30)insights.push(`⚠️ CPL médio de R$ ${fmt(avgCPL)} está elevado. Revise criativos e segmentação.`);
-  const withLeads=campaigns.filter(c=>c.leads_api>0);
-  if(withLeads.length>0){const best=withLeads[0];insights.push(`🏆 Melhor campanha: "${best.name.slice(0,45)}" com ${best.leads_api} leads a R$ ${fmt(best.leads_api>0?best.spend/best.leads_api:0)} CPL.`);if(withLeads.length>1){const worst=[...withLeads].sort((a,b)=>(b.spend/b.leads_api)-(a.spend/a.leads_api))[0];if(worst.id!==best.id)insights.push(`📉 CPL mais caro: "${worst.name.slice(0,40)}" a R$ ${fmt(worst.spend/worst.leads_api)}. Redirecione o budget para a melhor.`);}}
-  const inactive=campaigns.filter(c=>c.spend>totalSpend*0.15&&c.leads_api===0);
-  if(inactive.length>0)insights.push(`🔴 "${inactive[0].name.slice(0,40)}" consumiu R$ ${fmt(inactive[0].spend)} sem gerar nenhum lead. Pause e revise.`);
-  if(insightData.age.length>0){const bestAge=insightData.age[0];if(bestAge.leads>0)insights.push(`👥 Faixa etária mais eficiente: ${bestAge.label} com ${bestAge.leads} leads${bestAge.cpl>0?` (CPL R$ ${fmt(bestAge.cpl)})`:''}.`);}
-  if(insightData.gender.length>0){const wG=insightData.gender.filter(g=>g.leads>0);if(wG.length>0){const bG=wG[0];const tot=wG.reduce((s,g)=>s+g.leads,0);const pct=tot>0?Math.round(bG.leads/tot*100):0;insights.push(`⚡ ${pct}% dos leads vêm de ${bG.label}${bG.cpl>0?` (CPL R$ ${fmt(bG.cpl)})`:''}.`);}}
-  if(insightData.placement.length>0){const bP=insightData.placement.filter(p=>p.leads>0)[0];if(bP)insights.push(`📱 Melhor posicionamento: ${bP.label} com ${bP.leads} leads${bP.cpl>0?` (CPL R$ ${fmt(bP.cpl)})`:''}.`);}
-  insights.push(`💡 Sugestões: Lookalike 1% das leads aprovadas, mulheres 25-44 interessadas em moda/beleza/empreendedorismo, retargeting de visitantes do quiz.`);
-  const lowCTR=campaigns.filter(c=>c.ctr<1&&c.impressions>5000);
-  if(lowCTR.length>0)insights.push(`🎯 ${lowCTR.length} campanha(s) com CTR abaixo de 1%. Teste variações de thumbnail e primeiros 3 segundos do vídeo.`);
-  return insights;
-}
 
 function FilterDropdown({value,options,onChange,dark}:{value:string;options:{label:string;value:string}[];onChange:(v:string)=>void;dark:boolean}){
   const[open,setOpen]=useState(false);const[pos,setPos]=useState({top:0,left:0,width:180});const btnRef=useRef<HTMLButtonElement>(null);const sel=options.find(o=>o.value===value);
@@ -182,9 +141,7 @@ export default function CampanhasPage() {
   const dark = theme === 'dark';
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [insightData, setInsightData] = useState<InsightData>({age:[],gender:[],placement:[],device:[]});
   const [loading, setLoading] = useState(true);
-  const [loadingInsights, setLoadingInsights] = useState(false);
   const [error, setError] = useState(false);
   const [datePreset, setDatePreset] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -232,9 +189,7 @@ export default function CampanhasPage() {
   },[]);
 
   const load=async()=>{setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
-  const loadInsights=async()=>{setLoadingInsights(true);const data=await fetchInsightData(datePreset);setInsightData(data);setLoadingInsights(false);};
   useEffect(()=>{load();},[datePreset]); // eslint-disable-line
-  useEffect(()=>{if(activeTab==='insights')loadInsights();},[activeTab,datePreset]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
@@ -322,8 +277,6 @@ export default function CampanhasPage() {
       };
     });
   },[filtered, getCampLeads]); // eslint-disable-line
-
-  const analysis=useMemo(()=>generateAnalysis(campaigns,insightData,totalSpend,totalLeads,avgCPL),[campaigns,insightData,totalSpend,totalLeads,avgCPL]);
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
@@ -509,13 +462,13 @@ export default function CampanhasPage() {
                               <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
                                 {leadsDisplay} leads ↗
                               </button>
-                              {cplVal&&<span style={{fontSize:'12px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(cplVal)}</span>}
+                              {cplVal&&<span style={{fontSize:'12px',color:'#10b981',fontWeight:500}}>R$ {fmt(cplVal)}</span>}
                               {dot}
                               {/* Tag Rev — roxo */}
                               <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}&status=3`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
                                 {cR} rev ↗
                               </button>
-                              <span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>CPR {cprVal?`R$ ${fmt(cprVal)}`:'—'}</span>
+                              <span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>{cprVal?`R$ ${fmt(cprVal)}`:'—'}</span>
                             </div>
                           </div>
                           {!isMobile&&(
@@ -547,9 +500,9 @@ export default function CampanhasPage() {
                                             <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(as.spend)}</span>
                                             {dot}
                                             <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{as.leads_api} leads</span>
-                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(as.cpl)}</span>}
+                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>R$ {fmt(as.cpl)}</span>}
                                             {dot}
-                                            {(()=>{const asRev=as.leads_api>0&&c.leads_api>0?Math.round(cR*as.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{asRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{asRev>0&&as.spend>0?`CPR R$ ${fmt(as.spend/asRev)}`:'CPR —'}</span></>;})()}
+                                            {(()=>{const asRev=as.leads_api>0&&c.leads_api>0?Math.round(cR*as.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{asRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{asRev>0&&as.spend>0?`R$ ${fmt(as.spend/asRev)}`:'—'}</span></>;})()}
                                             {dot}
                                             <span style={{fontSize:'11px',color:txtMid}}>{(as.ctr||0).toFixed(2)}% CTR</span>
                                           </div>
@@ -570,9 +523,9 @@ export default function CampanhasPage() {
                                                   <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(ad.spend)}</span>
                                                   {dot}
                                                   <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{ad.leads_api} leads</span>
-                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>CPL R$ {fmt(ad.cpl)}</span>}
+                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>R$ {fmt(ad.cpl)}</span>}
                                                   {dot}
-                                                  {(()=>{const adRev=ad.leads_api>0&&c.leads_api>0?Math.round(cR*ad.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{adRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{adRev>0&&ad.spend>0?`CPR R$ ${fmt(ad.spend/adRev)}`:'CPR —'}</span></>;})()}
+                                                  {(()=>{const adRev=ad.leads_api>0&&c.leads_api>0?Math.round(cR*ad.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{adRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{adRev>0&&ad.spend>0?`R$ ${fmt(ad.spend/adRev)}`:'—'}</span></>;})()}
                                                   {dot}
                                                   <span style={{fontSize:'11px',color:txtMid}}>{(ad.ctr||0).toFixed(2)}% CTR</span>
                                                 </div>
@@ -603,84 +556,24 @@ export default function CampanhasPage() {
                   <Lightbulb style={{width:'16px',height:'16px',color:'#8b5cf6'}}/>
                 </div>
                 <div>
-                  <h3 style={{margin:0,fontSize:'15px',fontWeight:600,color:txtHi}}>Análise como gestor de tráfego</h3>
-                  <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Período: {PERIOD_OPTIONS.find(p=>p.value===datePreset)?.label} · Dados reais da API</p>
+                  <h3 style={{margin:0,fontSize:'15px',fontWeight:600,color:txtHi}}>⚡ Análise de hoje</h3>
+                  <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Gerado pela IA com base nos dados reais</p>
                 </div>
               </div>
-              {loading||loadingInsights
-                ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Analisando dados de campanhas…</div>
-                :(
-                  <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-                    {aiLog?.insights?.length>0&&(
-                      <>
-                        <div style={{padding:'12px 14px',borderRadius:'10px',background:dark?'rgba(139,92,246,0.08)':'#faf5ff',border:'1px solid rgba(139,92,246,0.2)'}}>
-                          <p style={{margin:'0 0 8px',fontSize:'11px',fontWeight:700,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.06em'}}>⚡ IA hoje</p>
-                          {aiLog.insights.map((insight:any,i:number)=>(
-                            <p key={i} style={{margin:i<aiLog.insights.length-1?'0 0 4px':0,fontSize:'12.5px',color:dark?'#d4d4d8':'#374151',lineHeight:1.5}}>{typeof insight==='string'?insight:insight.mensagem}</p>
-                          ))}
-                        </div>
-                        <div style={{height:'1px',background:border}}/>
-                      </>
-                    )}
-                    {analysis.map((a,i)=>(
-                      <div key={i} style={{padding:'14px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
-                        <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
-                        <p style={{margin:0,fontSize:'13.5px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{a}</p>
+              {loading
+                ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Carregando…</div>
+                :aiLog?.insights?.length>0
+                  ?<div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                    {aiLog.insights.map((insight:any,i:number)=>(
+                      <div key={i} style={{padding:'13px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
+                        <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
+                        <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{typeof insight==='string'?insight:insight.mensagem}</p>
                       </div>
                     ))}
-                    <div style={{marginTop:'4px',padding:'16px',borderRadius:'12px',background:dark?'rgba(37,99,235,0.1)':'#eff6ff',border:`1px solid ${dark?'rgba(59,130,246,0.2)':'#bfdbfe'}`}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
-                        <ArrowUpRight style={{width:'14px',height:'14px',color:'#2563eb'}}/>
-                        <span style={{fontSize:'13px',fontWeight:600,color:dark?'#93c5fd':'#1e40af'}}>Resumo do Período</span>
-                      </div>
-                      <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:'12px'}}>
-                        {[{label:'Total Investido',value:`R$ ${fmt(totalSpend)}`},{label:'Leads Gerados',value:String(totalLeads)},{label:'CPL Médio',value:avgCPL>0?`R$ ${fmt(avgCPL)}`:'—'}].map((s,i)=>(
-                          <div key={i}>
-                            <p style={{margin:0,fontSize:'11px',color:dark?'#93c5fd':'#3b82f6',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'2px'}}>{s.label}</p>
-                            <p style={{margin:0,fontSize:'18px',fontWeight:700,color:dark?'#fff':'#1e40af'}}>{s.value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {insightData.age.length>0&&(
-                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Faixa etária</p>
-                        {insightData.age.map((item,i)=>{const max=Math.max(...insightData.age.map(a=>a.leads),1);return(
-                          <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
-                            <span style={{fontSize:'12px',color:txtMid,width:'50px',flexShrink:0}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#8b5cf6',borderRadius:'99px'}}/></div>
-                            <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
-                            {item.cpl>0&&<span style={{fontSize:'11px',color:txtLow,flexShrink:0}}>R${fmt(item.cpl)}</span>}
-                          </div>
-                        );})}
-                      </div>
-                    )}
-                    {insightData.gender.length>0&&(
-                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Gênero</p>
-                        {insightData.gender.map((item,i)=>{const max=Math.max(...insightData.gender.map(g=>g.leads),1);return(
-                          <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
-                            <span style={{fontSize:'12px',color:txtMid,width:'70px',flexShrink:0}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#3b82f6',borderRadius:'99px'}}/></div>
-                            <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
-                          </div>
-                        );})}
-                      </div>
-                    )}
-                    {insightData.placement.length>0&&(
-                      <div style={{padding:'16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                        <p style={{margin:'0 0 10px',fontSize:'12px',fontWeight:600,color:txtMid,textTransform:'uppercase',letterSpacing:'0.06em'}}>Posicionamento</p>
-                        {insightData.placement.map((item,i)=>{const max=Math.max(...insightData.placement.map(p=>p.leads),1);return(
-                          <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
-                            <span style={{fontSize:'11.5px',color:txtMid,width:'120px',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label}</span>
-                            <div style={{flex:1,height:'6px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}><div style={{height:'100%',width:`${(item.leads/max)*100}%`,background:'#10b981',borderRadius:'99px'}}/></div>
-                            <span style={{fontSize:'11px',color:txtMid,width:'60px',textAlign:'right',flexShrink:0}}>{item.leads} leads</span>
-                          </div>
-                        );})}
-                      </div>
-                    )}
                   </div>
-                )
+                  :<div style={{padding:'40px 0',textAlign:'center'}}>
+                    <p style={{margin:0,fontSize:'13px',color:txtMid,lineHeight:1.6}}>Nenhum insight gerado hoje.<br/>A IA só gera insights quando identifica algo realmente importante.</p>
+                  </div>
               }
             </div>
           )}
@@ -709,37 +602,53 @@ export default function CampanhasPage() {
       {showAiPanel&&aiLog&&(
         <>
           <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
-          <div style={{position:'fixed',right:0,top:0,bottom:0,width:'300px',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'18px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)'}}>
+          <div style={{position:'fixed',right:0,top:0,bottom:0,width:isMobile?'100vw':'min(420px, 100vw)',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'20px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)',boxSizing:'border-box'}}>
             {/* Header */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
-              <span style={{fontSize:'13px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>IA • hoje às {new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
-              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280',padding:'2px',display:'flex'}}>
-                <X style={{width:'15px',height:'15px'}}/>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
+              <span style={{fontSize:'14px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>
+                IA • hoje às {new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+              </span>
+              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280',padding:'4px',display:'flex',borderRadius:'6px'}}>
+                <X style={{width:'16px',height:'16px'}}/>
               </button>
             </div>
             {/* Resumo */}
             {aiLog.resumo&&(
-              <p style={{margin:'0 0 10px',fontSize:'12.5px',color:dark?'#a1a1aa':'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{aiLog.resumo}</p>
+              <p style={{margin:'0 0 14px',fontSize:'13px',color:dark?'#a1a1aa':'#6b7280',lineHeight:1.6}}>{aiLog.resumo}</p>
             )}
             {/* Alerta */}
             {aiLog.alerta&&(
-              <div style={{padding:'5px 10px',borderRadius:'7px',marginBottom:'10px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)'}}>
-                <p style={{margin:0,fontSize:'12px',color:'#ef4444',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{aiLog.alerta}</p>
+              <div style={{padding:'10px 12px',borderRadius:'8px',marginBottom:'14px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)'}}>
+                <p style={{margin:0,fontSize:'12.5px',color:'#ef4444',lineHeight:1.5}}>{aiLog.alerta}</p>
               </div>
             )}
             {/* Ações executadas */}
             {aiLog.acoes_executadas?.length>0&&(
-              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
                 {aiLog.acoes_executadas.map((acao:any,i:number)=>{
                   const isUp=acao.acao==='aumentar_budget';
                   const isDown=acao.acao==='diminuir_budget';
                   const isPause=acao.acao==='pausar';
                   const color=isUp?'#10b981':isDown?'#f97316':'#ef4444';
-                  const icon=isUp?'↑':isDown?'↓':'⏸';
-                  const val=isPause?'pausada':(acao.novo_budget?`R$${acao.novo_budget}/dia`:'');
+                  const bgColor=isUp?(dark?'rgba(16,185,129,0.08)':'#f0fdf4'):isDown?(dark?'rgba(249,115,22,0.08)':'#fff7ed'):(dark?'rgba(239,68,68,0.08)':'#fef2f2');
+                  const borderColor=isUp?'rgba(16,185,129,0.2)':isDown?'rgba(249,115,22,0.2)':'rgba(239,68,68,0.2)';
                   return(
-                    <div key={i} style={{padding:'7px 10px',borderRadius:'8px',background:dark?'rgba(255,255,255,0.03)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`}}>
-                      <span style={{fontSize:'12.5px',fontWeight:600,color}}>{icon} {acao.campanha_nome}{val?` — ${val}`:''}</span>
+                    <div key={i} style={{padding:'11px 14px',borderRadius:'10px',background:bgColor,border:`1px solid ${borderColor}`}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:acao.motivo?'5px':'0'}}>
+                        {isUp&&<TrendingUp style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
+                        {isDown&&<TrendingDown style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
+                        {isPause&&<Pause style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
+                        <span style={{fontSize:'13px',fontWeight:700,color:dark?'#f4f4f5':'#111827'}}>{acao.campanha_nome}</span>
+                      </div>
+                      {acao.novo_budget&&(
+                        <p style={{margin:'0 0 4px',fontSize:'13px',fontWeight:600,color,paddingLeft:'22px'}}>R$ {acao.novo_budget}/dia</p>
+                      )}
+                      {isPause&&(
+                        <p style={{margin:'0 0 4px',fontSize:'13px',fontWeight:600,color,paddingLeft:'22px'}}>pausada</p>
+                      )}
+                      {acao.motivo&&(
+                        <p style={{margin:0,fontSize:'12px',color:dark?'#71717a':'#6b7280',lineHeight:1.5,paddingLeft:'22px'}}>{acao.motivo}</p>
+                      )}
                     </div>
                   );
                 })}
