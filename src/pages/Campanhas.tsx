@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
-import { TrendingUp, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ArrowUpRight, Lightbulb, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -195,7 +195,7 @@ export default function CampanhasPage() {
   // Leads direto do Supabase com select('*') para garantir utm_campaign
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const [aiLog, setAiLog] = useState<any>(null);
-  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -221,13 +221,13 @@ export default function CampanhasPage() {
 
   // Busca log de otimização da IA do dia
   useEffect(()=>{
-    supabase.from('ai_optimization_logs').select('*').order('created_at',{ascending:false}).limit(1)
+    const hoje = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
+    (supabase as any).from('ai_optimization_logs').select('*')
+      .gte('created_at', hoje+'T00:00:00')
+      .order('created_at',{ascending:false})
+      .limit(1)
       .then(({data})=>{
-        if(data&&data.length>0){
-          const log=data[0];
-          const logDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(log.created_at));
-          if(logDate===todayBRCamp()) setAiLog(log);
-        }
+        if(data&&data.length>0) setAiLog(data[0]);
       });
   },[]);
 
@@ -344,8 +344,14 @@ export default function CampanhasPage() {
             <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
             <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
             {aiLog&&(
-              <button onClick={()=>setShowAIPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'5px',marginTop:'7px',padding:'4px 12px',borderRadius:'20px',border:'1px solid #f59e0b55',background:'#f59e0b18',color:'#f59e0b',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.01em'}}>
-                <Zap style={{width:'12px',height:'12px',fill:'#f59e0b'}}/> IA rodou hoje
+              <button onClick={()=>setShowAiPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'6px',marginTop:'7px',padding:'6px 12px',borderRadius:'99px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',border:'1px solid rgba(139,92,246,0.3)',color:'#8b5cf6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+                <Zap style={{width:'12px',height:'12px'}}/>
+                IA otimizou hoje
+                {aiLog.acoes_executadas?.length>0&&(
+                  <span style={{background:'#8b5cf6',color:'#fff',borderRadius:'99px',padding:'1px 6px',fontSize:'11px'}}>
+                    {aiLog.acoes_executadas.length}
+                  </span>
+                )}
               </button>
             )}
           </div>
@@ -689,51 +695,70 @@ export default function CampanhasPage() {
         )}
       </div>
       {/* Painel IA */}
-      {showAIPanel&&aiLog&&(
+      {showAiPanel&&aiLog&&(
         <>
-          <div onClick={()=>setShowAIPanel(false)} style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.5)'}}/>
-          <div style={{position:'fixed',top:0,right:0,width:isMobile?'100%':'420px',height:'100vh',zIndex:9001,background:cardBg,borderLeft:`1px solid ${border}`,padding:'24px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'16px',boxShadow:'-8px 0 40px rgba(0,0,0,0.3)'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
+          <div style={{position:'fixed',right:0,top:0,bottom:0,width:'420px',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'24px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)'}}>
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'20px'}}>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <Zap style={{width:'18px',height:'18px',color:'#f59e0b',fill:'#f59e0b'}}/>
-                <span style={{fontSize:'16px',fontWeight:700,color:txtHi}}>Otimizações da IA</span>
+                <div style={{width:'32px',height:'32px',borderRadius:'8px',background:'rgba(139,92,246,0.15)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <Zap style={{width:'16px',height:'16px',color:'#8b5cf6'}}/>
+                </div>
+                <div>
+                  <p style={{margin:0,fontSize:'14px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>Otimizações de hoje</p>
+                  <p style={{margin:0,fontSize:'11px',color:dark?'#71717a':'#6b7280'}}>{new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
+                </div>
               </div>
-              <button onClick={()=>setShowAIPanel(false)} style={{background:'transparent',border:'none',cursor:'pointer',color:txtMid,fontSize:'22px',lineHeight:1,padding:'0 4px'}}>×</button>
+              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280'}}>
+                <X style={{width:'18px',height:'18px'}}/>
+              </button>
             </div>
-            <p style={{fontSize:'12px',color:txtLow,margin:0}}>{new Date(aiLog.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</p>
+            {/* Resumo */}
             {aiLog.resumo&&(
-              <div style={{background:dark?'#18181b':'#f9fafb',borderRadius:'10px',padding:'14px',fontSize:'13px',color:txtMid,lineHeight:'1.6',border:`1px solid ${border}`}}>
-                {aiLog.resumo}
+              <div style={{padding:'14px',borderRadius:'12px',marginBottom:'16px',background:dark?'rgba(139,92,246,0.08)':'#faf5ff',border:'1px solid rgba(139,92,246,0.2)'}}>
+                <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.6}}>{aiLog.resumo}</p>
               </div>
             )}
-            {Array.isArray(aiLog.acoes_executadas)&&aiLog.acoes_executadas.length>0&&(
-              <div>
-                <p style={{fontSize:'11px',fontWeight:600,color:txtLow,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.07em'}}>Ações Executadas</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                  {aiLog.acoes_executadas.map((a:any,i:number)=>(
-                    <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'9px 12px',background:dark?'#18181b':'#f9fafb',borderRadius:'8px',fontSize:'13px',color:txtMid,border:`1px solid ${border}`}}>
-                      <span style={{color:'#10b981',flexShrink:0,marginTop:'1px'}}>✓</span>
-                      <span>{typeof a==='string'?a:a.descricao||a.acao||JSON.stringify(a)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {Array.isArray(aiLog.insights)&&aiLog.insights.length>0&&(
-              <div>
-                <p style={{fontSize:'11px',fontWeight:600,color:txtLow,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.07em'}}>Insights</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                  {aiLog.insights.map((ins:any,i:number)=>(
-                    <div key={i} style={{padding:'9px 12px',background:dark?'#18181b':'#f9fafb',borderRadius:'8px',fontSize:'13px',color:txtMid,border:`1px solid ${border}`}}>
-                      {typeof ins==='string'?ins:ins.texto||ins.descricao||JSON.stringify(ins)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Alerta */}
             {aiLog.alerta&&(
-              <div style={{padding:'12px 14px',background:'#ef444420',border:'1px solid #ef444440',borderRadius:'10px',fontSize:'13px',color:'#ef4444',lineHeight:'1.5'}}>
-                ⚠️ {aiLog.alerta}
+              <div style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'16px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)',display:'flex',gap:'10px',alignItems:'flex-start'}}>
+                <AlertTriangle style={{width:'14px',height:'14px',color:'#ef4444',flexShrink:0,marginTop:'2px'}}/>
+                <p style={{margin:0,fontSize:'12.5px',color:'#ef4444',lineHeight:1.5}}>{aiLog.alerta}</p>
+              </div>
+            )}
+            {/* Ações executadas */}
+            {aiLog.acoes_executadas?.length>0&&(
+              <div style={{marginBottom:'16px'}}>
+                <p style={{fontSize:'11px',fontWeight:700,color:dark?'#52525b':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px'}}>Ações executadas</p>
+                {aiLog.acoes_executadas.map((acao:any,i:number)=>(
+                  <div key={i} style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'6px',background:dark?'rgba(255,255,255,0.03)':'#f9fafb',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'10px',alignItems:'flex-start'}}>
+                    <div style={{flexShrink:0,marginTop:'2px'}}>
+                      {acao.acao==='pausar'&&<Pause style={{width:'14px',height:'14px',color:'#ef4444'}}/>}
+                      {acao.acao==='aumentar_budget'&&<TrendingUp style={{width:'14px',height:'14px',color:'#10b981'}}/>}
+                      {acao.acao==='diminuir_budget'&&<TrendingDown style={{width:'14px',height:'14px',color:'#f97316'}}/>}
+                    </div>
+                    <div>
+                      <p style={{margin:'0 0 2px',fontSize:'12.5px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>{acao.campanha_nome}</p>
+                      <p style={{margin:'0 0 2px',fontSize:'11.5px',color:dark?'#71717a':'#6b7280'}}>{acao.motivo}</p>
+                      {acao.novo_budget&&(
+                        <p style={{margin:0,fontSize:'11px',color:'#10b981',fontWeight:500}}>Novo budget: R$ {acao.novo_budget}/dia</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Insights */}
+            {aiLog.insights?.length>0&&(
+              <div>
+                <p style={{fontSize:'11px',fontWeight:700,color:dark?'#52525b':'#9ca3af',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'8px'}}>Insights</p>
+                {aiLog.insights.map((insight:any,i:number)=>(
+                  <div key={i} style={{padding:'12px 14px',borderRadius:'10px',marginBottom:'6px',background:dark?'rgba(255,255,255,0.02)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'10px'}}>
+                    <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
+                    <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.6}}>{typeof insight==='string'?insight:insight.mensagem}</p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
