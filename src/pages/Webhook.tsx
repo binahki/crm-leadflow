@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Copy, RefreshCw, CheckCircle2, XCircle, Activity, Key } from 'lucide-react';
+import { Copy, CheckCircle2, Activity, Link } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTheme } from '@/hooks/useTheme';
 
 interface WebhookLog {
   id: string;
@@ -17,14 +16,19 @@ interface WebhookLog {
 
 export default function WebhookPage() {
   const { leads } = useAppStore();
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [logs, setLogs] = useState<WebhookLog[]>([]);
-  const [secretKey] = useState('lf_secret_' + Math.random().toString(36).substring(2, 10));
   const [copied, setCopied] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [webhookToken, setWebhookToken] = useState<string | null>(null);
 
-  const webhookUrl = `${window.location.origin}/api/webhook/inlead`;
+  const baseUrl = `https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead`;
+  const webhookUrl = webhookToken ? `${baseUrl}?token=${webhookToken}` : baseUrl;
 
   useEffect(() => {
+    supabase.from('configuracoes_whatsapp').select('webhook_token').limit(1).maybeSingle()
+      .then(({ data }) => { if (data) setWebhookToken((data as any).webhook_token || null); });
+
     supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { if (data) setLogs(data as unknown as WebhookLog[]); });
 
@@ -42,103 +46,109 @@ export default function WebhookPage() {
     toast.success('URL copiada!');
   };
 
-  const handleTest = async () => {
-    setTestStatus('loading');
-    try {
-      const { error } = await supabase.from('leads').upsert(
-        {
-          nome: 'Lead de Teste', whatsapp: '(11) 99999-0000', cidade: 'São Paulo',
-          status: 0, entrada: new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }), wa_sent: false,
-        },
-        { onConflict: 'nome,whatsapp', ignoreDuplicates: true }
-      );
-      if (error) throw error;
-      await supabase.from('webhook_logs').insert({ event_type: 'test', payload: { nome: 'Lead de Teste', source: 'manual_test' }, status: 'success' });
-      setTestStatus('success');
-      toast.success('Lead de teste criado!');
-    } catch { setTestStatus('error'); }
-    setTimeout(() => setTestStatus('idle'), 3000);
+  const card: React.CSSProperties = {
+    background: dark ? '#111113' : '#ffffff',
+    border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`,
+    borderRadius: '18px',
+    overflow: 'hidden',
+    boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.06)',
   };
+  const cardHeader: React.CSSProperties = {
+    padding: '16px 20px',
+    borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: dark ? '#18181b' : '#fafafa',
+  };
+  const txt = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#a1a1aa' : '#6b7280';
 
   return (
     <AppLayout leadCount={leads.length}>
-      <div className="p-7 space-y-6">
+      <div style={{ padding: '32px', maxWidth: '860px' }}>
 
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Webhook</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Configure o recebimento automático de leads</p>
+        <div style={{ marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Webhook</h1>
+          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Receba leads automaticamente do seu quiz</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Config card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-2">
-              <Key className="w-5 h-5 text-blue-600" />
-              <h2 className="font-semibold text-gray-900">Endpoint Webhook</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+          {/* URL card */}
+          <div style={card}>
+            <div style={cardHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Link style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>URL do Webhook</span>
+              </div>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-400">Cole esta URL na configuração do seu quiz/formulário para receber leads automaticamente.</p>
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">URL do Webhook</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs font-mono text-gray-700 break-all">{webhookUrl}</code>
-                  <Button variant="ghost" size="sm" onClick={handleCopy} className="hover:bg-gray-100 flex-shrink-0">
-                    {copied ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                  </Button>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
+                Cole esta URL no campo de webhook do seu quiz na <strong style={{ color: txt }}>Inlead</strong>.
+                {webhookToken && <> O token garante segurança no recebimento.</>}
+              </p>
+
+              <div style={{ background: dark ? '#0d0d0f' : '#f8fafc', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '12px', padding: '14px 16px' }}>
+                <p style={{ fontSize: '10px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>Endpoint</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ flex: 1, fontSize: '12.5px', color: txt, wordBreak: 'break-all', lineHeight: 1.5 }}>{webhookUrl}</span>
+                  <button
+                    onClick={handleCopy}
+                    style={{ flexShrink: 0, padding: '6px', borderRadius: '8px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#18181b' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: copied ? '#10b981' : txtMid, transition: 'all 0.15s' }}
+                  >
+                    {copied ? <CheckCircle2 style={{ width: '15px', height: '15px' }} /> : <Copy style={{ width: '15px', height: '15px' }} />}
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Secret Key</label>
-                <Input value={secretKey} readOnly className="font-mono text-xs bg-gray-50 border-gray-200" />
+
+              <div style={{ background: dark ? 'rgba(59,130,246,0.08)' : '#eff6ff', border: `1px solid ${dark ? 'rgba(59,130,246,0.2)' : '#bfdbfe'}`, borderRadius: '10px', padding: '12px 14px' }}>
+                <p style={{ fontSize: '12.5px', color: dark ? '#93c5fd' : '#1d4ed8', margin: 0, lineHeight: 1.5 }}>
+                  <strong>Como configurar:</strong> Acesse seu quiz na Inlead → Configurações → Webhook → cole a URL acima.
+                  {webhookToken && <> O token na URL garante que apenas requisições autorizadas são aceitas.</>}
+                </p>
               </div>
-              <Button
-                onClick={handleTest}
-                disabled={testStatus === 'loading'}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {testStatus === 'loading' && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
-                {testStatus === 'success' && <CheckCircle2 className="w-4 h-4 mr-2" />}
-                {testStatus === 'error'   && <XCircle className="w-4 h-4 mr-2" />}
-                {testStatus === 'success' ? 'Teste enviado!' : testStatus === 'error' ? 'Erro no teste' : 'Testar webhook'}
-              </Button>
             </div>
           </div>
 
-          {/* Logs card */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-purple-600" />
-                <h2 className="font-semibold text-gray-900">Log em tempo real</h2>
+          {/* Log card */}
+          <div style={card}>
+            <div style={cardHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity style={{ width: '16px', height: '16px', color: '#8b5cf6' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Log em tempo real</span>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => window.location.reload()} className="hover:bg-gray-50">
-                <RefreshCw className="w-4 h-4" />
-              </Button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                <span style={{ fontSize: '11px', color: txtMid }}>ao vivo</span>
+              </div>
             </div>
-            <div className="p-4 max-h-[400px] overflow-y-auto">
+            <div style={{ padding: '12px', maxHeight: '360px', overflowY: 'auto' }}>
               {logs.length === 0 ? (
-                <div className="text-center py-10">
-                  <Activity className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-400">Nenhum evento registrado</p>
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <Activity style={{ width: '28px', height: '28px', color: dark ? '#27272a' : '#e5e7eb', margin: '0 auto 8px' }} />
+                  <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>Nenhum evento ainda</p>
                 </div>
               ) : (
-                <div className="space-y-2 font-mono text-xs">
-                  {logs.map(log => (
-                    <div key={log.id} className="bg-gray-50 rounded-lg p-3 border border-gray-100 flex items-center gap-3">
-                      <span className="text-gray-400 flex-shrink-0">{new Date(log.created_at).toLocaleTimeString('pt-BR')}</span>
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${log.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className={log.status === 'success' ? 'text-green-700' : 'text-red-600'}>
-                        {log.event_type}: {(log.payload as any)?.nome || 'Lead'}
-                      </span>
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {logs.map(log => {
+                    const nome = (log.payload as any)?.nome || 'Lead';
+                    const ok = log.status === 'success';
+                    return (
+                      <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '10px', background: dark ? '#18181b' : '#f8fafc', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}` }}>
+                        <span style={{ fontSize: '11.5px', color: txtMid, flexShrink: 0, minWidth: '52px' }}>
+                          {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: ok ? '#10b981' : '#ef4444', flexShrink: 0 }} />
+                        <span style={{ fontSize: '13px', color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nome}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
     </AppLayout>
   );

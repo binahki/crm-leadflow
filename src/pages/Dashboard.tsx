@@ -180,7 +180,7 @@ export default function Dashboard() {
   const dark = theme === 'dark';
 
   const firstName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
-  const savedPeriod = localStorage.getItem(STORAGE_KEY) || 'today';
+  const savedPeriod = (() => { try { return localStorage.getItem(STORAGE_KEY) || 'today'; } catch { return 'today'; } })();
   const savedCustom = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}'); } catch { return {}; } })();
 
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -211,8 +211,8 @@ export default function Dashboard() {
   useEffect(() => { if(allLeads.length>0)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
   useEffect(() => { const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, []);
 
-  function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); localStorage.setItem(STORAGE_KEY,value); setShowDropdown(false); setShowCustom(false); }
-  function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); setShowCustom(false); }
+  function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }
+  function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); try { localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); } catch {} setShowCustom(false); }
   async function handleRefresh() { setIsRefreshing(true); await Promise.all([fetchLeads(),loadMeta()]); setTimeout(()=>setIsRefreshing(false),600); }
 
   // Navega para leads filtrados por campanha + período atual
