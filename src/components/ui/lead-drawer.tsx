@@ -34,29 +34,51 @@ const GRADIENTS = [
   ['#fbbf24', '#a78bfa'], ['#34d399', '#a78bfa'],
 ];
 
-// Perguntas do quiz em ordem exata
-const QUIZ_FIELDS = [
-  { label: 'O que mais te atrai?',            campo: 'o_que_mais_te_atrai' },
-  { label: 'Quanto quer ganhar por mês?',      campo: 'quanto_ganha' },
-  { label: 'Idade',                            campo: 'idade' },
-  { label: 'Tem filhos?',                      campo: 'tem_filhos' },
-  { label: 'Idade do filho mais novo',         campo: 'idade_filho' },
-  { label: 'Tem rede de apoio?',               campo: 'rede_apoio' },
-  { label: 'Mora com companheiro?',            campo: 'mora_com' },
-  { label: 'Situação atual',                   campo: 'situacao_atual' },
-  { label: 'Área de atuação',                  campo: 'area_atuacao' },
-  { label: 'Já vende algum produto?',          campo: 'ja_vende' },
-  { label: 'Por quais meios pretende vender?', campo: 'meios_venda' },
-  { label: 'Horas por semana disponíveis',     campo: 'horas_semana' },
-  { label: 'Quando quer começar?',             campo: 'quando_comecar' },
-  { label: 'Já tentou vender semijoia?',       campo: 'tentou_semijoia' },
-  { label: 'Instagram ativo?',                 campo: 'instagram_ativo' },
-  { label: 'Para começar no consignado',       campo: 'consignado' },
-  { label: 'Nome negativado?',                 campo: 'negativado' },
-  { label: 'Aceita as regras do consignado?',  campo: 'aceita_regras' },
-];
-
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+
+// ── Quiz respostas dinâmico ───────────────────────────────────
+const SKIP_EXACT = new Set([
+  'nome', 'whatsapp', 'telefone', 'cidade', 'score', 'status', 'email',
+  'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term', 'utm_id',
+  'fbclid', 'brid', 'code', 'ip', 'platform', 'instagram', 'wa_sent', 'created_at', 'id',
+]);
+const SKIP_PREFIXES = ['tracking.', 'responses.', 'score.'];
+const STRIP_PREFIXES = ['voce_', 'qual_sua_', 'quanto_gostaria_de_'];
+// Campos de controle da Inlead: 6 chars alfanuméricos misturados (letras + dígitos)
+const INLEAD_CTRL = /^[A-Za-z0-9]{6}$/;
+
+function isSkippedKey(key: string): boolean {
+  const k = key.toLowerCase();
+  if (SKIP_EXACT.has(k)) return true;
+  if (/^\d+$/.test(key)) return true;
+  if (k.endsWith('_at') || k.endsWith('_id')) return true;
+  if (SKIP_PREFIXES.some(p => k.startsWith(p))) return true;
+  if (INLEAD_CTRL.test(key) && /[A-Z]/.test(key) && /[a-z]/.test(key) && /[0-9]/.test(key)) return true;
+  return false;
+}
+
+function isSkippedValue(val: unknown): boolean {
+  if (val === null || val === undefined || val === '') return true;
+  const s = String(val);
+  if (s.includes('http://') || s.includes('https://')) return true;
+  return false;
+}
+
+function formatKey(key: string): string {
+  let k = key;
+  for (const prefix of STRIP_PREFIXES) {
+    if (k.startsWith(prefix)) { k = k.slice(prefix.length); break; }
+  }
+  return k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatValue(val: unknown): string {
+  if (val === null || val === undefined || val === '') return '—';
+  if (typeof val === 'boolean') return val ? 'Sim' : 'Não';
+  if (Array.isArray(val)) return val.join(', ');
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
 
 function getGradient(name: string) { return GRADIENTS[(name?.charCodeAt(0) || 0) % GRADIENTS.length]; }
 function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
@@ -322,16 +344,27 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
           <div style={{ padding: '4px 22px 8px' }}>
 
-            {/* Respostas do Quiz — SEMPRE todas as perguntas em ordem */}
-            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '10px 0 4px', fontFamily: FONT }}>
-              Respostas do Quiz
-            </p>
-            <Section openKey="quiz" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-              icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Perfil e respostas">
-              {QUIZ_FIELDS.map(({ label, campo }) => (
-                <Field key={campo} label={label} value={l[campo]} dark={dark} />
-              ))}
-            </Section>
+            {/* Respostas do Quiz — lê de quiz_respostas (jsonb), totalmente dinâmico */}
+            {(() => {
+              let respostas: Record<string, unknown> | null = null;
+              try {
+                const raw = l.quiz_respostas;
+                if (raw) respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              } catch { respostas = null; }
+              if (!respostas) return null;
+              const entries = Object.entries(respostas).filter(
+                ([k, v]) => !isSkippedKey(k) && !isSkippedValue(v)
+              );
+              if (entries.length === 0) return null;
+              return (
+                <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
+                  icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Ver respostas do quiz">
+                  {entries.map(([key, val]) => (
+                    <Field key={key} label={formatKey(key)} value={formatValue(val)} dark={dark} />
+                  ))}
+                </Section>
+              );
+            })()}
 
             {/* Origem do Tráfego */}
             {hasTraffic && (
