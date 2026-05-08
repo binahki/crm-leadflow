@@ -194,6 +194,8 @@ export default function CampanhasPage() {
   const [isMobile, setIsMobile] = useState(false);
   // Leads direto do Supabase com select('*') para garantir utm_campaign
   const [allLeads, setAllLeads] = useState<any[]>([]);
+  const [aiLog, setAiLog] = useState<any>(null);
+  const [showAIPanel, setShowAIPanel] = useState(false);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -215,6 +217,18 @@ export default function CampanhasPage() {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
+  },[]);
+
+  // Busca log de otimização da IA do dia
+  useEffect(()=>{
+    supabase.from('ai_optimization_logs').select('*').order('created_at',{ascending:false}).limit(1)
+      .then(({data})=>{
+        if(data&&data.length>0){
+          const log=data[0];
+          const logDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date(log.created_at));
+          if(logDate===todayBRCamp()) setAiLog(log);
+        }
+      });
   },[]);
 
   const load=async()=>{setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
@@ -329,6 +343,11 @@ export default function CampanhasPage() {
           <div>
             <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
             <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
+            {aiLog&&(
+              <button onClick={()=>setShowAIPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'5px',marginTop:'7px',padding:'4px 12px',borderRadius:'20px',border:'1px solid #f59e0b55',background:'#f59e0b18',color:'#f59e0b',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.01em'}}>
+                <Zap style={{width:'12px',height:'12px',fill:'#f59e0b'}}/> IA rodou hoje
+              </button>
+            )}
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
@@ -669,6 +688,57 @@ export default function CampanhasPage() {
           </div>
         )}
       </div>
+      {/* Painel IA */}
+      {showAIPanel&&aiLog&&(
+        <>
+          <div onClick={()=>setShowAIPanel(false)} style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'fixed',top:0,right:0,width:isMobile?'100%':'420px',height:'100vh',zIndex:9001,background:cardBg,borderLeft:`1px solid ${border}`,padding:'24px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'16px',boxShadow:'-8px 0 40px rgba(0,0,0,0.3)'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <Zap style={{width:'18px',height:'18px',color:'#f59e0b',fill:'#f59e0b'}}/>
+                <span style={{fontSize:'16px',fontWeight:700,color:txtHi}}>Otimizações da IA</span>
+              </div>
+              <button onClick={()=>setShowAIPanel(false)} style={{background:'transparent',border:'none',cursor:'pointer',color:txtMid,fontSize:'22px',lineHeight:1,padding:'0 4px'}}>×</button>
+            </div>
+            <p style={{fontSize:'12px',color:txtLow,margin:0}}>{new Date(aiLog.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</p>
+            {aiLog.resumo&&(
+              <div style={{background:dark?'#18181b':'#f9fafb',borderRadius:'10px',padding:'14px',fontSize:'13px',color:txtMid,lineHeight:'1.6',border:`1px solid ${border}`}}>
+                {aiLog.resumo}
+              </div>
+            )}
+            {Array.isArray(aiLog.acoes_executadas)&&aiLog.acoes_executadas.length>0&&(
+              <div>
+                <p style={{fontSize:'11px',fontWeight:600,color:txtLow,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.07em'}}>Ações Executadas</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {aiLog.acoes_executadas.map((a:any,i:number)=>(
+                    <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'9px 12px',background:dark?'#18181b':'#f9fafb',borderRadius:'8px',fontSize:'13px',color:txtMid,border:`1px solid ${border}`}}>
+                      <span style={{color:'#10b981',flexShrink:0,marginTop:'1px'}}>✓</span>
+                      <span>{typeof a==='string'?a:a.descricao||a.acao||JSON.stringify(a)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {Array.isArray(aiLog.insights)&&aiLog.insights.length>0&&(
+              <div>
+                <p style={{fontSize:'11px',fontWeight:600,color:txtLow,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.07em'}}>Insights</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {aiLog.insights.map((ins:any,i:number)=>(
+                    <div key={i} style={{padding:'9px 12px',background:dark?'#18181b':'#f9fafb',borderRadius:'8px',fontSize:'13px',color:txtMid,border:`1px solid ${border}`}}>
+                      {typeof ins==='string'?ins:ins.texto||ins.descricao||JSON.stringify(ins)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {aiLog.alerta&&(
+              <div style={{padding:'12px 14px',background:'#ef444420',border:'1px solid #ef444440',borderRadius:'10px',fontSize:'13px',color:'#ef4444',lineHeight:'1.5'}}>
+                ⚠️ {aiLog.alerta}
+              </div>
+            )}
+          </div>
+        </>
+      )}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
