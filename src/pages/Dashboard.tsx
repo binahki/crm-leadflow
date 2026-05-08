@@ -4,6 +4,7 @@ import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizon
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
@@ -13,8 +14,7 @@ interface Lead { id: string; nome: string; cidade: string | null; whatsapp: stri
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
 interface MetaMetrics { spend: number; leads: number; cpl: number; impressions: number; clicks: number; ctr: number; cplRealTime: number; }
 
-const META_TOKEN = import.meta.env.VITE_META_TOKEN;
-const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
+
 const STORAGE_KEY = 'dashboard_period';
 const STORAGE_CUSTOM = 'dashboard_custom_range';
 
@@ -144,16 +144,17 @@ function toNum(s: any): number { if (s === null || s === undefined || s === '') 
 function initials(n: string) { return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
 function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
 
-async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = []): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
+async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = [], token = '', account = ''): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
   const empty = { metrics: { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 }, campaigns: [] };
+  if (!token || !account) return empty;
   try {
     const presetMap: Record<string,string> = { today:'today', yesterday:'yesterday', '7days':'last_7d', '30days':'last_30d', month:'this_month' };
     const timeParam = period in presetMap ? `date_preset=${presetMap[period]}` : period==='custom'&&from&&to ? `time_range=%7B%22since%22%3A%22${from}%22%2C%22until%22%3A%22${to}%22%7D` : 'date_preset=this_month';
-    const insRes = await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=spend,impressions,clicks,ctr,actions&${timeParam}&access_token=${META_TOKEN}`);
+    const insRes = await fetch(`https://graph.facebook.com/v18.0/act_${account}/insights?fields=spend,impressions,clicks,ctr,actions&${timeParam}&access_token=${token}`);
     const insData = await insRes.json();
     let spend=0, impressions=0, clicks=0, ctr=0, leads=0;
     if (insData.data?.length) { const d=insData.data[0]; spend=parseFloat(d.spend||'0'); impressions=parseInt(d.impressions||'0'); clicks=parseInt(d.clicks||'0'); ctr=parseFloat(d.ctr||'0'); const la=(d.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type)); leads=la?parseInt(la.value||'0'):0; }
-    const campRes = await fetch(`https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${META_TOKEN}`);
+    const campRes = await fetch(`https://graph.facebook.com/v18.0/act_${account}/insights?fields=campaign_id,campaign_name,spend,actions&level=campaign&${timeParam}&access_token=${token}`);
     const campData = await campRes.json();
     const campaigns: Campaign[] = [];
     (campData.data||[]).forEach((ins:any) => {
@@ -175,6 +176,7 @@ function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { metaToken, metaAccount } = useMetaConfig();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const dark = theme === 'dark';
@@ -205,10 +207,10 @@ export default function Dashboard() {
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async () => { setLoading(true); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
-  const loadMeta = async (currentLeads?: Lead[]) => { setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
+  const loadMeta = async (currentLeads?: Lead[]) => { setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
 
-  useEffect(() => { if(!user)return; fetchLeads().then(()=>loadMeta()); }, [user?.id]); // eslint-disable-line
-  useEffect(() => { if(allLeads.length>0)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length]); // eslint-disable-line
+  useEffect(() => { if(!user||!metaToken||!metaAccount)return; fetchLeads().then(()=>loadMeta()); }, [user?.id,metaToken,metaAccount]); // eslint-disable-line
+  useEffect(() => { if(allLeads.length>0&&metaToken&&metaAccount)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaToken,metaAccount]); // eslint-disable-line
   useEffect(() => { const ch=supabase.channel('dash-rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, []);
 
   function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }

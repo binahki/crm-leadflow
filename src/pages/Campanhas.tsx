@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
+import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
@@ -22,8 +23,7 @@ interface Campaign {
   leads_api: number; cpl?: number; adsets?: AdSet[]; ads?: Ad[];
 }
 
-const META_TOKEN  = import.meta.env.VITE_META_TOKEN;
-const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
+
 const LEAD_ACTIONS = ['lead','offsite_conversion.fb_pixel_lead','onsite_conversion.lead_grouped'];
 
 const PERIOD_OPTIONS = [
@@ -72,22 +72,23 @@ function filterLeadsByPreset(leads: any[], preset: string) {
 }
 
 // ── Fetch campanhas ───────────────────────────────────────────
-async function fetchCampaignsWithChildren(datePreset: string): Promise<Campaign[]> {
-  const tok=META_TOKEN; const base='https://graph.facebook.com/v18.0'; const dp=datePreset;
+async function fetchCampaignsWithChildren(datePreset: string, token: string, account: string): Promise<Campaign[]> {
+  const tok=token; const base='https://graph.facebook.com/v18.0'; const dp=datePreset;
+  if (!tok || !account) return [];
   function getLeadsFromActions(actions:any[]){return parseInt(actions?.find((a:any)=>LEAD_ACTIONS.includes(a.action_type))?.value||'0');}
   try {
-    const campUrl=new URL(`${base}/act_${META_ACCOUNT}/campaigns`);
+    const campUrl=new URL(`${base}/act_${account}/campaigns`);
     campUrl.searchParams.set('fields',`id,name,status,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
     campUrl.searchParams.set('limit','20'); campUrl.searchParams.set('access_token',tok);
     const campData=await(await fetch(campUrl.toString())).json();
     if(!campData.data?.length) return [];
 
-    const asUrl=new URL(`${base}/act_${META_ACCOUNT}/adsets`);
+    const asUrl=new URL(`${base}/act_${account}/adsets`);
     asUrl.searchParams.set('fields',`id,name,status,campaign_id,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
     asUrl.searchParams.set('limit','50'); asUrl.searchParams.set('access_token',tok);
     const asData=await(await fetch(asUrl.toString())).json();
 
-    const adUrl=new URL(`${base}/act_${META_ACCOUNT}/ads`);
+    const adUrl=new URL(`${base}/act_${account}/ads`);
     adUrl.searchParams.set('fields',`id,name,status,campaign_id,adset_id,creative{thumbnail_url},insights.date_preset(${dp}){spend,ctr,actions}`);
     adUrl.searchParams.set('limit','50'); adUrl.searchParams.set('access_token',tok);
     const adData=await(await fetch(adUrl.toString())).json();
@@ -138,6 +139,7 @@ function Thumbnail({url,name,size=36}:{url:string|null;name:string;size?:number}
 export default function CampanhasPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
+  const { metaToken, metaAccount } = useMetaConfig();
   const dark = theme === 'dark';
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -188,8 +190,8 @@ export default function CampanhasPage() {
       });
   },[]);
 
-  const load=async()=>{setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
-  useEffect(()=>{load();},[datePreset]); // eslint-disable-line
+  const load=async()=>{if(!metaToken||!metaAccount)return;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
+  useEffect(()=>{load();},[datePreset,metaToken,metaAccount]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
