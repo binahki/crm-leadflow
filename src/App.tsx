@@ -9,6 +9,7 @@ import ResetPasswordPage from "./pages/ResetPassword";
 import CadastroPage from "./pages/Cadastro";
 import AdminPage from "./pages/Admin";
 import OnboardingPage from "./pages/Onboarding";
+import SemAcessoPage from "./pages/SemAcesso";
 import DashboardPage from "./pages/Dashboard";
 import LeadsPage from "./pages/Leads";
 import KanbanPage from "./pages/Kanban";
@@ -35,6 +36,7 @@ const App = () => (
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
+          <Route path="/sem-acesso" element={<ProtectedRoute><SemAcessoPage /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
           <Route path="/kanban" element={<ProtectedRoute><KanbanPage /></ProtectedRoute>} />
