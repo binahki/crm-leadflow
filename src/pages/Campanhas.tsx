@@ -162,11 +162,11 @@ export default function CampanhasPage() {
 
   // Busca leads com select('*') — garante utm_campaign, utm_source, status
   useEffect(()=>{
-    if (!orgReady) return;
-    let q = supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at')
-      .order('created_at',{ascending:false});
-    if (orgId) q = q.eq('org_id', orgId);
-    q.then(({data})=>{ if(data) setAllLeads(data); });
+    if (!orgReady || !orgId) return;
+    setAllLeads([]);
+    supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at')
+      .order('created_at',{ascending:false}).eq('org_id', orgId)
+      .then(({data})=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady]);
 
   // Realtime: atualiza allLeads ao receber novos leads (filtrado por org)

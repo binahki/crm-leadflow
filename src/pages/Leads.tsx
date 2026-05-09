@@ -309,12 +309,12 @@ export default function LeadsPage() {
   }, []);
 
   const fetchLeads = useCallback(async () => {
-    if (!orgReady) return;
+    if (!orgReady || !orgId) return;
     setIsLoading(true);
     setAllLeads([]);
-    let q = supabase.from('leads').select('*').order('created_at', { ascending: false });
-    if (orgId) q = q.eq('org_id', orgId);
-    const { data, error } = await q;
+    const { data, error } = await supabase
+      .from('leads').select('*').order('created_at', { ascending: false })
+      .eq('org_id', orgId);
     if (error) toast.error(`Erro: ${error.message}`);
     else if (data) setAllLeads(data as unknown as Lead[]);
     setIsLoading(false);
@@ -372,7 +372,7 @@ export default function LeadsPage() {
     const cidadeNorm=normalizeCity(newLead.cidade); const phoneClean=newLead.whatsapp.replace(/\D/g,'');
     const existing=allLeads.find(l=>l.whatsapp?.replace(/\D/g,'')=== phoneClean);
     if(existing){ const{error}=await supabase.from('leads').update({nome:newLead.nome.trim(),cidade:cidadeNorm}).eq('id',existing.id); if(error){toast.error(`Erro: ${error.message}`);return;} setAllLeads(prev=>prev.map(l=>l.id===existing.id?{...l,nome:newLead.nome.trim(),cidade:cidadeNorm}:l)); setNewLead({nome:'',whatsapp:'',cidade:''}); setIsAddOpen(false); toast.success('Lead duplicado atualizado!'); return; }
-    const{data,error}=await supabase.from('leads').insert({nome:newLead.nome.trim(),whatsapp:newLead.whatsapp,cidade:cidadeNorm,status:1,created_at:new Date().toISOString()}).select('*').single();
+    const{data,error}=await supabase.from('leads').insert({nome:newLead.nome.trim(),whatsapp:newLead.whatsapp,cidade:cidadeNorm,status:1,created_at:new Date().toISOString(),org_id:orgId}).select('*').single();
     if(error){toast.error(`Erro: ${error.message}`);return;} if(data)setAllLeads(prev=>[data as unknown as Lead,...prev]); setNewLead({nome:'',whatsapp:'',cidade:''}); setIsAddOpen(false); toast.success('Lead adicionado!');
   };
 
