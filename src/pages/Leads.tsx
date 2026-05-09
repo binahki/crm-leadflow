@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, Lead, STATUS_LABELS, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrgId } from '@/hooks/useOrgId';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -262,6 +263,7 @@ export default function LeadsPage() {
   const { updateLead } = useAppStore();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -307,12 +309,15 @@ export default function LeadsPage() {
   }, []);
 
   const fetchLeads = useCallback(async () => {
+    if (!orgReady) return;
     setIsLoading(true);
-    const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+    let q = supabase.from('leads').select('*').order('created_at', { ascending: false });
+    if (orgId) q = q.eq('org_id', orgId);
+    const { data, error } = await q;
     if (error) toast.error(`Erro: ${error.message}`);
     else if (data) setAllLeads(data as unknown as Lead[]);
     setIsLoading(false);
-  }, []);
+  }, [orgId, orgReady]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 

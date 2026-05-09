@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { getRelativeTime } from '@/utils/relativeTime';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
+import { useOrgId } from '@/hooks/useOrgId';
 
 const COLUMNS = [
   { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: 'rgba(59,130,246,0.06)' },
@@ -255,6 +256,7 @@ function OverlayCard({ lead }: { lead: Lead }) {
 export default function KanbanPage() {
   const { leads, setLeads, updateLead } = useAppStore();
   const { theme } = useTheme();
+  const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
@@ -274,7 +276,12 @@ export default function KanbanPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
 
-  useEffect(() => { supabase.from('leads').select('*').then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); }); }, []);
+  useEffect(() => {
+    if (!orgReady) return;
+    let q = supabase.from('leads').select('*');
+    if (orgId) q = q.eq('org_id', orgId);
+    q.then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); });
+  }, [orgId, orgReady]); // eslint-disable-line
 
   useEffect(() => {
     const ch = supabase.channel('kanban-rt')

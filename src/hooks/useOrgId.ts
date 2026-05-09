@@ -73,5 +73,5 @@ export function useOrgId() {
       .catch(() => setReady(true));
   }, [user?.id]);
 
-  return { orgId, orgName, isAdminView, ready };
+  return { orgId, orgName, isAdminView, ready, loading: !ready };
 }
