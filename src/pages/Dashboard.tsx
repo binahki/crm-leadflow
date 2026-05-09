@@ -8,7 +8,6 @@ import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { TutorialPopup } from '@/components/TutorialPopup';
 
@@ -170,12 +169,6 @@ async function fetchMetaData(period: string, from?: string, to?: string, leadsLi
   } catch (e) { console.error('[Meta]',e); return empty; }
 }
 
-function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
-  const { configuracoes } = useAppStore();
-  const faixa = lead.faixa || (configuracoes ? calcularFaixa(lead as any, configuracoes) : null);
-  if (!faixa || faixa === 'vermelho') return null;
-  return <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/>;
-}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -207,13 +200,13 @@ export default function Dashboard() {
   const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const [isMobile, setIsMobile] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
 
   const dropRef = useRef<HTMLDivElement>(null);
   const customRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
+  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async () => { if(!orgId){setLoading(false);return;} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
@@ -310,6 +303,8 @@ export default function Dashboard() {
     });
   }, [metaCampaigns, filtered]);
 
+  const safeChartData = chartData.length > 0 ? chartData : [{ date: '—', leads: 0 }];
+
   const periodLabel = selectedPeriod==='custom'&&customFrom&&customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
@@ -389,7 +384,7 @@ export default function Dashboard() {
           ].map((c,i)=>(
             <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
               <p style={{ fontSize:'11px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
-              <p style={{ fontSize:isMobile?'18px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
+              <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
               <p style={{ fontSize:'11px', display:'flex', alignItems:'center', gap:'3px', margin:0 }}>
                 {c.up?<TrendingUp style={{ width:'11px', height:'11px', color:'#10b981' }}/>:<TrendingDown style={{ width:'11px', height:'11px', color:'#ef4444' }}/>}
                 <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444' }}>{c.trend}</span>
@@ -411,10 +406,9 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            {chartData.length > 0 && (
             <div style={{ width:'100%', height:isMobile?160:200, minHeight:120 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
+                <AreaChart data={safeChartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
                   <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
@@ -424,7 +418,6 @@ export default function Dashboard() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            )}
           </div>
 
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, position:'relative', overflow:'hidden' }}>
@@ -489,7 +482,7 @@ export default function Dashboard() {
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
                         {initials(lead.nome)}
                       </div>
-                      <FaixaDot lead={lead} dark={dark}/>
+                      {(()=>{ const faixaLead = (lead.faixa as string) || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <p style={{ fontSize:'12.5px', fontWeight:500, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
@@ -565,7 +558,7 @@ export default function Dashboard() {
         </div>
       </div>
       <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>
-      {orgId && <TutorialPopup />}
+      {orgId && !isMobile && <TutorialPopup />}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
