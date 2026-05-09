@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 import { Check, Copy, MessageCircle, Webhook, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { invalidateOnboardingCache } from '@/components/ProtectedRoute';
+
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
@@ -44,12 +44,12 @@ export default function OnboardingPage() {
       .limit(1)
       .single()
       .then(({ data, error }) => {
-        if (error) {
+        if (error || !data?.org_id) {
           console.error('[Onboarding] memberships query error:', error);
+          toast.error('Erro ao carregar organização. Tente fazer logout e login novamente.');
           return;
         }
-        if (data?.org_id) setOrgId(data.org_id);
-        else console.warn('[Onboarding] membership found but org_id is empty');
+        setOrgId(data.org_id);
       });
   }, [user?.id]);
 
@@ -71,7 +71,7 @@ export default function OnboardingPage() {
   // ── Handlers ─────────────────────────────────────────────────
   async function handleStep2Continue() {
     if (!orgId) {
-      toast.error('Organização não encontrada. Tente recarregar a página.');
+      toast.error('Aguarde... carregando organização.');
       return;
     }
     setSaving(true);
@@ -131,8 +131,7 @@ export default function OnboardingPage() {
   }
 
   function handleConcluir() {
-    invalidateOnboardingCache();
-    navigate('/');
+    navigate('/dashboard');
   }
 
   const webhookUrl = `${EDGE_URL}?token=${webhookToken}`;
