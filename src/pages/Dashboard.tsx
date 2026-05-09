@@ -41,23 +41,28 @@ const AVATAR_COLORS = ['bg-rose-400', 'bg-yellow-400', 'bg-emerald-400', 'bg-ora
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
-  if (!str) return new Date(0);
-  if (str.includes('T')) return new Date(str);
-  if (/^\d{4}-\d{2}-\d{2} /.test(str))
-    return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z'));
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-  if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`); }
-  return new Date(str);
+  if (!str || typeof str !== 'string') return new Date(0);
+  try {
+    if (str.includes('T')) { const d = new Date(str); return isNaN(d.getTime()) ? new Date(0) : d; }
+    if (/^\d{4}-\d{2}-\d{2} /.test(str)) { const d = new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z')); return isNaN(d.getTime()) ? new Date(0) : d; }
+    const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+    if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; const dt = new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`); return isNaN(dt.getTime()) ? new Date(0) : dt; }
+    const d = new Date(str); return isNaN(d.getTime()) ? new Date(0) : d;
+  } catch { return new Date(0); }
 }
 
 function leadDateBR(str?: string | null): string {
-  const d = parseLeadDate(str);
-  if (d.getTime() === 0) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  try {
+    const d = parseLeadDate(str);
+    if (!d || isNaN(d.getTime()) || d.getTime() === 0) return '';
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  } catch { return ''; }
 }
 
 function todayBR(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  } catch { return new Date().toISOString().slice(0, 10); }
 }
 
 function subDays(dateStr: string, n: number): string {
@@ -101,30 +106,40 @@ function buildChartData(leads: Lead[], period: string, from?: string, to?: strin
     const slots: Record<string, number> = {};
     for (let h = 0; h < 24; h += 2) slots[`${String(h).padStart(2,'0')}h`] = 0;
     leads.forEach(l => {
-      if (leadDateBR(l.created_at) !== startDate) return;
-      const d = parseLeadDate(l.created_at);
-      const hStr = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
-      const sh = Math.floor(parseInt(hStr) / 2) * 2;
-      const k = `${String(sh).padStart(2,'0')}h`;
-      if (k in slots) slots[k]++;
+      try {
+        if (leadDateBR(l.created_at) !== startDate) return;
+        const d = parseLeadDate(l.created_at);
+        if (!d || isNaN(d.getTime())) return;
+        const hStr = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
+        const sh = Math.floor(parseInt(hStr) / 2) * 2;
+        const k = `${String(sh).padStart(2,'0')}h`;
+        if (k in slots) slots[k]++;
+      } catch { /* skip invalid date */ }
     });
     return Object.entries(slots).map(([date, cnt]) => ({ date, leads: cnt }));
   }
 
   const dayMap: Record<string, number> = {};
   for (let i = 0; i < days; i++) {
-    const d = new Date(startDate + 'T12:00:00Z');
-    d.setUTCDate(d.getUTCDate() + i);
-    dayMap[d.toISOString().slice(0,10)] = 0;
+    try {
+      const d = new Date(startDate + 'T12:00:00Z');
+      if (isNaN(d.getTime())) continue;
+      d.setUTCDate(d.getUTCDate() + i);
+      if (isNaN(d.getTime())) continue;
+      dayMap[d.toISOString().slice(0, 10)] = 0;
+    } catch { continue; }
   }
   leads.forEach(l => {
     const k = leadDateBR(l.created_at);
     if (k && k in dayMap) dayMap[k]++;
   });
-  return Object.entries(dayMap).map(([iso, cnt]) => ({
-    date: new Date(iso+'T12:00:00Z').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
-    leads: cnt,
-  }));
+  return Object.entries(dayMap).map(([iso, cnt]) => {
+    try {
+      const d = new Date(iso + 'T12:00:00Z');
+      if (isNaN(d.getTime())) return { date: '—', leads: cnt };
+      return { date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), leads: cnt };
+    } catch { return { date: '—', leads: cnt }; }
+  });
 }
 
 function isoToBR(iso: string): string {
@@ -135,9 +150,20 @@ function isoToBR(iso: string): string {
 
 function relativeTime(str?: string | null): string {
   if (!str) return '—';
-  const diff = Date.now() - parseLeadDate(str).getTime();
-  const min = Math.floor(diff/60000); const h = Math.floor(min/60); const days = Math.floor(h/24);
-  if (min < 1) return 'agora'; if (min < 60) return `${min}m`; if (h < 24) return `${h}h`; if (days === 1) return '1d'; return `${days}d`;
+  try {
+    const d = parseLeadDate(str);
+    if (!d || isNaN(d.getTime())) return '—';
+    const diff = Date.now() - d.getTime();
+    if (diff < 0) return 'agora';
+    const min = Math.floor(diff / 60000);
+    const h = Math.floor(min / 60);
+    const days = Math.floor(h / 24);
+    if (min < 1) return 'agora';
+    if (min < 60) return `${min}m`;
+    if (h < 24) return `${h}h`;
+    if (days === 1) return '1d';
+    return `${days}d`;
+  } catch { return '—'; }
 }
 
 function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
