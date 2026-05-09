@@ -3,8 +3,9 @@ import { Sidebar } from './Sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
-import { getAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
+import { getAdminViewingOrg, clearAdminViewingOrg, useOrgId } from '@/hooks/useOrgId';
 import { TrialBanner } from './TrialBanner';
+import { TutorialPopup } from './TutorialPopup';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ interface AppLayoutProps {
 export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { orgId } = useOrgId();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [adminOrg, setAdminOrg] = useState<{ orgId: string; orgName: string } | null>(null);
@@ -149,6 +151,7 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
 
         <TrialBanner />
         {children}
+        {orgId && !isMobile && <TutorialPopup />}
       </main>
 
       <style>{`@keyframes fadeIn { from{opacity:0} to{opacity:1} }`}</style>

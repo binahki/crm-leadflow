@@ -9,7 +9,6 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
-import { TutorialPopup } from '@/components/TutorialPopup';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
@@ -185,14 +184,26 @@ export default function Dashboard() {
       .then(({ data }) => { if (data) setNomeEmpresa((data as any).nome || ''); });
   }, [orgId]); // eslint-disable-line
   const primeiroNome = nomeEmpresa.split(' ')[0];
-  const savedPeriod = (() => { try { return localStorage.getItem(STORAGE_KEY) || 'today'; } catch { return 'today'; } })();
-  const savedCustom = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}'); } catch { return {}; } })();
 
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState(savedPeriod);
-  const [customFrom, setCustomFrom] = useState<string>(savedCustom.from||'');
-  const [customTo, setCustomTo] = useState<string>(savedCustom.to||'');
+  const [selectedPeriod, setSelectedPeriod] = useState('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  // Carrega período salvo do localStorage após montar
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setSelectedPeriod(saved);
+      const savedC = localStorage.getItem(STORAGE_CUSTOM);
+      if (savedC) {
+        const parsed = JSON.parse(savedC);
+        if (parsed.from) setCustomFrom(parsed.from);
+        if (parsed.to) setCustomTo(parsed.to);
+      }
+    } catch {}
+  }, []);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -209,10 +220,10 @@ export default function Dashboard() {
   useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
-  const fetchLeads = async () => { if(!orgId){setLoading(false);return;} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
+  const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
   const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaError(true);setMetaLoading(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
 
-  useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(()=>loadMeta()); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
+  useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
   useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
   useEffect(() => { if(!orgReady||!orgId)return; const ch=supabase.channel(`dash-rt-${orgId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, [orgId,orgReady]); // eslint-disable-line
 
@@ -303,7 +314,6 @@ export default function Dashboard() {
     });
   }, [metaCampaigns, filtered]);
 
-  const safeChartData = chartData.length > 0 ? chartData : [{ date: '—', leads: 0 }];
 
   const periodLabel = selectedPeriod==='custom'&&customFrom&&customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
 
@@ -406,9 +416,9 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            <div style={{ width:'100%', height:isMobile?160:200, minHeight:120 }}>
+            {!isMobile && chartData.length > 0 && <div style={{ width:'100%', height:200, minHeight:120 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={safeChartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
+                <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
                   <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
@@ -417,7 +427,7 @@ export default function Dashboard() {
                   <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#glLeads)" name="Leads"/>
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            </div>}
           </div>
 
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, position:'relative', overflow:'hidden' }}>
@@ -558,7 +568,6 @@ export default function Dashboard() {
         </div>
       </div>
       <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>
-      {orgId && !isMobile && <TutorialPopup />}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
