@@ -207,13 +207,13 @@ export default function Dashboard() {
   const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
 
   const dropRef = useRef<HTMLDivElement>(null);
   const customRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
+  useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async () => { if(!orgId){setLoading(false);return;} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
@@ -380,16 +380,16 @@ export default function Dashboard() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
           {[
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
             { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
             { label:'CPL Ads', value:metaLoading?'…':(()=>{const fb=filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length;return fb>0?`R$ ${safe(spend/fb).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —';})(), trend:'Real Time', up:true, sub:'Base Sistema' },
             { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?'custo/revendedora':'conversão' },
           ].map((c,i)=>(
-            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'14px':'20px', border:`1px solid ${border}` }}>
-              <p style={{ fontSize:'12px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
-              <p style={{ fontSize:isMobile?'22px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
+            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+              <p style={{ fontSize:'11px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
+              <p style={{ fontSize:isMobile?'18px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
               <p style={{ fontSize:'11px', display:'flex', alignItems:'center', gap:'3px', margin:0 }}>
                 {c.up?<TrendingUp style={{ width:'11px', height:'11px', color:'#10b981' }}/>:<TrendingDown style={{ width:'11px', height:'11px', color:'#ef4444' }}/>}
                 <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444' }}>{c.trend}</span>
@@ -411,9 +411,10 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            <div style={{ width:'100%', height:isMobile?'160px':'200px', minHeight:'120px' }}>
+            {chartData.length > 0 && (
+            <div style={{ width:'100%', height:isMobile?160:200, minHeight:120 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData.length?chartData:[{date:'—',leads:0}]} margin={{ top:10, right:10, left:-20, bottom:0 }}>
+                <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
                   <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
@@ -423,6 +424,7 @@ export default function Dashboard() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            )}
           </div>
 
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, position:'relative', overflow:'hidden' }}>
@@ -506,8 +508,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Campanhas */}
-          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
+          {/* Campanhas — oculto no mobile para evitar overflow */}
+          {!isMobile && <div style={{ background:cardBg, borderRadius:'14px', padding:'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                 <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0 }}>Campanhas</h3>
@@ -559,7 +561,7 @@ export default function Dashboard() {
                   </table>
                 )
             }
-          </div>
+          </div>}
         </div>
       </div>
       <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>
