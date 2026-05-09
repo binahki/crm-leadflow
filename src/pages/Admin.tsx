@@ -228,9 +228,7 @@ export default function AdminPage() {
 
       let trialEndsAt: string | null = editOrg.trial_ends_at || null;
       if (editTrialDias > 0) {
-        const base = editOrg.trial_ends_at && new Date(editOrg.trial_ends_at) > new Date()
-          ? new Date(editOrg.trial_ends_at)
-          : new Date();
+        const base = new Date();
         base.setDate(base.getDate() + editTrialDias);
         trialEndsAt = base.toISOString();
       }
@@ -519,16 +517,11 @@ export default function AdminPage() {
               </div>
               {editStatus === 'trialing' && (
                 <div>
-                  <label style={lbl}>Adicionar dias ao trial</label>
+                  <label style={lbl}>Dias de trial (a partir de hoje)</label>
                   <input style={inp} type="number" min={0} max={365} value={editTrialDias} onChange={e => setEditTrialDias(Number(e.target.value))} placeholder="0 = mantém data atual" />
-                  {editOrg.trial_ends_at && (
+                  {editTrialDias > 0 && (
                     <p style={{ fontSize: '11.5px', color: txtMid, margin: '4px 0 0' }}>
-                      Trial atual: <strong style={{ color: txt }}>{trialInfo(editOrg.trial_ends_at)}</strong>
-                      {editTrialDias > 0 && (() => {
-                        const base = new Date(editOrg.trial_ends_at!) > new Date() ? new Date(editOrg.trial_ends_at!) : new Date();
-                        base.setDate(base.getDate() + editTrialDias);
-                        return <> → Novo: <strong style={{ color: '#10b981' }}>{base.toLocaleDateString('pt-BR')}</strong></>;
-                      })()}
+                      Novo trial expira em: <strong style={{ color: '#10b981' }}>{(() => { const d = new Date(); d.setDate(d.getDate() + editTrialDias); return d.toLocaleDateString('pt-BR'); })()}</strong>
                     </p>
                   )}
                 </div>
