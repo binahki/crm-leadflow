@@ -351,17 +351,18 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                 const raw = l.quiz_respostas;
                 if (raw) respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
               } catch { respostas = null; }
-              if (!respostas) return null;
-              const entries = Object.entries(respostas).filter(
-                ([k, v]) => !isSkippedKey(k) && !isSkippedValue(v)
-              );
-              if (entries.length === 0) return null;
+              const entries = respostas
+                ? Object.entries(respostas).filter(([k, v]) => !isSkippedKey(k) && !isSkippedValue(v))
+                : [];
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Ver respostas do quiz">
-                  {entries.map(([key, val]) => (
-                    <Field key={key} label={formatKey(key)} value={formatValue(val)} dark={dark} />
-                  ))}
+                  {entries.length === 0
+                    ? <p style={{ fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontFamily: FONT }}>Nenhuma resposta do quiz disponível.</p>
+                    : entries.map(([key, val]) => (
+                        <Field key={key} label={formatKey(key)} value={formatValue(val)} dark={dark} />
+                      ))
+                  }
                 </Section>
               );
             })()}

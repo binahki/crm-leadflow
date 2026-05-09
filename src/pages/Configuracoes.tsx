@@ -51,10 +51,12 @@ export default function ConfiguracoesPage() {
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }
     setSaving(true);
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('organizations')
       .update({ meta_account_id: accountId, meta_token: token })
-      .eq('id', orgId);
+      .eq('id', orgId)
+      .select();
+    console.log('SAVE RESULT:', { error, data, orgId, accountId });
     setSaving(false);
     if (error) toast.error('Erro ao salvar configurações');
     else toast.success('Configurações salvas!');
@@ -127,6 +129,7 @@ export default function ConfiguracoesPage() {
                   <input
                     style={inp}
                     type="password"
+                    autoComplete="new-password"
                     value={token}
                     onChange={e => setToken(e.target.value)}
                     placeholder="Token de acesso permanente"

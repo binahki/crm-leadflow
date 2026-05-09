@@ -152,6 +152,7 @@ export default function WhatsAppPage() {
                 <input
                   style={input}
                   type="password"
+                  autoComplete="new-password"
                   value={token}
                   onChange={e => setToken(e.target.value)}
                   placeholder="Token gerado pela Z-API"
@@ -163,6 +164,7 @@ export default function WhatsAppPage() {
                 <input
                   style={input}
                   type="password"
+                  autoComplete="new-password"
                   value={clientToken}
                   onChange={e => setClientToken(e.target.value)}
                   placeholder="Client-Token (aba Security)"
