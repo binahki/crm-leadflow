@@ -7,11 +7,11 @@ import { toast } from 'sonner';
 import { setAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
 import { invalidateSubscriptionCache } from '@/components/ProtectedRoute';
 
-const ADMIN_EMAIL = 'murilosilvestredias@gmail.com';
-const EDGE_URL    = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
-const FONT        = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+const ADMIN_EMAIL = 'admin@floow.com';
+const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
+const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
-const PLANOS = ['starter', 'pro', 'enterprise'];
+const PLANOS = ['basic', 'pro'];
 
 interface Org {
   id: string;
@@ -30,8 +30,8 @@ export default function AdminPage() {
   const dark = theme === 'dark';
   const navigate = useNavigate();
 
-  const [orgs, setOrgs]           = useState<Org[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // ── Create modal state ────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
@@ -40,14 +40,14 @@ export default function AdminPage() {
   const [modalSenha, setModalSenha] = useState('');
   const [modalPlano, setModalPlano] = useState('starter');
   const [modalTrialDias, setModalTrialDias] = useState(14);
-  const [creating, setCreating]   = useState(false);
+  const [creating, setCreating] = useState(false);
 
   // ── Edit modal state ──────────────────────────────────────────
-  const [editOrg, setEditOrg]         = useState<Org | null>(null);
-  const [editPlano, setEditPlano]     = useState('starter');
-  const [editStatus, setEditStatus]   = useState('trialing');
+  const [editOrg, setEditOrg] = useState<Org | null>(null);
+  const [editPlano, setEditPlano] = useState('starter');
+  const [editStatus, setEditStatus] = useState('trialing');
   const [editTrialDias, setEditTrialDias] = useState(0);
-  const [editSaving, setEditSaving]   = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
 
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -71,14 +71,14 @@ export default function AdminPage() {
       const merged: Org[] = (data || []).map((org: any) => {
         const sub = org.subscriptions?.[0] || null;
         return {
-          id:            org.id,
-          nome:          org.nome          || '—',
-          email_admin:   org.email_admin   || '—',
-          plano:         org.plano         || 'starter',
-          created_at:    org.created_at,
-          status:        sub?.status       || null,
+          id: org.id,
+          nome: org.nome || '—',
+          email_admin: org.email_admin || '—',
+          plano: org.plano || 'starter',
+          created_at: org.created_at,
+          status: sub?.status || null,
           trial_ends_at: sub?.trial_ends_at || null,
-          sub_id:        sub?.id           || null,
+          sub_id: sub?.id || null,
         };
       });
       setOrgs(merged);
@@ -94,7 +94,7 @@ export default function AdminPage() {
     setCreating(true);
     try {
       // 1. Cria usuário + org via edge function
-      const res  = await fetch(EDGE_URL, {
+      const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome_empresa: modalNome, email: modalEmail, senha: modalSenha }),
@@ -202,24 +202,24 @@ export default function AdminPage() {
   if (user?.email !== ADMIN_EMAIL) return null;
 
   // ── Métricas ──────────────────────────────────────────────────
-  const total  = orgs.length;
+  const total = orgs.length;
   const ativas = orgs.filter(o => o.status === 'active').length;
   const trials = orgs.filter(o => o.status === 'trialing').length;
-  const mrr    = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const mrr = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // ── Estilos ───────────────────────────────────────────────────
-  const bg     = dark ? '#090909' : '#f4f4f5';
-  const card   = { background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`, borderRadius: '16px', padding: '20px 24px' } as React.CSSProperties;
-  const txt    = dark ? '#f4f4f5' : '#111827';
+  const bg = dark ? '#090909' : '#f4f4f5';
+  const card = { background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`, borderRadius: '16px', padding: '20px 24px' } as React.CSSProperties;
+  const txt = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#0d0d0f' : '#f8fafc', color: txt, fontSize: '13px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box' };
   const lbl: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '5px' };
 
   function StatusBadge({ status }: { status?: string | null }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
-      active:   { label: 'Ativo',     color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-      trialing: { label: 'Trial',     color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-      inactive: { label: 'Inativo',   color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
+      active: { label: 'Ativo', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+      trialing: { label: 'Trial', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+      inactive: { label: 'Inativo', color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
       canceled: { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
     };
     const s = map[status || ''] || { label: '—', color: '#71717a', bg: 'rgba(113,113,122,0.12)' };
@@ -266,7 +266,7 @@ export default function AdminPage() {
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', background: dark ? 'rgba(9,9,9,0.92)' : 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'linear-gradient(135deg, #10b981, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
           </div>
           <span style={{ fontSize: '15px', fontWeight: 700, color: txt, letterSpacing: '-0.02em' }}>Floow CRM</span>
           <span style={{ fontSize: '11px', fontWeight: 500, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '99px', marginLeft: '4px' }}>Admin</span>
@@ -283,83 +283,83 @@ export default function AdminPage() {
 
       {/* Conteúdo */}
       <div style={{ paddingTop: '56px' }}>
-      <div style={{ padding: '32px' }}>
+        <div style={{ padding: '32px' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Painel Admin</h1>
-            <p style={{ fontSize: '13px', color: txtMid, margin: '3px 0 0' }}>Gerenciamento de clientes do Floow CRM</p>
-          </div>
-          <button onClick={() => setShowModal(true)}
-            style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
-            + Novo cliente
-          </button>
-        </div>
-
-        {/* Cards métricas */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-          {[
-            { label: 'Total de orgs', value: String(total),  color: '#3b82f6' },
-            { label: 'Ativas',        value: String(ativas), color: '#10b981' },
-            { label: 'Em trial',      value: String(trials), color: '#f59e0b' },
-            { label: 'MRR estimado',  value: mrr,            color: '#a855f7' },
-          ].map(m => (
-            <div key={m.label} style={card}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>{m.label}</p>
-              <p style={{ fontSize: '22px', fontWeight: 700, color: m.color, margin: 0, letterSpacing: '-0.03em' }}>{m.value}</p>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Painel Admin</h1>
+              <p style={{ fontSize: '13px', color: txtMid, margin: '3px 0 0' }}>Gerenciamento de clientes do Floow CRM</p>
             </div>
-          ))}
-        </div>
-
-        {/* Tabela */}
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Clientes</span>
+            <button onClick={() => setShowModal(true)}
+              style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+              + Novo cliente
+            </button>
           </div>
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Carregando…</div>
-          ) : orgs.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Nenhum cliente ainda</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ background: dark ? '#18181b' : '#f8fafc' }}>
-                    {['Empresa', 'Email admin', 'Plano', 'Status', 'Trial', 'Criado em', ''].map(h => (
-                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {orgs.map((org, i) => (
-                    <tr key={org.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
-                      <td style={{ padding: '12px 16px', color: txt, fontWeight: 500, whiteSpace: 'nowrap' }}>{org.nome}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.email_admin}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{org.plano}</td>
-                      <td style={{ padding: '12px 16px' }}><StatusBadge status={org.status} /></td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
-                      <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => openEdit(org)}
-                            style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
-                            Editar
-                          </button>
-                          <button onClick={() => handleAcessar(org)}
-                            style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
-                            Acessar
-                          </button>
-                        </div>
-                      </td>
+
+          {/* Cards métricas */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+            {[
+              { label: 'Total de orgs', value: String(total), color: '#3b82f6' },
+              { label: 'Ativas', value: String(ativas), color: '#10b981' },
+              { label: 'Em trial', value: String(trials), color: '#f59e0b' },
+              { label: 'MRR estimado', value: mrr, color: '#a855f7' },
+            ].map(m => (
+              <div key={m.label} style={card}>
+                <p style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>{m.label}</p>
+                <p style={{ fontSize: '22px', fontWeight: 700, color: m.color, margin: 0, letterSpacing: '-0.03em' }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabela */}
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Clientes</span>
+            </div>
+            {loading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Carregando…</div>
+            ) : orgs.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Nenhum cliente ainda</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: dark ? '#18181b' : '#f8fafc' }}>
+                      {['Empresa', 'Email admin', 'Plano', 'Status', 'Trial', 'Criado em', ''].map(h => (
+                        <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {orgs.map((org, i) => (
+                      <tr key={org.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
+                        <td style={{ padding: '12px 16px', color: txt, fontWeight: 500, whiteSpace: 'nowrap' }}>{org.nome}</td>
+                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.email_admin}</td>
+                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{org.plano}</td>
+                        <td style={{ padding: '12px 16px' }}><StatusBadge status={org.status} /></td>
+                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
+                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => openEdit(org)}
+                              style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
+                              Editar
+                            </button>
+                            <button onClick={() => handleAcessar(org)}
+                              style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                              Acessar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </div>
 
       {/* ── Modal: Novo cliente ── */}

@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-const ADMIN_EMAIL  = 'murilosilvestredias@gmail.com';
+const ADMIN_EMAIL  = 'admin@floow.com';
 const KEY_ORG_ID   = 'admin_viewing_org';
 const KEY_ORG_NAME = 'admin_viewing_org_name';
 
