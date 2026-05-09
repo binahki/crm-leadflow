@@ -184,7 +184,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const dark = theme === 'dark';
 
-  const firstName = user?.user_metadata?.first_name || user?.user_metadata?.full_name?.split(' ')[0] || '';
+  const [nomeEmpresa, setNomeEmpresa] = useState('');
+  useEffect(() => {
+    if (!orgId) return;
+    supabase.from('organizations').select('nome').eq('id', orgId).single()
+      .then(({ data }) => { if (data) setNomeEmpresa((data as any).nome || ''); });
+  }, [orgId]); // eslint-disable-line
+  const primeiroNome = nomeEmpresa.split(' ')[0];
   const savedPeriod = (() => { try { return localStorage.getItem(STORAGE_KEY) || 'today'; } catch { return 'today'; } })();
   const savedCustom = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'{}'); } catch { return {}; } })();
 
@@ -320,7 +326,7 @@ export default function Dashboard() {
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'10px' }}>
           <div>
             <h1 style={{ fontSize:isMobile?'20px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:'8px' }}>
-              {getGreeting()}{firstName?`, ${firstName}`:''}!{' '}
+              {getGreeting()}{primeiroNome?`, ${primeiroNome}`:''}!{' '}
               <img src="/wave.png" alt="👋" style={{ width:'26px', height:'26px', objectFit:'contain' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
             </h1>
             <p style={{ fontSize:'13px', color:txtLow, marginTop:'4px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>

@@ -4,9 +4,26 @@ import { useNavigate, Link } from 'react-router-dom';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
 
+function mascaraDocumento(valor: string): string {
+  const digits = valor.replace(/\D/g, '');
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .slice(0, 14)
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+}
+
 export default function CadastroPage() {
   const navigate = useNavigate();
   const [nomeEmpresa, setNomeEmpresa] = useState('');
+  const [documento, setDocumento]     = useState('');
   const [email, setEmail]             = useState('');
   const [senha, setSenha]             = useState('');
   const [confirmar, setConfirmar]     = useState('');
@@ -32,7 +49,7 @@ export default function CadastroPage() {
       const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome_empresa: nomeEmpresa, email, senha }),
+        body: JSON.stringify({ nome_empresa: nomeEmpresa, email, senha, documento: documento.replace(/\D/g, '') || undefined }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -77,6 +94,18 @@ export default function CadastroPage() {
               <input
                 style={inp} type="text" required placeholder="Ex: Minha Loja" autoFocus
                 value={nomeEmpresa} onChange={e => setNomeEmpresa(e.target.value)}
+                onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                onBlur={e => (e.target.style.borderColor = '#27272a')}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '6px' }}>
+                CNPJ / CPF <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#52525b' }}>(opcional)</span>
+              </label>
+              <input
+                style={inp} type="text" placeholder="000.000.000-00 ou 00.000.000/0000-00" maxLength={18}
+                value={documento} onChange={e => setDocumento(mascaraDocumento(e.target.value))}
                 onFocus={e => (e.target.style.borderColor = '#3b82f6')}
                 onBlur={e => (e.target.style.borderColor = '#27272a')}
               />

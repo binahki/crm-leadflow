@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
-  Webhook, MessageCircle, Settings, LogOut, ChevronLeft,
+  Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +22,9 @@ const NAV_META = [
 const NAV_INT = [
   { icon: Webhook, label: 'Webhook', href: '/webhook', badge: false },
   { icon: MessageCircle, label: 'WhatsApp', href: '/whatsapp', badge: false },
+  { icon: BarChart3, label: 'Meta Ads', href: '/meta-ads', badge: false },
+];
+const NAV_CONTA = [
   { icon: Settings, label: 'Configurações', href: '/configuracoes', badge: false },
 ];
 
@@ -53,7 +56,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
       setAlertBadges({
         '/whatsapp': !((wh as any)?.instance_id),
         '/webhook': (count ?? 0) === 0,
-        '/configuracoes': !((org as any)?.meta_token),
+        '/meta-ads': !((org as any)?.meta_token),
       });
     }
     fetchBadges();
@@ -264,6 +267,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         <NavGroup label="Principal" items={NAV_MAIN} />
         <NavGroup label="Meta Ads" items={NAV_META} />
         <NavGroup label="Integrações" items={NAV_INT} />
+        <NavGroup label="Conta" items={NAV_CONTA} />
       </nav>
 
       {/* Footer */}

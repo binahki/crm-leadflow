@@ -17,6 +17,7 @@ import CriativosPage from "./pages/Criativos";
 import WebhookPage from "./pages/Webhook";
 import WhatsAppPage from "./pages/WhatsApp";
 import ConfiguracoesPage from "./pages/Configuracoes";
+import MetaAdsPage from "./pages/MetaAds";
 import ReportsPage from "./pages/Reports";
 import InvitePage from "./pages/InvitePage";
 import NotFound from "./pages/NotFound";
@@ -43,6 +44,7 @@ const App = () => (
           <Route path="/webhook" element={<ProtectedRoute><WebhookPage /></ProtectedRoute>} />
           <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
           <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
+          <Route path="/meta-ads" element={<ProtectedRoute><MetaAdsPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/convidar" element={<ProtectedRoute><InvitePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

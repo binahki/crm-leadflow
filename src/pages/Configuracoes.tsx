@@ -4,62 +4,120 @@ import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
-import { Save, Settings, ExternalLink } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { Save, Building2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+const ATUALIZAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/atualizar-usuario';
+
+function mascaraDocumento(valor: string): string {
+  const digits = valor.replace(/\D/g, '');
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .slice(0, 14)
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+}
 
 export default function ConfiguracoesPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
-
   const { orgId, ready: orgReady } = useOrgId();
-  const [accountId, setAccountId]     = useState('');
-  const [token, setToken]             = useState('');
+  const { user } = useAuth();
+
+  const [nome, setNome]           = useState('');
+  const [documento, setDocumento] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmSenha, setConfirmSenha] = useState('');
   const [loadingData, setLoadingData] = useState(true);
-  const [saving, setSaving]           = useState(false);
+  const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
-    if (!orgReady) return;
-    if (!orgId) { setLoadingData(false); return; }
-    (async () => {
-      setLoadingData(true);
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('meta_account_id, meta_token, nome')
-        .eq('id', orgId)
-        .single();
-      if (org) {
-        setAccountId((org as any).meta_account_id || '');
-        setToken((org as any).meta_token || '');
-      }
-      setLoadingData(false);
-    })();
+    if (!orgReady || !orgId) return;
+    supabase
+      .from('organizations')
+      .select('nome, documento')
+      .eq('id', orgId)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setNome((data as any).nome || '');
+          setDocumento((data as any).documento || '');
+        }
+        setLoadingData(false);
+      });
   }, [orgId, orgReady]);
 
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }
+
+    if (novaSenha && novaSenha.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    if (novaSenha && novaSenha !== confirmSenha) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+
     setSaving(true);
-    const { error, data } = await supabase
-      .from('organizations')
-      .update({ meta_account_id: accountId, meta_token: token })
-      .eq('id', orgId)
-      .select();
-    console.log('SAVE RESULT:', { error, data, orgId, accountId });
+    try {
+      // Atualiza dados da empresa
+      const { error: orgError } = await supabase
+        .from('organizations')
+        .update({ nome: nome.trim(), documento: documento.replace(/\D/g, '') || null })
+        .eq('id', orgId);
+      if (orgError) { toast.error('Erro ao salvar dados da empresa'); setSaving(false); return; }
+
+      // Atualiza senha se preenchida
+      if (novaSenha) {
+        const { data: mem } = await supabase
+          .from('memberships')
+          .select('user_id')
+          .eq('org_id', orgId)
+          .single();
+        const userId = (mem as any)?.user_id;
+        if (!userId) { toast.error('Usuário não encontrado'); setSaving(false); return; }
+
+        const res = await fetch(ATUALIZAR_USUARIO_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, password: novaSenha }),
+        });
+        const data = await res.json();
+        if (!data.ok) { toast.error(data.erro || 'Erro ao atualizar senha'); setSaving(false); return; }
+        setNovaSenha('');
+        setConfirmSenha('');
+      }
+
+      toast.success('Configurações salvas!');
+    } catch {
+      toast.error('Erro de conexão');
+    }
     setSaving(false);
-    if (error) toast.error('Erro ao salvar configurações');
-    else toast.success('Configurações salvas!');
   }
 
-  // ── Estilos ────────────────────────────────────────────────────
   const card: React.CSSProperties = {
     background: dark ? '#111113' : '#ffffff',
     border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`,
-    borderRadius: '18px',
-    overflow: 'hidden',
+    borderRadius: '18px', overflow: 'hidden',
     boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.06)',
-    maxWidth: '520px',
+    maxWidth: '520px', marginBottom: '16px',
+  };
+  const cardHeader: React.CSSProperties = {
+    padding: '16px 20px',
+    borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`,
+    display: 'flex', alignItems: 'center', gap: '8px',
+    background: dark ? '#18181b' : '#fafafa',
   };
   const inp: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: '10px',
@@ -68,6 +126,12 @@ export default function ConfiguracoesPage() {
     color: dark ? '#f4f4f5' : '#111827',
     fontSize: '13.5px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box',
     transition: 'border-color 0.15s',
+  };
+  const inpReadonly: React.CSSProperties = {
+    ...inp,
+    background: dark ? '#0a0a0c' : '#f1f5f9',
+    color: dark ? '#52525b' : '#9ca3af',
+    cursor: 'default',
   };
   const lbl: React.CSSProperties = {
     fontSize: '10.5px', fontWeight: 600,
@@ -82,76 +146,98 @@ export default function ConfiguracoesPage() {
     <AppLayout leadCount={leads.length}>
       <div style={{ padding: '32px', fontFamily: FONT }}>
 
-        {/* Header */}
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Configurações</h1>
-          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Gerencie integrações e preferências</p>
+          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Dados da empresa e acesso à conta</p>
         </div>
 
-        {/* Meta Ads card */}
-        <div style={card}>
-          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, display: 'flex', alignItems: 'center', gap: '8px', background: dark ? '#18181b' : '#fafafa' }}>
-            <Settings style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
-            <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Meta Ads API</span>
-          </div>
-
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {loadingData ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: txtMid, fontSize: '13px' }}>
-                Carregando configurações…
+        {loadingData ? (
+          <p style={{ color: txtMid, fontSize: '13px' }}>Carregando…</p>
+        ) : (
+          <>
+            {/* Dados da Empresa */}
+            <div style={card}>
+              <div style={cardHeader}>
+                <Building2 style={{ width: '16px', height: '16px', color: '#10b981' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Dados da Empresa</span>
               </div>
-            ) : (
-              <>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <label style={lbl}>Account ID</label>
+                  <label style={lbl}>Nome da empresa</label>
                   <input
-                    style={inp}
-                    value={accountId}
-                    onChange={e => setAccountId(e.target.value)}
-                    placeholder="ID da conta de anúncios (ex: act_123456789)"
-                    onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                    style={inp} value={nome} onChange={e => setNome(e.target.value)}
+                    placeholder="Nome da sua empresa"
+                    onFocus={e => (e.target.style.borderColor = '#10b981')}
                     onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
                   />
                 </div>
-
                 <div>
-                  <label style={lbl}>Access Token</label>
+                  <label style={lbl}>CNPJ / CPF</label>
                   <input
                     style={inp}
-                    type="password"
+                    value={documento}
+                    onChange={e => setDocumento(mascaraDocumento(e.target.value))}
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    maxLength={18}
+                    onFocus={e => (e.target.style.borderColor = '#10b981')}
+                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Dados de Acesso */}
+            <div style={card}>
+              <div style={cardHeader}>
+                <Lock style={{ width: '16px', height: '16px', color: '#8b5cf6' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Dados de Acesso</span>
+              </div>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={lbl}>Email</label>
+                  <input style={inpReadonly} value={user?.email || ''} readOnly />
+                </div>
+                <div>
+                  <label style={lbl}>Nova senha <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
+                  <input
+                    style={inp} type="password" value={novaSenha}
+                    onChange={e => setNovaSenha(e.target.value)}
+                    placeholder="Mínimo 8 caracteres"
                     autoComplete="new-password"
-                    value={token}
-                    onChange={e => setToken(e.target.value)}
-                    placeholder="Token de acesso permanente"
-                    onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                    onFocus={e => (e.target.style.borderColor = '#8b5cf6')}
                     onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
                   />
-                  <div style={{ marginTop: '8px', padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(59,130,246,0.07)' : '#eff6ff', border: `1px solid ${dark ? 'rgba(59,130,246,0.18)' : '#bfdbfe'}` }}>
-                    <p style={{ fontSize: '12px', color: dark ? '#93c5fd' : '#1d4ed8', margin: 0, lineHeight: 1.6 }}>
-                      Gere um token permanente em{' '}
-                      <a href="https://business.facebook.com" target="_blank" rel="noreferrer"
-                        style={{ color: dark ? '#60a5fa' : '#2563eb', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 500 }}>
-                        business.facebook.com <ExternalLink style={{ width: '11px', height: '11px' }} />
-                      </a>
-                      {' '}→ Configurações → Usuários do Sistema → Gerar Token.
-                      Marque as permissões <strong>ads_read</strong> e <strong>ads_management</strong>.
-                    </p>
-                  </div>
                 </div>
+                {novaSenha && (
+                  <div>
+                    <label style={lbl}>Confirmar nova senha</label>
+                    <input
+                      style={{ ...inp, borderColor: confirmSenha && confirmSenha !== novaSenha ? '#ef4444' : (dark ? '#27272a' : '#e5e7eb') }}
+                      type="password" value={confirmSenha}
+                      onChange={e => setConfirmSenha(e.target.value)}
+                      placeholder="Repita a senha"
+                      autoComplete="new-password"
+                      onFocus={e => (e.target.style.borderColor = '#8b5cf6')}
+                      onBlur={e => (e.target.style.borderColor = confirmSenha && confirmSenha !== novaSenha ? '#ef4444' : (dark ? '#27272a' : '#e5e7eb'))}
+                    />
+                    {confirmSenha && confirmSenha !== novaSenha && (
+                      <p style={{ fontSize: '12px', color: '#ef4444', margin: '4px 0 0' }}>As senhas não coincidem</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: saving ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: saving ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}
-                >
-                  <Save style={{ width: '14px', height: '14px' }} />
-                  {saving ? 'Salvando…' : 'Salvar configurações'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{ padding: '11px 28px', borderRadius: '10px', border: 'none', background: saving ? (dark ? '#27272a' : '#e5e7eb') : '#10b981', color: saving ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}
+            >
+              <Save style={{ width: '14px', height: '14px' }} />
+              {saving ? 'Salvando…' : 'Salvar alterações'}
+            </button>
+          </>
+        )}
       </div>
     </AppLayout>
   );
