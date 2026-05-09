@@ -7,13 +7,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
-const STORAGE_KEY = 'tutorial_concluido';
 const TOTAL_STEPS = 4;
-
-function concluir(onClose: () => void) {
-  localStorage.setItem(STORAGE_KEY, 'true');
-  onClose();
-}
 
 export function TutorialPopup() {
   const { orgId, ready } = useOrgId();
@@ -21,17 +15,20 @@ export function TutorialPopup() {
   const dark = theme === 'dark';
   const navigate = useNavigate();
 
+  // Chave única por org — cada empresa tem seu próprio tutorial
+  const tutorialKey = orgId ? `tutorial_concluido_${orgId}` : null;
+
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Só abre se não foi visto e o usuário tem orgId
+  // Só abre se não foi visto para esta org
   useEffect(() => {
-    if (!ready || !orgId) return;
-    if (localStorage.getItem(STORAGE_KEY) === 'true') return;
+    if (!ready || !orgId || !tutorialKey) return;
+    if (localStorage.getItem(tutorialKey) === 'true') return;
     setOpen(true);
-  }, [ready, orgId]);
+  }, [ready, orgId, tutorialKey]);
 
   // Busca o webhook_token quando chega no passo 2
   useEffect(() => {
@@ -51,7 +48,12 @@ export function TutorialPopup() {
 
   if (!open) return null;
 
-  const close = () => concluir(() => setOpen(false));
+  const logoSrc = dark ? '/logo-light.png' : '/logo-dark.png';
+
+  function close() {
+    if (tutorialKey) localStorage.setItem(tutorialKey, 'true');
+    setOpen(false);
+  }
 
   const card: React.CSSProperties = {
     position: 'fixed',
@@ -140,7 +142,12 @@ export function TutorialPopup() {
         {/* Passo 1 — Boas-vindas */}
         {step === 1 && (
           <>
-            <div style={{ fontSize: '36px', marginBottom: '14px' }}>🚀</div>
+            <img
+              src={logoSrc}
+              alt="Floow"
+              style={{ height: '48px', width: 'auto', objectFit: 'contain', display: 'block', margin: '0 auto 16px' }}
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
             <p style={{ fontSize: '10px', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px', fontFamily: FONT }}>Passo 1 de {TOTAL_STEPS}</p>
             <h2 style={{ fontSize: '20px', fontWeight: 700, color: txtHi, margin: '0 0 10px', fontFamily: FONT }}>Bem-vindo ao Floow!</h2>
             <p style={{ fontSize: '14px', color: txtMid, lineHeight: 1.6, margin: '0 0 24px', fontFamily: FONT }}>

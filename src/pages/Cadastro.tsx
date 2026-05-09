@@ -38,7 +38,7 @@ export default function CadastroPage() {
       if (!res.ok || !data.ok) {
         setErro(data.erro || 'Erro ao criar conta. Tente novamente.');
       } else {
-        navigate('/login', { state: { msg: 'Conta criada! Faça login para continuar.' } });
+        navigate('/login', { state: { msg: 'Conta criada! Trial de 7 dias ativado. Faça login.' } });
       }
     } catch {
       setErro('Não foi possível conectar. Verifique sua internet.');

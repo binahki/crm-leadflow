@@ -9,10 +9,9 @@ import { invalidateSubscriptionCache } from '@/components/ProtectedRoute';
 
 const ADMIN_EMAIL = 'admin@floow.com';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
-const SUPABASE_PROJECT_URL = 'https://obguidmfvfjaekaskgob.supabase.co';
 const WEBHOOK_BASE = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
+const ATUALIZAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/atualizar-usuario';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
-const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY || '';
 
 const PLANOS = ['basic', 'pro'];
 
@@ -181,43 +180,44 @@ export default function AdminPage() {
     setCredsLoading(false);
   }
 
+  async function handleUpdateUser(): Promise<boolean> {
+    if (!editOrg) return true;
+    const emailAlterado = editEmail.trim() && editEmail.trim() !== editOrg.email_admin;
+    const senhaAlterada = editSenha.trim().length >= 8;
+    if (!emailAlterado && !senhaAlterada) return true;
+
+    const { data: mem } = await supabase
+      .from('memberships')
+      .select('user_id')
+      .eq('org_id', editOrg.id)
+      .single();
+    if (!(mem as any)?.user_id) { toast.error('Usuário não encontrado'); return false; }
+
+    const res = await fetch(ATUALIZAR_USUARIO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: (mem as any).user_id,
+        email: emailAlterado ? editEmail.trim() : undefined,
+        password: senhaAlterada ? editSenha.trim() : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) { toast.error(data.erro || 'Erro ao atualizar usuário'); return false; }
+
+    if (emailAlterado) {
+      await supabase.from('organizations').update({ email_admin: editEmail.trim() }).eq('id', editOrg.id);
+    }
+    setEditSenha('');
+    return true;
+  }
+
   async function handleEditSave() {
     if (!editOrg) return;
     setEditSaving(true);
     try {
-      // Atualiza email/senha do usuário via admin API (se alterados)
-      const credBody: any = {};
-      if (editEmail.trim() && editEmail.trim() !== editOrg.email_admin) credBody.email = editEmail.trim();
-      if (editSenha.trim().length >= 8) credBody.password = editSenha.trim();
-      if (Object.keys(credBody).length > 0) {
-        const { data: mem } = await supabase
-          .from('memberships')
-          .select('user_id')
-          .eq('org_id', editOrg.id)
-          .single();
-        const userId = (mem as any)?.user_id;
-        if (userId && SERVICE_KEY) {
-          const res = await fetch(`${SUPABASE_PROJECT_URL}/auth/v1/admin/users/${userId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${SERVICE_KEY}`,
-              'apikey': SERVICE_KEY,
-            },
-            body: JSON.stringify(credBody),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            toast.error(`Erro ao atualizar credenciais: ${err.message || res.status}`);
-            setEditSaving(false);
-            return;
-          }
-          // Atualiza email_admin na tabela organizations se mudou
-          if (credBody.email) {
-            await supabase.from('organizations').update({ email_admin: credBody.email }).eq('id', editOrg.id);
-          }
-        }
-      }
+      const credOk = await handleUpdateUser();
+      if (!credOk) { setEditSaving(false); return; }
 
       // Atualiza plano + campo ativo
       const ativo = ['active', 'trialing'].includes(editStatus);
