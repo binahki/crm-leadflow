@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
+import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { RefreshCw, ChevronDown, TrendingUp, Users, DollarSign, MousePointer, Trophy, Lightbulb } from 'lucide-react';
 
 interface Creative {
@@ -12,8 +13,7 @@ interface Creative {
   adset_name: string; campaign_name: string;
 }
 
-const META_TOKEN = import.meta.env.VITE_META_TOKEN;
-const META_ACCOUNT = import.meta.env.VITE_META_ACCOUNT;
+// token e account são passados como parâmetro — sem fallback para env vars
 
 const PERIOD_OPTIONS = [
   { label: 'Hoje', value: 'today' },
@@ -25,12 +25,13 @@ const PERIOD_OPTIONS = [
 
 function fmt(n: number) { return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-async function fetchCreatives(datePreset: string): Promise<Creative[]> {
+async function fetchCreatives(datePreset: string, metaToken: string, metaAccount: string): Promise<Creative[]> {
+  if (!metaToken || !metaAccount) return [];
   try {
     const adsRes = await fetch(
-      `https://graph.facebook.com/v18.0/act_${META_ACCOUNT}/ads` +
+      `https://graph.facebook.com/v18.0/act_${metaAccount}/ads` +
       `?fields=id,name,status,adset{name},campaign{name},creative{id,thumbnail_url,image_url}` +
-      `&limit=50&access_token=${META_TOKEN}`
+      `&limit=50&access_token=${metaToken}`
     );
     const adsData = await adsRes.json();
     if (!adsData.data?.length) return [];
@@ -40,7 +41,7 @@ async function fetchCreatives(datePreset: string): Promise<Creative[]> {
           const insRes = await fetch(
             `https://graph.facebook.com/v18.0/${ad.id}/insights` +
             `?fields=spend,impressions,clicks,ctr,cpm,frequency,actions` +
-            `&date_preset=${datePreset}&access_token=${META_TOKEN}`
+            `&date_preset=${datePreset}&access_token=${metaToken}`
           );
           const insData = await insRes.json();
           const ins = insData.data?.[0];
@@ -131,6 +132,7 @@ function ScoreBadge({ rank }: { rank: number }) {
 export default function CriativosPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
+  const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const dark = theme === 'dark';
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,8 +143,8 @@ export default function CriativosPage() {
 
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
 
-  const load = async () => { setLoading(true); setError(false); const data = await fetchCreatives(datePreset); if (!data.length) setError(true); setCreatives(data); setLoading(false); };
-  useEffect(() => { load(); }, [datePreset]); // eslint-disable-line
+  const load = async () => { if (!metaToken || !metaAccount) { setLoading(false); setError(true); return; } setLoading(true); setError(false); const data = await fetchCreatives(datePreset, metaToken, metaAccount); if (!data.length) setError(true); setCreatives(data); setLoading(false); };
+  useEffect(() => { if (!metaReady) return; load(); }, [datePreset, metaReady, metaToken, metaAccount]); // eslint-disable-line
 
   const totalSpend = creatives.reduce((s, c) => s + c.spend, 0);
   const totalLeads = creatives.reduce((s, c) => s + c.leads, 0);

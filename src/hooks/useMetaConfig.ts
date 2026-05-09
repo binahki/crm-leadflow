@@ -5,8 +5,8 @@ import { useOrgId } from '@/hooks/useOrgId';
 export function useMetaConfig() {
   const { orgId, ready: orgReady } = useOrgId();
 
-  const [metaToken,   setMetaToken]   = useState<string>(import.meta.env.VITE_META_TOKEN   || '');
-  const [metaAccount, setMetaAccount] = useState<string>(import.meta.env.VITE_META_ACCOUNT || '');
+  const [metaToken,   setMetaToken]   = useState<string>('');
+  const [metaAccount, setMetaAccount] = useState<string>('');
   const [ready,       setReady]       = useState(false);
 
   useEffect(() => {

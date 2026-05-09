@@ -161,8 +161,8 @@ export const useAppStore = create<AppState>((set) => ({
   campaigns: [],
   creatives: [],
   configuracoes: null,
-  metaAccountId: import.meta.env.VITE_META_ACCOUNT || '',
-  metaToken: import.meta.env.VITE_META_TOKEN || '',
+  metaAccountId: '',
+  metaToken: '',
   period: 'last_30d',
   theme: (typeof window !== 'undefined'
     ? (localStorage.getItem('theme') as 'light' | 'dark') || 'light'

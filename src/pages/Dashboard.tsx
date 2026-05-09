@@ -209,7 +209,7 @@ export default function Dashboard() {
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async () => { if(!orgId){setLoading(false);return;} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); else if(data)setAllLeads(data as Lead[]); setLoading(false); };
-  const loadMeta = async (currentLeads?: Lead[]) => { setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
+  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaError(true);setMetaLoading(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
 
   useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(()=>loadMeta()); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
   useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
@@ -513,7 +513,7 @@ export default function Dashboard() {
             {metaLoading
               ?[...Array(3)].map((_,i)=><div key={i} style={{ height:'32px', borderRadius:'8px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', marginBottom:'8px' }}/>)
               :metaError||campRows.length===0
-                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
+                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>{!metaToken||!metaAccount?'Configure o token do Meta Ads em Configurações':metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
                 :(
                   <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
                     <thead>
