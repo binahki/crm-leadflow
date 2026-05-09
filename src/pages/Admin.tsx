@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { toast } from 'sonner';
+import { setAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
+import { invalidateSubscriptionCache } from '@/components/ProtectedRoute';
 
 const ADMIN_EMAIL = 'murilosilvestredias@gmail.com';
 const EDGE_URL    = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
@@ -141,7 +143,14 @@ export default function AdminPage() {
     return `${date} (${diff}d)`;
   }
 
+  function handleAcessar(org: Org) {
+    setAdminViewingOrg(org.id, org.nome);
+    invalidateSubscriptionCache(); // força re-check com org do cliente
+    navigate('/');
+  }
+
   async function handleSignOut() {
+    clearAdminViewingOrg();
     await supabase.auth.signOut();
     navigate('/login');
   }
@@ -228,8 +237,8 @@ export default function AdminPage() {
                       <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
                       <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
                       <td style={{ padding: '12px 16px' }}>
-                        <button onClick={() => toast.info(`org_id: ${org.id}`)}
-                          style={{ padding: '5px 12px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>
+                        <button onClick={() => handleAcessar(org)}
+                          style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
                           Acessar
                         </button>
                       </td>

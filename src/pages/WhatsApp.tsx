@@ -5,15 +5,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Save, Settings, Zap, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
-import { useAuth } from '@/hooks/useAuth';
+import { useOrgId } from '@/hooks/useOrgId';
 
 export default function WhatsAppPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
-  const { user } = useAuth();
   const dark = theme === 'dark';
 
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgId, ready: orgReady } = useOrgId();
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [clientToken, setClientToken] = useState('');
@@ -24,33 +23,22 @@ export default function WhatsAppPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    async function load() {
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', user!.id)
-        .single();
-
-      if (!membership?.org_id) return;
-      setOrgId(membership.org_id);
-
-      const { data: config } = await supabase
-        .from('configuracoes_whatsapp')
-        .select('*')
-        .eq('org_id', membership.org_id)
-        .single();
-
-      if (config) {
-        setInstanceId((config as any).instance_id || '');
-        setToken((config as any).token || '');
-        setClientToken((config as any).client_token || '');
-        setMessageTemplate((config as any).message_template || messageTemplate);
-        setAutoSend((config as any).auto_send ?? true);
-      }
-    }
-    load();
-  }, [user?.id]);
+    if (!orgReady || !orgId) return;
+    supabase
+      .from('configuracoes_whatsapp')
+      .select('*')
+      .eq('org_id', orgId)
+      .single()
+      .then(({ data: config }) => {
+        if (config) {
+          setInstanceId((config as any).instance_id || '');
+          setToken((config as any).token || '');
+          setClientToken((config as any).client_token || '');
+          setMessageTemplate((config as any).message_template || messageTemplate);
+          setAutoSend((config as any).auto_send ?? true);
+        }
+      });
+  }, [orgId, orgReady]);
 
   const handleSave = async () => {
     if (!orgId) { toast.error('Organização não encontrada'); return; }

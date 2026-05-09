@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Copy, CheckCircle2, Activity, Link } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
+import { useOrgId } from '@/hooks/useOrgId';
 
 interface WebhookLog {
   id: string;
@@ -18,6 +19,7 @@ export default function WebhookPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
+  const { orgId, ready: orgReady } = useOrgId();
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [copied, setCopied] = useState(false);
   const [webhookToken, setWebhookToken] = useState<string | null>(null);
@@ -25,10 +27,15 @@ export default function WebhookPage() {
   const baseUrl = `https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead`;
   const webhookUrl = webhookToken ? `${baseUrl}?token=${webhookToken}` : baseUrl;
 
+  // Busca webhook_token filtrado pelo org do usuário
   useEffect(() => {
-    supabase.from('configuracoes_whatsapp').select('webhook_token').limit(1).maybeSingle()
+    if (!orgReady || !orgId) return;
+    supabase.from('configuracoes_whatsapp').select('webhook_token').eq('org_id', orgId).single()
       .then(({ data }) => { if (data) setWebhookToken((data as any).webhook_token || null); });
+  }, [orgId, orgReady]);
 
+  // Logs em tempo real (independente de org)
+  useEffect(() => {
     supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { if (data) setLogs(data as unknown as WebhookLog[]); });
 

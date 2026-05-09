@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { useOrgId } from '@/hooks/useOrgId';
 import { Save, Settings, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -11,42 +11,32 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue"
 
 export default function ConfiguracoesPage() {
   const { leads } = useAppStore();
-  const { user } = useAuth();
   const { theme } = useTheme();
   const dark = theme === 'dark';
 
-  const [orgId, setOrgId]       = useState<string | null>(null);
-  const [accountId, setAccountId] = useState('');
-  const [token, setToken]         = useState('');
+  const { orgId, ready: orgReady } = useOrgId();
+  const [accountId, setAccountId]     = useState('');
+  const [token, setToken]             = useState('');
   const [loadingData, setLoadingData] = useState(true);
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving]           = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!orgReady) return;
+    if (!orgId) { setLoadingData(false); return; }
     (async () => {
       setLoadingData(true);
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!membership?.org_id) { setLoadingData(false); return; }
-      setOrgId(membership.org_id);
-
       const { data: org } = await supabase
         .from('organizations')
         .select('meta_account_id, meta_token, nome')
-        .eq('id', membership.org_id)
+        .eq('id', orgId)
         .single();
-
       if (org) {
         setAccountId((org as any).meta_account_id || '');
         setToken((org as any).meta_token || '');
       }
       setLoadingData(false);
     })();
-  }, [user]);
+  }, [orgId, orgReady]);
 
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }

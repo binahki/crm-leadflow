@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
+import { getAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,8 +15,20 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
   const isDark = theme === 'dark';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [adminOrg, setAdminOrg] = useState<{ orgId: string; orgName: string } | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Relê o override do admin a cada troca de rota
+  useEffect(() => {
+    setAdminOrg(getAdminViewingOrg());
+  }, [location.pathname]);
+
+  function handleExitAdminView() {
+    clearAdminViewingOrg();
+    setAdminOrg(null);
+    navigate('/admin');
+  }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -69,6 +82,34 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
         paddingTop: isMobile ? '56px' : '0',
         WebkitOverflowScrolling: 'touch',
       }}>
+        {/* Banner admin impersonation */}
+        {adminOrg && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 49, flexShrink: 0,
+            background: 'linear-gradient(90deg, #ea580c, #dc2626)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 20px', height: '36px',
+            boxShadow: '0 2px 8px rgba(220,38,38,0.35)',
+          }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>
+              👁 Visualizando: <strong>{adminOrg.orgName}</strong>
+            </span>
+            <button
+              onClick={handleExitAdminView}
+              style={{
+                padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.35)',
+                background: 'rgba(255,255,255,0.15)', color: '#fff',
+                fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.28)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+            >
+              Sair
+            </button>
+          </div>
+        )}
+
         {/* Mobile top bar */}
         {isMobile && (
           <div style={{
