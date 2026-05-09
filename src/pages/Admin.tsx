@@ -11,6 +11,7 @@ const ADMIN_EMAIL = 'admin@floow.com';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
 const WEBHOOK_BASE = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
 const ATUALIZAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/atualizar-usuario';
+const DELETAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/deletar-usuario';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 const PLANOS = ['basic', 'pro'];
@@ -266,27 +267,30 @@ export default function AdminPage() {
     if (!deleteOrg || deleteConfirm !== deleteOrg.nome) return;
     setDeleteLoading(true);
     try {
-      // Busca o user_id via memberships e deleta do Auth
-      const { data: membership } = await (supabase as any)
-        .from('memberships')
+      // 0. Busca o user_id da membership
+      const { data: membership } = await supabase
+        .from('memberships' as any)
         .select('user_id')
         .eq('org_id', deleteOrg.id)
         .maybeSingle();
-      if (membership?.user_id) {
-        await fetch(ATUALIZAR_USUARIO_URL, {
+
+      // 1. Deleta o usuário do Auth
+      if ((membership as any)?.user_id) {
+        await fetch(DELETAR_USUARIO_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: membership.user_id, delete: true }),
+          body: JSON.stringify({ user_id: (membership as any).user_id }),
         });
       }
 
+      // 2. Deleta os dados (ordem importa por causa das foreign keys)
       await supabase.from('subscriptions').delete().eq('org_id', deleteOrg.id);
-      await (supabase as any).from('ai_optimization_logs').delete().eq('org_id', deleteOrg.id);
+      await supabase.from('ai_optimization_logs' as any).delete().eq('org_id', deleteOrg.id);
       await supabase.from('webhook_logs').delete().eq('org_id', deleteOrg.id);
       await supabase.from('leads').delete().eq('org_id', deleteOrg.id);
       await supabase.from('configuracoes_whatsapp').delete().eq('org_id', deleteOrg.id);
-      await (supabase as any).from('memberships').delete().eq('org_id', deleteOrg.id);
-      await (supabase as any).from('organizations').delete().eq('id', deleteOrg.id);
+      await supabase.from('memberships' as any).delete().eq('org_id', deleteOrg.id);
+      await supabase.from('organizations' as any).delete().eq('id', deleteOrg.id);
       toast.success(`Empresa "${deleteOrg.nome}" excluída com sucesso`);
       setDeleteOrg(null);
       setDeleteConfirm('');
