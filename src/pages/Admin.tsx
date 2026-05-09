@@ -180,44 +180,68 @@ export default function AdminPage() {
     setCredsLoading(false);
   }
 
-  async function handleUpdateUser(): Promise<boolean> {
-    if (!editOrg) return true;
-    const emailAlterado = editEmail.trim() && editEmail.trim() !== editOrg.email_admin;
-    const senhaAlterada = editSenha.trim().length >= 8;
-    if (!emailAlterado && !senhaAlterada) return true;
-
-    const { data: mem } = await supabase
-      .from('memberships')
-      .select('user_id')
-      .eq('org_id', editOrg.id)
-      .single();
-    if (!(mem as any)?.user_id) { toast.error('Usuário não encontrado'); return false; }
-
-    const res = await fetch(ATUALIZAR_USUARIO_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: (mem as any).user_id,
-        email: emailAlterado ? editEmail.trim() : undefined,
-        password: senhaAlterada ? editSenha.trim() : undefined,
-      }),
-    });
-    const data = await res.json();
-    if (!data.ok) { toast.error(data.erro || 'Erro ao atualizar usuário'); return false; }
-
-    if (emailAlterado) {
-      await supabase.from('organizations').update({ email_admin: editEmail.trim() }).eq('id', editOrg.id);
+  async function handleUpdateUser() {
+    if (!editOrg) return;
+    if (!editEmail && !editSenha) return;
+    if (editSenha && editSenha.length < 8) {
+      toast.error('Senha deve ter no mínimo 8 caracteres');
+      return;
     }
-    setEditSenha('');
-    return true;
+    setEditSaving(true);
+    try {
+      const { data: membership, error: memberError } = await supabase
+        .from('memberships')
+        .select('user_id')
+        .eq('org_id', editOrg.id)
+        .maybeSingle();
+      console.log('membership encontrada:', membership, 'erro:', memberError);
+      if (!membership?.user_id) {
+        toast.error('Usuário não encontrado para essa org');
+        setEditSaving(false);
+        return;
+      }
+      const body: any = { user_id: membership.user_id };
+      if (editEmail) body.email = editEmail;
+      if (editSenha) body.password = editSenha;
+      console.log('Chamando atualizar-usuario com:', body);
+      const res = await fetch(ATUALIZAR_USUARIO_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      console.log('Resposta atualizar-usuario:', data);
+      if (!data.ok) {
+        toast.error(data.erro || 'Erro ao atualizar usuário');
+      } else {
+        toast.success('Dados de acesso atualizados!');
+        if (editEmail) {
+          await supabase
+            .from('organizations')
+            .update({ email_admin: editEmail })
+            .eq('id', editOrg.id);
+        }
+        setEditSenha('');
+        setEditEmail('');
+        fetchOrgs();
+      }
+    } catch (err) {
+      console.error('Erro:', err);
+      toast.error('Erro de conexão');
+    }
+    setEditSaving(false);
   }
 
   async function handleEditSave() {
     if (!editOrg) return;
+
+    // Atualiza credenciais separadamente se preenchidas
+    if (editEmail || editSenha) {
+      await handleUpdateUser();
+    }
+
     setEditSaving(true);
     try {
-      const credOk = await handleUpdateUser();
-      if (!credOk) { setEditSaving(false); return; }
 
       // Atualiza plano + campo ativo
       const ativo = ['active', 'trialing'].includes(editStatus);
@@ -490,7 +514,7 @@ export default function AdminPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={lbl}>Email</label>
-                <input style={inp} type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
+                <input style={inp} type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={editOrg?.email_admin || 'email@empresa.com'} />
               </div>
               <div>
                 <label style={lbl}>Nova senha <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional, mín. 8 chars)</span></label>
