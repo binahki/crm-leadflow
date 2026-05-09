@@ -15,17 +15,41 @@ export function BloqueioAssinatura() {
 
   async function checkSubscription() {
     if (!orgId) return;
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('status, trial_ends_at')
-      .eq('org_id', orgId)
-      .single();
-    if (!data) return;
-    const ativo =
-      data.status === 'active' ||
-      (data.status === 'trialing' &&
-        (!data.trial_ends_at || new Date(data.trial_ends_at) > new Date()));
-    setBloqueado(!ativo);
+    try {
+      // Verifica se a org ainda existe
+      const { data: org, error: orgError } = await supabase
+        .from('organizations' as any)
+        .select('id')
+        .eq('id', orgId)
+        .maybeSingle();
+
+      // Org foi deletada — faz logout e redireciona
+      if (!org || orgError) {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+        return;
+      }
+
+      // Verifica assinatura normalmente
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('status, trial_ends_at')
+        .eq('org_id', orgId)
+        .maybeSingle();
+
+      if (!data) {
+        setBloqueado(false);
+        return;
+      }
+
+      const ativo =
+        data.status === 'active' ||
+        (data.status === 'trialing' &&
+          (!data.trial_ends_at || new Date(data.trial_ends_at) > new Date()));
+      setBloqueado(!ativo);
+    } catch {
+      // Em caso de erro de rede, não bloqueia
+    }
   }
 
   useEffect(() => {
@@ -43,6 +67,16 @@ export function BloqueioAssinatura() {
         filter: `org_id=eq.${orgId}`,
       }, () => {
         checkSubscription();
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'organizations',
+        filter: `id=eq.${orgId}`,
+      }, async () => {
+        // Org deletada — logout imediato
+        await supabase.auth.signOut();
+        window.location.href = '/login';
       })
       .subscribe();
 
