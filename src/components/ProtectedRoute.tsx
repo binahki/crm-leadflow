@@ -3,46 +3,40 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-// Rotas que não precisam de assinatura ativa
-const EXEMPT_PATHS = ['/onboarding', '/admin', '/sem-acesso'];
-const ADMIN_EMAIL  = 'admin@floow.com';
+const EXEMPT_PATHS = ['/onboarding', '/admin', '/sem-acesso', '/cadastro'];
+const ADMIN_EMAIL = 'admin@floow.com';
 
-// Cache por sessão — evita re-query a cada troca de rota
 let _cachedUserId: string | null = null;
 let _cachedAllowed: boolean | null = null;
 
-/** Invalida o cache de assinatura (use após mudança de plano). */
 export function invalidateSubscriptionCache() {
   _cachedAllowed = null;
 }
 
-/** Legado — mantido para não quebrar imports existentes. */
-export function invalidateOnboardingCache() {}
+export function invalidateOnboardingCache() { }
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const isExempt = EXEMPT_PATHS.includes(location.pathname);
-
-  // Admin: acesso irrestrito — redireciona para /admin se tentar acessar /
-  if (!loading && user?.email === ADMIN_EMAIL) {
-    if (location.pathname === '/') {
-      return <Navigate to="/admin" replace />;
-    }
-    return <>{children}</>;
-  }
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   const [checked, setChecked] = useState(false);
   const [allowed, setAllowed] = useState(true);
 
   useEffect(() => {
-    // Rota isenta ou sem usuário: pula o check de assinatura
+    // Admin tem acesso irrestrito — não verifica assinatura
+    if (isAdmin) {
+      setChecked(true);
+      setAllowed(true);
+      return;
+    }
+
     if (!user || isExempt) {
       setChecked(true);
       return;
     }
 
-    // Cache hit para o mesmo usuário
     if (_cachedUserId === user.id && _cachedAllowed !== null) {
       setAllowed(_cachedAllowed);
       setChecked(true);
@@ -51,7 +45,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
     async function checkSubscription() {
       try {
-        // 1. Busca org_id
         const { data: membership } = await supabase
           .from('memberships')
           .select('org_id')
@@ -66,20 +59,17 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 2. Busca assinatura
         const { data: sub } = await supabase
           .from('subscriptions')
           .select('status, trial_ends_at, current_period_end')
           .eq('org_id', membership.org_id)
           .single();
 
-        // 3. Avalia status
         let ok = false;
         if (sub) {
           if (sub.status === 'active') {
             ok = true;
           } else if (sub.status === 'trialing') {
-            // Trialing válido se trial_ends_at ainda não passou (ou não definido)
             ok = !sub.trial_ends_at || new Date(sub.trial_ends_at) > new Date();
           }
         }
@@ -88,7 +78,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         _cachedAllowed = ok;
         setAllowed(ok);
       } catch {
-        // Em caso de erro de rede, libera o acesso para não bloquear o usuário
         _cachedUserId = user!.id;
         _cachedAllowed = true;
         setAllowed(true);
@@ -98,9 +87,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
 
     checkSubscription();
-  }, [user?.id, isExempt]);
+  }, [user?.id, isExempt, isAdmin]);
 
-  // Aguarda auth + check de assinatura
   if (loading || !checked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -110,6 +98,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // Admin sem impersonation: só pode acessar rotas isentas (/admin, /sem-acesso…)
+  // Quando está impersonando, deixa acessar o CRM normalmente.
+  const isImpersonating = !!localStorage.getItem('admin_viewing_org');
+  if (isAdmin && !isImpersonating && !isExempt) {
+    return <Navigate to="/admin" replace />;
+  }
+
   if (!isExempt && !allowed) return <Navigate to="/sem-acesso" replace />;
 
   return <>{children}</>;

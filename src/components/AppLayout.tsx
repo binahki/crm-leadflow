@@ -25,9 +25,9 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
   }, [location.pathname]);
 
   function handleExitAdminView() {
-    clearAdminViewingOrg();
-    setAdminOrg(null);
-    navigate('/admin');
+    localStorage.removeItem('admin_viewing_org');
+    localStorage.removeItem('admin_viewing_org_nome');
+    window.location.href = '/admin'; // reload completo: limpa todo o estado React
   }
 
   useEffect(() => {

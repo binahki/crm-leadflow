@@ -187,9 +187,9 @@ export default function AdminPage() {
 
   // ── Actions ───────────────────────────────────────────────────
   function handleAcessar(org: Org) {
-    setAdminViewingOrg(org.id, org.nome);
-    invalidateSubscriptionCache();
-    navigate('/');
+    localStorage.setItem('admin_viewing_org',      org.id);
+    localStorage.setItem('admin_viewing_org_nome', org.nome);
+    window.location.href = '/'; // reload completo: todos os hooks lêem o localStorage fresco
   }
 
   async function handleSignOut() {
