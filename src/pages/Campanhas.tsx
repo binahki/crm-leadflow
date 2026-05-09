@@ -169,18 +169,19 @@ export default function CampanhasPage() {
     q.then(({data})=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady]);
 
-  // Realtime: atualiza allLeads ao receber novos leads
+  // Realtime: atualiza allLeads ao receber novos leads (filtrado por org)
   useEffect(()=>{
-    const ch = supabase.channel('camp-leads-rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{
+    if (!orgReady || !orgId) return;
+    const ch = supabase.channel(`camp-leads-rt-${orgId}`)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{
         setAllLeads(prev=>[p.new as any,...prev]);
       })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{
         setAllLeads(prev=>prev.map(l=>l.id===(p.new as any).id?p.new as any:l));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  },[]);
+  },[orgId, orgReady]); // eslint-disable-line
 
   // Busca log de otimização da IA do dia
   useEffect(()=>{

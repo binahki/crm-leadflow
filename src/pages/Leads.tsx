@@ -311,6 +311,7 @@ export default function LeadsPage() {
   const fetchLeads = useCallback(async () => {
     if (!orgReady) return;
     setIsLoading(true);
+    setAllLeads([]);
     let q = supabase.from('leads').select('*').order('created_at', { ascending: false });
     if (orgId) q = q.eq('org_id', orgId);
     const { data, error } = await q;
@@ -322,13 +323,14 @@ export default function LeadsPage() {
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
   useEffect(() => {
-    const ch = supabase.channel('leads-rt2')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{ const novo=p.new as Lead; setAllLeads(prev=>[novo,...prev]); toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'}); })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{ setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l)); })
+    if (!orgReady || !orgId) return;
+    const ch = supabase.channel(`leads-rt2-${orgId}`)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ const novo=p.new as Lead; setAllLeads(prev=>[novo,...prev]); toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'}); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l)); })
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{ setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id)); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [orgId, orgReady]); // eslint-disable-line
 
   const filtered = useMemo(() => {
     let r=[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime());

@@ -11,6 +11,8 @@ const ADMIN_EMAIL = 'murilosilvestredias@gmail.com';
 const EDGE_URL    = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
 const FONT        = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
+const PLANOS = ['starter', 'pro', 'enterprise'];
+
 interface Org {
   id: string;
   nome: string;
@@ -19,6 +21,7 @@ interface Org {
   created_at: string;
   status?: string;
   trial_ends_at?: string;
+  sub_id?: string;
 }
 
 export default function AdminPage() {
@@ -29,17 +32,26 @@ export default function AdminPage() {
 
   const [orgs, setOrgs]           = useState<Org[]>([]);
   const [loading, setLoading]     = useState(true);
+
+  // ── Create modal state ────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
   const [modalNome, setModalNome] = useState('');
   const [modalEmail, setModalEmail] = useState('');
   const [modalSenha, setModalSenha] = useState('');
+  const [modalPlano, setModalPlano] = useState('starter');
+  const [modalTrialDias, setModalTrialDias] = useState(14);
   const [creating, setCreating]   = useState(false);
+
+  // ── Edit modal state ──────────────────────────────────────────
+  const [editOrg, setEditOrg]         = useState<Org | null>(null);
+  const [editPlano, setEditPlano]     = useState('starter');
+  const [editStatus, setEditStatus]   = useState('trialing');
+  const [editTrialDias, setEditTrialDias] = useState(0);
+  const [editSaving, setEditSaving]   = useState(false);
 
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!authLoading && (!user || user.email !== ADMIN_EMAIL)) {
-      navigate('/');
-    }
+    if (!authLoading && (!user || user.email !== ADMIN_EMAIL)) navigate('/');
   }, [user, authLoading]);
 
   // ── Fetch orgs ────────────────────────────────────────────────
@@ -55,22 +67,20 @@ export default function AdminPage() {
         .from('organizations')
         .select('*, subscriptions(*)')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
-
       const merged: Org[] = (data || []).map((org: any) => {
         const sub = org.subscriptions?.[0] || null;
         return {
           id:            org.id,
           nome:          org.nome          || '—',
           email_admin:   org.email_admin   || '—',
-          plano:         org.plano         || '—',
+          plano:         org.plano         || 'starter',
           created_at:    org.created_at,
           status:        sub?.status       || null,
           trial_ends_at: sub?.trial_ends_at || null,
+          sub_id:        sub?.id           || null,
         };
       });
-
       setOrgs(merged);
     } catch {
       toast.error('Erro ao carregar dados');
@@ -78,24 +88,114 @@ export default function AdminPage() {
     setLoading(false);
   }
 
+  // ── Create org ────────────────────────────────────────────────
   async function handleCreateOrg(e: React.FormEvent) {
     e.preventDefault();
     setCreating(true);
     try {
+      // 1. Cria usuário + org via edge function
       const res  = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome_empresa: modalNome, email: modalEmail, senha: modalSenha }),
       });
       const data = await res.json();
-      if (!res.ok || !data.ok) { toast.error(data.erro || 'Erro ao criar cliente'); }
-      else {
-        toast.success(`Org "${modalNome}" criada!`);
-        setShowModal(false); setModalNome(''); setModalEmail(''); setModalSenha('');
-        fetchOrgs();
+      if (!res.ok || !data.ok) { toast.error(data.erro || 'Erro ao criar cliente'); setCreating(false); return; }
+
+      // 2. Busca org recém-criada pelo email
+      const { data: newOrg } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('email_admin', modalEmail)
+        .single();
+
+      if (newOrg?.id) {
+        const trialEndsAt = new Date(Date.now() + modalTrialDias * 86400000).toISOString();
+        // 3. Atualiza plano na org
+        await supabase.from('organizations').update({ plano: modalPlano }).eq('id', newOrg.id);
+        // 4. Cria/atualiza subscription
+        const { data: existingSub } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('org_id', newOrg.id)
+          .limit(1);
+        if (existingSub && existingSub.length > 0) {
+          await supabase.from('subscriptions').update({
+            status: 'trialing',
+            trial_ends_at: trialEndsAt,
+          }).eq('id', existingSub[0].id);
+        } else {
+          await supabase.from('subscriptions').insert({
+            org_id: newOrg.id,
+            status: 'trialing',
+            trial_ends_at: trialEndsAt,
+          });
+        }
       }
+
+      toast.success(`"${modalNome}" criada! Trial de ${modalTrialDias} dias.`);
+      setShowModal(false);
+      setModalNome(''); setModalEmail(''); setModalSenha('');
+      setModalPlano('starter'); setModalTrialDias(14);
+      fetchOrgs();
     } catch { toast.error('Erro de conexão'); }
     setCreating(false);
+  }
+
+  // ── Edit org ──────────────────────────────────────────────────
+  function openEdit(org: Org) {
+    setEditOrg(org);
+    setEditPlano(org.plano || 'starter');
+    setEditStatus(org.status || 'trialing');
+    setEditTrialDias(0);
+  }
+
+  async function handleEditSave() {
+    if (!editOrg) return;
+    setEditSaving(true);
+    try {
+      // Atualiza plano
+      await supabase.from('organizations').update({ plano: editPlano }).eq('id', editOrg.id);
+
+      // Calcula nova data de trial
+      let trialEndsAt: string | null = editOrg.trial_ends_at || null;
+      if (editTrialDias > 0) {
+        const base = editOrg.trial_ends_at && new Date(editOrg.trial_ends_at) > new Date()
+          ? new Date(editOrg.trial_ends_at)
+          : new Date();
+        base.setDate(base.getDate() + editTrialDias);
+        trialEndsAt = base.toISOString();
+      }
+
+      const subPayload: any = { status: editStatus };
+      if (editStatus === 'trialing' && trialEndsAt) subPayload.trial_ends_at = trialEndsAt;
+
+      if (editOrg.sub_id) {
+        await supabase.from('subscriptions').update(subPayload).eq('id', editOrg.sub_id);
+      } else {
+        await supabase.from('subscriptions').insert({ org_id: editOrg.id, ...subPayload });
+      }
+
+      toast.success('Atualizado!');
+      setEditOrg(null);
+      fetchOrgs();
+    } catch {
+      toast.error('Erro ao salvar');
+    }
+    setEditSaving(false);
+  }
+
+  // ── Actions ───────────────────────────────────────────────────
+  function handleAcessar(org: Org) {
+    setAdminViewingOrg(org.id, org.nome);
+    invalidateSubscriptionCache();
+    navigate('/');
+  }
+
+  async function handleSignOut() {
+    clearAdminViewingOrg();
+    await supabase.auth.signOut();
+    navigate('/login');
   }
 
   if (authLoading || (!user && !authLoading)) return null;
@@ -107,12 +207,13 @@ export default function AdminPage() {
   const trials = orgs.filter(o => o.status === 'trialing').length;
   const mrr    = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // ── Estilos base ──────────────────────────────────────────────
-  const bg      = dark ? '#090909' : '#f4f4f5';
-  const card    = { background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`, borderRadius: '16px', padding: '20px 24px' } as React.CSSProperties;
-  const txt     = dark ? '#f4f4f5' : '#111827';
-  const txtMid  = dark ? '#a1a1aa' : '#6b7280';
+  // ── Estilos ───────────────────────────────────────────────────
+  const bg     = dark ? '#090909' : '#f4f4f5';
+  const card   = { background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`, borderRadius: '16px', padding: '20px 24px' } as React.CSSProperties;
+  const txt    = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#0d0d0f' : '#f8fafc', color: txt, fontSize: '13px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box' };
+  const lbl: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '5px' };
 
   function StatusBadge({ status }: { status?: string | null }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
@@ -143,17 +244,20 @@ export default function AdminPage() {
     return `${date} (${diff}d)`;
   }
 
-  function handleAcessar(org: Org) {
-    setAdminViewingOrg(org.id, org.nome);
-    invalidateSubscriptionCache(); // força re-check com org do cliente
-    navigate('/');
-  }
-
-  async function handleSignOut() {
-    clearAdminViewingOrg();
-    await supabase.auth.signOut();
-    navigate('/login');
-  }
+  // ── Shared modal styles ───────────────────────────────────────
+  const modalBox: React.CSSProperties = {
+    position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+    zIndex: 61, width: '90%', maxWidth: '400px',
+    background: dark ? '#111113' : '#fff',
+    border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`,
+    borderRadius: '18px', padding: '24px',
+    boxShadow: '0 24px 60px rgba(0,0,0,0.4)', fontFamily: FONT,
+    maxHeight: '90vh', overflowY: 'auto',
+  };
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, zIndex: 60,
+    background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: bg, fontFamily: FONT }}>
@@ -237,10 +341,16 @@ export default function AdminPage() {
                       <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
                       <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
                       <td style={{ padding: '12px 16px' }}>
-                        <button onClick={() => handleAcessar(org)}
-                          style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
-                          Acessar
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => openEdit(org)}
+                            style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
+                            Editar
+                          </button>
+                          <button onClick={() => handleAcessar(org)}
+                            style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                            Acessar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -252,24 +362,37 @@ export default function AdminPage() {
       </div>
       </div>
 
-      {/* Modal novo cliente */}
+      {/* ── Modal: Novo cliente ── */}
       {showModal && (
         <>
-          <div onClick={() => setShowModal(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 61, width: '90%', maxWidth: '380px', background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.08)'}`, borderRadius: '18px', padding: '24px', boxShadow: '0 24px 60px rgba(0,0,0,0.4)', fontFamily: FONT }}>
+          <div onClick={() => setShowModal(false)} style={overlay} />
+          <div style={modalBox}>
             <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: txt }}>Novo cliente</h3>
             <form onSubmit={handleCreateOrg} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '5px' }}>Nome da empresa</label>
+                <label style={lbl}>Nome da empresa</label>
                 <input style={inp} type="text" required placeholder="Ex: Minha Loja" value={modalNome} onChange={e => setModalNome(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '5px' }}>Email</label>
+                <label style={lbl}>Email</label>
                 <input style={inp} type="email" required placeholder="admin@empresa.com" value={modalEmail} onChange={e => setModalEmail(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '5px' }}>Senha</label>
-                <input style={inp} type="password" required minLength={8} placeholder="Mínimo 8 caracteres" value={modalSenha} onChange={e => setModalSenha(e.target.value)} />
+                <label style={lbl}>Senha</label>
+                <input style={inp} type="password" required minLength={8} autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={modalSenha} onChange={e => setModalSenha(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Plano</label>
+                <select style={inp} value={modalPlano} onChange={e => setModalPlano(e.target.value)}>
+                  {PLANOS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Dias de trial</label>
+                <input style={inp} type="number" min={0} max={365} value={modalTrialDias} onChange={e => setModalTrialDias(Number(e.target.value))} />
+                <p style={{ fontSize: '11.5px', color: txtMid, margin: '4px 0 0' }}>
+                  Trial expira em: <strong style={{ color: txt }}>{new Date(Date.now() + modalTrialDias * 86400000).toLocaleDateString('pt-BR')}</strong>
+                </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button type="button" onClick={() => setShowModal(false)}
@@ -277,11 +400,65 @@ export default function AdminPage() {
                   Cancelar
                 </button>
                 <button type="submit" disabled={creating}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: creating ? '#27272a' : '#10b981', color: creating ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: creating ? 'default' : 'pointer', fontFamily: FONT }}>
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: creating ? (dark ? '#27272a' : '#e5e7eb') : '#10b981', color: creating ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: creating ? 'default' : 'pointer', fontFamily: FONT }}>
                   {creating ? 'Criando…' : 'Criar'}
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal: Editar org ── */}
+      {editOrg && (
+        <>
+          <div onClick={() => setEditOrg(null)} style={overlay} />
+          <div style={modalBox}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600, color: txt }}>Editar cliente</h3>
+            <p style={{ fontSize: '12.5px', color: txtMid, margin: '0 0 16px' }}>{editOrg.nome}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={lbl}>Plano</label>
+                <select style={inp} value={editPlano} onChange={e => setEditPlano(e.target.value)}>
+                  {PLANOS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Status da assinatura</label>
+                <select style={inp} value={editStatus} onChange={e => setEditStatus(e.target.value)}>
+                  <option value="trialing">Trial</option>
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                  <option value="canceled">Cancelado</option>
+                </select>
+              </div>
+              {editStatus === 'trialing' && (
+                <div>
+                  <label style={lbl}>Adicionar dias ao trial</label>
+                  <input style={inp} type="number" min={0} max={365} value={editTrialDias} onChange={e => setEditTrialDias(Number(e.target.value))} placeholder="0 = mantém data atual" />
+                  {editOrg.trial_ends_at && (
+                    <p style={{ fontSize: '11.5px', color: txtMid, margin: '4px 0 0' }}>
+                      Trial atual: <strong style={{ color: txt }}>{trialInfo(editOrg.trial_ends_at)}</strong>
+                      {editTrialDias > 0 && (() => {
+                        const base = new Date(editOrg.trial_ends_at!) > new Date() ? new Date(editOrg.trial_ends_at!) : new Date();
+                        base.setDate(base.getDate() + editTrialDias);
+                        return <> → Novo: <strong style={{ color: '#10b981' }}>{base.toLocaleDateString('pt-BR')}</strong></>;
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button type="button" onClick={() => setEditOrg(null)}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>
+                  Cancelar
+                </button>
+                <button onClick={handleEditSave} disabled={editSaving}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: editSaving ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: editSaving ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: editSaving ? 'default' : 'pointer', fontFamily: FONT }}>
+                  {editSaving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

@@ -278,19 +278,21 @@ export default function KanbanPage() {
 
   useEffect(() => {
     if (!orgReady) return;
+    setLeads([]);
     let q = supabase.from('leads').select('*');
     if (orgId) q = q.eq('org_id', orgId);
     q.then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); });
   }, [orgId, orgReady]); // eslint-disable-line
 
   useEffect(() => {
-    const ch = supabase.channel('kanban-rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},(p)=>{ useAppStore.getState().addLead(p.new as unknown as Lead); })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},(p)=>{ useAppStore.getState().updateLead((p.new as unknown as Lead).id, p.new as unknown as Lead); })
+    if (!orgReady || !orgId) return;
+    const ch = supabase.channel(`kanban-rt-${orgId}`)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},(p)=>{ useAppStore.getState().addLead(p.new as unknown as Lead); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},(p)=>{ useAppStore.getState().updateLead((p.new as unknown as Lead).id, p.new as unknown as Lead); })
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},(p)=>{ const c=useAppStore.getState().leads; useAppStore.getState().setLeads(c.filter(l=>l.id!==(p.old as {id:string}).id)); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [orgId, orgReady]); // eslint-disable-line
 
   useEffect(() => {
     function close(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuLead(null); }
