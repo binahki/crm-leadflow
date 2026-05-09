@@ -7,7 +7,7 @@ import {
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getRelativeTime } from '@/utils/relativeTime';
+import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { useTheme } from '@/hooks/useTheme';
 
 interface LeadDrawerProps {
@@ -37,30 +37,29 @@ const GRADIENTS = [
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 // ── Quiz respostas dinâmico ───────────────────────────────────
-const SKIP_EXACT = new Set([
+const CAMPOS_IGNORADOS = new Set([
   'nome', 'whatsapp', 'telefone', 'cidade', 'score', 'status', 'email',
   'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term', 'utm_id',
   'fbclid', 'brid', 'code', 'ip', 'platform', 'instagram', 'wa_sent', 'created_at', 'id',
+  'tracking', 'responses', 'button', 'clicked',
 ]);
-const SKIP_PREFIXES = ['tracking.', 'responses.', 'score.'];
 const STRIP_PREFIXES = ['voce_', 'qual_sua_', 'quanto_gostaria_de_'];
-// Campos de controle da Inlead: 6 chars alfanuméricos misturados (letras + dígitos)
-const INLEAD_CTRL = /^[A-Za-z0-9]{6}$/;
 
-function isSkippedKey(key: string): boolean {
-  const k = key.toLowerCase();
-  if (SKIP_EXACT.has(k)) return true;
-  if (/^\d+$/.test(key)) return true;
-  if (k.endsWith('_at') || k.endsWith('_id')) return true;
-  if (SKIP_PREFIXES.some(p => k.startsWith(p))) return true;
-  if (INLEAD_CTRL.test(key) && /[A-Z]/.test(key) && /[a-z]/.test(key) && /[0-9]/.test(key)) return true;
-  return false;
-}
-
-function isSkippedValue(val: unknown): boolean {
-  if (val === null || val === undefined || val === '') return true;
-  const s = String(val);
-  if (s.includes('http://') || s.includes('https://')) return true;
+function deveIgnorar(chave: string, valor: unknown): boolean {
+  const c = chave.toLowerCase();
+  if (CAMPOS_IGNORADOS.has(c)) return true;
+  if (/^\d+$/.test(chave)) return true;
+  if (c.startsWith('tracking.') || c.startsWith('score.') || c.startsWith('responses.')) return true;
+  // IDs técnicos da Inlead: exatamente 6 chars alfanuméricos
+  if (/^[a-zA-Z0-9]{6}$/.test(chave)) return true;
+  if (c.endsWith('_at') || c.endsWith('_id')) return true;
+  if (valor === 'clicked' || valor === 'loaded') return true;
+  // Strings de resposta encodada (ex: "1|2|*")
+  if (typeof valor === 'string' && /^[\d|*\s]+$/.test(valor)) return true;
+  if (typeof valor === 'string' && valor.startsWith('http')) return true;
+  // Valores muito longos (fbclid, userAgent, etc)
+  if (typeof valor === 'string' && valor.length > 200) return true;
+  if (valor === null || valor === undefined || valor === '') return true;
   return false;
 }
 
@@ -305,7 +304,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
-                {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.whatsapp}</span>}
+                {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{formatarWhatsapp(lead.whatsapp)}</span>}
                 {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
                 {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
               </div>
@@ -351,9 +350,30 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                 const raw = l.quiz_respostas;
                 if (raw) respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
               } catch { respostas = null; }
-              const entries = respostas
-                ? Object.entries(respostas).filter(([k, v]) => !isSkippedKey(k) && !isSkippedValue(v))
-                : [];
+              // Fallback para leads legados sem quiz_respostas (vieram pelo Make)
+              if (!respostas) {
+                respostas = {
+                  oque_mais_te_atrai: l.o_que_mais_te_atrai,
+                  quanto_gostaria_de_ganhar_por_mes: l.quanto_ganha,
+                  qual_sua_idade: l.idade,
+                  tem_filhos: l.tem_filhos,
+                  idade_do_filho_mais_novo: l.idade_filho,
+                  voce_tem_alguma_rede_de_apoio: l.rede_apoio,
+                  voce_mora_com_marido: l.mora_com,
+                  situacao_atual: l.situacao_atual,
+                  area_de_atuacao: l.area_atuacao,
+                  voce_ja_vende: l.ja_vende,
+                  por_quais_meios_vc_pretende_vender: l.meios_venda,
+                  quantas_horas_por_semana_vai_se_dedicar: l.horas_semana,
+                  quando_gostaria_de_comecar: l.quando_comecar,
+                  ja_tentou_vender_semijoia: l.tentou_semijoia,
+                  instagram_ativo: l.instagram_ativo,
+                  para_comecar_no_consignado: l.consignado,
+                  seu_nome_esta_negativado: l.negativado,
+                  voce_aceita_as_regras_do_consignado: l.aceita_regras,
+                };
+              }
+              const entries = Object.entries(respostas).filter(([k, v]) => !deveIgnorar(k, v));
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Ver respostas do quiz">

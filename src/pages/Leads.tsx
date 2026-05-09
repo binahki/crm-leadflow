@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
+import { formatarWhatsapp } from '@/utils/relativeTime';
 
 const STATUS_STYLE = [
   { lightBg:'#dbeafe', lightText:'#1d4ed8', darkBg:'rgba(59,130,246,0.15)', darkText:'#60a5fa', dot:'#3b82f6' },
@@ -535,7 +536,7 @@ export default function LeadsPage() {
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome||'—'}</p>
-                      <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):''}{lead.cidade&&lead.whatsapp?' · ':''}{lead.whatsapp||''}</p>
+                      <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):''}{lead.cidade&&lead.whatsapp?' · ':''}{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
                       <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
@@ -598,7 +599,7 @@ export default function LeadsPage() {
                       <td className="px-3 py-3" style={{whiteSpace:'nowrap'}}>
                         <ScoreTag score={la.score!=null?Number(la.score):null} faixa={la.faixa} dark={dark}/>
                       </td>
-                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp||'—'}</td>
+                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):'—'}</td>
                       <td className="px-3 py-3">
                         <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,whiteSpace:'nowrap',background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>

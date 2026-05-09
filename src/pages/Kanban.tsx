@@ -10,7 +10,7 @@ import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { getRelativeTime } from '@/utils/relativeTime';
+import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -169,7 +169,7 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
               <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{lead.nome||'Lead sem nome'}</p>
               {!isMobile && <ScoreTag score={score} faixa={faixa} dark={dark} />}
             </div>
-            <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp||'—'}</p>
+            <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
           </div>
         </div>
         <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:isMobile?1:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick}>
@@ -245,7 +245,7 @@ function OverlayCard({ lead }: { lead: Lead }) {
         <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:avatarColor(lead.nome), display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
         <div>
           <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0 }}>{lead.nome}</p>
-          <p style={{ fontSize:'12px', color:'#9ca3af', margin:0 }}>{lead.whatsapp}</p>
+          <p style={{ fontSize:'12px', color:'#9ca3af', margin:0 }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>
         </div>
       </div>
     </div>

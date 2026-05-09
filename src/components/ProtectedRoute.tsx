@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-const EXEMPT_PATHS = ['/onboarding', '/admin', '/sem-acesso', '/cadastro'];
+const EXEMPT_PATHS = ['/admin', '/sem-acesso', '/cadastro'];
 const ADMIN_EMAIL = 'admin@floow.com';
 
 let _cachedUserId: string | null = null;

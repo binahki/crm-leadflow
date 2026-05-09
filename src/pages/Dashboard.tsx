@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
+import { TutorialPopup } from '@/components/TutorialPopup';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
@@ -555,6 +556,7 @@ export default function Dashboard() {
         </div>
       </div>
       <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>
+      {orgId && <TutorialPopup />}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}

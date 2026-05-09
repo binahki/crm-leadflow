@@ -45,6 +45,14 @@ export function formatDate(dateStr: string | null | undefined): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+export function formatarWhatsapp(wa: string | null | undefined): string {
+  if (!wa) return '';
+  const n = wa.replace(/\D/g, '');
+  if (n.length === 11) return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
+  if (n.length === 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`;
+  return wa;
+}
+
 function getDateObj(dateStr: string): Date {
   if (dateStr.includes('T') || dateStr.endsWith('Z')) {
     let normalized = dateStr;
