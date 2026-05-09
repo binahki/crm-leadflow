@@ -9,7 +9,10 @@ import { invalidateSubscriptionCache } from '@/components/ProtectedRoute';
 
 const ADMIN_EMAIL = 'admin@floow.com';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
+const SUPABASE_PROJECT_URL = 'https://obguidmfvfjaekaskgob.supabase.co';
+const WEBHOOK_BASE = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY || '';
 
 const PLANOS = ['basic', 'pro'];
 
@@ -47,7 +50,14 @@ export default function AdminPage() {
   const [editPlano, setEditPlano] = useState('starter');
   const [editStatus, setEditStatus] = useState('trialing');
   const [editTrialDias, setEditTrialDias] = useState(0);
+  const [editEmail, setEditEmail] = useState('');
+  const [editSenha, setEditSenha] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+
+  // ── Credentials modal state ───────────────────────────────────
+  const [showCreds, setShowCreds] = useState(false);
+  const [credsData, setCredsData] = useState<{ email: string; orgId: string; webhookUrl: string } | null>(null);
+  const [credsLoading, setCredsLoading] = useState(false);
 
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -148,14 +158,70 @@ export default function AdminPage() {
     setEditPlano(org.plano || 'starter');
     setEditStatus(org.status || 'trialing');
     setEditTrialDias(0);
+    setEditEmail(org.email_admin);
+    setEditSenha('');
+  }
+
+  async function handleVerCreds(org: Org) {
+    setCredsData(null);
+    setShowCreds(true);
+    setCredsLoading(true);
+    const { data } = await supabase
+      .from('configuracoes_whatsapp')
+      .select('webhook_token')
+      .eq('org_id', org.id)
+      .limit(1)
+      .single();
+    const token = (data as any)?.webhook_token || '';
+    setCredsData({
+      email: org.email_admin,
+      orgId: org.id,
+      webhookUrl: token ? `${WEBHOOK_BASE}?token=${token}` : '—',
+    });
+    setCredsLoading(false);
   }
 
   async function handleEditSave() {
     if (!editOrg) return;
     setEditSaving(true);
     try {
-      // Atualiza plano
-      await supabase.from('organizations').update({ plano: editPlano }).eq('id', editOrg.id);
+      // Atualiza email/senha do usuário via admin API (se alterados)
+      const credBody: any = {};
+      if (editEmail.trim() && editEmail.trim() !== editOrg.email_admin) credBody.email = editEmail.trim();
+      if (editSenha.trim().length >= 8) credBody.password = editSenha.trim();
+      if (Object.keys(credBody).length > 0) {
+        const { data: mem } = await supabase
+          .from('memberships')
+          .select('user_id')
+          .eq('org_id', editOrg.id)
+          .single();
+        const userId = (mem as any)?.user_id;
+        if (userId && SERVICE_KEY) {
+          const res = await fetch(`${SUPABASE_PROJECT_URL}/auth/v1/admin/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SERVICE_KEY}`,
+              'apikey': SERVICE_KEY,
+            },
+            body: JSON.stringify(credBody),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(`Erro ao atualizar credenciais: ${err.message || res.status}`);
+            setEditSaving(false);
+            return;
+          }
+          // Atualiza email_admin na tabela organizations se mudou
+          if (credBody.email) {
+            await supabase.from('organizations').update({ email_admin: credBody.email }).eq('id', editOrg.id);
+          }
+        }
+      }
+
+      // Atualiza plano + campo ativo
+      const ativo = ['active', 'trialing'].includes(editStatus);
+      await supabase.from('organizations').update({ plano: editPlano, ativo }).eq('id', editOrg.id);
 
       // Calcula nova data de trial
       let trialEndsAt: string | null = editOrg.trial_ends_at || null;
@@ -176,6 +242,7 @@ export default function AdminPage() {
         await supabase.from('subscriptions').insert({ org_id: editOrg.id, ...subPayload });
       }
 
+      invalidateSubscriptionCache();
       toast.success('Atualizado!');
       setEditOrg(null);
       fetchOrgs();
@@ -342,6 +409,10 @@ export default function AdminPage() {
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => handleVerCreds(org)}
+                              style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
+                              Credenciais
+                            </button>
                             <button onClick={() => openEdit(org)}
                               style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>
                               Editar
@@ -418,6 +489,14 @@ export default function AdminPage() {
             <p style={{ fontSize: '12.5px', color: txtMid, margin: '0 0 16px' }}>{editOrg.nome}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
+                <label style={lbl}>Email</label>
+                <input style={inp} type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@empresa.com" />
+              </div>
+              <div>
+                <label style={lbl}>Nova senha <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional, mín. 8 chars)</span></label>
+                <input style={inp} type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="Deixe em branco para não alterar" autoComplete="new-password" />
+              </div>
+              <div>
                 <label style={lbl}>Plano</label>
                 <select style={inp} value={editPlano} onChange={e => setEditPlano(e.target.value)}>
                   {PLANOS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
@@ -459,6 +538,45 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </>
+      )}
+      {/* ── Modal: Credenciais ── */}
+      {showCreds && (
+        <>
+          <div onClick={() => setShowCreds(false)} style={overlay} />
+          <div style={{ ...modalBox, maxWidth: '460px' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: txt }}>Credenciais do cliente</h3>
+            {credsLoading ? (
+              <p style={{ color: txtMid, fontSize: '13px' }}>Carregando…</p>
+            ) : credsData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {([
+                  { label: 'Email', value: credsData.email },
+                  { label: 'Org ID', value: credsData.orgId },
+                  { label: 'Webhook URL', value: credsData.webhookUrl },
+                ] as const).map(({ label, value }) => (
+                  <div key={label}>
+                    <p style={{ ...lbl, marginBottom: '4px' }}>{label}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: dark ? '#0d0d0f' : '#f8fafc', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '9px', padding: '9px 12px' }}>
+                      <span style={{ flex: 1, fontSize: '12.5px', color: txt, wordBreak: 'break-all', fontFamily: 'monospace' }}>{value}</span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(value).then(() => toast.success('Copiado!'))}
+                        style={{ flexShrink: 0, padding: '4px 8px', borderRadius: '6px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '11px', cursor: 'pointer', fontFamily: FONT }}
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <button
+              onClick={() => setShowCreds(false)}
+              style={{ marginTop: '20px', width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}
+            >
+              Fechar
+            </button>
           </div>
         </>
       )}

@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { getAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
+import { TrialBanner } from './TrialBanner';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -146,6 +147,7 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
           </div>
         )}
 
+        <TrialBanner />
         {children}
       </main>
 

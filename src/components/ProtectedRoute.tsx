@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { BloqueioAssinatura } from './BloqueioAssinatura';
 
 const EXEMPT_PATHS = ['/admin', '/sem-acesso', '/cadastro'];
 const ADMIN_EMAIL = 'admin@floow.com';
@@ -108,5 +109,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isExempt && !allowed) return <Navigate to="/sem-acesso" replace />;
 
-  return <>{children}</>;
+  return (
+    <>
+      <BloqueioAssinatura />
+      {children}
+    </>
+  );
 }
