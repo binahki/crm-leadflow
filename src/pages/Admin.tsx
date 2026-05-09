@@ -157,7 +157,7 @@ export default function AdminPage() {
     setEditPlano(org.plano || 'starter');
     setEditStatus(org.status || 'trialing');
     setEditTrialDias(0);
-    setEditEmail(org.email_admin);
+    setEditEmail('');
     setEditSenha('');
   }
 
@@ -187,67 +187,45 @@ export default function AdminPage() {
       toast.error('Senha deve ter no mínimo 8 caracteres');
       return;
     }
-    setEditSaving(true);
-    try {
-      const { data: membership, error: memberError } = await supabase
-        .from('memberships')
-        .select('user_id')
-        .eq('org_id', editOrg.id)
-        .maybeSingle();
-      console.log('membership encontrada:', membership, 'erro:', memberError);
-      if (!membership?.user_id) {
-        toast.error('Usuário não encontrado para essa org');
-        setEditSaving(false);
-        return;
-      }
-      const body: any = { user_id: membership.user_id };
-      if (editEmail) body.email = editEmail;
-      if (editSenha) body.password = editSenha;
-      console.log('Chamando atualizar-usuario com:', body);
-      const res = await fetch(ATUALIZAR_USUARIO_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      console.log('Resposta atualizar-usuario:', data);
-      if (!data.ok) {
-        toast.error(data.erro || 'Erro ao atualizar usuário');
-      } else {
-        toast.success('Dados de acesso atualizados!');
-        if (editEmail) {
-          await supabase
-            .from('organizations')
-            .update({ email_admin: editEmail })
-            .eq('id', editOrg.id);
-        }
-        setEditSenha('');
-        setEditEmail('');
-        fetchOrgs();
-      }
-    } catch (err) {
-      console.error('Erro:', err);
-      toast.error('Erro de conexão');
+    const { data: membership } = await supabase
+      .from('memberships')
+      .select('user_id')
+      .eq('org_id', editOrg.id)
+      .maybeSingle();
+    if (!membership?.user_id) {
+      toast.error('Usuário não encontrado para essa org');
+      return;
     }
-    setEditSaving(false);
+    const body: any = { user_id: membership.user_id };
+    if (editEmail) body.email = editEmail;
+    if (editSenha) body.password = editSenha;
+    const res = await fetch(ATUALIZAR_USUARIO_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      toast.error(data.erro || 'Erro ao atualizar usuário');
+    } else {
+      toast.success('Dados de acesso atualizados!');
+      if (editEmail) {
+        await supabase
+          .from('organizations')
+          .update({ email_admin: editEmail })
+          .eq('id', editOrg.id);
+      }
+    }
   }
 
   async function handleEditSave() {
     if (!editOrg) return;
-
-    // Atualiza credenciais separadamente se preenchidas
-    if (editEmail || editSenha) {
-      await handleUpdateUser();
-    }
-
     setEditSaving(true);
     try {
-
-      // Atualiza plano + campo ativo
+      // 1. Salva plano + status
       const ativo = ['active', 'trialing'].includes(editStatus);
       await supabase.from('organizations').update({ plano: editPlano, ativo }).eq('id', editOrg.id);
 
-      // Calcula nova data de trial
       let trialEndsAt: string | null = editOrg.trial_ends_at || null;
       if (editTrialDias > 0) {
         const base = editOrg.trial_ends_at && new Date(editOrg.trial_ends_at) > new Date()
@@ -256,24 +234,28 @@ export default function AdminPage() {
         base.setDate(base.getDate() + editTrialDias);
         trialEndsAt = base.toISOString();
       }
-
       const subPayload: any = { status: editStatus };
       if (editStatus === 'trialing' && trialEndsAt) subPayload.trial_ends_at = trialEndsAt;
-
       if (editOrg.sub_id) {
         await supabase.from('subscriptions').update(subPayload).eq('id', editOrg.sub_id);
       } else {
         await supabase.from('subscriptions').insert({ org_id: editOrg.id, ...subPayload });
       }
-
       invalidateSubscriptionCache();
       toast.success('Atualizado!');
-      setEditOrg(null);
+
+      // 2. Atualiza credenciais se preenchidas
+      if (editEmail || editSenha) {
+        await handleUpdateUser();
+      }
+
       fetchOrgs();
     } catch {
       toast.error('Erro ao salvar');
+    } finally {
+      setEditSaving(false);
+      setEditOrg(null);
     }
-    setEditSaving(false);
   }
 
   // ── Actions ───────────────────────────────────────────────────

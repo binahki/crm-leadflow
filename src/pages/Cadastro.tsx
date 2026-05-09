@@ -5,15 +5,14 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue"
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
 
 function mascaraDocumento(valor: string): string {
-  const digits = valor.replace(/\D/g, '');
-  if (digits.length <= 11) {
-    return digits
+  const nums = valor.replace(/\D/g, '').slice(0, 14);
+  if (nums.length <= 11) {
+    return nums
       .replace(/(\d{3})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   }
-  return digits
-    .slice(0, 14)
+  return nums
     .replace(/(\d{2})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1/$2')

@@ -143,6 +143,7 @@ function relativeTime(str?: string | null): string {
 }
 
 function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
+function safe(val: number): number { return isNaN(val) || !isFinite(val) ? 0 : val; }
 function initials(n: string) { return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
 function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
 
@@ -257,7 +258,7 @@ export default function Dashboard() {
       }
     }).length;
   }, [allLeads, selectedPeriod, customFrom, customTo]);
-  const convRate = totalLeads>0 ? ((approved/totalLeads)*100).toFixed(1) : '0.0';
+  const convRate = totalLeads>0 ? safe((approved/totalLeads)*100).toFixed(1) : '0.0';
   const spend = metaMetrics.spend||0;
   const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
   // Funil: cada status conta pelo dia que a pessoa foi movida para aquele status
@@ -383,8 +384,8 @@ export default function Dashboard() {
           {[
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
             { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
-            { label:'CPL Ads', value:metaLoading?'…':(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length>0?`R$ ${(spend/filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —'), trend:'Real Time', up:true, sub:'Base Sistema' },
-            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?`R$ ${(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?'custo/revendedora':'conversão' },
+            { label:'CPL Ads', value:metaLoading?'…':(()=>{const fb=filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length;return fb>0?`R$ ${safe(spend/fb).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —';})(), trend:'Real Time', up:true, sub:'Base Sistema' },
+            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?'custo/revendedora':'conversão' },
           ].map((c,i)=>(
             <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'14px':'20px', border:`1px solid ${border}` }}>
               <p style={{ fontSize:'12px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
@@ -410,7 +411,7 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            <div style={{ height:isMobile?'160px':'200px' }}>
+            <div style={{ width:'100%', height:isMobile?'160px':'200px', minHeight:'120px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData.length?chartData:[{date:'—',leads:0}]} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
