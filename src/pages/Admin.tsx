@@ -273,7 +273,7 @@ export default function AdminPage() {
       await supabase.from('configuracoes_whatsapp').delete().eq('org_id', deleteOrg.id);
       await (supabase as any).from('memberships').delete().eq('org_id', deleteOrg.id);
       await (supabase as any).from('organizations').delete().eq('id', deleteOrg.id);
-      toast.success(`"${deleteOrg.nome}" excluída.`);
+      toast.success(`Empresa "${deleteOrg.nome}" excluída com sucesso`);
       setDeleteOrg(null);
       setDeleteConfirm('');
       fetchOrgs();
