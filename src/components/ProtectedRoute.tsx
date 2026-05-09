@@ -35,36 +35,44 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
 
     // Faz a consulta ao banco
-    supabase
-      .from('memberships')
-      .select('org_id')
-      .eq('user_id', user.id)
-      .single()
-      .then(async ({ data: membership }) => {
-        if (membership?.org_id) {
-          const { data: config } = await supabase
-            .from('configuracoes_whatsapp')
-            .select('id')
-            .eq('org_id', membership.org_id)
-            .maybeSingle();
-          const needs = !config;
-          _cachedUserId = user.id;
-          _cachedNeedsOnboarding = needs;
-          setNeedsOnboarding(needs);
-        } else {
-          // Sem org → onboarding
+    async function runCheck() {
+      try {
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('org_id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single();
+
+        if (!membership?.org_id) {
+          // Sem org → precisa de onboarding
           _cachedUserId = user.id;
           _cachedNeedsOnboarding = true;
           setNeedsOnboarding(true);
+          setChecked(true);
+          return;
         }
-        setChecked(true);
-      })
-      .catch(() => {
-        // Em caso de erro, deixa passar para não bloquear o app
+
+        const { data: configs } = await supabase
+          .from('configuracoes_whatsapp')
+          .select('id')
+          .eq('org_id', membership.org_id)
+          .limit(1);
+
+        // Só redireciona se não existe NENHUM registro para o org
+        const needs = !configs || configs.length === 0;
+        _cachedUserId = user.id;
+        _cachedNeedsOnboarding = needs;
+        setNeedsOnboarding(needs);
+      } catch {
+        // Em caso de erro de rede/permissão, deixa passar para não bloquear
         _cachedUserId = user.id;
         _cachedNeedsOnboarding = false;
+      } finally {
         setChecked(true);
-      });
+      }
+    }
+    runCheck();
   }, [user?.id, isOnboarding]);
 
   // Aguarda auth + check de onboarding

@@ -41,8 +41,16 @@ export default function OnboardingPage() {
       .from('memberships')
       .select('org_id')
       .eq('user_id', user.id)
+      .limit(1)
       .single()
-      .then(({ data }) => { if (data?.org_id) setOrgId(data.org_id); });
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Onboarding] memberships query error:', error);
+          return;
+        }
+        if (data?.org_id) setOrgId(data.org_id);
+        else console.warn('[Onboarding] membership found but org_id is empty');
+      });
   }, [user?.id]);
 
   // ── Colors ───────────────────────────────────────────────────
@@ -62,24 +70,45 @@ export default function OnboardingPage() {
 
   // ── Handlers ─────────────────────────────────────────────────
   async function handleStep2Continue() {
-    if (!orgId) { toast.error('Organização não encontrada'); return; }
+    if (!orgId) {
+      toast.error('Organização não encontrada. Tente recarregar a página.');
+      return;
+    }
     setSaving(true);
     try {
       const newToken = crypto.randomUUID().replace(/-/g, '');
       const payload: Record<string, unknown> = {
-        org_id: orgId,
         webhook_token: newToken,
       };
       if (waEnabled) {
-        payload.instance_id      = instanceId.trim();
-        payload.token            = token.trim();
-        payload.client_token     = clientToken.trim();
+        payload.instance_id       = instanceId.trim();
+        payload.token             = token.trim();
+        payload.client_token      = clientToken.trim();
         payload.mensagem_template = msgTemplate.trim();
-        payload.auto_send        = true;
+        payload.auto_send         = true;
       }
-      const { error } = await supabase
+
+      // Verifica se já existe registro para esse org_id
+      const { data: existing } = await supabase
         .from('configuracoes_whatsapp')
-        .upsert(payload, { onConflict: 'org_id' });
+        .select('id')
+        .eq('org_id', orgId)
+        .limit(1);
+
+      let error;
+      if (existing && existing.length > 0) {
+        // Já existe → UPDATE
+        ({ error } = await supabase
+          .from('configuracoes_whatsapp')
+          .update(payload)
+          .eq('org_id', orgId));
+      } else {
+        // Não existe → INSERT
+        ({ error } = await supabase
+          .from('configuracoes_whatsapp')
+          .insert({ ...payload, org_id: orgId }));
+      }
+
       if (error) throw error;
       setWebhookToken(newToken);
       setStep(3);
