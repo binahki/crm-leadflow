@@ -5,12 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Save, Settings, Zap, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function WhatsAppPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const dark = theme === 'dark';
 
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [clientToken, setClientToken] = useState('');
@@ -21,24 +24,52 @@ export default function WhatsAppPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    supabase.from('configuracoes_whatsapp').select('*').limit(1).maybeSingle().then(({ data }) => {
-      if (data) {
-        setInstanceId((data as any).instance_id || '');
-        setToken((data as any).token || '');
-        setClientToken((data as any).client_token || '');
-        setMessageTemplate((data as any).message_template || messageTemplate);
-        setAutoSend((data as any).auto_send ?? true);
+    if (!user) return;
+    async function load() {
+      const { data: membership } = await supabase
+        .from('memberships')
+        .select('org_id')
+        .eq('user_id', user!.id)
+        .single();
+
+      if (!membership?.org_id) return;
+      setOrgId(membership.org_id);
+
+      const { data: config } = await supabase
+        .from('configuracoes_whatsapp')
+        .select('*')
+        .eq('org_id', membership.org_id)
+        .single();
+
+      if (config) {
+        setInstanceId((config as any).instance_id || '');
+        setToken((config as any).token || '');
+        setClientToken((config as any).client_token || '');
+        setMessageTemplate((config as any).message_template || messageTemplate);
+        setAutoSend((config as any).auto_send ?? true);
       }
-    });
-  }, []);
+    }
+    load();
+  }, [user?.id]);
 
   const handleSave = async () => {
+    if (!orgId) { toast.error('Organização não encontrada'); return; }
     setSaving(true);
-    const config = { instance_id: instanceId, token, client_token: clientToken, message_template: messageTemplate, auto_send: autoSend };
-    const { data: existing } = await supabase.from('configuracoes_whatsapp').select('id').limit(1).maybeSingle();
+    const config = {
+      instance_id: instanceId,
+      token,
+      client_token: clientToken,
+      message_template: messageTemplate,
+      auto_send: autoSend,
+    };
+    const { data: existing } = await supabase
+      .from('configuracoes_whatsapp')
+      .select('id')
+      .eq('org_id', orgId)
+      .single();
     const { error } = existing
-      ? await supabase.from('configuracoes_whatsapp').update(config).eq('id', (existing as any).id)
-      : await supabase.from('configuracoes_whatsapp').insert(config);
+      ? await supabase.from('configuracoes_whatsapp').update(config).eq('org_id', orgId)
+      : await supabase.from('configuracoes_whatsapp').insert({ ...config, org_id: orgId });
     setSaving(false);
     if (error) toast.error('Erro ao salvar');
     else toast.success('Configuração salva!');
