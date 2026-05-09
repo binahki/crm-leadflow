@@ -6,7 +6,7 @@ import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AdSet {
@@ -145,6 +145,7 @@ export default function CampanhasPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
   const isBecker = orgId === BECKER_ORG_ID;
+  const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,7 +200,7 @@ export default function CampanhasPage() {
       });
   },[isBecker, orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaReady||!metaToken||!metaAccount)return;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
+  const load=async()=>{if(!metaReady)return;if(!metaToken||!metaAccount){setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
   useEffect(()=>{load();},[datePreset,metaToken,metaAccount,metaReady]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
@@ -432,6 +433,13 @@ export default function CampanhasPage() {
             <div>
               {loading
                 ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
+                :semToken
+                  ?(<div style={{padding:'48px 32px',textAlign:'center'}}>
+                    <div style={{fontSize:'32px',marginBottom:'12px'}}>📊</div>
+                    <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 6px'}}>Meta Ads não configurado</p>
+                    <p style={{fontSize:'13px',color:txtMid,margin:'0 0 20px',lineHeight:1.6}}>Configure seu token do Facebook para ver campanhas e métricas aqui.</p>
+                    <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
+                  </div>)
                 :error||filtered.length===0
                   ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{error?'⚠️ Erro ao conectar ao Meta Ads.':'Nenhuma campanha encontrada.'}</div>
                   :filtered.map(c=>{
