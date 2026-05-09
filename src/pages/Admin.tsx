@@ -266,6 +266,20 @@ export default function AdminPage() {
     if (!deleteOrg || deleteConfirm !== deleteOrg.nome) return;
     setDeleteLoading(true);
     try {
+      // Busca o user_id via memberships e deleta do Auth
+      const { data: membership } = await (supabase as any)
+        .from('memberships')
+        .select('user_id')
+        .eq('org_id', deleteOrg.id)
+        .maybeSingle();
+      if (membership?.user_id) {
+        await fetch(ATUALIZAR_USUARIO_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: membership.user_id, delete: true }),
+        });
+      }
+
       await supabase.from('subscriptions').delete().eq('org_id', deleteOrg.id);
       await (supabase as any).from('ai_optimization_logs').delete().eq('org_id', deleteOrg.id);
       await supabase.from('webhook_logs').delete().eq('org_id', deleteOrg.id);

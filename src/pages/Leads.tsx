@@ -293,6 +293,7 @@ export default function LeadsPage() {
   const [deleting, setDeleting] = useState(false);
   const [allSystemSelected, setAllSystemSelected] = useState(false);
   const [campanhaFiltro, setCampanhaFiltro] = useState('');
+  const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
 
   // Lê parâmetros da URL ao montar (redirect de Campanhas/Dashboard)
   useEffect(() => {
@@ -347,8 +348,9 @@ export default function LeadsPage() {
       const q=search.toLowerCase();
       r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||(la.utm_campaign||'').toLowerCase().includes(q); });
     }
+    if (sortByScore) r=[...r].sort((a,b)=>{ const sa=(a as any).score??-1; const sb=(b as any).score??-1; return sortByScore==='desc'?sb-sa:sa-sb; });
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo]);
+  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore]);
 
   useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search, campanhaFiltro]);
 
@@ -574,7 +576,13 @@ export default function LeadsPage() {
                   <th className="pl-4 pr-2 py-3">
                     <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
                   </th>
-                  {['Nome','Score','WhatsApp','Cidade','Status','Entrada','Ações'].map(h=>(
+                  <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
+                  <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
+                    <button onClick={()=>setSortByScore(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:sortByScore?(dark?'#60a5fa':'#2563eb'):(dark?'#71717a':'#6b7280'),background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
+                      Score {sortByScore==='asc'?'↑':'↓'}
+                    </button>
+                  </th>
+                  {(['WhatsApp','Cidade','Status','Entrada','Ações'] as string[]).map(h=>(
                     <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
                 </tr>

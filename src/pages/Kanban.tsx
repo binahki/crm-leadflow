@@ -8,7 +8,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle, MoreVertical, Eye, Trash2, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -120,8 +120,8 @@ function ObsBadge({ text }: { text: string }) {
 }
 
 // ── Draggable Card ────────────────────────────────────────────
-function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfile, isMobile }: {
-  lead: Lead; onCardClick: ()=>void; onMenuClick: (e:React.MouseEvent)=>void;
+function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile }: {
+  lead: Lead; onCardClick: ()=>void;
   onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void; isMobile: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
@@ -153,28 +153,25 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
         transition:'box-shadow 0.2s, border-color 0.2s', outline:'none',
       }}
     >
-      {/* Header: avatar + nome + score (desktop) + menu */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'8px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px', flex:1, minWidth:0 }}>
-          {/* Avatar — bolinha de faixa SÓ no mobile */}
-          <div style={{ position:'relative', flexShrink:0 }}>
-            <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
-            {isMobile && faixa && faixa !== 'vermelho' && (
-              <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
+      {/* Header: avatar + nome + score */}
+      <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+        {/* Avatar — bolinha de faixa SÓ no mobile */}
+        <div style={{ position:'relative', flexShrink:0 }}>
+          <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
+          {isMobile && faixa && faixa !== 'vermelho' && (
+            <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
+          )}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          {/* Nome + score com space-between */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
+            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{lead.nome||'Lead sem nome'}</p>
+            {score != null && (
+              <span style={{ fontSize:'11px', fontWeight:700, color:faixa==='verde'?'#10b981':faixa==='amarelo'?'#f59e0b':'#ef4444', background:faixa==='verde'?'rgba(16,185,129,0.12)':faixa==='amarelo'?'rgba(245,158,11,0.12)':'rgba(239,68,68,0.12)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>{score}pts</span>
             )}
           </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            {/* Nome + score tag lado a lado no desktop */}
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
-              <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{lead.nome||'Lead sem nome'}</p>
-              {!isMobile && <ScoreTag score={score} faixa={faixa} dark={dark} />}
-            </div>
-            <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
-          </div>
+          <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
         </div>
-        <button style={{ padding:'4px', color:'#d1d5db', border:'none', background:'transparent', borderRadius:'7px', cursor:'pointer', flexShrink:0, opacity:isMobile?1:0, transition:'opacity 0.15s', display:'flex', alignItems:'center', justifyContent:'center' }} className="card-menu-btn" onPointerDown={e=>e.stopPropagation()} onClick={onMenuClick}>
-          <MoreVertical style={{ width:'15px', height:'15px' }}/>
-        </button>
       </div>
 
       {/* Cidade + tempo + obs + alerta */}
@@ -194,8 +191,8 @@ function DraggableCard({ lead, onCardClick, onMenuClick, onWhatsApp, onViewProfi
 
       {/* Motivo reprovação */}
       {statusNum === 4 && motivo && (
-        <div style={{ marginTop:'7px', padding:'4px 8px', borderRadius:'7px', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', display:'inline-flex', alignItems:'center', gap:'4px' }}>
-          <span style={{ fontSize:'11.5px', color:'#ef4444', fontWeight:500 }}>❌ {motivo}</span>
+        <div style={{ marginTop:'7px' }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'2px 8px', borderRadius:'99px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.2)', fontSize:'11px', color:'#ef4444', fontWeight:500, maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>✕ {motivo}</span>
         </div>
       )}
 
@@ -260,13 +257,10 @@ export default function KanbanPage() {
   const dark = theme === 'dark';
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
-  const [menuLead, setMenuLead] = useState<Lead | null>(null);
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [activeColIndex, setActiveColIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const [motivoCtx, setMotivoCtx] = useState<{ lead: Lead; targetStatus: number; currentStatus: number } | null>(null);
 
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
@@ -293,11 +287,6 @@ export default function KanbanPage() {
     return () => { supabase.removeChannel(ch); };
   }, [orgId, orgReady]); // eslint-disable-line
 
-  useEffect(() => {
-    function close(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuLead(null); }
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
 
   function scrollToCol(index: number) {
     if (!scrollRef.current) return;
@@ -330,7 +319,6 @@ export default function KanbanPage() {
   function handleDragStart(e: DragStartEvent) {
     const lead = leads.find(l => l.id === e.active.id);
     if (lead) setActiveLead(lead);
-    setMenuLead(null);
     document.body.classList.add('dragging');
     document.body.style.userSelect = 'none';
     (document.body.style as any).webkitUserSelect = 'none';
@@ -355,26 +343,11 @@ export default function KanbanPage() {
     else { applyStatus(lead, targetStatus, currentStatus); }
   }
 
-  function handleMenuMove(lead: Lead, newStatus: number) {
-    setMenuLead(null);
-    let currentStatus = Number(lead.status ?? 1);
-    if (currentStatus === 0) currentStatus = 1;
-    if (newStatus === 4) { setMotivoCtx({ lead, targetStatus: newStatus, currentStatus }); }
-    else if (currentStatus !== newStatus) { applyStatus(lead, newStatus, currentStatus); }
-  }
-
   async function handleMotivoConfirm(motivo: string) {
     if (!motivoCtx) return;
     const { lead, targetStatus, currentStatus } = motivoCtx;
     setMotivoCtx(null);
     await applyStatus(lead, targetStatus, currentStatus, motivo);
-  }
-
-  async function deleteLead(lead: Lead) {
-    setMenuLead(null);
-    const { error } = await supabase.from('leads').delete().eq('id', lead.id);
-    if (error) toast.error('Erro ao excluir lead');
-    else { setLeads(leads.filter(l => l.id !== lead.id)); toast.success('Lead removido'); }
   }
 
   const bg = dark ? '#090909' : '#f4f4f5';
@@ -423,7 +396,6 @@ export default function KanbanPage() {
                       {colLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={true}
                           onCardClick={() => setViewingLead(lead)}
-                          onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
                           onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                         />
@@ -443,7 +415,6 @@ export default function KanbanPage() {
                       {colLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={false}
                           onCardClick={() => setViewingLead(lead)}
-                          onMenuClick={e => { e.stopPropagation(); setMenuLead(lead); setMenuPos({ x:e.clientX, y:e.clientY }); }}
                           onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                         />
@@ -460,38 +431,6 @@ export default function KanbanPage() {
         </DndContext>
       </div>
 
-      {menuLead && (
-        <div ref={menuRef} style={{ position:'fixed', zIndex:60, left:Math.min(menuPos.x, window.innerWidth-224), top:Math.min(menuPos.y, window.innerHeight-320), background:dark?'#111113':'#ffffff', border:`1px solid ${dark?'#1e1e22':'rgba(0,0,0,0.08)'}`, borderRadius:'13px', boxShadow:dark?'0 12px 48px rgba(0,0,0,0.6)':'0 8px 32px rgba(0,0,0,0.12)', padding:'6px', minWidth:'215px', animation:'kmenu 0.15s cubic-bezier(0.32,0.72,0,1)' }}>
-          <div style={{ padding:'4px 10px 6px', fontSize:'10.5px', fontWeight:600, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'0.07em' }}>Mover para</div>
-          {COLUMNS.map(col => {
-            const currentSt = Number(menuLead.status ?? 1);
-            const isCurrent = currentSt === col.status;
-            const canEditMotivo = isCurrent && col.status === 4;
-            return (
-              <button key={col.status} onClick={() => handleMenuMove(menuLead, col.status)} disabled={isCurrent && col.status !== 4}
-                style={{ width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:(isCurrent && col.status !== 4)?'default':'pointer', color:(isCurrent && col.status !== 4)?(dark?'#3f3f46':'#d1d5db'):(dark?'#d4d4d8':'#374151'), fontSize:'13px', display:'flex', alignItems:'center', gap:'8px', transition:'background 0.12s' }}
-                onMouseEnter={e=>{ if (!isCurrent || canEditMotivo) (e.currentTarget.style.background=dark?'rgba(255,255,255,0.04)':'#f8fafc'); }}
-                onMouseLeave={e=>{ (e.currentTarget.style.background='transparent'); }}
-              >
-                <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:(isCurrent&&!canEditMotivo)?(dark?'#27272a':'#e5e7eb'):col.dot, flexShrink:0, display:'inline-block' }}/>{col.label}
-                {isCurrent && !canEditMotivo && <span style={{ marginLeft:'auto', fontSize:'11px', color:dark?'#3f3f46':'#d1d5db' }}>atual</span>}
-                {canEditMotivo && <span style={{ marginLeft:'auto', fontSize:'11px', color:'#ef4444' }}>editar motivo</span>}
-              </button>
-            );
-          })}
-          <div style={{ height:'1px', background:dark?'#1e1e22':'rgba(0,0,0,0.06)', margin:'4px 0' }}/>
-          <button onClick={() => { setViewingLead(menuLead); setMenuLead(null); }} style={{ width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', color:dark?'#d4d4d8':'#374151', fontSize:'13px', display:'flex', alignItems:'center', gap:'8px', transition:'background 0.12s' }} onMouseEnter={e=>(e.currentTarget.style.background=dark?'rgba(255,255,255,0.04)':'#f8fafc')} onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-            <Eye style={{ width:'14px', height:'14px', color:dark?'#71717a':'#6b7280' }}/> Ver perfil completo
-          </button>
-          <button onClick={() => { window.open(`https://wa.me/${menuLead.whatsapp?.replace(/\D/g,'')}`, '_blank'); setMenuLead(null); }} style={{ width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', color:dark?'#d4d4d8':'#374151', fontSize:'13px', display:'flex', alignItems:'center', gap:'8px', transition:'background 0.12s' }} onMouseEnter={e=>(e.currentTarget.style.background=dark?'rgba(255,255,255,0.04)':'#f8fafc')} onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-            <MessageCircle style={{ width:'14px', height:'14px', color:dark?'#71717a':'#6b7280' }}/> Abrir WhatsApp
-          </button>
-          <div style={{ height:'1px', background:dark?'#1e1e22':'rgba(0,0,0,0.06)', margin:'4px 0' }}/>
-          <button onClick={() => deleteLead(menuLead)} style={{ width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', color:'#dc2626', fontSize:'13px', display:'flex', alignItems:'center', gap:'8px', transition:'background 0.12s' }} onMouseEnter={e=>(e.currentTarget.style.background='#fff1f2')} onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
-            <Trash2 style={{ width:'14px', height:'14px' }}/> Excluir lead
-          </button>
-        </div>
-      )}
 
       {motivoCtx && createPortal(
         <MotivoModal dark={dark} motivoAtual={(motivoCtx.lead as any).motivo_reprovacao} onConfirm={handleMotivoConfirm} onCancel={() => setMotivoCtx(null)}/>,
@@ -506,9 +445,7 @@ export default function KanbanPage() {
         @keyframes kpulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
         body.dragging * { transition: none !important; }
         body.dragging { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
-        @keyframes kmenu { from{opacity:0;transform:scale(0.94) translateY(-4px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes kmotivo { from{opacity:0;transform:translate(-50%,-48%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
-        div:hover > div > .card-menu-btn { opacity: 1 !important; }
         .kanban-col-scroll::-webkit-scrollbar { display: none; }
         .kanban-mobile::-webkit-scrollbar { display: none; }
         .kanban-desktop { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
