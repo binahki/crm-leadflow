@@ -3,9 +3,10 @@ import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
   Webhook, MessageCircle, Settings, LogOut, ChevronLeft,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { useOrgId } from '@/hooks/useOrgId';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -36,7 +37,27 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { orgId } = useOrgId();
   const isDark = theme === 'dark';
+
+  const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!orgId) return;
+    async function fetchBadges() {
+      const [{ data: wh }, { data: org }, { count }] = await Promise.all([
+        supabase.from('configuracoes_whatsapp').select('instance_id, webhook_token').eq('org_id', orgId!).maybeSingle(),
+        supabase.from('organizations').select('meta_token').eq('id', orgId!).single(),
+        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', orgId!),
+      ]);
+      setAlertBadges({
+        '/whatsapp': !(wh as any)?.instance_id,
+        '/webhook': !(wh as any)?.instance_id || (count ?? 0) === 0,
+        '/configuracoes': !(org as any)?.meta_token,
+      });
+    }
+    fetchBadges();
+  }, [orgId, location.pathname]);
 
   // collapsed só funciona no desktop
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -141,6 +162,13 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                 {!isCollapsed && (
                   <>
                     <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
+                    {alertBadges[item.href] && (
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '50%',
+                        background: '#ef4444', flexShrink: 0,
+                        boxShadow: '0 0 4px rgba(239,68,68,0.5)',
+                      }} />
+                    )}
                     {item.badge && leadCount > 0 && (
                       <span style={{
                         fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '20px',
