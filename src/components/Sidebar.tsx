@@ -51,9 +51,9 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         supabase.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', orgId!),
       ]);
       setAlertBadges({
-        '/whatsapp': !(wh as any)?.instance_id,
-        '/webhook': !(wh as any)?.instance_id || (count ?? 0) === 0,
-        '/configuracoes': !(org as any)?.meta_token,
+        '/whatsapp': !((wh as any)?.instance_id),
+        '/webhook': (count ?? 0) === 0,
+        '/configuracoes': !((org as any)?.meta_token),
       });
     }
     fetchBadges();

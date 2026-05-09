@@ -34,17 +34,30 @@ export default function WebhookPage() {
       .then(({ data }) => { if (data) setWebhookToken((data as any).webhook_token || null); });
   }, [orgId, orgReady]);
 
-  // Logs em tempo real (independente de org)
+  // Logs em tempo real filtrados pelo org_id
   useEffect(() => {
-    supabase.from('webhook_logs').select('*').order('created_at', { ascending: false }).limit(50)
+    if (!orgReady || !orgId) return;
+
+    supabase
+      .from('webhook_logs')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(50)
       .then(({ data }) => { if (data) setLogs(data as unknown as WebhookLog[]); });
 
-    const channel = supabase.channel('webhook-logs')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webhook_logs' }, p => {
+    const channel = supabase.channel(`webhook-logs-${orgId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'webhook_logs',
+        filter: `org_id=eq.${orgId}`,
+      }, p => {
         setLogs(prev => [p.new as unknown as WebhookLog, ...prev].slice(0, 50));
       }).subscribe();
+
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [orgId, orgReady]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(webhookUrl);
