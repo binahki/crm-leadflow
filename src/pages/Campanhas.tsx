@@ -26,6 +26,7 @@ interface Campaign {
 
 
 const LEAD_ACTIONS = ['lead','offsite_conversion.fb_pixel_lead','onsite_conversion.lead_grouped'];
+const BECKER_ORG_ID = '81b1ba7b-5c03-45c5-a74a-6ea8eb3432ae';
 
 const PERIOD_OPTIONS = [
   { label:'Hoje',      value:'today' },
@@ -143,6 +144,7 @@ export default function CampanhasPage() {
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
+  const isBecker = orgId === BECKER_ORG_ID;
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,17 +185,19 @@ export default function CampanhasPage() {
     return () => { supabase.removeChannel(ch); };
   },[orgId, orgReady]); // eslint-disable-line
 
-  // Busca log de otimização da IA do dia
+  // Busca log de otimização da IA do dia — apenas para Becker Joias
   useEffect(()=>{
+    if (!isBecker || !orgReady || !orgId) return;
     const hoje = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
     (supabase as any).from('ai_optimization_logs').select('*')
+      .eq('org_id', orgId)
       .gte('created_at', hoje+'T00:00:00')
       .order('created_at',{ascending:false})
       .limit(1)
       .then(({data})=>{
         if(data&&data.length>0) setAiLog(data[0]);
       });
-  },[]);
+  },[isBecker, orgId, orgReady]); // eslint-disable-line
 
   const load=async()=>{if(!metaReady||!metaToken||!metaAccount)return;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
   useEffect(()=>{load();},[datePreset,metaToken,metaAccount,metaReady]); // eslint-disable-line
@@ -303,7 +307,7 @@ export default function CampanhasPage() {
           <div>
             <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
             <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
-            {aiLog&&(
+            {isBecker&&aiLog&&(
               <button onClick={()=>setShowAiPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'6px',marginTop:'7px',padding:'6px 12px',borderRadius:'99px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',border:'1px solid rgba(139,92,246,0.3)',color:'#8b5cf6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
                 <Zap style={{width:'12px',height:'12px'}}/>
                 IA otimizou hoje
@@ -605,8 +609,8 @@ export default function CampanhasPage() {
           </div>
         )}
       </div>
-      {/* Painel IA */}
-      {showAiPanel&&aiLog&&(
+      {/* Painel IA — apenas Becker */}
+      {isBecker&&showAiPanel&&aiLog&&(
         <>
           <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
           <div style={{position:'fixed',right:0,top:0,bottom:0,width:isMobile?'100vw':'min(420px, 100vw)',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'20px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)',boxSizing:'border-box'}}>

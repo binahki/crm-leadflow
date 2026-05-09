@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
@@ -25,6 +25,7 @@ type Mode = 'login' | 'cadastro' | 'forgot';
 
 export default function LoginPage() {
   const { user, loading, signIn, resetPassword } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>('login');
 
   // Login fields
@@ -52,9 +53,14 @@ export default function LoginPage() {
   if (user) return <Navigate to="/" replace />;
 
   const inp: React.CSSProperties = {
-    width: '100%', height: '44px', background: '#fff', color: '#111',
-    padding: '0 14px', borderRadius: '8px', border: 'none',
-    fontSize: '14px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box',
+    width: '100%', height: '44px',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#f4f4f5',
+    padding: '0 14px', borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.12)',
+    fontSize: '14px', outline: 'none', fontFamily: FONT,
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s',
   };
 
   const lbl: React.CSSProperties = {
@@ -62,6 +68,9 @@ export default function LoginPage() {
     textTransform: 'uppercase', letterSpacing: '0.07em',
     display: 'block', marginBottom: '6px',
   };
+
+  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = '#366fec'; };
+  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; };
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -100,10 +109,15 @@ export default function LoginPage() {
       if (!res.ok || !data.ok) {
         toast.error(data.erro || 'Erro ao criar conta. Tente novamente.');
       } else {
-        toast.success('Conta criada! Trial de 7 dias ativado. Faça login.');
-        setMode('login');
-        setEmail(cadEmail);
-        setNomeEmpresa(''); setDocumento(''); setCadEmail(''); setCadSenha(''); setCadConfirmar('');
+        toast.success('Conta criada! Trial de 7 dias ativado.');
+        const { error: loginError } = await signIn(cadEmail, cadSenha);
+        if (!loginError) {
+          navigate('/');
+        } else {
+          setMode('login');
+          setEmail(cadEmail);
+          setNomeEmpresa(''); setDocumento(''); setCadEmail(''); setCadSenha(''); setCadConfirmar('');
+        }
       }
     } catch {
       toast.error('Não foi possível conectar. Verifique sua internet.');
@@ -137,11 +151,11 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
               <label style={lbl}>Email</label>
-              <input style={inp} type="email" required placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+              <input style={inp} type="email" required placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>Senha</label>
-              <input style={inp} type="password" required placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+              <input style={inp} type="password" required placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <button type="submit" disabled={submitting} style={{ width: '100%', height: '44px', borderRadius: '8px', border: 'none', background: submitting ? '#27272a' : '#366fec', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'default' : 'pointer', fontFamily: FONT, marginTop: '4px' }}>
               {submitting ? 'Entrando…' : 'Entrar'}
@@ -154,23 +168,23 @@ export default function LoginPage() {
           <form onSubmit={handleCadastro} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={lbl}>Nome da empresa</label>
-              <input style={inp} type="text" required placeholder="Ex: Minha Loja de Joias" value={nomeEmpresa} onChange={e => setNomeEmpresa(e.target.value)} />
+              <input style={inp} type="text" required placeholder="Ex: Minha Loja de Joias" value={nomeEmpresa} onChange={e => setNomeEmpresa(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>CNPJ / CPF <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
-              <input style={inp} type="text" placeholder="000.000.000-00 ou 00.000.000/0000-00" maxLength={18} value={documento} onChange={e => setDocumento(mascaraDocumento(e.target.value))} />
+              <input style={inp} type="text" placeholder="000.000.000-00 ou 00.000.000/0000-00" maxLength={18} value={documento} onChange={e => setDocumento(mascaraDocumento(e.target.value))} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>Email</label>
-              <input style={inp} type="email" required placeholder="seu@email.com" value={cadEmail} onChange={e => setCadEmail(e.target.value)} />
+              <input style={inp} type="email" required placeholder="seu@email.com" value={cadEmail} onChange={e => setCadEmail(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>Senha</label>
-              <input style={inp} type="password" required placeholder="Mínimo 8 caracteres" minLength={8} value={cadSenha} onChange={e => setCadSenha(e.target.value)} />
+              <input style={inp} type="password" required placeholder="Mínimo 8 caracteres" minLength={8} value={cadSenha} onChange={e => setCadSenha(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>Confirmar senha</label>
-              <input style={inp} type="password" required placeholder="Repita a senha" value={cadConfirmar} onChange={e => setCadConfirmar(e.target.value)} />
+              <input style={inp} type="password" required placeholder="Repita a senha" value={cadConfirmar} onChange={e => setCadConfirmar(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <button type="submit" disabled={submitting} style={{ width: '100%', height: '44px', borderRadius: '8px', border: 'none', background: submitting ? '#27272a' : '#366fec', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'default' : 'pointer', fontFamily: FONT, marginTop: '4px' }}>
               {submitting ? 'Criando conta…' : 'Criar minha conta'}
@@ -186,7 +200,7 @@ export default function LoginPage() {
           <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
               <label style={lbl}>Email</label>
-              <input style={inp} type="email" required placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+              <input style={inp} type="email" required placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <button type="submit" disabled={submitting} style={{ width: '100%', height: '44px', borderRadius: '8px', border: 'none', background: submitting ? '#27272a' : '#366fec', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'default' : 'pointer', fontFamily: FONT }}>
               {submitting ? 'Enviando…' : 'Enviar link'}
@@ -218,6 +232,7 @@ export default function LoginPage() {
           )}
         </div>
       </div>
+      <style>{`input::placeholder { color: rgba(255,255,255,0.35) !important; }`}</style>
     </div>
   );
 }

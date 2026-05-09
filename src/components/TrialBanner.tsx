@@ -5,7 +5,8 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { supabase } from '@/integrations/supabase/client';
 
 const ADMIN_EMAIL = 'admin@floow.com';
-const STRIPE_URL = 'https://billing.stripe.com';
+const STRIPE_URL = 'https://buy.stripe.com/test_4gMaEX6Nh8xde521NX8EM00';
+const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 export function TrialBanner() {
   const { user } = useAuth();
@@ -27,59 +28,41 @@ export function TrialBanner() {
         const dias = Math.ceil(
           (new Date(data.trial_ends_at).getTime() - Date.now()) / 86400000
         );
-        if (dias > 0 && dias <= 7) setDiasRestantes(dias);
+        if (dias >= 0 && dias <= 7) setDiasRestantes(dias);
       });
   }, [orgId, ready, user?.email]);
 
   if (fechado || diasRestantes === null) return null;
 
   const urgente = diasRestantes <= 2;
-  const bg = urgente ? '#ef4444' : '#f59e0b';
-  const bgHover = urgente ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)';
 
   return (
     <div style={{
-      background: bg,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 20px', height: '40px', flexShrink: 0,
-      boxShadow: `0 2px 8px ${bg}55`,
-      gap: '12px',
+      background: urgente
+        ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+        : 'linear-gradient(90deg, #f59e0b, #d97706)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '0 16px', height: '44px', flexShrink: 0, gap: '16px',
+      position: 'relative', fontFamily: FONT,
+      boxShadow: urgente ? '0 2px 12px rgba(239,68,68,0.4)' : '0 2px 12px rgba(245,158,11,0.4)',
     }}>
-      <span style={{
-        fontSize: '13px', fontWeight: 500, color: '#fff',
-        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        ⏳ Seu período de teste termina em <strong>{diasRestantes} {diasRestantes === 1 ? 'dia' : 'dias'}</strong>. Configure seu pagamento para continuar.
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <span style={{ fontSize: '13px', fontWeight: 500, color: '#fff', textAlign: 'center' }}>
+        ⏳ Teste termina em{' '}
+        <strong>{diasRestantes === 0 ? 'hoje' : `${diasRestantes}d`}</strong>
+        {' · '}
         <button
           onClick={() => window.open(STRIPE_URL, '_blank')}
-          style={{
-            padding: '5px 14px', borderRadius: '7px',
-            border: '1px solid rgba(255,255,255,0.4)',
-            background: 'rgba(255,255,255,0.2)',
-            color: '#fff', fontSize: '12.5px', fontWeight: 600,
-            cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.32)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+          style={{ background: 'none', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontFamily: FONT, padding: 0 }}
         >
-          Configurar pagamento
+          Regularizar pagamento
         </button>
-        <button
-          onClick={() => setFechado(true)}
-          style={{
-            width: '24px', height: '24px', borderRadius: '50%', border: 'none',
-            background: 'rgba(255,255,255,0.18)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', transition: 'background 0.15s', flexShrink: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = bgHover)}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
-        >
-          <X style={{ width: '12px', height: '12px' }} />
-        </button>
-      </div>
+      </span>
+      <button
+        onClick={() => setFechado(true)}
+        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '22px', borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+      >
+        <X style={{ width: '11px', height: '11px' }} />
+      </button>
     </div>
   );
 }

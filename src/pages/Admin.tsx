@@ -58,6 +58,11 @@ export default function AdminPage() {
   const [credsData, setCredsData] = useState<{ email: string; orgId: string; webhookUrl: string } | null>(null);
   const [credsLoading, setCredsLoading] = useState(false);
 
+  // ── Delete modal state ────────────────────────────────────────
+  const [deleteOrg, setDeleteOrg] = useState<Org | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && (!user || user.email !== ADMIN_EMAIL)) navigate('/');
@@ -256,6 +261,28 @@ export default function AdminPage() {
     }
   }
 
+  // ── Delete org ────────────────────────────────────────────────
+  async function handleDelete() {
+    if (!deleteOrg || deleteConfirm !== deleteOrg.nome) return;
+    setDeleteLoading(true);
+    try {
+      await supabase.from('subscriptions').delete().eq('org_id', deleteOrg.id);
+      await (supabase as any).from('ai_optimization_logs').delete().eq('org_id', deleteOrg.id);
+      await supabase.from('webhook_logs').delete().eq('org_id', deleteOrg.id);
+      await supabase.from('leads').delete().eq('org_id', deleteOrg.id);
+      await supabase.from('configuracoes_whatsapp').delete().eq('org_id', deleteOrg.id);
+      await (supabase as any).from('memberships').delete().eq('org_id', deleteOrg.id);
+      await (supabase as any).from('organizations').delete().eq('id', deleteOrg.id);
+      toast.success(`"${deleteOrg.nome}" excluída.`);
+      setDeleteOrg(null);
+      setDeleteConfirm('');
+      fetchOrgs();
+    } catch {
+      toast.error('Erro ao excluir');
+    }
+    setDeleteLoading(false);
+  }
+
   // ── Actions ───────────────────────────────────────────────────
   function handleAcessar(org: Org) {
     localStorage.setItem('admin_viewing_org',      org.id);
@@ -425,6 +452,10 @@ export default function AdminPage() {
                               style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
                               Acessar
                             </button>
+                            <button onClick={() => { setDeleteOrg(org); setDeleteConfirm(''); }}
+                              style={{ padding: '5px 10px', borderRadius: '7px', border: 'none', background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                              Excluir
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -511,8 +542,7 @@ export default function AdminPage() {
                 <select style={inp} value={editStatus} onChange={e => setEditStatus(e.target.value)}>
                   <option value="trialing">Trial</option>
                   <option value="active">Ativo</option>
-                  <option value="inactive">Inativo</option>
-                  <option value="canceled">Cancelado</option>
+                  <option value="past_due">Inadimplente</option>
                 </select>
               </div>
               {editStatus === 'trialing' && (
@@ -540,6 +570,42 @@ export default function AdminPage() {
           </div>
         </>
       )}
+      {/* ── Modal: Excluir org ── */}
+      {deleteOrg && (
+        <>
+          <div onClick={() => { setDeleteOrg(null); setDeleteConfirm(''); }} style={{ ...overlay, zIndex: 62 }} />
+          <div style={{ ...modalBox, zIndex: 63, maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>Excluir cliente</h3>
+            <p style={{ fontSize: '13px', color: txtMid, margin: '0 0 16px', lineHeight: 1.6 }}>
+              Esta ação é <strong style={{ color: txt }}>irreversível</strong>. Todos os dados serão apagados.<br />
+              Digite <strong style={{ color: txt }}>{deleteOrg.nome}</strong> para confirmar.
+            </p>
+            <input
+              style={inp}
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={deleteOrg.nome}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                onClick={() => { setDeleteOrg(null); setDeleteConfirm(''); }}
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteConfirm !== deleteOrg.nome || deleteLoading}
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: deleteConfirm !== deleteOrg.nome || deleteLoading ? (dark ? '#27272a' : '#e5e7eb') : '#ef4444', color: deleteConfirm !== deleteOrg.nome || deleteLoading ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: deleteConfirm !== deleteOrg.nome || deleteLoading ? 'default' : 'pointer', fontFamily: FONT }}
+              >
+                {deleteLoading ? 'Excluindo…' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Modal: Credenciais ── */}
       {showCreds && (
         <>
