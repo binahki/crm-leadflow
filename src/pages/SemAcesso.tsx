@@ -1,10 +1,16 @@
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
-const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+const FONT       = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const SUPORTE_WA = 'https://wa.me/5567999999999';
+const ADMIN_EMAIL = 'admin@floow.com';
 
 export default function SemAcessoPage() {
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isAdmin = user?.email === ADMIN_EMAIL;
   const dark = theme === 'dark';
 
   const bg     = dark ? '#090909' : '#f4f4f5';
@@ -91,6 +97,22 @@ export default function SemAcessoPage() {
           >
             Tentar novamente
           </button>
+
+          {/* Link admin — só aparece para admin@floow.com */}
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/admin')}
+              style={{
+                padding: '10px', borderRadius: '12px', fontFamily: FONT,
+                border: 'none', background: 'transparent',
+                color: dark ? '#71717a' : '#9ca3af',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Ir para o Admin
+            </button>
+          )}
         </div>
       </div>
     </div>

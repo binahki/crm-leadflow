@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // Rotas que não precisam de assinatura ativa
 const EXEMPT_PATHS = ['/onboarding', '/admin', '/sem-acesso'];
+const ADMIN_EMAIL  = 'admin@floow.com';
 
 // Cache por sessão — evita re-query a cada troca de rota
 let _cachedUserId: string | null = null;
@@ -22,6 +23,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const isExempt = EXEMPT_PATHS.includes(location.pathname);
+
+  // Admin: acesso irrestrito — redireciona para /admin se tentar acessar /
+  if (!loading && user?.email === ADMIN_EMAIL) {
+    if (location.pathname === '/') {
+      return <Navigate to="/admin" replace />;
+    }
+    return <>{children}</>;
+  }
 
   const [checked, setChecked] = useState(false);
   const [allowed, setAllowed] = useState(true);
