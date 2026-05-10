@@ -8,6 +8,7 @@ import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, R
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -40,8 +41,6 @@ const PERIOD_MAP: Record<string,string> = {
   today:'today', yesterday:'yesterday', last_7d:'7days', last_30d:'30days', this_month:'month',
 };
 
-const META_CACHE_KEY = 'meta_cache_camp';
-const META_CACHE_TTL = 5 * 60 * 1000;
 
 function fmt(n: number) { return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtInt(n: number) { return n.toLocaleString('pt-BR'); }
@@ -150,8 +149,10 @@ export default function CampanhasPage() {
   const isBecker = orgId === BECKER_ORG_ID;
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(false);
+  const _initCampKey = orgId ? `meta_camp_${orgId}_today` : null;
+  const _initCampCached = _initCampKey ? getMetaCache(_initCampKey) : null;
+  const [campaigns, setCampaigns] = useState<Campaign[]>(_initCampCached || []);
+  const [loading, setLoading] = useState(!_initCampCached && !!metaToken);
   const [error, setError] = useState(false);
   const [datePreset, setDatePreset] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -203,12 +204,13 @@ export default function CampanhasPage() {
       });
   },[isBecker, orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaReady)return;if(!metaToken||!metaAccount){setLoading(false);setError(false);return;}setLoading(true);setError(false);try{const cached=sessionStorage.getItem(`${META_CACHE_KEY}_${datePreset}`);if(cached){const{data,ts}=JSON.parse(cached);if(Date.now()-ts<META_CACHE_TTL){setCampaigns(data);setLoading(false);return;}}}catch{}try{const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);try{sessionStorage.setItem(`${META_CACHE_KEY}_${datePreset}`,JSON.stringify({data,ts:Date.now()}));}catch{}setCampaigns(data);setLoading(false);}catch{setError(true);setLoading(false);}};
+  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);};
   useEffect(()=>{
-    if (!metaReady || !orgReady) return;
-    if (!metaToken || !metaAccount) { setLoading(false); return; }
+    if (!metaReady || !orgReady || !metaToken || !metaAccount) return;
+    const key=`meta_camp_${orgId}_${datePreset}`;
+    sessionStorage.removeItem(key);
     load();
-  },[datePreset,metaToken,metaAccount,metaReady,orgReady]); // eslint-disable-line
+  },[datePreset,metaToken,metaAccount,metaReady,orgReady,orgId]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
@@ -438,18 +440,20 @@ export default function CampanhasPage() {
           {/* Tab Campanhas */}
           {activeTab==='campanhas'&&(
             <div>
-              {loading
-                ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
-                :semToken
-                  ?(<div style={{padding:'48px 32px',textAlign:'center'}}>
-                    <div style={{fontSize:'32px',marginBottom:'12px'}}>📊</div>
-                    <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 6px'}}>Meta Ads não configurado</p>
-                    <p style={{fontSize:'13px',color:txtMid,margin:'0 0 20px',lineHeight:1.6}}>Configure seu token do Facebook para ver campanhas e métricas aqui.</p>
-                    <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
-                  </div>)
-                :error||filtered.length===0
-                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{!metaToken||!metaAccount?'Configure o Meta Ads para ver campanhas.':error?'Nenhuma campanha com gasto no período selecionado.':'Nenhuma campanha encontrada para este período.'}</div>
-                  :filtered.map(c=>{
+              {!metaReady
+                ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando…</div>
+                :loading
+                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
+                  :semToken
+                    ?(<div style={{padding:'48px 32px',textAlign:'center'}}>
+                      <div style={{fontSize:'32px',marginBottom:'12px'}}>📊</div>
+                      <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 6px'}}>Meta Ads não configurado</p>
+                      <p style={{fontSize:'13px',color:txtMid,margin:'0 0 20px',lineHeight:1.6}}>Configure seu token do Facebook para ver campanhas e métricas aqui.</p>
+                      <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
+                    </div>)
+                    :filtered.length===0
+                      ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>
+                      :filtered.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);
                     const periodo=PERIOD_MAP[datePreset]||'all';

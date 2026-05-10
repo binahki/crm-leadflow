@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { safeName, safeInitials } from '@/utils/safeName';
+import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
@@ -171,8 +172,6 @@ function toNum(s: any): number { if (s === null || s === undefined || s === '') 
 function safe(val: number): number { return isNaN(val) || !isFinite(val) ? 0 : val; }
 function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
 
-const META_CACHE_KEY = 'meta_cache_dash';
-const META_CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = [], token = '', account = ''): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
   const empty = { metrics: { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 }, campaigns: [] };
@@ -236,9 +235,11 @@ export default function Dashboard() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [metaMetrics, setMetaMetrics] = useState<MetaMetrics>({ spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 });
-  const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
-  const [metaLoading, setMetaLoading] = useState(true);
+  const _initMetaKey = orgId ? `meta_dash_${orgId}_today` : null;
+  const _initMetaCached = _initMetaKey ? getMetaCache(_initMetaKey) : null;
+  const [metaMetrics, setMetaMetrics] = useState<MetaMetrics>(_initMetaCached?.metrics || { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 });
+  const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>(_initMetaCached?.campaigns || []);
+  const [metaLoading, setMetaLoading] = useState(!_initMetaCached);
   const [metaError, setMetaError] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
@@ -250,7 +251,7 @@ export default function Dashboard() {
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
-  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaError(true);setMetaLoading(false);return;} setMetaLoading(true); setMetaError(false); try { try { const cached=sessionStorage.getItem(META_CACHE_KEY); if(cached){const{data,ts,preset}=JSON.parse(cached);if(Date.now()-ts<META_CACHE_TTL&&preset===selectedPeriod){setMetaMetrics(data.metrics);setMetaCampaigns(data.campaigns);setMetaLoading(false);return;}} } catch {} const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); sessionStorage.setItem(META_CACHE_KEY,JSON.stringify({data:{metrics,campaigns},ts:Date.now(),preset:selectedPeriod})); } catch { setMetaError(true); } setMetaLoading(false); };
+  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaLoading(false);return;} const key=`meta_dash_${orgId}_${selectedPeriod}`; const cached=getMetaCache(key); if(cached){setMetaMetrics(cached.metrics);setMetaCampaigns(cached.campaigns);setMetaLoading(false);setMetaError(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaCache(key,{metrics,campaigns}); setMetaMetrics(metrics); setMetaCampaigns(campaigns); setMetaError(false); } catch { setMetaError(true); } setMetaLoading(false); };
 
   useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
   useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
@@ -555,8 +556,12 @@ export default function Dashboard() {
             </div>
             {metaLoading
               ?[...Array(3)].map((_,i)=><div key={i} style={{ height:'32px', borderRadius:'8px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', marginBottom:'8px' }}/>)
+              :!metaReady
+                ?[...Array(3)].map((_,i)=><div key={i} style={{ height:'32px', borderRadius:'8px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', marginBottom:'8px' }}/>)
+              :!metaToken||!metaAccount
+                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>Configure o token do Meta Ads em Configurações</p></div>
               :metaError||campRows.length===0
-                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>{!metaToken||!metaAccount?'Configure o token do Meta Ads em Configurações':metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
+                ?<div style={{ textAlign:'center', padding:'20px 0' }}><p style={{ fontSize:'13px', color:txtMid, margin:0 }}>{metaError?'Erro ao conectar ao Meta Ads':'Nenhuma campanha'}</p></div>
                 :(
                   <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
                     <thead>
