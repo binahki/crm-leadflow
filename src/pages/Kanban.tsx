@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
+import { safeName, safeInitials } from '@/utils/safeName';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -27,7 +28,7 @@ const MOTIVOS = ['Sem retorno','Fora de SP','Nome sujo','Sem reserva','Não comp
 const AVATAR_COLORS = ['#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#ec4899','#8b5cf6'];
 
 function avatarColor(name: string) { return !name ? AVATAR_COLORS[0] : AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
-function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('').toUpperCase(); }
+function initials(name: string) { return safeInitials(name); }
 
 function parseDateMs(str?: string | null): number {
   if (!str) return 0;
@@ -165,7 +166,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile 
         <div style={{ flex:1, minWidth:0 }}>
           {/* Nome + score com space-between */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
-            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{lead.nome||'Lead sem nome'}</p>
+            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
             {score != null && (
               <span style={{ fontSize:'11px', fontWeight:700, color:faixa==='verde'?'#10b981':faixa==='amarelo'?'#f59e0b':'#ef4444', background:faixa==='verde'?'rgba(16,185,129,0.12)':faixa==='amarelo'?'rgba(245,158,11,0.12)':'rgba(239,68,68,0.12)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>{score}pts</span>
             )}

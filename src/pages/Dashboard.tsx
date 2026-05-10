@@ -9,6 +9,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
+import { safeName, safeInitials } from '@/utils/safeName';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
@@ -168,13 +169,10 @@ function relativeTime(str?: string | null): string {
 
 function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
 function safe(val: number): number { return isNaN(val) || !isFinite(val) ? 0 : val; }
-function initials(n: string): string {
-  if (!n || typeof n !== 'string') return '?';
-  const clean = n.trim().replace(/^[^a-zA-ZÀ-ú0-9]+$/, '');
-  if (!clean) return '?';
-  return clean.split(' ').filter(w => w.length > 0).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
-}
 function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
+
+const META_CACHE_KEY = 'meta_cache_dash';
+const META_CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = [], token = '', account = ''): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
   const empty = { metrics: { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 }, campaigns: [] };
@@ -252,7 +250,7 @@ export default function Dashboard() {
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
   const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
-  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaError(true);setMetaLoading(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); if(metrics.spend===0&&campaigns.length===0)setMetaError(true); } catch { setMetaError(true); } setMetaLoading(false); };
+  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaError(true);setMetaLoading(false);return;} setMetaLoading(true); setMetaError(false); try { try { const cached=sessionStorage.getItem(META_CACHE_KEY); if(cached){const{data,ts,preset}=JSON.parse(cached);if(Date.now()-ts<META_CACHE_TTL&&preset===selectedPeriod){setMetaMetrics(data.metrics);setMetaCampaigns(data.campaigns);setMetaLoading(false);return;}} } catch {} const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaMetrics(metrics); setMetaCampaigns(campaigns); sessionStorage.setItem(META_CACHE_KEY,JSON.stringify({data:{metrics,campaigns},ts:Date.now(),preset:selectedPeriod})); } catch { setMetaError(true); } setMetaLoading(false); };
 
   useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
   useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
@@ -447,7 +445,7 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            {!isMobile && chartData.length > 0 && <div style={{ width:'100%', height:200, minHeight:120 }}>
+            {chartData.length > 0 && <div style={{ width:'100%', height:isMobile ? 160 : 200, minHeight:120 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                   <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
@@ -513,7 +511,7 @@ export default function Dashboard() {
               :recentLeads.length===0?<p style={{ fontSize:'13px', color:txtMid, textAlign:'center', padding:'20px 0' }}>Nenhum lead</p>
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
-                const safeNome = (lead.nome || '').trim().replace(/^\.+$/, '') || 'Lead';
+                const safeNome = safeName(lead.nome) || 'Lead';
                 return (
                   <div key={lead.id} onClick={()=>setViewingLead(lead)}
                     style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 8px', borderRadius:'10px', cursor:'pointer', transition:'background 0.12s' }}
@@ -522,7 +520,7 @@ export default function Dashboard() {
                   >
                     <div style={{ position:'relative', flexShrink:0 }}>
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
-                        {initials(safeNome)}
+                        {safeInitials(safeNome)}
                       </div>
                       {(()=>{ const faixaLead = (lead.faixa as string) || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
@@ -543,8 +541,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Campanhas — oculto no mobile para evitar overflow */}
-          {!isMobile && <div style={{ background:cardBg, borderRadius:'14px', padding:'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
+          {/* Campanhas */}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, minWidth:0, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                 <h3 style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0 }}>Campanhas</h3>
@@ -596,7 +594,7 @@ export default function Dashboard() {
                   </table>
                 )
             }
-          </div>}
+          </div>
         </div>
       </div>
       <LeadDrawer lead={viewingLead as any} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated as any:l));setViewingLead(updated as any);}}/>

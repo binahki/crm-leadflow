@@ -40,6 +40,9 @@ const PERIOD_MAP: Record<string,string> = {
   today:'today', yesterday:'yesterday', last_7d:'7days', last_30d:'30days', this_month:'month',
 };
 
+const META_CACHE_KEY = 'meta_cache_camp';
+const META_CACHE_TTL = 5 * 60 * 1000;
+
 function fmt(n: number) { return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtInt(n: number) { return n.toLocaleString('pt-BR'); }
 function getLeads(actions: any[]) { return parseInt(actions?.find((a:any)=>LEAD_ACTIONS.includes(a.action_type))?.value||'0'); }
@@ -148,7 +151,7 @@ export default function CampanhasPage() {
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [datePreset, setDatePreset] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -200,8 +203,12 @@ export default function CampanhasPage() {
       });
   },[isBecker, orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaReady)return;if(!metaToken||!metaAccount){setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(!data.length)setError(true);setCampaigns(data);setLoading(false);};
-  useEffect(()=>{load();},[datePreset,metaToken,metaAccount,metaReady]); // eslint-disable-line
+  const load=async()=>{if(!metaReady)return;if(!metaToken||!metaAccount){setLoading(false);setError(false);return;}setLoading(true);setError(false);try{const cached=sessionStorage.getItem(`${META_CACHE_KEY}_${datePreset}`);if(cached){const{data,ts}=JSON.parse(cached);if(Date.now()-ts<META_CACHE_TTL){setCampaigns(data);setLoading(false);return;}}}catch{}try{const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);try{sessionStorage.setItem(`${META_CACHE_KEY}_${datePreset}`,JSON.stringify({data,ts:Date.now()}));}catch{}setCampaigns(data);setLoading(false);}catch{setError(true);setLoading(false);}};
+  useEffect(()=>{
+    if (!metaReady || !orgReady) return;
+    if (!metaToken || !metaAccount) { setLoading(false); return; }
+    load();
+  },[datePreset,metaToken,metaAccount,metaReady,orgReady]); // eslint-disable-line
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
@@ -441,7 +448,7 @@ export default function CampanhasPage() {
                     <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
                   </div>)
                 :error||filtered.length===0
-                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{error?'⚠️ Erro ao conectar ao Meta Ads.':'Nenhuma campanha encontrada.'}</div>
+                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>{!metaToken||!metaAccount?'Configure o Meta Ads para ver campanhas.':error?'Nenhuma campanha com gasto no período selecionado.':'Nenhuma campanha encontrada para este período.'}</div>
                   :filtered.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);

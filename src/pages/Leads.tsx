@@ -10,6 +10,7 @@ import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 import { formatarWhatsapp } from '@/utils/relativeTime';
+import { safeName } from '@/utils/safeName';
 
 const STATUS_STYLE = [
   { lightBg:'#dbeafe', lightText:'#1d4ed8', darkBg:'rgba(59,130,246,0.15)', darkText:'#60a5fa', dot:'#3b82f6' },
@@ -340,13 +341,13 @@ export default function LeadsPage() {
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
     // Filtro de campanha vindo da URL
     if(campanhaFiltro.trim()){
-      const q=campanhaFiltro.toLowerCase();
-      r=r.filter(l=>{ const la=l as any; return(la.utm_campaign||'').toLowerCase().split('|')[0].trim().includes(q); });
+      const camp=campanhaFiltro.toLowerCase();
+      r=r.filter(l=>{ const la=l as any; const utm=safeName((la.utm_campaign||'')).toLowerCase(); return utm.includes(camp.slice(0,20)); });
     }
     // Busca manual
     if(search.trim()&&!campanhaFiltro.trim()){
       const q=search.toLowerCase();
-      r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||(la.utm_campaign||'').toLowerCase().includes(q); });
+      r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||safeName((la.utm_campaign||'')).toLowerCase().includes(q); });
     }
     if (sortByScore) r=[...r].sort((a,b)=>{ const sa=(a as any).score??-1; const sb=(b as any).score??-1; return sortByScore==='desc'?sb-sa:sa-sb; });
     return r;
@@ -537,8 +538,8 @@ export default function LeadsPage() {
                       <div style={{position:'absolute',top:'-4px',right:'-4px'}}><FaixaDot lead={lead} dark={dark}/></div>
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.nome||'—'}</p>
-                      <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):''}{lead.cidade&&lead.whatsapp?' · ':''}{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>
+                      <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.nome)||'Lead'}</p>
+                      <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):''}{safeName(lead.cidade)&&lead.whatsapp?' · ':''}{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
                       <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
@@ -600,7 +601,7 @@ export default function LeadsPage() {
                       <td className="px-3 py-3" style={{overflow:'hidden'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
                           <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700,flexShrink:0}}>{getInitials(lead.nome)}</div>
-                          <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{lead.nome||'—'}</span>
+                          <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{safeName(lead.nome)||'Lead'}</span>
                           {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
                         </div>
                       </td>
@@ -608,7 +609,7 @@ export default function LeadsPage() {
                         <ScoreTag score={la.score!=null?Number(la.score):null} faixa={la.faixa} dark={dark}/>
                       </td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</td>
-                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.cidade?normalizeCity(lead.cidade):'—'}</td>
+                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):'—'}</td>
                       <td className="px-3 py-3">
                         <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,whiteSpace:'nowrap',background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
                           <span style={{width:'5px',height:'5px',borderRadius:'50%',background:STATUS_STYLE[s]?.dot,flexShrink:0,display:'inline-block'}}/>{STATUS_LABELS[s]}
