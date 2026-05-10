@@ -168,7 +168,12 @@ function relativeTime(str?: string | null): string {
 
 function toNum(s: any): number { if (s === null || s === undefined || s === '') return 0; const n = Number(s); return isNaN(n) ? 0 : n; }
 function safe(val: number): number { return isNaN(val) || !isFinite(val) ? 0 : val; }
-function initials(n: string) { return (n||'').split(' ').slice(0,2).map((x:string)=>x[0]).join('').toUpperCase()||'?'; }
+function initials(n: string): string {
+  if (!n || typeof n !== 'string') return '?';
+  const clean = n.trim().replace(/^[^a-zA-ZÀ-ú0-9]+$/, '');
+  if (!clean) return '?';
+  return clean.split(' ').filter(w => w.length > 0).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
+}
 function getGreeting() { const h = new Date().getHours(); if (h>=5&&h<12) return 'Bom dia'; if (h>=12&&h<18) return 'Boa tarde'; return 'Boa noite'; }
 
 async function fetchMetaData(period: string, from?: string, to?: string, leadsList: Lead[] = [], token = '', account = ''): Promise<{ metrics: MetaMetrics; campaigns: Campaign[] }> {
@@ -508,6 +513,7 @@ export default function Dashboard() {
               :recentLeads.length===0?<p style={{ fontSize:'13px', color:txtMid, textAlign:'center', padding:'20px 0' }}>Nenhum lead</p>
               :recentLeads.map((lead,idx)=>{
                 const st=toNum(lead.status);
+                const safeNome = (lead.nome || '').trim().replace(/^\.+$/, '') || 'Lead';
                 return (
                   <div key={lead.id} onClick={()=>setViewingLead(lead)}
                     style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 8px', borderRadius:'10px', cursor:'pointer', transition:'background 0.12s' }}
@@ -516,12 +522,12 @@ export default function Dashboard() {
                   >
                     <div style={{ position:'relative', flexShrink:0 }}>
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
-                        {initials(lead.nome)}
+                        {initials(safeNome)}
                       </div>
                       {(()=>{ const faixaLead = (lead.faixa as string) || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:'12.5px', fontWeight:500, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.nome.split(' ').slice(0,2).join(' ')}</p>
+                      <p style={{ fontSize:'12.5px', fontWeight:500, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0,2).join(' ') || 'Lead'}</p>
                       <p style={{ fontSize:'11px', color:txtLow, margin:0 }}>{lead.cidade||'—'}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{ fontSize:'10.5px' }}>{STATUS_LABEL[st]??'Aguardando'}</span>
