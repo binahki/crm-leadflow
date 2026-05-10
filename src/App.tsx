@@ -7,7 +7,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LoginPage from "./pages/Login";
 import ResetPasswordPage from "./pages/ResetPassword";
-import CadastroPage from "./pages/Cadastro";
 import AdminPage from "./pages/Admin";
 import DashboardPage from "./pages/Dashboard";
 import LeadsPage from "./pages/Leads";
@@ -32,7 +31,6 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/cadastro" element={<CadastroPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="/sem-acesso" element={<Navigate to="/" replace />} />

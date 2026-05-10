@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { BloqueioAssinatura } from './BloqueioAssinatura';
 
-const EXEMPT_PATHS = ['/admin', '/cadastro'];
+const EXEMPT_PATHS = ['/admin'];
 const ADMIN_EMAIL = 'admin@floow.com';
 
 // Mantém export para compatibilidade com Admin.tsx — BloqueioAssinatura faz query fresca a cada mount
