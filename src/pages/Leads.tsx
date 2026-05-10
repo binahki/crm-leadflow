@@ -168,7 +168,9 @@ function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: strin
 
 function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
   const { configuracoes } = useAppStore();
-  const faixa = calcularFaixa(lead, configuracoes!) ?? (lead as any).faixa;
+  const faixa = configuracoes 
+    ? (calcularFaixa(lead, configuracoes) ?? (lead as any).faixa)
+    : (lead as any).faixa;
   if (!faixa || faixa === 'vermelho') return null;
   return <div style={{ width:'10px', height:'10px', borderRadius:'50%', flexShrink:0, background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}` }}/>;
 }
@@ -463,8 +465,7 @@ function LeadsPage() {
   const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
   return (
-    <ErrorBoundary>
-      <AppLayout leadCount={allLeads.length}>
+    <AppLayout leadCount={allLeads.length}>
       <div style={{ padding:isMobile?'12px':'28px', background:bg, minHeight:'100vh' }}>
 
         {/* Header */}
@@ -664,7 +665,7 @@ function LeadsPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3" style={{whiteSpace:'nowrap'}}>
-                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
+                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={(configuracoes ? calcularFaixa(lead, configuracoes) : null) ?? la.faixa} dark={dark}/>
                       </td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):'—'}</td>
