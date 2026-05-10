@@ -45,7 +45,7 @@ export function BloqueioAssinatura() {
       const ativo =
         data.status === 'active' ||
         (data.status === 'trialing' &&
-          (!data.trial_ends_at || new Date(data.trial_ends_at) > new Date()));
+          (!data.trial_ends_at || new Date(data.trial_ends_at).getTime() > Date.now() - (24 * 60 * 60 * 1000)));
       setBloqueado(!ativo);
     } catch {
       // Em caso de erro de rede, não bloqueia
