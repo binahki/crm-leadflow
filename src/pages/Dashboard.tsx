@@ -58,20 +58,30 @@ function leadDateBR(str?: string | null): string {
   try {
     const d = parseLeadDate(str);
     if (!d || isNaN(d.getTime()) || d.getTime() === 0) return '';
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   } catch { return ''; }
 }
 
 function todayBR(): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   } catch { return new Date().toISOString().slice(0, 10); }
 }
 
 function subDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
+  try {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    if (isNaN(d.getTime())) return dateStr;
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  } catch { return dateStr; }
 }
 
 function filterByPeriod(leads: Lead[], period: string, from?: string, to?: string): Lead[] {
@@ -113,8 +123,8 @@ function buildChartData(leads: Lead[], period: string, from?: string, to?: strin
         if (leadDateBR(l.created_at) !== startDate) return;
         const d = parseLeadDate(l.created_at);
         if (!d || isNaN(d.getTime())) return;
-        const hStr = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
-        const sh = Math.floor(parseInt(hStr) / 2) * 2;
+        const h = d.getHours();
+        const sh = Math.floor(h / 2) * 2;
         const k = `${String(sh).padStart(2,'0')}h`;
         if (k in slots) slots[k]++;
       } catch { /* skip invalid date */ }
@@ -140,7 +150,9 @@ function buildChartData(leads: Lead[], period: string, from?: string, to?: strin
     try {
       const d = new Date(iso + 'T12:00:00Z');
       if (isNaN(d.getTime())) return { date: '—', leads: cnt };
-      return { date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), leads: cnt };
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      return { date: `${day}/${month}`, leads: cnt };
     } catch { return { date: '—', leads: cnt }; }
   });
 }
@@ -378,7 +390,14 @@ export default function Dashboard() {
               {getGreeting()}{primeiroNome?`, ${primeiroNome}`:''}!{' '}
               <img src="/wave.png" alt="👋" style={{ width:'22px', height:'22px', objectFit:'contain' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
             </h1>
-            <p style={{ fontSize:'12px', color:txtLow, marginTop:'3px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
+            <p style={{ fontSize:'12px', color:txtLow, marginTop:'3px' }}>{(() => {
+              try {
+                const d = new Date();
+                const dias = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+                const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+                return `${dias[d.getDay()]}, ${d.getDate()} de ${meses[d.getMonth()]}`;
+              } catch { return ''; }
+            })()}</p>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
             <div style={{ position:'relative' }} ref={dropRef}>

@@ -56,9 +56,24 @@ function parseLeadDateCamp(str?: string|null): Date {
   return new Date(str);
 }
 function leadDateBRCamp(str?: string|null): string {
-  try { const d=parseLeadDateCamp(str); if(d.getTime()===0)return ''; return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(d); } catch { return ''; }
+  try {
+    const d=parseLeadDateCamp(str);
+    if(d.getTime()===0)return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch { return ''; }
 }
-function todayBRCamp(): string { return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date()); }
+function todayBRCamp(): string {
+  try {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch { return new Date().toISOString().split('T')[0]; }
+}
 function subDaysCamp(s:string,n:number): string {
   try { const d=new Date(s+'T12:00:00Z'); if(isNaN(d.getTime()))return s; d.setUTCDate(d.getUTCDate()-n); return d.toISOString().slice(0,10); } catch { return s; }
 }
@@ -637,7 +652,13 @@ export default function CampanhasPage() {
             {/* Header */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
               <span style={{fontSize:'14px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>
-                IA • hoje às {new Date(aiLog.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                IA • hoje às {(() => {
+                  try {
+                    const d = new Date(aiLog.created_at);
+                    if (isNaN(d.getTime())) return '';
+                    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                  } catch { return ''; }
+                })()}
               </span>
               <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280',padding:'4px',display:'flex',borderRadius:'6px'}}>
                 <X style={{width:'16px',height:'16px'}}/>

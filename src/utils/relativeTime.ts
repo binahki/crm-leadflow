@@ -38,7 +38,9 @@ export function formatDDMM(dateStr: string | null | undefined): string {
     if (!dateStr) return '—';
     const d = getDateObj(dateStr);
     if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}`;
   } catch { return '—'; }
 }
 
@@ -47,7 +49,10 @@ export function formatDate(dateStr: string | null | undefined): string {
     if (!dateStr) return '—';
     const d = getDateObj(dateStr);
     if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
   } catch { return '—'; }
 }
 

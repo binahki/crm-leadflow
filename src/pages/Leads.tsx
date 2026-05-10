@@ -48,37 +48,54 @@ function getInitials(name: string) {
 // ── Datas no fuso de Brasília ─────────────────────────────────
 function parseLeadDate(str?: string | null): Date {
   if (!str) return new Date(0);
-  if (str.includes('T')) return new Date(str);
+  if (str.includes('T')) {
+    const cleaned = str.replace(/(\.\d{3})\d+/, '$1');
+    return new Date(cleaned);
+  }
   // Supabase: "2026-05-05 01:33:48.336+00" → ISO UTC
-  if (/^\d{4}-\d{2}-\d{2} /.test(str))
-    return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z'));
+  if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
+    const cleaned = str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z').replace(/(\.\d{3})\d+/, '$1');
+    return new Date(cleaned);
+  }
   // Legado "DD/MM/YYYY HH:MM"
   const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
   if (m) {
     const [, d, mo, y, h = '0', mi = '0'] = m;
     return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`);
   }
-  return new Date(str);
+  return new Date(str.replace(/(\.\d{3})\d+/, '$1'));
 }
 
 function leadDateBR(str?: string | null): string {
   try {
     const d = parseLeadDate(str);
     if (isNaN(d.getTime())) return '';
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   } catch { return ''; }
 }
 
 function todayBR(): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-  } catch { return new Date().toISOString().slice(0, 10); }
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch {
+    return new Date().toISOString().split('T')[0];
+  }
 }
 
 function subDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
+  try {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    if (isNaN(d.getTime())) return dateStr;
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().split('T')[0];
+  } catch { return dateStr; }
 }
 
 function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string): Lead[] {
@@ -104,7 +121,12 @@ function formatEntrada(str?: string | null): string {
     if (!str) return '—';
     const d = parseLeadDate(str);
     if (isNaN(d.getTime())) return '—';
-    return `${d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', timeZone:'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo' })}`;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
   } catch { return '—'; }
 }
 
