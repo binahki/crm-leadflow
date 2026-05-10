@@ -34,15 +34,21 @@ export function getRelativeTime(dateStr: string | null | undefined): string {
 }
 
 export function formatDDMM(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—';
-  const d = getDateObj(dateStr);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  try {
+    if (!dateStr) return '—';
+    const d = getDateObj(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  } catch { return '—'; }
 }
 
 export function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—';
-  const d = getDateObj(dateStr);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  try {
+    if (!dateStr) return '—';
+    const d = getDateObj(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch { return '—'; }
 }
 
 export function formatarWhatsapp(wa: string | null | undefined): string {

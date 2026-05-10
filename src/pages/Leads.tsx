@@ -62,13 +62,17 @@ function parseLeadDate(str?: string | null): Date {
 }
 
 function leadDateBR(str?: string | null): string {
-  const d = parseLeadDate(str);
-  if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  try {
+    const d = parseLeadDate(str);
+    if (isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  } catch { return ''; }
 }
 
 function todayBR(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  } catch { return new Date().toISOString().slice(0, 10); }
 }
 
 function subDays(dateStr: string, n: number): string {
@@ -96,10 +100,12 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
 }
 
 function formatEntrada(str?: string | null): string {
-  if (!str) return '—';
-  const d = parseLeadDate(str);
-  if (isNaN(d.getTime())) return '—';
-  return `${d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', timeZone:'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo' })}`;
+  try {
+    if (!str) return '—';
+    const d = parseLeadDate(str);
+    if (isNaN(d.getTime())) return '—';
+    return `${d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', timeZone:'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo' })}`;
+  } catch { return '—'; }
 }
 
 function maskPhone(value: string): string {
