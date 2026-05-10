@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 const ADMIN_EMAIL = 'admin@floow.com';
 
 export function setAdminViewingOrg(orgId: string, orgNome: string) {
-  localStorage.setItem('admin_viewing_org',      orgId);
+  localStorage.setItem('admin_viewing_org', orgId);
   localStorage.setItem('admin_viewing_org_nome', orgNome);
 }
 
@@ -20,32 +20,61 @@ export function getAdminViewingOrg(): { orgId: string; orgName: string } | null 
   return { orgId, orgName: localStorage.getItem('admin_viewing_org_nome') || '' };
 }
 
+// Cache em memória — evita re-fetch a cada mount do componente
+const orgIdCache: Record<string, string | null> = {};
+
 export function useOrgId() {
   const { user } = useAuth();
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+
+  // Tenta pegar do cache imediatamente para evitar flash
+  const getCached = (): { orgId: string | null; ready: boolean } => {
+    if (!user) return { orgId: null, ready: false };
+    if (user.email === ADMIN_EMAIL) {
+      const adminViewing = localStorage.getItem('admin_viewing_org');
+      return { orgId: adminViewing, ready: true };
+    }
+    if (orgIdCache[user.id] !== undefined) {
+      return { orgId: orgIdCache[user.id], ready: true };
+    }
+    return { orgId: null, ready: false };
+  };
+
+  const initial = getCached();
+  const [orgId, setOrgId] = useState<string | null>(initial.orgId);
+  const [ready, setReady] = useState(initial.ready);
 
   useEffect(() => {
     if (!user) { setReady(true); return; }
 
-    // Admin: lê direto do localStorage no momento do effect.
-    // window.location.href = '/' força reload completo, então o useEffect
-    // executa com o valor correto já presente no localStorage.
+    // Admin
     if (user.email === ADMIN_EMAIL) {
       const adminViewing = localStorage.getItem('admin_viewing_org');
-      setOrgId(adminViewing); // pode ser null (sem impersonation) ou o orgId do cliente
+      setOrgId(adminViewing);
       setReady(true);
       return;
     }
 
-    // Usuário normal: busca via memberships
+    // Cache hit — não precisa buscar novamente
+    if (orgIdCache[user.id] !== undefined) {
+      setOrgId(orgIdCache[user.id]);
+      setReady(true);
+      return;
+    }
+
+    // Busca via memberships
     supabase
       .from('memberships')
       .select('org_id')
       .eq('user_id', user.id)
       .single()
       .then(({ data }) => {
-        setOrgId(data?.org_id || null);
+        const id = data?.org_id || null;
+        orgIdCache[user.id] = id; // salva no cache
+        setOrgId(id);
+        setReady(true);
+      })
+      .catch(() => {
+        orgIdCache[user.id] = null;
         setReady(true);
       });
   }, [user?.id]);

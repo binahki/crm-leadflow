@@ -172,7 +172,7 @@ export default function CampanhasPage() {
     if (!orgReady || !orgId) return;
     setAllLeads([]);
     supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at')
-      .order('created_at',{ascending:false}).eq('org_id', orgId)
+      .order('created_at',{ascending:false}).eq('org_id', orgId).limit(500)
       .then(({data})=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady]);
 
@@ -190,25 +190,25 @@ export default function CampanhasPage() {
     return () => { supabase.removeChannel(ch); };
   },[orgId, orgReady]); // eslint-disable-line
 
-  // Busca log de otimização da IA do dia — apenas para Becker Joias
+  // Busca log de otimização da IA — mostra se for das últimas 24h (evita problema de fuso)
   useEffect(()=>{
     if (!isBecker || !orgReady || !orgId) return;
-    const hoje = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
     (supabase as any).from('ai_optimization_logs').select('*')
-      .eq('org_id', orgId)
-      .gte('created_at', hoje+'T00:00:00')
+      .eq('org_id', BECKER_ORG_ID)
       .order('created_at',{ascending:false})
       .limit(1)
       .then(({data})=>{
-        if(data&&data.length>0) setAiLog(data[0]);
+        if(data&&data.length>0){
+          const log=data[0];
+          const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
+          if(horas<=24) setAiLog(log);
+        }
       });
   },[isBecker, orgId, orgReady]); // eslint-disable-line
 
   const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);};
   useEffect(()=>{
-    if (!metaReady || !orgReady || !metaToken || !metaAccount) return;
-    const key=`meta_camp_${orgId}_${datePreset}`;
-    sessionStorage.removeItem(key);
+    if (!metaReady || !orgReady) return;
     load();
   },[datePreset,metaToken,metaAccount,metaReady,orgReady,orgId]); // eslint-disable-line
 
@@ -332,7 +332,7 @@ export default function CampanhasPage() {
           <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
             <FilterDropdown value={statusFilter} options={[{label:'Todas',value:'all'},{label:'Ativas',value:'ACTIVE'},{label:'Pausadas',value:'PAUSED'}]} onChange={setStatusFilter} dark={dark}/>
-            <button onClick={load} disabled={loading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+            <button onClick={()=>{ const key=`meta_camp_${orgId}_${datePreset}`; sessionStorage.removeItem(key); load(); }} disabled={loading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
               <RefreshCw style={{width:'14px',height:'14px',animation:loading?'spin 1s linear infinite':''}}/>
               {loading?'Carregando…':'Atualizar'}
             </button>
@@ -340,7 +340,7 @@ export default function CampanhasPage() {
         </div>
 
         {/* Cards: Gasto | Leads | CPL | CPR */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
           {[
             {label:'Gasto Total',    value:loading?'…':`R$ ${fmt(totalSpend)}`,             icon:DollarSign, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5', sub:null},
             {label:'Leads',         value:loading?'…':String(leadsCRMTotal),                icon:Users,      color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff',  sub:`período · CRM`},
@@ -440,20 +440,21 @@ export default function CampanhasPage() {
           {/* Tab Campanhas */}
           {activeTab==='campanhas'&&(
             <div>
-              {!metaReady
-                ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando…</div>
-                :loading
-                  ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>
-                  :semToken
-                    ?(<div style={{padding:'48px 32px',textAlign:'center'}}>
-                      <div style={{fontSize:'32px',marginBottom:'12px'}}>📊</div>
-                      <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 6px'}}>Meta Ads não configurado</p>
-                      <p style={{fontSize:'13px',color:txtMid,margin:'0 0 20px',lineHeight:1.6}}>Configure seu token do Facebook para ver campanhas e métricas aqui.</p>
-                      <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
-                    </div>)
-                    :filtered.length===0
-                      ?<div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>
-                      :filtered.map(c=>{
+              {(()=>{
+                const mostrarSemToken=metaReady&&orgReady&&(!metaToken||!metaAccount);
+                const mostrarLoading=loading&&campaigns.length===0;
+                const mostrarVazio=!loading&&!mostrarSemToken&&campaigns.length===0&&metaReady&&orgReady;
+                if(mostrarLoading) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Carregando campanhas…</div>;
+                if(mostrarSemToken) return (
+                  <div style={{padding:'48px 32px',textAlign:'center'}}>
+                    <div style={{fontSize:'32px',marginBottom:'12px'}}>📊</div>
+                    <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:'0 0 6px'}}>Meta Ads não configurado</p>
+                    <p style={{fontSize:'13px',color:txtMid,margin:'0 0 20px',lineHeight:1.6}}>Configure seu token do Facebook para ver campanhas e métricas aqui.</p>
+                    <Link to="/meta-ads" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'10px 20px',borderRadius:'10px',background:'#2563eb',color:'#fff',textDecoration:'none',fontSize:'13px',fontWeight:600}}>Configurar Meta Ads →</Link>
+                  </div>
+                );
+                if(mostrarVazio) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>;
+                return <>{filtered.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);
                     const periodo=PERIOD_MAP[datePreset]||'all';
@@ -573,8 +574,8 @@ export default function CampanhasPage() {
                         )}
                       </div>
                     );
-                  })
-              }
+                  })}</>;
+              })()}
             </div>
           )}
 

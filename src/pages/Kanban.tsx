@@ -274,7 +274,7 @@ export default function KanbanPage() {
   useEffect(() => {
     if (!orgReady || !orgId) return;
     setLeads([]);
-    supabase.from('leads').select('*').eq('org_id', orgId)
+    supabase.from('leads').select('*').eq('org_id', orgId).limit(500)
       .then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); });
   }, [orgId, orgReady]); // eslint-disable-line
 

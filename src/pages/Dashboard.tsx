@@ -250,7 +250,7 @@ export default function Dashboard() {
   useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
-  const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
+  const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId).limit(500); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
   const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaLoading(false);return;} const key=`meta_dash_${orgId}_${selectedPeriod}`; const cached=getMetaCache(key); if(cached){setMetaMetrics(cached.metrics);setMetaCampaigns(cached.campaigns);setMetaLoading(false);setMetaError(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaCache(key,{metrics,campaigns}); setMetaMetrics(metrics); setMetaCampaigns(campaigns); setMetaError(false); } catch { setMetaError(true); } setMetaLoading(false); };
 
   useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId]); // eslint-disable-line
@@ -259,7 +259,18 @@ export default function Dashboard() {
 
   function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }
   function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); try { localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); } catch {} setShowCustom(false); }
-  async function handleRefresh() { setIsRefreshing(true); await Promise.all([fetchLeads(),loadMeta()]); setTimeout(()=>setIsRefreshing(false),600); }
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 15000)
+      );
+      await Promise.race([Promise.all([fetchLeads(), loadMeta()]), timeout]);
+    } catch (err) {
+      console.warn('[refresh] timeout ou erro:', err);
+    }
+    setIsRefreshing(false);
+  }
 
   // Navega para leads filtrados por campanha + período atual
   function goToLeads(campanhaNome: string) {
@@ -359,7 +370,7 @@ export default function Dashboard() {
       <div style={{ padding:pad, background:bg, minHeight:'100vh', overflowX:'hidden' }}>
 
         {/* Header */}
-        <div style={{ display:'flex', flexDirection:isMobile?'column':'row', alignItems:'flex-start', justifyContent:'space-between', marginBottom:isMobile?'14px':'20px', gap:'10px' }}>
+        <div style={{ display:'flex', flexDirection:'row', alignItems:'flex-start', justifyContent:'space-between', marginBottom:isMobile?'14px':'20px', gap:'8px' }}>
           <div>
             <h1 style={{ fontSize:isMobile?'18px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:'8px' }}>
               {getGreeting()}{primeiroNome?`, ${primeiroNome}`:''}!{' '}
@@ -367,14 +378,14 @@ export default function Dashboard() {
             </h1>
             <p style={{ fontSize:'12px', color:txtLow, marginTop:'3px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', width:isMobile?'100%':'auto' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
             <div style={{ position:'relative' }} ref={dropRef}>
               <button onClick={()=>{setShowDropdown(v=>!v);setShowCustom(false);}} style={btnBase}>
                 {periodLabel}
                 <ChevronDown style={{ width:'14px', height:'14px', color:txtLow, transform:showDropdown?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
               </button>
               {showDropdown && (
-                <div style={{ position:'absolute', right:isMobile?'auto':0, left:isMobile?0:'auto', top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'12px', padding:'4px', minWidth:'160px', maxWidth:'calc(100vw - 32px)', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)' }}>
+                <div style={{ position:'absolute', right:0, left:'auto', top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'12px', padding:'4px', minWidth:'160px', maxWidth:'calc(100vw - 32px)', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)' }}>
                   {PERIOD_FILTERS.map(f=>(
                     <button key={f.value} onClick={()=>selectPeriod(f.value)} style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:'none', background:selectedPeriod===f.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent', color:selectedPeriod===f.value?(dark?'#60a5fa':'#2563eb'):txtMid, fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
                       {f.label}
@@ -403,7 +414,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            <button onClick={handleRefresh} style={btnBase}>
+            <button onClick={handleRefresh} style={{ ...btnBase, minWidth:isMobile?'44px':undefined, minHeight:isMobile?'44px':undefined, justifyContent:'center' }}>
               <RefreshCw style={{ width:'14px', height:'14px', color:txtMid, animation:isRefreshing?'spin 1s linear infinite':'' }}/>
             </button>
             {!isMobile && (
@@ -415,10 +426,10 @@ export default function Dashboard() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display:'grid', gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
           {[
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
-            { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
+            { label:'Leads', value:loading?'…':String(totalLeads), trend:'+', up:true, sub:'Total período' },
             { label:'CPL Ads', value:metaLoading?'…':(()=>{const fb=filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length;return fb>0?`R$ ${safe(spend/fb).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —';})(), trend:'Real Time', up:true, sub:'Base Sistema' },
             { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?(isMobile?'↑':`R$ ${safe(spend/approved).toFixed(2)}`):`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?(isMobile?`R$${safe(spend/approved).toLocaleString('pt-BR',{maximumFractionDigits:0})}/rev`:`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`):'conversão' },
           ].map((c,i)=>(

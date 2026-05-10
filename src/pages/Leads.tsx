@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/AppLayout';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useAppStore, Lead, STATUS_LABELS, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -261,7 +262,7 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   );
 }
 
-export default function LeadsPage() {
+function LeadsPage() {
   const { updateLead } = useAppStore();
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -295,6 +296,7 @@ export default function LeadsPage() {
   const [allSystemSelected, setAllSystemSelected] = useState(false);
   const [campanhaFiltro, setCampanhaFiltro] = useState('');
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
+  const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
 
   // Lê parâmetros da URL ao montar (redirect de Campanhas/Dashboard)
   useEffect(() => {
@@ -307,7 +309,13 @@ export default function LeadsPage() {
     if (periodo) setPeriodFilter(periodo);
     if (de) setCustomFrom(de);
     if (ate) setCustomTo(ate);
-    if (campanha) setCampanhaFiltro(decodeURIComponent(campanha).split('|')[0].trim());
+    if (campanha) {
+      try {
+        setCampanhaFiltro(decodeURIComponent(campanha).split('|')[0].trim());
+      } catch {
+        setCampanhaFiltro(campanha.split('|')[0].trim());
+      }
+    }
     if (status) setStatusFilter(status);
   }, []);
 
@@ -317,7 +325,7 @@ export default function LeadsPage() {
     setAllLeads([]);
     const { data, error } = await supabase
       .from('leads').select('*').order('created_at', { ascending: false })
-      .eq('org_id', orgId);
+      .eq('org_id', orgId).limit(500);
     if (error) toast.error(`Erro: ${error.message}`);
     else if (data) setAllLeads(data as unknown as Lead[]);
     setIsLoading(false);
@@ -336,22 +344,36 @@ export default function LeadsPage() {
   }, [orgId, orgReady]); // eslint-disable-line
 
   const filtered = useMemo(() => {
-    let r=[...allLeads].sort((a,b)=>parseLeadDate(b.created_at).getTime()-parseLeadDate(a.created_at).getTime());
+    let r=[...allLeads];
     r=filterByPeriod(r,periodFilter,customFrom,customTo);
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
     // Filtro de campanha vindo da URL
     if(campanhaFiltro.trim()){
-      const camp=campanhaFiltro.toLowerCase();
-      r=r.filter(l=>{ const la=l as any; const utm=safeName((la.utm_campaign||'')).toLowerCase(); return utm.includes(camp.slice(0,20)); });
+      r=r.filter(l=>{
+        try {
+          const la=l as any;
+          const utm=((la.utm_campaign||'')).toLowerCase().split('|')[0].trim();
+          const camp=campanhaFiltro.toLowerCase().split('|')[0].trim().slice(0,20);
+          return utm.includes(camp);
+        } catch { return false; }
+      });
     }
     // Busca manual
     if(search.trim()&&!campanhaFiltro.trim()){
       const q=search.toLowerCase();
       r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||safeName((la.utm_campaign||'')).toLowerCase().includes(q); });
     }
-    if (sortByScore) r=[...r].sort((a,b)=>{ const sa=(a as any).score??-1; const sb=(b as any).score??-1; return sortByScore==='desc'?sb-sa:sa-sb; });
+    if (sortByScore) {
+      r=[...r].sort((a,b)=>{ const sa=(a as any).score??-1; const sb=(b as any).score??-1; return sortByScore==='desc'?sb-sa:sa-sb; });
+    } else {
+      r=[...r].sort((a,b)=>{
+        const da=parseLeadDate(a.created_at).getTime();
+        const db=parseLeadDate(b.created_at).getTime();
+        return sortByDate==='desc'?db-da:da-db;
+      });
+    }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore]);
+  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate]);
 
   useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search, campanhaFiltro]);
 
@@ -583,9 +605,15 @@ export default function LeadsPage() {
                       Score {sortByScore==='asc'?'↑':'↓'}
                     </button>
                   </th>
-                  {(['WhatsApp','Cidade','Status','Entrada','Ações'] as string[]).map(h=>(
+                  {(['WhatsApp','Cidade','Status'] as string[]).map(h=>(
                     <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
+                  <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
+                    <button onClick={()=>setSortByDate(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:dark?'#71717a':'#6b7280',background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
+                      Entrada {sortByDate==='desc'?'↓':'↑'}
+                    </button>
+                  </th>
+                  <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -660,5 +688,13 @@ export default function LeadsPage() {
       <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{updateLead(updated.id,updated);setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated:l));setViewingLead(updated);}}/>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </AppLayout>
+  );
+}
+
+export default function LeadsPageExport() {
+  return (
+    <ErrorBoundary>
+      <LeadsPage />
+    </ErrorBoundary>
   );
 }

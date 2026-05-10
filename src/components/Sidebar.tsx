@@ -361,6 +361,21 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             <LogOut style={{ width: '16px', height: '16px', strokeWidth: 1.8 }} />
           </button>
         )}
+
+        {/* Mobile drawer — botão Sair sempre visível no rodapé */}
+        {isMobileDrawer && (
+          <button onClick={signOut} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+            background: isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)',
+            color: isDark ? 'rgba(255,80,80,0.9)' : 'rgba(200,0,0,0.75)',
+            fontSize: '13.5px', fontWeight: 600, marginTop: '4px',
+            fontFamily: 'inherit', textAlign: 'left',
+            transition: 'background 0.12s',
+          }}>
+            <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8, flexShrink: 0 }} /> Sair
+          </button>
+        )}
       </div>
 
       {/* Profile Modal */}

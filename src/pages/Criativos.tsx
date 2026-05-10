@@ -143,7 +143,7 @@ export default function CriativosPage() {
 
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
 
-  const load = async () => { if (!metaToken || !metaAccount) { setLoading(false); setError(true); return; } setLoading(true); setError(false); const data = await fetchCreatives(datePreset, metaToken, metaAccount); if (!data.length) setError(true); setCreatives(data); setLoading(false); };
+  const load = async () => { if (!metaToken || !metaAccount) { setLoading(false); return; } setLoading(true); setError(false); const data = await fetchCreatives(datePreset, metaToken, metaAccount); if (!data.length) setError(true); setCreatives(data); setLoading(false); };
   useEffect(() => { if (!metaReady) return; load(); }, [datePreset, metaReady, metaToken, metaAccount]); // eslint-disable-line
 
   const totalSpend = creatives.reduce((s, c) => s + c.spend, 0);
@@ -190,7 +190,7 @@ export default function CriativosPage() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: '20px' }}>
           {[
             { label: 'Gasto Total', value: loading ? '…' : `R$ ${fmt(totalSpend)}`, icon: DollarSign, color: '#10b981', bgC: dark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' },
             { label: 'Leads Gerados', value: loading ? '…' : String(totalLeads), icon: Users, color: '#3b82f6', bgC: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff' },
