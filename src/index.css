@@ -70,6 +70,11 @@ body {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
+/* iOS: evita zoom automático ao focar inputs (font-size mínimo 16px) */
+input, textarea, select {
+  font-size: max(16px, 1em);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lead, useAppStore } from '@/stores/appStore';
+import { Lead, useAppStore, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
@@ -199,7 +199,7 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m
 export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const { updateLead } = useAppStore();
+  const { updateLead, configuracoes } = useAppStore();
 
   const [obs, setObs] = useState('');
   const [status, setStatus] = useState(1);
@@ -272,7 +272,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const l = lead as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
-  const faixa = l.faixa || null;
+  const faixa = calcularFaixa(lead, configuracoes!) ?? l.faixa;
   const instagramValue = l.instagram ? String(l.instagram).trim() : '';
 
   return (

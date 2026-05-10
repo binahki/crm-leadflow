@@ -90,37 +90,67 @@ export interface Configuracoes {
   };
 }
 
-// Calcula faixa com base no score (lógica principal) ou travas (fallback para leads antigos)
+// Situações que limitam ao amarelo independente do score
+const SITUACOES_LIMITANTES = [
+  'desempregada', 'desempregado',
+  'autônoma', 'autônomo', 'autonoma', 'autonomo',
+  'renda informal', // pega "Autônoma / renda informal / revenda catálogo"
+  'do lar', 'dona de casa',
+  'aposentada', 'aposentado',
+];
+
+function getSituacaoAtual(lead: Lead): string {
+  // Busca em todas as possíveis fontes
+  return (
+    String((lead as any).situacao_atual || '') ||
+    String((lead as any).quiz_respostas?.situacao_atual || '') ||
+    String((lead as any).quiz_data?.situacao_atual || '') ||
+    ''
+  ).toLowerCase();
+}
+
 export function calcularFaixa(
   lead: Lead,
   config: Configuracoes
 ): 'verde' | 'amarelo' | 'vermelho' | null {
-  // 1. Se o lead já tem faixa salva no banco, usa ela
-  if (lead.faixa) return lead.faixa;
 
-  // 2. Se tem score, calcula pela pontuação
+  // 1. Calcula faixa base pelo score (nova lógica)
+  // Score < 25 → barrada no quiz (não entra no sistema)
+  // Score 25–34 → amarelo
+  // Score ≥ 35 → verde
+  let faixaCalculada: 'verde' | 'amarelo' | 'vermelho' | null = null;
+
   if (lead.score != null) {
     const score = Number(lead.score);
-    if (score < 55) return 'vermelho';
-    if (score >= 70) return 'verde';
-    return 'amarelo';
+    if (score < 25) faixaCalculada = 'vermelho';
+    else if (score >= 35) faixaCalculada = 'verde';
+    else faixaCalculada = 'amarelo';
+  } else if (lead.faixa) {
+    // Sem score: usa faixa salva no banco como fallback
+    faixaCalculada = lead.faixa;
+  } else {
+    // Fallback antigo por travas
+    if (!config?.faixas_score?.travas?.length) return null;
+    const { travas, vermelho_se_todas } = config.faixas_score;
+    const travaAtivada = (trava: Trava): boolean => {
+      const valor = String(lead[trava.campo] || '').toLowerCase();
+      return valor.includes(trava.contem.toLowerCase());
+    };
+    const travaCount = travas.filter(travaAtivada).length;
+    if (travaCount === 0) faixaCalculada = 'verde';
+    else if (vermelho_se_todas && travaCount === travas.length) faixaCalculada = 'vermelho';
+    else faixaCalculada = 'amarelo';
   }
 
-  // 3. Fallback: lógica antiga por travas (leads sem score)
-  if (!config?.faixas_score?.travas?.length) return null;
+  // 2. Regra de situação limitante — SEMPRE aplicada depois
+  // Desempregada / autônoma / do lar → máximo amarelo, nunca verde
+  if (faixaCalculada === 'verde') {
+    const situacao = getSituacaoAtual(lead);
+    const ehLimitante = SITUACOES_LIMITANTES.some(s => situacao.includes(s));
+    if (ehLimitante) return 'amarelo';
+  }
 
-  const { travas, vermelho_se_todas } = config.faixas_score;
-
-  const travaAtivada = (trava: Trava): boolean => {
-    const valor = String(lead[trava.campo] || '').toLowerCase();
-    return valor.includes(trava.contem.toLowerCase());
-  };
-
-  const travaCount = travas.filter(travaAtivada).length;
-
-  if (travaCount === 0) return 'verde';
-  if (vermelho_se_todas && travaCount === travas.length) return 'vermelho';
-  return 'amarelo';
+  return faixaCalculada;
 }
 
 export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado', 'Contrato/App'];

@@ -126,6 +126,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile 
   onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void; isMobile: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
+  const { configuracoes } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const color = avatarColor(lead.nome);
@@ -135,7 +136,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile 
   const motivo = (lead as any).motivo_reprovacao as string | undefined;
   const l = lead as any;
   const score = l.score != null ? Number(l.score) : null;
-  const faixa = l.faixa || null;
+  const faixa = calcularFaixa(lead, configuracoes!) ?? l.faixa;
 
   return (
     <div ref={setNodeRef} {...attributes} {...listeners}

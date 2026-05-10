@@ -32,7 +32,7 @@ const COLLAPSE_KEY = 'sidebar_collapsed';
 
 interface SidebarProps {
   leadCount?: number;
-  onMobileClose?: () => void; // chamado pela gaveta mobile para fechar
+  onMobileClose?: () => void;
 }
 
 export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
@@ -62,7 +62,6 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
     fetchBadges();
   }, [orgId, location.pathname]);
 
-  // collapsed só funciona no desktop
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === 'true'; } catch { return false; }
   });
@@ -88,7 +87,6 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
       if (profName !== displayName) updates.data = { full_name: profName };
       if (profEmail !== userEmail) updates.email = profEmail;
       if (profPass.trim()) updates.password = profPass.trim();
-
       const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
       toast.success('Perfil atualizado com sucesso!');
@@ -98,7 +96,6 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
     }
     setProfLoading(false);
   }
-
 
   function toggle() {
     const next = !collapsed;
@@ -117,7 +114,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const userEmail = user?.email || '';
   const userInitial = displayName[0]?.toUpperCase() || 'U';
 
-  const isMobileDrawer = !!onMobileClose; // se tem onMobileClose, está em modo gaveta mobile
+  const isMobileDrawer = !!onMobileClose;
 
   const sideBg = isDark ? '#0f0f11' : '#ffffff';
   const sideBdr = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
@@ -125,7 +122,6 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const mutClr = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.58)';
   const hovBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
 
-  // Em mobile sempre expandido (sem collapsed)
   const isCollapsed = isMobileDrawer ? false : collapsed;
 
   function NavGroup({ label, items }: { label: string; items: typeof NAV_MAIN }) {
@@ -214,22 +210,13 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         flexShrink: 0,
       }}>
         {isCollapsed ? (
-          /* Badge FL desktop collapsed — fundo escuro no light, claro no dark */
           <button onClick={toggle} title="Expandir" style={{
             width: '34px', height: '34px', borderRadius: '9px',
             background: isDark ? '#ffffff' : '#2a2c2b',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: 'none', cursor: 'pointer', flexShrink: 0,
-            transition: 'background 0.12s, box-shadow 0.12s',
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(42,44,43,0.18)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-          >
-            <span style={{
-              fontSize: '11px', fontWeight: 800,
-              color: isDark ? '#090909' : '#ffffff',
-              letterSpacing: '-0.03em',
-            }}>FL</span>
+          }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: isDark ? '#090909' : '#ffffff', letterSpacing: '-0.03em' }}>FL</span>
           </button>
         ) : (
           <>
@@ -242,19 +229,14 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
             </div>
-            {/* Botão recolher — só aparece no desktop */}
             {!isMobileDrawer && (
               <button onClick={toggle} style={{
                 width: '26px', height: '26px', borderRadius: '7px',
                 background: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
                 border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.12s', flexShrink: 0,
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'; }}
-                title="Recolher sidebar"
-              >
+                flexShrink: 0,
+              }} title="Recolher sidebar">
                 <ChevronLeft style={{ width: '13px', height: '13px', color: mutClr }} />
               </button>
             )}
@@ -304,8 +286,8 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           </div>
         </div>
 
-        {/* User info — expandido */}
-        {!isCollapsed && (
+        {/* User info — só aparece expandido E não é drawer mobile */}
+        {!isCollapsed && !isMobileDrawer && (
           <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
             <div
               onClick={openProfile}
@@ -346,34 +328,50 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           </div>
         )}
 
-        {/* Collapsed — só ícone sair */}
-        {isCollapsed && (
+        {/* Mobile drawer — user info + UM único botão Sair */}
+        {isMobileDrawer && (
+          <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px', borderRadius: '8px', marginBottom: '4px' }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '50%',
+                background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0,
+              }}>
+                {userInitial}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isDark ? '#f4f4f5' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayName}
+                </p>
+                <p style={{ margin: 0, fontSize: '11px', color: mutClr, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {userEmail}
+                </p>
+              </div>
+            </div>
+            {/* UM ÚNICO botão Sair no mobile */}
+            <button onClick={signOut} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '10px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+              background: isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)',
+              color: isDark ? 'rgba(255,80,80,0.9)' : 'rgba(200,0,0,0.75)',
+              fontSize: '13.5px', fontWeight: 600, marginTop: '4px',
+              fontFamily: 'inherit', textAlign: 'left',
+            }}>
+              <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8, flexShrink: 0 }} /> Sair
+            </button>
+          </div>
+        )}
+
+        {/* Collapsed desktop — só ícone sair */}
+        {isCollapsed && !isMobileDrawer && (
           <button onClick={signOut} title="Sair" style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: '10px 0', borderRadius: '8px', border: 'none', cursor: 'pointer',
             background: 'transparent',
             color: isDark ? 'rgba(255,80,80,0.75)' : 'rgba(200,0,0,0.6)',
-            transition: 'background 0.12s',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <LogOut style={{ width: '16px', height: '16px', strokeWidth: 1.8 }} />
-          </button>
-        )}
-
-        {/* Mobile drawer — botão Sair sempre visível no rodapé */}
-        {isMobileDrawer && (
-          <button onClick={signOut} style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '10px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-            background: isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)',
-            color: isDark ? 'rgba(255,80,80,0.9)' : 'rgba(200,0,0,0.75)',
-            fontSize: '13.5px', fontWeight: 600, marginTop: '4px',
-            fontFamily: 'inherit', textAlign: 'left',
-            transition: 'background 0.12s',
           }}>
-            <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8, flexShrink: 0 }} /> Sair
+            <LogOut style={{ width: '16px', height: '16px', strokeWidth: 1.8 }} />
           </button>
         )}
       </div>
@@ -386,45 +384,26 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
             background: isDark ? '#111113' : '#ffffff', border: `1px solid ${isDark ? '#27272a' : '#e5e7eb'}`,
             borderRadius: '16px', padding: '24px', zIndex: 1001, width: '90%', maxWidth: '360px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.2)', fontFamily: 'inherit'
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)', fontFamily: 'inherit',
           }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: isDark ? '#fff' : '#111' }}>Editar Perfil</h3>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nome</label>
-                <input
-                  type="text" value={profName} onChange={e => setProfName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
-                />
+                <input type="text" value={profName} onChange={e => setProfName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Email</label>
-                <input
-                  type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
-                />
+                <input type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nova Senha (opcional)</label>
-                <input
-                  type="password" value={profPass} onChange={e => setProfPass(e.target.value)} placeholder="Deixe em branco para não alterar"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '14px', outline: 'none' }}
-                />
+                <input type="password" value={profPass} onChange={e => setProfPass(e.target.value)} placeholder="Deixe em branco para não alterar" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setShowProfile(false)}
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: 'transparent', color: isDark ? '#fff' : '#111', fontWeight: 500, cursor: 'pointer' }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleUpdateProfile} disabled={profLoading}
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: profLoading ? 'default' : 'pointer', opacity: profLoading ? 0.7 : 1 }}
-              >
+              <button onClick={() => setShowProfile(false)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: 'transparent', color: isDark ? '#fff' : '#111', fontWeight: 500, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleUpdateProfile} disabled={profLoading} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: profLoading ? 'default' : 'pointer', opacity: profLoading ? 0.7 : 1 }}>
                 {profLoading ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
@@ -434,4 +413,3 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
     </aside>
   );
 }
-

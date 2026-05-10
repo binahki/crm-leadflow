@@ -9,6 +9,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
+import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { safeName, safeInitials } from '@/utils/safeName';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 
@@ -204,6 +205,7 @@ export default function Dashboard() {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const dark = theme === 'dark';
+  const { configuracoes } = useAppStore();
 
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   useEffect(() => {
@@ -534,7 +536,7 @@ export default function Dashboard() {
                       <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
                         {safeInitials(safeNome)}
                       </div>
-                      {(()=>{ const faixaLead = (lead.faixa as string) || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
+                      {(()=>{ const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <p style={{ fontSize:'12.5px', fontWeight:500, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0,2).join(' ') || 'Lead'}</p>
