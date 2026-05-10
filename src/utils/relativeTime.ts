@@ -46,7 +46,7 @@ export function formatDate(dateStr: string | null | undefined): string {
 }
 
 export function formatarWhatsapp(wa: string | null | undefined): string {
-  if (!wa) return '';
+  if (!wa || typeof wa !== 'string') return String(wa || '');
   const n = wa.replace(/\D/g, '');
   if (n.length === 11) return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
   if (n.length === 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`;

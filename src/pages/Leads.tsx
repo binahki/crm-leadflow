@@ -38,7 +38,7 @@ const STATUS_OPTIONS = [
 ];
 
 function getInitials(name: string) {
-  if (!name) return '?';
+  if (!name || typeof name !== 'string') return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -204,7 +204,7 @@ function CustomDateModal({ dark, customFrom, customTo, setCustomFrom, setCustomT
 }
 
 function PhoneInput({ value, onChange, style: st }: { value:string; onChange:(v:string)=>void; style?:React.CSSProperties }) {
-  return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={e => onChange(maskPhone(e.target.value))} style={st}/>;
+  return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={e => onChange(e.target.value)} style={st}/>;
 }
 
 function DeleteConfirmDialog({ count, onConfirm, onCancel, loading, dark }: { count:number; onConfirm:()=>void; onCancel:()=>void; loading:boolean; dark:boolean }) {
@@ -352,7 +352,7 @@ function LeadsPage() {
       r=r.filter(l=>{
         try {
           const la=l as any;
-          const utm=((la.utm_campaign||'')).toLowerCase().split('|')[0].trim();
+          const utm=String(la.utm_campaign||'').toLowerCase().split('|')[0].trim();
           const camp=campanhaFiltro.toLowerCase().split('|')[0].trim().slice(0,20);
           return utm.includes(camp);
         } catch { return false; }
