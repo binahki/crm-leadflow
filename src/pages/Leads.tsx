@@ -40,6 +40,7 @@ const STATUS_OPTIONS = [
 function getInitials(name: string) {
   if (!name || typeof name !== 'string') return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
@@ -62,7 +63,7 @@ function parseLeadDate(str?: string | null): Date {
 
 function leadDateBR(str?: string | null): string {
   const d = parseLeadDate(str);
-  if (d.getTime() === 0) return '';
+  if (isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
 }
 
@@ -97,7 +98,7 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
 function formatEntrada(str?: string | null): string {
   if (!str) return '—';
   const d = parseLeadDate(str);
-  if (d.getTime() === 0) return '—';
+  if (isNaN(d.getTime())) return '—';
   return `${d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', timeZone:'America/Sao_Paulo' })} ${d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo' })}`;
 }
 
@@ -434,7 +435,8 @@ function LeadsPage() {
   const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
   return (
-    <AppLayout leadCount={allLeads.length}>
+    <ErrorBoundary>
+      <AppLayout leadCount={allLeads.length}>
       <div style={{ padding:isMobile?'12px':'28px', background:bg, minHeight:'100vh' }}>
 
         {/* Header */}
