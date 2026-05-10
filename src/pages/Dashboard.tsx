@@ -359,22 +359,22 @@ export default function Dashboard() {
       <div style={{ padding:pad, background:bg, minHeight:'100vh', overflowX:'hidden' }}>
 
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'10px' }}>
+        <div style={{ display:'flex', flexDirection:isMobile?'column':'row', alignItems:'flex-start', justifyContent:'space-between', marginBottom:isMobile?'14px':'20px', gap:'10px' }}>
           <div>
-            <h1 style={{ fontSize:isMobile?'20px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:'8px' }}>
+            <h1 style={{ fontSize:isMobile?'18px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:0, display:'flex', alignItems:'center', gap:'8px' }}>
               {getGreeting()}{primeiroNome?`, ${primeiroNome}`:''}!{' '}
-              <img src="/wave.png" alt="👋" style={{ width:'26px', height:'26px', objectFit:'contain' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
+              <img src="/wave.png" alt="👋" style={{ width:'22px', height:'22px', objectFit:'contain' }} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
             </h1>
-            <p style={{ fontSize:'13px', color:txtLow, marginTop:'4px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
+            <p style={{ fontSize:'12px', color:txtLow, marginTop:'3px' }}>{new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</p>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', width:isMobile?'100%':'auto' }}>
             <div style={{ position:'relative' }} ref={dropRef}>
               <button onClick={()=>{setShowDropdown(v=>!v);setShowCustom(false);}} style={btnBase}>
                 {periodLabel}
                 <ChevronDown style={{ width:'14px', height:'14px', color:txtLow, transform:showDropdown?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
               </button>
               {showDropdown && (
-                <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'12px', padding:'4px', minWidth:'168px', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)' }}>
+                <div style={{ position:'absolute', right:isMobile?'auto':0, left:isMobile?0:'auto', top:'calc(100% + 6px)', background:cardBg, border:`1px solid ${border}`, borderRadius:'12px', padding:'4px', minWidth:'160px', maxWidth:'calc(100vw - 32px)', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 32px rgba(0,0,0,0.1)' }}>
                   {PERIOD_FILTERS.map(f=>(
                     <button key={f.value} onClick={()=>selectPeriod(f.value)} style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:'none', background:selectedPeriod===f.value?(dark?'rgba(255,255,255,0.08)':'#eff6ff'):'transparent', color:selectedPeriod===f.value?(dark?'#60a5fa':'#2563eb'):txtMid, fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
                       {f.label}
@@ -420,15 +420,15 @@ export default function Dashboard() {
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
             { label:'Leads', value:loading?'…':String(filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length), trend:'+', up:true, sub:'Fonte FB' },
             { label:'CPL Ads', value:metaLoading?'…':(()=>{const fb=filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length;return fb>0?`R$ ${safe(spend/fb).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —';})(), trend:'Real Time', up:true, sub:'Base Sistema' },
-            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?'custo/revendedora':'conversão' },
+            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?(isMobile?'↑':`R$ ${safe(spend/approved).toFixed(2)}`):`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?(isMobile?`R$${safe(spend/approved).toLocaleString('pt-BR',{maximumFractionDigits:0})}/rev`:`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`):'conversão' },
           ].map((c,i)=>(
-            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-              <p style={{ fontSize:'11px', color:txtLow, marginBottom:'4px' }}>{c.label}</p>
-              <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.03em', margin:'0 0 6px' }}>{c.value}</p>
-              <p style={{ fontSize:'11px', display:'flex', alignItems:'center', gap:'3px', margin:0 }}>
-                {c.up?<TrendingUp style={{ width:'11px', height:'11px', color:'#10b981' }}/>:<TrendingDown style={{ width:'11px', height:'11px', color:'#ef4444' }}/>}
-                <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444' }}>{c.trend}</span>
-                <span style={{ color:txtLow, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.sub}</span>
+            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, overflow:'hidden', minWidth:0 }}>
+              <p style={{ fontSize:'11px', color:txtLow, marginBottom:'4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.label}</p>
+              <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</p>
+              <p style={{ fontSize:'10px', display:'flex', alignItems:'center', gap:'2px', margin:0, overflow:'hidden' }}>
+                {c.up?<TrendingUp style={{ width:'10px', height:'10px', color:'#10b981', flexShrink:0 }}/>:<TrendingDown style={{ width:'10px', height:'10px', color:'#ef4444', flexShrink:0 }}/>}
+                <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444', flexShrink:0 }}>{c.trend}</span>
+                <span style={{ color:txtLow, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:isMobile?'10px':'11px' }}>{c.sub}</span>
               </p>
             </div>
           ))}
