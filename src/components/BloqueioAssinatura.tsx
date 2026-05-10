@@ -4,7 +4,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { supabase } from '@/integrations/supabase/client';
 
 const ADMIN_EMAIL = 'admin@floow.com';
-const STRIPE_URL = 'https://buy.stripe.com/test_4gMaEX6Nh8xde521NX8EM00';
+const STRIPE_URL = 'https://buy.stripe.com/aFacN5812gQm3fQcxe87K00';
 const WA_SUPORTE = 'https://wa.me/5519993929168';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
