@@ -168,9 +168,7 @@ function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: strin
 
 function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
   const { configuracoes } = useAppStore();
-  const faixa = configuracoes 
-    ? (calcularFaixa(lead, configuracoes) ?? (lead as any).faixa)
-    : (lead as any).faixa;
+  const faixa = calcularFaixa(lead, configuracoes!) ?? (lead as any).faixa;
   if (!faixa || faixa === 'vermelho') return null;
   return <div style={{ width:'10px', height:'10px', borderRadius:'50%', flexShrink:0, background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}` }}/>;
 }
@@ -665,7 +663,7 @@ function LeadsPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3" style={{whiteSpace:'nowrap'}}>
-                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={(configuracoes ? calcularFaixa(lead, configuracoes) : null) ?? la.faixa} dark={dark}/>
+                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                       </td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</td>
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):'—'}</td>

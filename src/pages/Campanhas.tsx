@@ -676,31 +676,55 @@ export default function CampanhasPage() {
             )}
             {/* Ações executadas */}
             {aiLog.acoes_executadas?.length>0&&(
-              <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                 {aiLog.acoes_executadas.map((acao:any,i:number)=>{
-                  const isUp=acao.acao==='aumentar_budget';
-                  const isDown=acao.acao==='diminuir_budget';
-                  const isPause=acao.acao==='pausar';
-                  const color=isUp?'#10b981':isDown?'#f97316':'#ef4444';
-                  const bgColor=isUp?(dark?'rgba(16,185,129,0.08)':'#f0fdf4'):isDown?(dark?'rgba(249,115,22,0.08)':'#fff7ed'):(dark?'rgba(239,68,68,0.08)':'#fef2f2');
-                  const borderColor=isUp?'rgba(16,185,129,0.2)':isDown?'rgba(249,115,22,0.2)':'rgba(239,68,68,0.2)';
+                  const isBudget = acao.tipo==='ajustar_budget_campanha'||acao.tipo==='ajustar_budget_adset';
+                  const isUp     = isBudget&&acao.direcao==='aumento';
+                  const isDown   = isBudget&&acao.direcao==='reducao';
+                  const isPause  = typeof acao.tipo==='string'&&acao.tipo.startsWith('pausar_');
+                  const hasError = acao.ok===false;
+
+                  const acaoColor = isUp?'#10b981':isDown?'#ef4444':'#71717a';
+                  const seta      = isUp?'↑':isDown?'↓':'⏸';
+                  const valorStr  = isBudget&&acao.novo_budget!=null
+                    ? `${seta} R$${acao.novo_budget}/dia`
+                    : seta;
+
                   return(
-                    <div key={i} style={{padding:'11px 14px',borderRadius:'10px',background:bgColor,border:`1px solid ${borderColor}`}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:acao.motivo?'5px':'0'}}>
-                        {isUp&&<TrendingUp style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
-                        {isDown&&<TrendingDown style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
-                        {isPause&&<Pause style={{width:'14px',height:'14px',color,flexShrink:0}}/>}
-                        <span style={{fontSize:'13px',fontWeight:700,color:dark?'#f4f4f5':'#111827'}}>{acao.campanha_nome}</span>
+                    <div key={i} style={{
+                      display:'flex',alignItems:'flex-start',gap:'10px',
+                      padding:'9px 12px',borderRadius:'9px',
+                      background:dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)',
+                      border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,
+                    }}>
+                      {/* Seta/valor colorido */}
+                      <span style={{
+                        fontSize:'12.5px',fontWeight:700,color:acaoColor,
+                        whiteSpace:'nowrap',flexShrink:0,lineHeight:'18px',
+                        minWidth:'70px',
+                      }}>{valorStr}</span>
+
+                      {/* Nome + motivo + badge erro */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+                          <span style={{
+                            fontSize:'12.5px',fontWeight:600,
+                            color:isPause?(dark?'#71717a':'#9ca3af'):(dark?'#f4f4f5':'#111827'),
+                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                          }}>{acao.nome||acao.campanha_nome||'—'}</span>
+                          {hasError&&(
+                            <span style={{
+                              fontSize:'10px',fontWeight:700,color:'#ef4444',
+                              background:dark?'rgba(239,68,68,0.12)':'#fef2f2',
+                              border:'1px solid rgba(239,68,68,0.3)',
+                              padding:'1px 6px',borderRadius:'4px',flexShrink:0,lineHeight:'16px',
+                            }}>ERRO</span>
+                          )}
+                        </div>
+                        {acao.motivo&&(
+                          <p style={{margin:'2px 0 0',fontSize:'11.5px',color:dark?'#52525b':'#9ca3af',lineHeight:1.45,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{acao.motivo}</p>
+                        )}
                       </div>
-                      {acao.novo_budget&&(
-                        <p style={{margin:'0 0 4px',fontSize:'13px',fontWeight:600,color,paddingLeft:'22px'}}>R$ {acao.novo_budget}/dia</p>
-                      )}
-                      {isPause&&(
-                        <p style={{margin:'0 0 4px',fontSize:'13px',fontWeight:600,color,paddingLeft:'22px'}}>pausada</p>
-                      )}
-                      {acao.motivo&&(
-                        <p style={{margin:0,fontSize:'12px',color:dark?'#71717a':'#6b7280',lineHeight:1.5,paddingLeft:'22px'}}>{acao.motivo}</p>
-                      )}
                     </div>
                   );
                 })}
