@@ -265,7 +265,28 @@ export default function Dashboard() {
   useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
 
-  const fetchLeads = async (): Promise<Lead[]> => { if(!orgId){setLoading(false);return[];} setLoading(true); setAllLeads([]); const{data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false}).eq('org_id',orgId).limit(500); if(error)console.error('[Dashboard]',error.message); const leads=(data as Lead[])||[]; setAllLeads(leads); setLoading(false); return leads; };
+  const fetchLeads = async (): Promise<Lead[]> => {
+    if (!orgId) { setLoading(false); return []; }
+    setLoading(true);
+    setAllLeads([]);
+    let allData: Lead[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads').select('*').eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) { console.error('[Dashboard]', error.message); break; }
+      if (!data || data.length === 0) break;
+      allData = [...allData, ...data as Lead[]];
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    setAllLeads(allData);
+    setLoading(false);
+    return allData;
+  };
   const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaLoading(false);return;} const key=`meta_dash_${orgId}_${selectedPeriod}`; const cached=getMetaCache(key); if(cached){setMetaMetrics(cached.metrics);setMetaCampaigns(cached.campaigns);setMetaLoading(false);setMetaError(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaCache(key,{metrics,campaigns}); setMetaMetrics(metrics); setMetaCampaigns(campaigns); setMetaError(false); } catch { setMetaError(true); } setMetaLoading(false); };
 
   useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId,location.key]); // eslint-disable-line

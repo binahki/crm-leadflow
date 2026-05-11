@@ -49,26 +49,37 @@ function deveIgnorar(chave: string, valor: unknown): boolean {
   const c = chave.toLowerCase();
   if (CAMPOS_IGNORADOS.has(c)) return true;
   if (/^\d+$/.test(chave)) return true;
-  if (c.startsWith('tracking.') || c.startsWith('score.') || c.startsWith('responses.')) return true;
+  // Ignora qualquer chave que comece com score, responses. ou tracking.
+  if (c.startsWith('score') || c.startsWith('responses.') || c.startsWith('tracking.')) return true;
   // IDs técnicos da Inlead: exatamente 6 chars alfanuméricos
   if (/^[a-zA-Z0-9]{6}$/.test(chave)) return true;
   if (c.endsWith('_at') || c.endsWith('_id')) return true;
   if (valor === 'clicked' || valor === 'loaded') return true;
-  // Strings de resposta encodada (ex: "1|2|*")
-  if (typeof valor === 'string' && /^[\d|*\s]+$/.test(valor)) return true;
-  if (typeof valor === 'string' && valor.startsWith('http')) return true;
-  // Valores muito longos (fbclid, userAgent, etc)
-  if (typeof valor === 'string' && valor.length > 200) return true;
+  // Valores nulos/vazios
   if (valor === null || valor === undefined || valor === '') return true;
+  const str = String(valor);
+  // Letra maiúscula solta (A, B, C, D…) — código de opção
+  if (/^[A-Z]$/.test(str)) return true;
+  // Número solto de um dígito (0–9) — índice de opção
+  if (/^[0-9]$/.test(str)) return true;
+  // Strings de resposta encodada (ex: "1|2|*")
+  if (/^[\d|*\s]+$/.test(str)) return true;
+  if (str.startsWith('http')) return true;
+  // Valores muito longos (fbclid, userAgent, etc)
+  if (str.length > 200) return true;
   return false;
 }
 
 function formatKey(key: string): string {
+  // Chaves opcoes_: exibe como "OPCOES YH5VJX" sem strip de prefixo
+  if (key.toLowerCase().startsWith('opcoes_')) {
+    return key.replace(/_/g, ' ').toUpperCase();
+  }
   let k = key;
   for (const prefix of STRIP_PREFIXES) {
     if (k.startsWith(prefix)) { k = k.slice(prefix.length); break; }
   }
-  return k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return k.replace(/_/g, ' ').toUpperCase();
 }
 
 function formatValue(val: unknown): string {

@@ -275,8 +275,21 @@ export default function KanbanPage() {
   useEffect(() => {
     if (!orgReady || !orgId) return;
     setLeads([]);
-    supabase.from('leads').select('*').eq('org_id', orgId).limit(500)
-      .then(({ data }) => { if (data) setLeads(data as unknown as Lead[]); });
+    (async () => {
+      let allData: Lead[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('leads').select('*').eq('org_id', orgId)
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allData = [...allData, ...data as unknown as Lead[]];
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setLeads(allData);
+    })();
   }, [orgId, orgReady]); // eslint-disable-line
 
   useEffect(() => {

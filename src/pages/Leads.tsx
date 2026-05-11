@@ -352,11 +352,19 @@ function LeadsPage() {
     if (!orgReady || !orgId) return;
     setIsLoading(true);
     setAllLeads([]);
-    const { data, error } = await supabase
-      .from('leads').select('*').order('created_at', { ascending: false })
-      .eq('org_id', orgId).limit(500);
-    if (error) toast.error(`Erro: ${error.message}`);
-    else if (data) setAllLeads(data as unknown as Lead[]);
+    const PAGE = 1000;
+    let from = 0;
+    let all: Lead[] = [];
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads').select('*').order('created_at', { ascending: false })
+        .eq('org_id', orgId).range(from, from + PAGE - 1);
+      if (error) { toast.error(`Erro: ${error.message}`); break; }
+      if (data?.length) all = all.concat(data as unknown as Lead[]);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    setAllLeads(all);
     setIsLoading(false);
   }, [orgId, orgReady]);
 
