@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
-  Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2,
+  Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2, ClipboardList,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +23,7 @@ const NAV_INT = [
   { icon: Webhook, label: 'Webhook', href: '/webhook', badge: false },
   { icon: MessageCircle, label: 'WhatsApp', href: '/whatsapp', badge: false },
   { icon: BarChart3, label: 'Meta Ads', href: '/meta-ads', badge: false },
+  { icon: ClipboardList, label: 'Quiz', href: '/quiz-builder', badge: false },
 ];
 const NAV_CONTA = [
   { icon: Settings, label: 'Configurações', href: '/configuracoes', badge: false },
