@@ -326,15 +326,16 @@ export default function QuizPublico() {
     );
   }
 
-  const HEADER_H = 72;
+  const HEADER_H = phase === 'quiz' ? 88 : 74;
 
   return (
     <div style={{
       minHeight: '100vh',
       background: '#fff',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
     }}>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes slideIn { from { opacity:0; transform:translateX(24px); } to { opacity:1; transform:translateX(0); } }
         @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn  { from { opacity:0; transform:translateY(8px);  } to { opacity:1; transform:translateY(0); } }
@@ -355,7 +356,7 @@ export default function QuizPublico() {
             <span style={{ fontSize: '15px', fontWeight: 700, color: '#111' }}>{quiz?.titulo}</span>
           )}
         </div>
-        <div style={{ height: '6px', background: '#e5e7eb', margin: '0', overflow: 'hidden' }}>
+        <div style={{ height: '8px', background: '#e5e7eb', margin: '0', overflow: 'hidden' }}>
           <div style={{
             height: '100%', background: primary,
             width: `${phase === 'capa' ? 0 : phase === 'quiz' ? Math.max(progress, 2) : 100}%`,
@@ -363,7 +364,14 @@ export default function QuizPublico() {
             transition: 'width 500ms ease-out',
           }} />
         </div>
-        <div style={{ height: '4px' }} />
+        {phase === 'quiz' && (
+          <div style={{ padding: '4px 24px 2px', textAlign: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 500 }}>
+              Etapa {currentIdx + 1} de {totalVisible}
+            </span>
+          </div>
+        )}
+        <div style={{ height: phase === 'quiz' ? '2px' : '6px' }} />
       </div>
 
       {/* ── BODY ─────────────────────────────────────────────────────────── */}
@@ -419,7 +427,7 @@ export default function QuizPublico() {
 
         {/* ══ QUIZ ══════════════════════════════════════════════════════════ */}
         {phase === 'quiz' && currentPergunta && (
-          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '20px 24px 140px' }}>
+          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px 140px' }}>
             <div key={questionKey} style={{ animation: 'slideIn 0.3s ease-out' }}>
 
               {/* Block badge */}
@@ -445,7 +453,7 @@ export default function QuizPublico() {
               )}
 
               {/* Question */}
-              <h2 style={{ fontSize: `${tokens.font.xl}px`, fontWeight: 700, color: '#111', lineHeight: 1.35, margin: '0 0 6px' }}>
+              <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '26px', fontWeight: 600, color: '#111', lineHeight: 1.3, margin: '0 0 6px' }}>
                 {currentPergunta.texto}
               </h2>
               {currentPergunta.subtexto && (
@@ -459,14 +467,13 @@ export default function QuizPublico() {
               <div>
                 {currentPergunta.opcoes.map(opcao => {
                   const isSelected = selectedOpcao === opcao.id;
-                  const emoji = opcao.emoji || emojiForText(opcao.texto);
                   return (
                     <button
                       key={opcao.id}
                       onClick={() => handleOpcaoClick(currentPergunta, opcao)}
                       disabled={!!selectedOpcao}
                       style={{
-                        width: '100%', padding: '16px 18px', marginBottom: '10px',
+                        width: '100%', padding: '15px 18px', marginBottom: '10px',
                         borderRadius: `${tokens.radius.md}px`,
                         border: `${isSelected ? '2px' : '1.5px'} solid ${isSelected ? primary : '#e2e8f0'}`,
                         background: isSelected ? hexRgba(primary, 0.08) : '#ffffff',
@@ -487,10 +494,12 @@ export default function QuizPublico() {
                         }
                       }}
                     >
-                      <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0, width: '24px', textAlign: 'center' }}>
-                        {emoji}
-                      </span>
-                      <span style={{ flex: 1, fontSize: `${tokens.font.base}px`, color: '#111', fontWeight: 500, lineHeight: 1.4 }}>
+                      {opcao.emoji && (
+                        <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0 }}>
+                          {opcao.emoji}
+                        </span>
+                      )}
+                      <span style={{ flex: 1, fontSize: '15px', color: '#111', fontWeight: 500, lineHeight: 1.4 }}>
                         {opcao.texto}
                       </span>
                       {isSelected && (
@@ -526,6 +535,16 @@ export default function QuizPublico() {
                 borderRadius: `${tokens.radius.md}px`, border: 'none',
                 background: '#111', color: '#fff',
                 fontSize: `${tokens.font.base}px`, fontWeight: 600, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
+                (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
               }}
             >
               Continuar →

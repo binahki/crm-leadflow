@@ -45,7 +45,7 @@ interface Bloco { id: string; quiz_id: string; titulo: string; ordem: number; em
 
 interface Pergunta {
   id: string; bloco_id: string; texto: string; ordem: number;
-  subtexto: string | null;
+  subtexto: string | null; tipo_resposta: string | null;
   condicao_pergunta_id: string | null; condicao_opcao_id: string | null;
 }
 
@@ -580,46 +580,82 @@ export default function QuizBuilderPage() {
   if (!quiz) {
     return (
       <AppLayout>
-        <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
-          <div style={{ maxWidth: '520px', width: '100%' }}>
-            <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '14px', lineHeight: 1 }}>📋</div>
-              <h1 style={{ fontSize: '22px', fontWeight: 700, color: textMain, marginBottom: '8px', letterSpacing: '-0.02em' }}>
+        <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', background: '#fff' }}>
+          <div style={{ maxWidth: '480px', width: '100%' }}>
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <h1 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '32px', fontWeight: 600, color: '#111', marginBottom: '10px', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
                 Crie seu quiz
               </h1>
-              <p style={{ fontSize: '14px', color: textMut, lineHeight: 1.65, maxWidth: '360px', margin: '0 auto' }}>
-                Qualifique leads automaticamente com um quiz personalizado.
+              <p style={{ fontSize: '14px', color: '#9ca3af', lineHeight: 1.6, maxWidth: '320px', margin: '0 auto' }}>
+                Escolha como deseja começar
               </p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <button onClick={() => handleCreateQuiz(true)} disabled={creating} style={{
-                padding: '24px 20px', borderRadius: '14px',
-                border: `2px solid #2563eb`, background: '#2563eb10', color: textMain,
-                cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left',
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '10px' }}>✨</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', color: '#2563eb' }}>Modelo Becker</div>
-                <div style={{ fontSize: '12px', color: textMut, lineHeight: 1.5 }}>Quiz de semijoias pronto para usar</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <button
+                onClick={() => handleCreateQuiz(true)} disabled={creating}
+                style={{
+                  padding: '32px 24px', borderRadius: '16px',
+                  border: '1.5px solid #e5e7eb', background: '#fff', color: '#111',
+                  cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                  transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
+                }}
+                onMouseEnter={e => {
+                  if (!creating) {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#2563eb';
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(37,99,235,0.12)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = '#e5e7eb';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)';
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                }}
+              >
+                <div style={{ fontSize: '28px', marginBottom: '14px' }}>🎯</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '6px', color: '#111' }}>Usar modelo Becker</div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', lineHeight: 1.55 }}>Quiz de semijoias pronto para usar</div>
               </button>
-              <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{
-                padding: '24px 20px', borderRadius: '14px',
-                border: `1.5px solid ${border}`, background: cardBg, color: textMain,
-                cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left',
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '10px' }}>📄</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px', color: textMain }}>Em branco</div>
-                <div style={{ fontSize: '12px', color: textMut, lineHeight: 1.5 }}>Comece do zero</div>
+              <button
+                onClick={() => handleCreateQuiz(false)} disabled={creating}
+                style={{
+                  padding: '32px 24px', borderRadius: '16px',
+                  border: '1.5px solid #e5e7eb', background: '#fff', color: '#111',
+                  cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                  transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
+                }}
+                onMouseEnter={e => {
+                  if (!creating) {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#111';
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = '#e5e7eb';
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)';
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                }}
+              >
+                <div style={{ fontSize: '28px', marginBottom: '14px' }}>📝</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '6px', color: '#111' }}>Começar em branco</div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', lineHeight: 1.55 }}>Comece do zero</div>
               </button>
             </div>
             {creating && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '20px', color: textMut, fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px', color: '#9ca3af', fontSize: '13px' }}>
                 <Loader2 style={{ width: '14px', height: '14px', animation: 'spin 0.7s linear infinite' }} />
                 Criando quiz...
               </div>
             )}
           </div>
         </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
       </AppLayout>
     );
   }
@@ -630,9 +666,9 @@ export default function QuizBuilderPage() {
     return {
       display: 'flex', alignItems: 'center', gap: '8px',
       padding: '9px 12px', cursor: 'pointer', userSelect: 'none',
-      borderLeft: `2px solid ${active ? '#2563eb' : 'transparent'}`,
+      borderLeft: `3px solid ${active ? '#2563eb' : 'transparent'}`,
       background: active ? '#eff6ff' : 'transparent',
-      color: active ? '#2563eb' : textMain,
+      color: active ? '#1d4ed8' : '#374151',
       fontSize: '13px', fontWeight: active ? 600 : 400,
       transition: tokens.transition,
     };
@@ -774,7 +810,18 @@ export default function QuizBuilderPage() {
       return (
         <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={lbl}>Texto da pergunta</label>
+            <label style={lbl}>Tipo de resposta</label>
+            <select
+              value={selectedPergunta.tipo_resposta || 'unica'}
+              onChange={e => updatePergunta(selectedPergunta.id, 'tipo_resposta', e.target.value)}
+              style={{ ...iStyle }}
+            >
+              <option value="unica">Seleção única</option>
+              <option value="multipla">Múltipla escolha</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Texto da etapa</label>
             <textarea value={selectedPergunta.texto}
               onChange={e => updatePergunta(selectedPergunta.id, 'texto', e.target.value)}
               placeholder="Digite a pergunta..."
@@ -824,12 +871,25 @@ export default function QuizBuilderPage() {
                     onChange={e => updateOpcao(op.id, 'pontos', Number(e.target.value))}
                     style={{ ...iStyle, width: '56px', textAlign: 'center', padding: '6px 4px', flexShrink: 0 }} />
 
-                  <label title="Reprova imediato" style={{ display: 'flex', alignItems: 'center', flexShrink: 0, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={op.reprova_imediato}
-                      onChange={e => updateOpcao(op.id, 'reprova_imediato', e.target.checked)}
-                      style={{ accentColor: '#ef4444', width: '13px', height: '13px' }} />
-                    <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 700, marginLeft: '3px', whiteSpace: 'nowrap' }}>Reprova</span>
-                  </label>
+                  <div
+                    title="Reprova imediato"
+                    onClick={() => updateOpcao(op.id, 'reprova_imediato', !op.reprova_imediato)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <div style={{
+                      width: '26px', height: '14px', borderRadius: 99,
+                      background: op.reprova_imediato ? '#ef4444' : (isDark ? '#333' : '#d1d5db'),
+                      position: 'relative', flexShrink: 0, transition: 'background 0.2s',
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: '2px',
+                        left: op.reprova_imediato ? '13px' : '2px',
+                        width: '10px', height: '10px', borderRadius: '50%', background: '#fff',
+                        transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 700, whiteSpace: 'nowrap' }}>Reprova</span>
+                  </div>
 
                   <button onClick={() => deleteOpcao(op.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
                     <Trash2 style={{ width: '12px', height: '12px' }} />
@@ -873,7 +933,7 @@ export default function QuizBuilderPage() {
                   style={{ ...iStyle }}>
                   <option value="">Selecionar pergunta...</option>
                   {flatPerguntas.filter(p => p.id !== selectedPergunta.id).map(p => (
-                    <option key={p.id} value={p.id}>{p.texto.slice(0, 60) || `Pergunta ${p.globalIndex}`}</option>
+                    <option key={p.id} value={p.id}>{p.texto.slice(0, 60) || `Etapa ${p.globalIndex}`}</option>
                   ))}
                 </select>
 
@@ -1048,14 +1108,14 @@ export default function QuizBuilderPage() {
                   <div key={perg.id} onClick={() => setSelectedPageId(perg.id)} style={{
                     display: 'flex', alignItems: 'center',
                     padding: '8px 12px 8px 12px', cursor: 'pointer',
-                    borderLeft: `2px solid ${active ? '#2563eb' : 'transparent'}`,
+                    borderLeft: `3px solid ${active ? '#2563eb' : 'transparent'}`,
                     background: active ? '#eff6ff' : 'transparent',
                     transition: tokens.transition,
                   }}>
                     <span style={{ fontSize: '11px', color: active ? '#93c5fd' : textMut, fontWeight: 600, minWidth: '18px', flexShrink: 0 }}>
                       {perg.globalIndex}.
                     </span>
-                    <span style={{ flex: 1, fontSize: '12px', color: active ? '#2563eb' : textMain, fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: 1, fontSize: '12px', color: active ? '#1d4ed8' : '#374151', fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {perg.texto ? perg.texto.slice(0, 35) : 'Sem texto'}
                     </span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0, marginLeft: '4px' }} onClick={e => e.stopPropagation()}>
@@ -1098,7 +1158,7 @@ export default function QuizBuilderPage() {
                 border: `1.5px dashed ${border}`, background: 'transparent',
                 color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                <Plus style={{ width: '12px', height: '12px' }} /> Pergunta
+                <Plus style={{ width: '12px', height: '12px' }} /> Etapa
               </button>
               <button onClick={() => window.open(quizLink, '_blank')} title="Abrir quiz" style={{
                 padding: '8px 10px', borderRadius: tokens.radius.sm,
@@ -1121,7 +1181,7 @@ export default function QuizBuilderPage() {
               </p>
               {/* Phone frame */}
               <div style={{
-                width: '270px', height: '540px', borderRadius: '38px',
+                width: '260px', height: '520px', borderRadius: '36px',
                 border: `9px solid ${isDark ? '#1c1c20' : '#1a1918'}`,
                 boxShadow: isDark
                   ? '0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)'
@@ -1163,7 +1223,7 @@ export default function QuizBuilderPage() {
                  selectedPageType === 'approval' ? '✅ Aprovação' :
                  selectedPageType === 'collect' ? '📝 Coleta' :
                  selectedPageType === 'rejection' ? '❌ Reprovação' :
-                 `Pergunta ${selectedPergunta?.globalIndex ?? ''}`}
+                 `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
               </span>
               <span style={{ fontSize: '11px', color: textMut, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {saving && <><Loader2 style={{ width: '11px', height: '11px', animation: 'spin 0.7s linear infinite' }} /> Salvando...</>}
