@@ -15,6 +15,9 @@ import {
   Plus, Trash2, Copy, ExternalLink,
   Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -60,6 +63,58 @@ async function compressImage(file: File, maxWidth = 400): Promise<string> {
   });
 }
 
+// ── Sortable pergunta card (dnd-kit) ─────────────────────────────────────────
+interface SortableCardProps {
+  perg: FlatPergunta;
+  isActive: boolean; isHovered: boolean; isDimmed: boolean;
+  primary: string; textMain: string; textMut: string; isDark: boolean;
+  onSelect: () => void; onHover: (id: string | null) => void;
+  onDuplicate: () => void; onDelete: () => void;
+}
+function SortablePerguntaCard({ perg, isActive, isHovered, isDimmed, primary, textMain, textMut, isDark, onSelect, onHover, onDuplicate, onDelete }: SortableCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: perg.id });
+  const dndStyle: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : undefined };
+  return (
+    <div ref={setNodeRef} style={dndStyle} {...attributes}>
+      <div onClick={onSelect} onMouseEnter={() => onHover(perg.id)} onMouseLeave={() => onHover(null)}
+        style={{
+          padding: '7px 8px 7px 4px', borderRadius: '10px', marginBottom: '2px', cursor: 'pointer',
+          border: `1.5px solid ${isActive ? primary : 'transparent'}`,
+          background: isActive ? hexToRgba(primary, 0.06) : isHovered ? (isDark ? '#1a1a1e' : '#f9fafb') : 'transparent',
+          opacity: isDragging ? 0.5 : isDimmed ? 0.4 : 1,
+          transition: 'background 0.1s, border-color 0.1s, opacity 150ms ease',
+          boxShadow: isActive ? `0 0 0 3px ${hexToRgba(primary, 0.12)}` : 'none',
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div {...listeners} style={{ color: textMut, cursor: isDragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none', display: 'flex' }}>
+            <GripVertical style={{ width: '12px', height: '12px' }} />
+          </div>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: isActive ? primary : textMut, flexShrink: 0 }}>{perg.globalIndex}.</span>
+          <span style={{ flex: 1, fontSize: '11px', fontWeight: isActive ? 700 : 500, color: isActive ? primary : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {perg.texto ? perg.texto.slice(0, 26) : 'Sem texto'}
+          </span>
+          {(isHovered || isActive) && (
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+              <button onClick={onDuplicate} title="Duplicar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#2a2a2e' : '#f3f4f6'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                <Copy style={{ width: '11px', height: '11px' }} />
+              </button>
+              <button onClick={onDelete} title="Excluir"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
+                <Trash2 style={{ width: '11px', height: '11px' }} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function QuizBuilderPage() {
   const { orgId, ready } = useOrgId();
@@ -93,9 +148,8 @@ export default function QuizBuilderPage() {
   const [editingBlocoId, setEditingBlocoId] = useState<string | null>(null);
   const [expandedColetaCampo, setExpandedColetaCampo] = useState<string | null>(null);
 
-  // DnD state
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // DnD sensors
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   // Preview state (interactive phone preview)
   const [previewPhase, setPreviewPhase] = useState<Phase>('capa');
@@ -235,13 +289,15 @@ export default function QuizBuilderPage() {
     saveTimers.current[key] = setTimeout(async () => {
       setSaving(true); setSavedRecently(false);
       try {
+        console.log('[debounce] executando:', key);
         await fn();
+        console.log('[debounce] sucesso:', key);
         setSaving(false); setSavedRecently(true);
         if (savedRecentlyTimer.current) clearTimeout(savedRecentlyTimer.current);
         savedRecentlyTimer.current = setTimeout(() => setSavedRecently(false), 2000);
       } catch (err) {
+        console.error('[debounce] ERRO:', key, err);
         setSaving(false);
-        console.error('[autosave error]', key, err);
         toast.error('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
       }
     }, delay);
@@ -387,42 +443,22 @@ export default function QuizBuilderPage() {
     toast.success('Etapa duplicada');
   }
 
-  // BUG 2 FIX: reorder entire bloco array sequentially
-  async function swapByDrag(idA: string, idB: string) {
+  // DnD reorder via @dnd-kit
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleDragEnd(event: any) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const idA = active.id as string;
+    const idB = over.id as string;
     const pergA = flatPerguntas.find(p => p.id === idA);
     const pergB = flatPerguntas.find(p => p.id === idB);
-    if (!pergA || !pergB || pergA.bloco_id !== pergB.bloco_id) {
-      toast.error('Só é possível reordenar etapas dentro do mesmo bloco');
-      return;
-    }
-    const blocoId = pergA.bloco_id;
-    const blocoPergs = [...(perguntas[blocoId] || [])].sort((a, b) => a.ordem - b.ordem);
-    const idxA = blocoPergs.findIndex(p => p.id === idA);
-    const idxB = blocoPergs.findIndex(p => p.id === idB);
-    if (idxA === -1 || idxB === -1) return;
-
-    // Move idA to position of idB
-    const reordered = [...blocoPergs];
-    const [moved] = reordered.splice(idxA, 1);
-    reordered.splice(idxB, 0, moved);
-
-    // Assign sequential orders
-    const updates = reordered.map((p, i) => ({ id: p.id, ordem: i + 1 }));
-
-    // Update local state immediately
-    setPerguntas(prev => ({
-      ...prev,
-      [blocoId]: prev[blocoId].map(p => {
-        const u = updates.find(x => x.id === p.id);
-        return u ? { ...p, ordem: u.ordem } : p;
-      }),
-    }));
-
-    // Batch update DB
-    for (const u of updates) {
-      const { error } = await db.from('quiz_perguntas').update({ ordem: u.ordem }).eq('id', u.id);
-      if (error) { toast.error(`Erro ao reordenar: ${error.message}`); await loadData(); return; }
-    }
+    if (!pergA || !pergB || pergA.bloco_id !== pergB.bloco_id) return;
+    const blocoPergs = [...(perguntas[pergA.bloco_id] || [])].sort((a, b) => a.ordem - b.ordem);
+    const oldIndex = blocoPergs.findIndex(p => p.id === idA);
+    const newIndex = blocoPergs.findIndex(p => p.id === idB);
+    const reordered = arrayMove(blocoPergs, oldIndex, newIndex).map((p, i) => ({ ...p, ordem: i + 1 }));
+    setPerguntas(prev => ({ ...prev, [pergA.bloco_id]: reordered }));
+    await Promise.all(reordered.map(p => db.from('quiz_perguntas').update({ ordem: p.ordem }).eq('id', p.id)));
   }
 
   function updatePergunta(id: string, field: string, value: string | null) {
@@ -653,21 +689,21 @@ export default function QuizBuilderPage() {
                   {quiz.capa_imagem_url ? (
                     <div>
                       <div style={{ position: 'relative' }}>
-                        <img src={quiz.capa_imagem_url} alt="" style={{ width: '100%', height: `${Math.round((quiz.capa_imagem_altura || 200) * 90 / 200)}px`, objectFit: 'cover', borderRadius: tokens.radius.sm, display: 'block' }} />
+                        <img src={quiz.capa_imagem_url} alt="" style={{ width: '100%', height: `${Math.round((quiz.capa_imagem_height || 200) * 90 / 200)}px`, objectFit: 'cover', borderRadius: tokens.radius.sm, display: 'block' }} />
                         <button onClick={() => updateQuizField('capa_imagem_url', null)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <X style={{ width: '12px', height: '12px' }} />
                         </button>
                       </div>
                       <div style={{ marginTop: '8px' }}>
-                        <label style={lbl}>Altura da imagem <span style={{ fontWeight: 400 }}>{quiz.capa_imagem_altura || 200}px</span></label>
+                        <label style={lbl}>Altura da imagem <span style={{ fontWeight: 400 }}>{quiz.capa_imagem_height || 200}px</span></label>
                         <input type="range" min={80} max={400} step={10}
-                          value={quiz.capa_imagem_altura || 200}
+                          value={quiz.capa_imagem_height || 200}
                           onChange={e => {
                             const val = Number(e.target.value);
                             const qId = quiz.id;
-                            setQuiz(q => q ? { ...q, capa_imagem_altura: val } : q);
-                            debounce('quiz_capa_imagem_altura', async () => {
-                              const { error } = await db.from('quizzes').update({ capa_imagem_altura: val }).eq('id', qId);
+                            setQuiz(q => q ? { ...q, capa_imagem_height: val } : q);
+                            debounce('quiz_capa_imagem_height', async () => {
+                              const { error } = await db.from('quizzes').update({ capa_imagem_height: val }).eq('id', qId);
                               if (error) throw new Error(error.message);
                             }, 500);
                           }}
@@ -742,6 +778,18 @@ export default function QuizBuilderPage() {
                     )}
                   </div>
                   <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta botões Iniciar, Continuar e Enviar</p>
+                </div>
+                <div>
+                  <label style={lbl}>Cor de fundo</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="color" value={quiz.cor_fundo || '#ffffff'}
+                      onChange={e => updateQuizField('cor_fundo', e.target.value)}
+                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+                    <input value={quiz.cor_fundo || '#ffffff'}
+                      onChange={e => updateQuizField('cor_fundo', e.target.value)}
+                      style={{ ...iStyle, flex: 1 }} />
+                  </div>
+                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Cor de fundo da página do quiz</p>
                 </div>
                 <div>
                   <label style={lbl}>Logo</label>
@@ -1133,6 +1181,7 @@ export default function QuizBuilderPage() {
 
               {/* Questions grouped by bloco */}
               {flatPerguntas.length > 0 && (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <div style={{ borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`, marginBottom: '3px', paddingTop: '4px', paddingBottom: '4px' }}>
                   {[...blocos].sort((a, b) => a.ordem - b.ordem).map(bloco => {
                     const blocoFlatPergs = flatPerguntas.filter(p => p.bloco_id === bloco.id);
@@ -1156,61 +1205,30 @@ export default function QuizBuilderPage() {
                             </span>
                           )}
                         </div>
-                        {blocoFlatPergs.map(perg => {
-                          const active = selectedPageId === perg.id;
-                          const isDraggingOver = dragOverId === perg.id && draggedId !== perg.id;
-                          return (
-                            <div key={perg.id} draggable
-                              onDragStart={e => { e.dataTransfer.setData('text/plain', perg.id); setDraggedId(perg.id); }}
-                              onDragOver={e => { e.preventDefault(); setDragOverId(perg.id); }}
-                              onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null); }}
-                              onDrop={() => { if (draggedId && draggedId !== perg.id) swapByDrag(draggedId, perg.id); setDraggedId(null); setDragOverId(null); }}
-                              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                              onClick={() => setSelectedPageId(perg.id)}
-                              onMouseEnter={() => setHoveredCard(perg.id)}
-                              onMouseLeave={() => setHoveredCard(null)}
-                              style={{
-                                padding: '7px 8px 7px 4px', borderRadius: '10px', marginBottom: '2px', cursor: 'pointer',
-                                border: `1.5px solid ${active ? primary : isDraggingOver ? '#94a3b8' : 'transparent'}`,
-                                background: active ? hexToRgba(primary, 0.06) : isDraggingOver ? '#f1f5f9' : hoveredCard === perg.id ? (isDark ? '#1a1a1e' : '#f9fafb') : 'transparent',
-                                opacity: draggedId === perg.id ? 0.4 : (selectedPageType === 'question' && selectedPageId !== perg.id ? 0.4 : 1),
-                                transition: 'background 0.1s, border-color 0.1s, opacity 150ms ease',
-                                boxShadow: active ? `0 0 0 3px ${hexToRgba(primary, 0.12)}` : 'none',
-                              }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <div style={{ color: textMut, cursor: 'grab', flexShrink: 0 }} title="Arrastar para reordenar">
-                                  <GripVertical style={{ width: '12px', height: '12px' }} />
-                                </div>
-                                <span style={{ fontSize: '10px', fontWeight: 700, color: active ? primary : textMut, flexShrink: 0 }}>
-                                  {perg.globalIndex}.
-                                </span>
-                                <span style={{ flex: 1, fontSize: '11px', fontWeight: active ? 700 : 500, color: active ? primary : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {perg.texto ? perg.texto.slice(0, 26) : 'Sem texto'}
-                                </span>
-                                {(hoveredCard === perg.id || active) && (
-                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                                    <button onClick={() => duplicatePergunta(perg.id)} title="Duplicar"
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#2a2a2e' : '#f3f4f6'; }}
-                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                                      <Copy style={{ width: '11px', height: '11px' }} />
-                                    </button>
-                                    <button onClick={() => setShowDeleteModal(perg.id)} title="Excluir"
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
-                                      <Trash2 style={{ width: '11px', height: '11px' }} />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                        <SortableContext items={blocoFlatPergs.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                          {blocoFlatPergs.map(perg => (
+                            <SortablePerguntaCard
+                              key={perg.id}
+                              perg={perg}
+                              isActive={selectedPageId === perg.id}
+                              isHovered={hoveredCard === perg.id}
+                              isDimmed={selectedPageType === 'question' && selectedPageId !== perg.id}
+                              primary={primary}
+                              textMain={textMain}
+                              textMut={textMut}
+                              isDark={isDark}
+                              onSelect={() => setSelectedPageId(perg.id)}
+                              onHover={setHoveredCard}
+                              onDuplicate={() => duplicatePergunta(perg.id)}
+                              onDelete={() => setShowDeleteModal(perg.id)}
+                            />
+                          ))}
+                        </SortableContext>
                       </div>
                     );
                   })}
                 </div>
+                </DndContext>
               )}
 
               {/* Fixed: Approval, Collect, Rejection */}

@@ -26,7 +26,8 @@ export interface QuizConfig {
   capa_botao_texto?: string | null; coleta_campos?: string[] | null;
   coleta_config?: ColetaCampo[] | null;
   pixel_id?: string | null; pixel_evento_lead?: string | null;
-  cor_botao?: string | null;
+  cor_botao?: string | null; cor_fundo?: string | null;
+  capa_imagem_height?: number | null;
   emoji_aprovado?: string | null; emoji_reprovado?: string | null;
 }
 export interface Bloco { id: string; titulo: string; ordem: number; emoji?: string | null; }
@@ -125,7 +126,7 @@ export function QuizRenderer({
   const progress = easedProgress(currentIdx, totalVisible);
   const isMultipla = currentPergunta?.tipo_resposta === 'multipla';
   const hasSelection = isMultipla ? selectedOpcoes.length > 0 : !!selectedOpcao;
-  const imgAltura = quiz.capa_imagem_altura || 220;
+  const imgAltura = quiz.capa_imagem_height || 200;
 
   const headerPos: React.CSSProperties = isPreview
     ? { position: 'relative' }
@@ -138,7 +139,7 @@ export function QuizRenderer({
   return (
     <div style={{
       minHeight: isPreview ? '100%' : '100vh',
-      background: isPreview ? '#fff' : hexRgba(primary, 0.03),
+      background: quiz.cor_fundo || '#ffffff',
       fontFamily: "'DM Sans', system-ui, sans-serif",
     }}>
       <style>{`
@@ -161,7 +162,7 @@ export function QuizRenderer({
       `}</style>
 
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
-      <div style={{ ...headerPos, background: '#fff', borderBottom: '1px solid #f3f4f6' }}>
+      <div style={{ ...headerPos, background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid #f3f4f6' }}>
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '14px 24px 8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           {quiz.logo_url ? (
             <img src={quiz.logo_url} alt={quiz.titulo}
