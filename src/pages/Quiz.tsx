@@ -142,8 +142,10 @@ export default function QuizBuilderPage() {
   useEffect(() => {
     if (selectedPageId === 'cover') {
       setPreviewPhase('capa');
-    } else if (selectedPageId === 'approval' || selectedPageId === 'collect') {
+    } else if (selectedPageId === 'approval') {
       setPreviewPhase('aprovado_form');
+    } else if (selectedPageId === 'collect') {
+      setPreviewPhase('coleta');
     } else if (selectedPageId === 'rejection') {
       setPreviewPhase('reprovado');
     } else {
@@ -649,11 +651,28 @@ export default function QuizBuilderPage() {
                 <div>
                   <label style={lbl}>Imagem de capa</label>
                   {quiz.capa_imagem_url ? (
-                    <div style={{ position: 'relative' }}>
-                      <img src={quiz.capa_imagem_url} alt="" style={{ width: '100%', height: '90px', objectFit: 'cover', borderRadius: tokens.radius.sm, display: 'block' }} />
-                      <button onClick={() => updateQuizField('capa_imagem_url', null)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <X style={{ width: '12px', height: '12px' }} />
-                      </button>
+                    <div>
+                      <div style={{ position: 'relative' }}>
+                        <img src={quiz.capa_imagem_url} alt="" style={{ width: '100%', height: `${Math.round((quiz.capa_imagem_altura || 200) * 90 / 200)}px`, objectFit: 'cover', borderRadius: tokens.radius.sm, display: 'block' }} />
+                        <button onClick={() => updateQuizField('capa_imagem_url', null)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <X style={{ width: '12px', height: '12px' }} />
+                        </button>
+                      </div>
+                      <div style={{ marginTop: '8px' }}>
+                        <label style={lbl}>Altura da imagem <span style={{ fontWeight: 400 }}>{quiz.capa_imagem_altura || 200}px</span></label>
+                        <input type="range" min={80} max={400} step={10}
+                          value={quiz.capa_imagem_altura || 200}
+                          onChange={e => {
+                            const val = Number(e.target.value);
+                            const qId = quiz.id;
+                            setQuiz(q => q ? { ...q, capa_imagem_altura: val } : q);
+                            debounce('quiz_capa_imagem_altura', async () => {
+                              const { error } = await db.from('quizzes').update({ capa_imagem_altura: val }).eq('id', qId);
+                              if (error) throw new Error(error.message);
+                            }, 500);
+                          }}
+                          style={{ width: '100%', marginTop: '4px', accentColor: primary }} />
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -705,6 +724,24 @@ export default function QuizBuilderPage() {
                       onChange={e => updateQuizField('cor_primaria', e.target.value)}
                       style={{ ...iStyle, flex: 1 }} />
                   </div>
+                </div>
+                <div>
+                  <label style={lbl}>Cor do botão <span style={{ fontWeight: 400 }}>(padrão: cor primária)</span></label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="color" value={quiz.cor_botao || quiz.cor_primaria || '#2563eb'}
+                      onChange={e => updateQuizField('cor_botao', e.target.value)}
+                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+                    <input value={quiz.cor_botao || ''}
+                      onChange={e => updateQuizField('cor_botao', e.target.value || null)}
+                      placeholder={quiz.cor_primaria || '#2563eb'}
+                      style={{ ...iStyle, flex: 1 }} />
+                    {quiz.cor_botao && (
+                      <button onClick={() => updateQuizField('cor_botao', null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
+                        <X style={{ width: '12px', height: '12px' }} />
+                      </button>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta botões Iniciar, Continuar e Enviar</p>
                 </div>
                 <div>
                   <label style={lbl}>Logo</label>
@@ -1077,7 +1114,9 @@ export default function QuizBuilderPage() {
                   <div onClick={() => setSelectedPageId('cover')} style={{
                     padding: '10px 10px 10px 8px', borderRadius: '10px', marginBottom: '3px',
                     cursor: 'pointer', border: `1.5px solid ${active ? primary : 'transparent'}`,
-                    background: active ? hexToRgba(primary, 0.06) : 'transparent', transition: tokens.transition,
+                    background: active ? hexToRgba(primary, 0.06) : 'transparent',
+                    opacity: selectedPageType === 'question' ? 0.4 : 1,
+                    transition: `${tokens.transition}, opacity 150ms ease`,
                   }}
                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
@@ -1134,8 +1173,8 @@ export default function QuizBuilderPage() {
                                 padding: '7px 8px 7px 4px', borderRadius: '10px', marginBottom: '2px', cursor: 'pointer',
                                 border: `1.5px solid ${active ? primary : isDraggingOver ? '#94a3b8' : 'transparent'}`,
                                 background: active ? hexToRgba(primary, 0.06) : isDraggingOver ? '#f1f5f9' : hoveredCard === perg.id ? (isDark ? '#1a1a1e' : '#f9fafb') : 'transparent',
-                                opacity: draggedId === perg.id ? 0.4 : 1,
-                                transition: 'background 0.1s, border-color 0.1s, opacity 0.1s',
+                                opacity: draggedId === perg.id ? 0.4 : (selectedPageType === 'question' && selectedPageId !== perg.id ? 0.4 : 1),
+                                transition: 'background 0.1s, border-color 0.1s, opacity 150ms ease',
                                 boxShadow: active ? `0 0 0 3px ${hexToRgba(primary, 0.12)}` : 'none',
                               }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1185,7 +1224,9 @@ export default function QuizBuilderPage() {
                   <div key={id} onClick={() => setSelectedPageId(id)} style={{
                     padding: '10px 10px 10px 8px', borderRadius: '10px', marginBottom: '3px',
                     cursor: 'pointer', border: `1.5px solid ${active ? primary : 'transparent'}`,
-                    background: active ? hexToRgba(primary, 0.06) : 'transparent', transition: tokens.transition,
+                    background: active ? hexToRgba(primary, 0.06) : 'transparent',
+                    opacity: selectedPageType === 'question' ? 0.4 : 1,
+                    transition: `${tokens.transition}, opacity 150ms ease`,
                   }}
                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
@@ -1227,10 +1268,10 @@ export default function QuizBuilderPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: textMut, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Preview ao vivo</p>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  {(['capa', 'quiz', 'aprovado_form', 'reprovado'] as Phase[]).map(ph => (
+                  {(['capa', 'quiz', 'aprovado_form', 'coleta', 'reprovado'] as Phase[]).map(ph => (
                     <button key={ph} onClick={() => { setPreviewPhase(ph); if (ph === 'quiz') setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                       style={{ padding: '2px 6px', fontSize: '9px', borderRadius: 4, border: `1px solid ${border}`, background: previewPhase === ph ? '#2563eb' : 'transparent', color: previewPhase === ph ? '#fff' : textMut, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-                      {ph === 'capa' ? 'Capa' : ph === 'quiz' ? 'Quiz' : ph === 'aprovado_form' ? 'Ok' : 'X'}
+                      {ph === 'capa' ? 'Capa' : ph === 'quiz' ? 'Quiz' : ph === 'aprovado_form' ? 'Ok' : ph === 'coleta' ? 'Coleta' : 'X'}
                     </button>
                   ))}
                 </div>
@@ -1247,7 +1288,9 @@ export default function QuizBuilderPage() {
                         selectedOpcao={previewSelectedOpcao}
                         onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                         onOpcaoClick={handlePreviewOpcaoClick as any}
-                        onContinue={advancePreview} isPreview />
+                        onContinue={advancePreview}
+                        onGoToColeta={() => setPreviewPhase('coleta')}
+                        isPreview />
                     )}
                   </div>
                 </div>
@@ -1346,7 +1389,9 @@ export default function QuizBuilderPage() {
                       selectedOpcao={previewSelectedOpcao}
                       onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                       onOpcaoClick={handlePreviewOpcaoClick as any}
-                      onContinue={advancePreview} isPreview />
+                      onContinue={advancePreview}
+                      onGoToColeta={() => setPreviewPhase('coleta')}
+                      isPreview />
                   )}
                 </div>
               </div>

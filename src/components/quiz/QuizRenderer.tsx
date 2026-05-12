@@ -26,6 +26,7 @@ export interface QuizConfig {
   capa_botao_texto?: string | null; coleta_campos?: string[] | null;
   coleta_config?: ColetaCampo[] | null;
   pixel_id?: string | null; pixel_evento_lead?: string | null;
+  cor_botao?: string | null;
   emoji_aprovado?: string | null; emoji_reprovado?: string | null;
 }
 export interface Bloco { id: string; titulo: string; ordem: number; emoji?: string | null; }
@@ -40,7 +41,7 @@ export interface Pergunta {
   condicao_pergunta_id: string | null; condicao_opcao_id: string | null;
   opcoes: Opcao[];
 }
-export type Phase = 'loading' | 'capa' | 'quiz' | 'aprovado_form' | 'reprovado' | 'sucesso' | 'not_found';
+export type Phase = 'loading' | 'capa' | 'quiz' | 'aprovado_form' | 'coleta' | 'reprovado' | 'sucesso' | 'not_found';
 
 export interface QuizRendererProps {
   quiz: QuizConfig;
@@ -64,6 +65,7 @@ export interface QuizRendererProps {
   onCidadeChange?: (v: string) => void;
   onInstagramChange?: (v: string) => void;
   onSubmit?: (e: React.FormEvent) => void;
+  onGoToColeta?: () => void;
   isPreview?: boolean;
 }
 
@@ -111,9 +113,11 @@ export function QuizRenderer({
   submitting = false, canSubmit = false,
   onStart, onOpcaoClick, onContinue,
   onNomeChange, onWhatsappChange, onCidadeChange, onInstagramChange, onSubmit,
+  onGoToColeta,
   isPreview = false,
 }: QuizRendererProps) {
   const primary = quiz.cor_primaria || '#2563eb';
+  const btnColor = quiz.cor_botao || primary;
   const coletaCampos = coleta || (quiz.coleta_campos as string[] | null) || ['nome', 'whatsapp', 'cidade', 'instagram'];
   const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
     ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
@@ -134,15 +138,14 @@ export function QuizRenderer({
   return (
     <div style={{
       minHeight: isPreview ? '100%' : '100vh',
-      background: '#fff',
+      background: isPreview ? '#fff' : hexRgba(primary, 0.03),
       fontFamily: "'DM Sans', system-ui, sans-serif",
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
         @keyframes questionIn {
-          0%   { opacity:0; transform:translateY(18px) scale(0.98); filter:blur(5px); }
-          55%  { filter:blur(0); }
-          100% { opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
+          from { opacity:0; transform:translateY(14px); }
+          to   { opacity:1; transform:translateY(0); }
         }
         @keyframes slideUp {
           from { opacity:0; transform:translateY(12px); }
@@ -213,7 +216,7 @@ export function QuizRenderer({
           )}
           <button onClick={onStart} style={{
             width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-            background: '#111', color: '#fff', fontSize: '15px', fontWeight: 700,
+            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
             cursor: 'pointer', letterSpacing: '-0.01em',
             boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
             transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
@@ -231,7 +234,7 @@ export function QuizRenderer({
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 140px' }}>
           <div
             key={questionKey}
-            style={{ animation: 'questionIn 0.45s cubic-bezier(0.25,0.46,0.45,0.94) forwards' }}
+            style={{ animation: 'questionIn 0.32s cubic-bezier(0.25,0.46,0.45,0.94) forwards', willChange: 'transform, opacity' }}
           >
             {/* Badge — centered */}
             {currentBloco && (
@@ -341,7 +344,7 @@ export function QuizRenderer({
           <button onClick={onContinue} style={{
             width: '100%', maxWidth: '432px', padding: '16px',
             borderRadius: '12px', border: 'none',
-            background: '#111', color: '#fff', fontSize: '15px', fontWeight: 600,
+            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 600,
             cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
             transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
           }}
@@ -355,13 +358,13 @@ export function QuizRenderer({
 
       {/* ── APROVADO FORM ──────────────────────────────────────────────────── */}
       {phase === 'aprovado_form' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
-          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <div style={{ fontSize: '64px', lineHeight: 1, marginBottom: '18px' }}>{quiz.emoji_aprovado || '🎉'}</div>
             <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#111', margin: '0 0 14px', letterSpacing: '-0.02em' }}>
               {quiz.mensagem_aprovado || 'Parabéns! Você foi aprovada.'}
             </h2>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '999px', background: '#d1fae5', color: '#065f46', fontSize: '12px', fontWeight: 700 }}>
                 <Check style={{ width: '11px', height: '11px', strokeWidth: 3 }} /> Perfil verificado
               </span>
@@ -370,7 +373,24 @@ export function QuizRenderer({
               </span>
             </div>
           </div>
+          <button onClick={onGoToColeta} style={{
+            width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+            cursor: 'pointer', letterSpacing: '-0.01em',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
+          >
+            Preencher meus dados →
+          </button>
+        </div>
+      )}
 
+      {/* ── COLETA ─────────────────────────────────────────────────────────── */}
+      {phase === 'coleta' && (
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
           {!isPreview && (
             <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '24px' }}>
               <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 20px', textAlign: 'center', lineHeight: 1.6 }}>
@@ -410,7 +430,7 @@ export function QuizRenderer({
                 })}
                 <button type="submit" disabled={submitting || !canSubmit} style={{
                   width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px', border: 'none',
-                  background: !canSubmit || submitting ? '#9ca3af' : '#111',
+                  background: !canSubmit || submitting ? '#9ca3af' : btnColor,
                   color: '#fff', fontSize: '15px', fontWeight: 700,
                   cursor: (!canSubmit || submitting) ? 'default' : 'pointer',
                 }}>
@@ -424,7 +444,7 @@ export function QuizRenderer({
           )}
           {isPreview && (
             <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '20px', textAlign: 'center', border: '1px solid #f0f0f0' }}>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Formulário de cadastro</p>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>📝 Formulário de coleta</p>
             </div>
           )}
         </div>

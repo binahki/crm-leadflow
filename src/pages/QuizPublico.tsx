@@ -222,7 +222,7 @@ export default function QuizPublico() {
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
       doAdvance(pergunta, [opcao.id]);
-    }, 350);
+    }, 280);
   }
 
   function handleContinue() {
@@ -342,6 +342,7 @@ export default function QuizPublico() {
       onStart={() => setPhase('quiz')}
       onOpcaoClick={handleOpcaoClick}
       onContinue={handleContinue}
+      onGoToColeta={() => setPhase('coleta')}
       onNomeChange={setNome}
       onWhatsappChange={setWhatsapp}
       onCidadeChange={setCidade}
