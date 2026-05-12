@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   QuizRenderer,
-  type QuizConfig, type Bloco, type Opcao, type Pergunta, type Phase,
+  DEFAULT_COLETA_CONFIG,
+  type ColetaCampo, type QuizConfig, type Bloco, type Opcao, type Pergunta, type Phase,
 } from '@/components/quiz/QuizRenderer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,9 +34,11 @@ export default function QuizPublico() {
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [todasPerguntas, setTodasPerguntas] = useState<Pergunta[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [multipleAnswers, setMultipleAnswers] = useState<Record<string, string[]>>({});
   const [currentIdx, setCurrentIdx] = useState(0);
   const [questionKey, setQuestionKey] = useState(0);
   const [selectedOpcao, setSelectedOpcao] = useState<string | null>(null);
+  const [selectedOpcoes, setSelectedOpcoes] = useState<string[]>([]);
   const [faixa, setFaixa] = useState<'verde' | 'amarelo' | null>(null);
   const [score, setScore] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +49,7 @@ export default function QuizPublico() {
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load quiz ───────────────────────────────────────────────────────────────
+  // ── Load quiz ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!slug) { setPhase('not_found'); return; }
     async function loadQuiz() {
@@ -91,14 +94,40 @@ export default function QuizPublico() {
     loadQuiz();
   }, [slug]);
 
-  // ── Confetti on approval ────────────────────────────────────────────────────
+  // ── Confetti on approval ──────────────────────────────────────────────────────
   useEffect(() => {
     if (phase === 'aprovado_form' && quiz) {
       launchConfetti(quiz.cor_primaria || '#2563eb');
     }
   }, [phase, quiz]);
 
-  // ── Visible questions (conditional filtering) ───────────────────────────────
+  // ── FB Pixel on approval ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'aprovado_form' || !quiz?.pixel_id) return;
+    const pixelId = quiz.pixel_id;
+    const evento = quiz.pixel_evento_lead || 'Lead';
+
+    function fireFbq() {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fbq = (window as any).fbq;
+      if (typeof fbq !== 'function') return;
+      fbq('init', pixelId);
+      fbq('track', evento);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof (window as any).fbq === 'function') {
+      fireFbq();
+    } else {
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://connect.facebook.net/en_US/fbevents.js';
+      s.onload = fireFbq;
+      document.head.appendChild(s);
+    }
+  }, [phase, quiz]);
+
+  // ── Visible questions (conditional filtering) ─────────────────────────────────
   const visiblePerguntas = useCallback((): Pergunta[] => {
     return todasPerguntas.filter(p => {
       if (!p.condicao_pergunta_id) return true;
@@ -109,16 +138,29 @@ export default function QuizPublico() {
     });
   }, [todasPerguntas, answers]);
 
-  // ── Advance logic ───────────────────────────────────────────────────────────
-  function doAdvance(pergunta: Pergunta, opcaoId: string) {
-    const opcao = pergunta.opcoes.find(o => o.id === opcaoId);
-    if (!opcao) return;
+  // ── Advance logic ─────────────────────────────────────────────────────────────
+  function doAdvance(pergunta: Pergunta, opcaoIds: string[]) {
+    if (opcaoIds.length === 0) return;
+    const isMultipla = pergunta.tipo_resposta === 'multipla';
 
-    const newAnswers = { ...answers, [pergunta.id]: opcaoId };
+    // Check reprova on any selected option
+    const hasReprova = opcaoIds.some(id => pergunta.opcoes.find(o => o.id === id)?.reprova_imediato);
+
+    // For conditional logic, use the first selected option as primary answer
+    const primaryAnswer = opcaoIds[0];
+    const newAnswers = { ...answers, [pergunta.id]: primaryAnswer };
+
+    // Store multiple selections for scoring
+    const newMultipleAnswers = isMultipla
+      ? { ...multipleAnswers, [pergunta.id]: opcaoIds }
+      : multipleAnswers;
+
     setAnswers(newAnswers);
+    setMultipleAnswers(newMultipleAnswers);
     setSelectedOpcao(null);
+    setSelectedOpcoes([]);
 
-    if (opcao.reprova_imediato) { setPhase('reprovado'); return; }
+    if (hasReprova) { setPhase('reprovado'); return; }
 
     const newVisible = todasPerguntas.filter(p => {
       if (!p.condicao_pergunta_id) return true;
@@ -130,11 +172,21 @@ export default function QuizPublico() {
 
     const nextIdx = currentIdx + 1;
     if (nextIdx >= newVisible.length) {
+      // Calculate total score (handles both single and multiple choice)
       let totalScore = 0;
       for (const [pergId, oId] of Object.entries(newAnswers)) {
         const perg = todasPerguntas.find(p => p.id === pergId);
-        const op = perg?.opcoes.find(o => o.id === oId);
-        if (op) totalScore += op.pontos ?? 0;
+        if (!perg) continue;
+        if (perg.tipo_resposta === 'multipla') {
+          const selectedIds = newMultipleAnswers[pergId] || [oId];
+          for (const opId of selectedIds) {
+            const op = perg.opcoes.find(o => o.id === opId);
+            if (op) totalScore += op.pontos ?? 0;
+          }
+        } else {
+          const op = perg.opcoes.find(o => o.id === oId);
+          if (op) totalScore += op.pontos ?? 0;
+        }
       }
       setScore(totalScore);
       if (!quiz) return;
@@ -152,28 +204,41 @@ export default function QuizPublico() {
   }
 
   function handleOpcaoClick(pergunta: Pergunta, opcao: Opcao) {
+    const isMultipla = pergunta.tipo_resposta === 'multipla';
+
+    if (isMultipla) {
+      // Toggle selection in array
+      navigator.vibrate?.(10);
+      setSelectedOpcoes(prev =>
+        prev.includes(opcao.id) ? prev.filter(id => id !== opcao.id) : [...prev, opcao.id]
+      );
+      return;
+    }
+
+    // Single choice: auto-advance after 350ms
     if (selectedOpcao) return;
     navigator.vibrate?.(10);
     setSelectedOpcao(opcao.id);
-
-    const isMultipla = pergunta.tipo_resposta === 'multipla';
-    if (!isMultipla) {
-      // Single select: auto-advance after 350ms
-      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = setTimeout(() => {
-        doAdvance(pergunta, opcao.id);
-      }, 350);
-    }
-    // Multiple: wait for Continue button click
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(() => {
+      doAdvance(pergunta, [opcao.id]);
+    }, 350);
   }
 
   function handleContinue() {
-    if (!selectedOpcao || !currentPergunta) return;
+    if (!currentPergunta) return;
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-    doAdvance(currentPergunta, selectedOpcao);
+    const isMultipla = currentPergunta.tipo_resposta === 'multipla';
+    if (isMultipla) {
+      if (selectedOpcoes.length === 0) return;
+      doAdvance(currentPergunta, selectedOpcoes);
+    } else {
+      if (!selectedOpcao) return;
+      doAdvance(currentPergunta, [selectedOpcao]);
+    }
   }
 
-  // ── Submit lead ─────────────────────────────────────────────────────────────
+  // ── Submit lead ───────────────────────────────────────────────────────────────
   async function handleSubmitLead(e: React.FormEvent) {
     e.preventDefault();
     if (!quiz || !faixa) return;
@@ -184,8 +249,17 @@ export default function QuizPublico() {
     const quizRespostas: Record<string, string> = {};
     for (const [pergId, opcId] of Object.entries(answers)) {
       const perg = todasPerguntas.find(p => p.id === pergId);
-      const op = perg?.opcoes.find(o => o.id === opcId);
-      if (perg && op) quizRespostas[perg.texto] = op.texto;
+      if (!perg) continue;
+      if (perg.tipo_resposta === 'multipla') {
+        const selectedIds = multipleAnswers[pergId] || [opcId];
+        const textos = selectedIds
+          .map(id => perg.opcoes.find(o => o.id === id)?.texto)
+          .filter(Boolean).join(', ');
+        quizRespostas[perg.texto] = textos;
+      } else {
+        const op = perg.opcoes.find(o => o.id === opcId);
+        if (op) quizRespostas[perg.texto] = op.texto;
+      }
     }
 
     const { error } = await db.from('leads').insert({
@@ -205,16 +279,26 @@ export default function QuizPublico() {
     }, 2000);
   }
 
-  // ── Derived state ───────────────────────────────────────────────────────────
+  // ── Derived state ─────────────────────────────────────────────────────────────
   const visible = visiblePerguntas();
   const totalVisible = visible.length;
   const currentPergunta = visible[currentIdx] ?? null;
   const currentBloco = blocos.find(b => b.id === currentPergunta?.bloco_id) ?? null;
   const coleta = (quiz?.coleta_campos as string[] | null) || ['nome', 'whatsapp', 'cidade', 'instagram'];
-  const canSubmit = !!(nome.trim() && whatsapp.replace(/\D/g, '').length >= 10 && cidade.trim());
+  const coletaConfig: ColetaCampo[] = quiz?.coleta_config?.length
+    ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
+    : DEFAULT_COLETA_CONFIG.filter(d => coleta.includes(d.campo));
+  const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
+  const canSubmit = coletaConfig
+    .filter(c => c.obrigatorio)
+    .every(c => {
+      const val = fieldValues[c.campo] ?? '';
+      if (c.campo === 'whatsapp') return val.replace(/\D/g, '').length >= 10;
+      return val.trim().length > 0;
+    });
   const primary = quiz?.cor_primaria || '#2563eb';
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────────
   if (phase === 'loading') {
     return (
       <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -224,7 +308,7 @@ export default function QuizPublico() {
     );
   }
 
-  // ── Not found ───────────────────────────────────────────────────────────────
+  // ── Not found ─────────────────────────────────────────────────────────────────
   if (phase === 'not_found') {
     return (
       <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', padding: '24px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
@@ -235,7 +319,7 @@ export default function QuizPublico() {
     );
   }
 
-  // ── Render via QuizRenderer ─────────────────────────────────────────────────
+  // ── Render via QuizRenderer ───────────────────────────────────────────────────
   return (
     <QuizRenderer
       quiz={quiz!}
@@ -246,6 +330,7 @@ export default function QuizPublico() {
       currentIdx={currentIdx}
       totalVisible={totalVisible}
       selectedOpcao={selectedOpcao}
+      selectedOpcoes={selectedOpcoes}
       questionKey={questionKey}
       coleta={coleta}
       nome={nome}

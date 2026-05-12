@@ -7,13 +7,13 @@ import { toast } from 'sonner';
 import { seedQuizBecker } from '@/utils/seedQuizBecker';
 import {
   QuizRenderer,
-  type QuizConfig, type Bloco, type Opcao,
-  hexRgba,
+  type QuizConfig, type Bloco, type Opcao, type ColetaCampo,
+  hexRgba, defaultEmojiForBloco, DEFAULT_COLETA_CONFIG,
 } from '@/components/quiz/QuizRenderer';
 import type { Phase } from '@/components/quiz/QuizRenderer';
 import {
   Plus, Trash2, Copy, ExternalLink,
-  Loader2, Settings, Eye, Check, X, Upload, GripVertical,
+  Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,14 +78,20 @@ export default function QuizBuilderPage() {
   const [selectedPageId, setSelectedPageId] = useState<string>('cover');
   const [saving, setSaving] = useState(false);
   const [savedRecently, setSavedRecently] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showUnpublishModal, setShowUnpublishModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeCoverTab, setActiveCoverTab] = useState<'content' | 'appearance'>('content');
   const [newBenefit, setNewBenefit] = useState('');
   const [showConditional, setShowConditional] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [editingBlocoId, setEditingBlocoId] = useState<string | null>(null);
+  const [expandedColetaCampo, setExpandedColetaCampo] = useState<string | null>(null);
 
   // DnD state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -101,6 +107,7 @@ export default function QuizBuilderPage() {
   const savedRecentlyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const capaInputRef = useRef<HTMLInputElement>(null);
+  const pageListRef = useRef<HTMLDivElement>(null);
 
   // Theme colors
   const bg       = isDark ? '#0d0d0f' : '#f4f2ef';
@@ -204,10 +211,11 @@ export default function QuizBuilderPage() {
         corte_verde: 35, corte_amarelo: 25,
         mensagem_aprovado: 'Parabéns! Seu perfil foi aprovado.',
         mensagem_reprovado: 'Obrigada pela participação!',
-        ativo: true,
+        ativo: true, publicado: false,
         capa_titulo: null, capa_subtitulo: null, capa_imagem_url: null,
         capa_beneficios: [], capa_botao_texto: 'Clique para iniciar →',
         coleta_campos: ['nome', 'whatsapp', 'cidade', 'instagram'],
+        coleta_config: DEFAULT_COLETA_CONFIG,
       }).select().single();
       if (error) throw error;
       if (withSeed) await seedQuizBecker(newQuiz.id);
@@ -224,19 +232,32 @@ export default function QuizBuilderPage() {
     clearTimeout(saveTimers.current[key]);
     saveTimers.current[key] = setTimeout(async () => {
       setSaving(true); setSavedRecently(false);
-      try { await fn(); } catch { /* ignore */ }
-      setSaving(false); setSavedRecently(true);
-      if (savedRecentlyTimer.current) clearTimeout(savedRecentlyTimer.current);
-      savedRecentlyTimer.current = setTimeout(() => setSavedRecently(false), 2000);
+      try {
+        await fn();
+        setSaving(false); setSavedRecently(true);
+        if (savedRecentlyTimer.current) clearTimeout(savedRecentlyTimer.current);
+        savedRecentlyTimer.current = setTimeout(() => setSavedRecently(false), 2000);
+      } catch (err) {
+        setSaving(false);
+        console.error('[autosave error]', key, err);
+        toast.error('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
+      }
     }, delay);
   }
 
-  function updateQuizField(field: string, value: string | number | boolean | string[] | null) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function updateQuizField(field: string, value: any) {
     if (!quiz) return;
     setQuiz({ ...quiz, [field]: value } as QuizConfig);
+    const quizId = quiz.id;
     debounce(`quiz_${field}`, async () => {
-      await db.from('quizzes').update({ [field]: value }).eq('id', quiz.id);
+      const { error } = await db.from('quizzes').update({ [field]: value }).eq('id', quizId);
+      if (error) throw new Error(error.message);
     });
+  }
+
+  function updateColetaConfig(updated: ColetaCampo[]) {
+    updateQuizField('coleta_config', updated);
   }
 
   async function toggleAtivo() {
@@ -245,6 +266,39 @@ export default function QuizBuilderPage() {
     setQuiz({ ...quiz, ativo: newVal });
     await db.from('quizzes').update({ ativo: newVal }).eq('id', quiz.id);
     toast.success(newVal ? 'Quiz ativado' : 'Quiz desativado');
+  }
+
+  // ── Manual save ─────────────────────────────────────────────────────────────
+  async function handleManualSave() {
+    if (!quiz) return;
+    setIsSaving(true);
+    try {
+      const { error } = await db.from('quizzes').update({ ...quiz }).eq('id', quiz.id);
+      if (error) throw new Error(error.message);
+      toast.success('✓ Salvo com sucesso');
+    } catch (err) {
+      toast.error('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    setIsSaving(false);
+  }
+
+  // ── Publish ─────────────────────────────────────────────────────────────────
+  async function handlePublish() {
+    if (!quiz) return;
+    const { error } = await db.from('quizzes').update({ publicado: true, ativo: true }).eq('id', quiz.id);
+    if (error) { toast.error(error.message); return; }
+    setQuiz(q => q ? { ...q, publicado: true, ativo: true } : q);
+    setShowPublishModal(false);
+    toast.success('Quiz publicado! 🎉');
+  }
+
+  async function handleUnpublish() {
+    if (!quiz) return;
+    const { error } = await db.from('quizzes').update({ publicado: false, ativo: false }).eq('id', quiz.id);
+    if (error) { toast.error(error.message); return; }
+    setQuiz(q => q ? { ...q, publicado: false, ativo: false } : q);
+    setShowUnpublishModal(false);
+    toast.success('Quiz despublicado');
   }
 
   // ── File uploads (with base64 fallback) ────────────────────────────────────
@@ -264,7 +318,6 @@ export default function QuizBuilderPage() {
           .from('quiz-assets').getPublicUrl(path);
         url = urlData.publicUrl;
       } else {
-        // Fallback: compress + base64
         url = await compressImage(file, field === 'logo_url' ? 300 : 800);
       }
 
@@ -282,8 +335,8 @@ export default function QuizBuilderPage() {
     if (!quiz) return;
     let targetBlocoId: string;
     if (blocos.length === 0) {
-      const { data: nb } = await db.from('quiz_blocos').insert({ quiz_id: quiz.id, titulo: 'Perguntas', ordem: 1 }).select().single();
-      if (!nb) return;
+      const { data: nb, error: nbErr } = await db.from('quiz_blocos').insert({ quiz_id: quiz.id, titulo: 'Perguntas', ordem: 1 }).select().single();
+      if (nbErr || !nb) { toast.error(`Erro ao criar bloco${nbErr ? ': ' + nbErr.message : ''}`); return; }
       setBlocos([nb]);
       setPerguntas({ [nb.id]: [] });
       targetBlocoId = nb.id;
@@ -292,16 +345,17 @@ export default function QuizBuilderPage() {
     }
     const blocoPergs = perguntas[targetBlocoId] || [];
     const maxOrdem = blocoPergs.reduce((mx, p) => Math.max(mx, p.ordem), 0);
-    const { data: np } = await db.from('quiz_perguntas').insert({
+    const { data: np, error: npErr } = await db.from('quiz_perguntas').insert({
+      quiz_id: quiz.id,
       bloco_id: targetBlocoId, texto: '', ordem: maxOrdem + 1,
       subtexto: null, tipo_resposta: 'unica',
       condicao_pergunta_id: null, condicao_opcao_id: null,
     }).select().single();
-    if (np) {
-      setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
-      setOpcoes(o => ({ ...o, [np.id]: [] }));
-      setSelectedPageId(np.id);
-    }
+    if (npErr || !np) { toast.error(`Erro ao criar etapa${npErr ? ': ' + npErr.message : ''}`); return; }
+    setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
+    setOpcoes(o => ({ ...o, [np.id]: [] }));
+    setSelectedPageId(np.id);
+    setTimeout(() => pageListRef.current?.scrollTo({ top: pageListRef.current.scrollHeight, behavior: 'smooth' }), 80);
   }
 
   async function duplicatePergunta(id: string) {
@@ -309,17 +363,19 @@ export default function QuizBuilderPage() {
     if (!perg) return;
     const blocoPergs = perguntas[perg.bloco_id] || [];
     const maxOrdem = blocoPergs.reduce((mx, p) => Math.max(mx, p.ordem), 0);
-    const { data: np } = await db.from('quiz_perguntas').insert({
+    const { data: np, error: npErr } = await db.from('quiz_perguntas').insert({
+      quiz_id: quiz!.id,
       bloco_id: perg.bloco_id, texto: perg.texto, ordem: maxOrdem + 1,
       subtexto: perg.subtexto, tipo_resposta: perg.tipo_resposta,
       condicao_pergunta_id: null, condicao_opcao_id: null,
     }).select().single();
-    if (!np) return;
+    if (npErr || !np) { toast.error(`Erro ao duplicar${npErr ? ': ' + npErr.message : ''}`); return; }
     const ops = opcoes[perg.id] || [];
     if (ops.length > 0) {
-      const { data: newOps } = await db.from('quiz_opcoes').insert(
+      const { data: newOps, error: opsErr } = await db.from('quiz_opcoes').insert(
         ops.map(o => ({ pergunta_id: np.id, texto: o.texto, pontos: o.pontos, reprova_imediato: o.reprova_imediato, ordem: o.ordem, emoji: o.emoji }))
       ).select();
+      if (opsErr) toast.error(`Aviso: opções não duplicadas: ${opsErr.message}`);
       setOpcoes(prev => ({ ...prev, [np.id]: newOps || [] }));
     } else {
       setOpcoes(prev => ({ ...prev, [np.id]: [] }));
@@ -329,6 +385,7 @@ export default function QuizBuilderPage() {
     toast.success('Etapa duplicada');
   }
 
+  // BUG 2 FIX: reorder entire bloco array sequentially
   async function swapByDrag(idA: string, idB: string) {
     const pergA = flatPerguntas.find(p => p.id === idA);
     const pergB = flatPerguntas.find(p => p.id === idB);
@@ -336,11 +393,34 @@ export default function QuizBuilderPage() {
       toast.error('Só é possível reordenar etapas dentro do mesmo bloco');
       return;
     }
-    await Promise.all([
-      db.from('quiz_perguntas').update({ ordem: pergB.ordem }).eq('id', pergA.id),
-      db.from('quiz_perguntas').update({ ordem: pergA.ordem }).eq('id', pergB.id),
-    ]);
-    await loadData();
+    const blocoId = pergA.bloco_id;
+    const blocoPergs = [...(perguntas[blocoId] || [])].sort((a, b) => a.ordem - b.ordem);
+    const idxA = blocoPergs.findIndex(p => p.id === idA);
+    const idxB = blocoPergs.findIndex(p => p.id === idB);
+    if (idxA === -1 || idxB === -1) return;
+
+    // Move idA to position of idB
+    const reordered = [...blocoPergs];
+    const [moved] = reordered.splice(idxA, 1);
+    reordered.splice(idxB, 0, moved);
+
+    // Assign sequential orders
+    const updates = reordered.map((p, i) => ({ id: p.id, ordem: i + 1 }));
+
+    // Update local state immediately
+    setPerguntas(prev => ({
+      ...prev,
+      [blocoId]: prev[blocoId].map(p => {
+        const u = updates.find(x => x.id === p.id);
+        return u ? { ...p, ordem: u.ordem } : p;
+      }),
+    }));
+
+    // Batch update DB
+    for (const u of updates) {
+      const { error } = await db.from('quiz_perguntas').update({ ordem: u.ordem }).eq('id', u.id);
+      if (error) { toast.error(`Erro ao reordenar: ${error.message}`); await loadData(); return; }
+    }
   }
 
   function updatePergunta(id: string, field: string, value: string | null) {
@@ -350,27 +430,29 @@ export default function QuizBuilderPage() {
       return next;
     });
     debounce(`perg_${id}_${field}`, async () => {
-      await db.from('quiz_perguntas').update({ [field]: value }).eq('id', id);
+      const { error } = await db.from('quiz_perguntas').update({ [field]: value }).eq('id', id);
+      if (error) throw new Error(error.message);
     });
   }
 
   async function deletePergunta(id: string) {
-    if (!confirm('Deletar esta etapa?')) return;
-    await db.from('quiz_perguntas').delete().eq('id', id);
+    const { error } = await db.from('quiz_perguntas').delete().eq('id', id);
+    if (error) { toast.error(`Erro ao deletar: ${error.message}`); return; }
     setPerguntas(prev => {
       const next = { ...prev };
       for (const bid of Object.keys(next)) next[bid] = next[bid].filter(p => p.id !== id);
       return next;
     });
     setOpcoes(prev => { const n = { ...prev }; delete n[id]; return n; });
-    setSelectedPageId('cover');
+    if (selectedPageId === id) setSelectedPageId('cover');
   }
 
   async function addOpcao(pergId: string) {
     const ordem = (opcoes[pergId]?.length || 0) + 1;
-    const { data: no } = await db.from('quiz_opcoes').insert({
+    const { data: no, error } = await db.from('quiz_opcoes').insert({
       pergunta_id: pergId, texto: '', pontos: 0, reprova_imediato: false, ordem, emoji: null,
     }).select().single();
+    if (error) { toast.error(`Erro ao adicionar opção: ${error.message}`); return; }
     if (no) setOpcoes(p => ({ ...p, [pergId]: [...(p[pergId] || []), no] }));
   }
 
@@ -381,12 +463,14 @@ export default function QuizBuilderPage() {
       return next;
     });
     debounce(`opcao_${id}_${field}`, async () => {
-      await db.from('quiz_opcoes').update({ [field]: value }).eq('id', id);
+      const { error } = await db.from('quiz_opcoes').update({ [field]: value }).eq('id', id);
+      if (error) throw new Error(error.message);
     });
   }
 
   async function deleteOpcao(id: string) {
-    await db.from('quiz_opcoes').delete().eq('id', id);
+    const { error } = await db.from('quiz_opcoes').delete().eq('id', id);
+    if (error) { toast.error(`Erro ao deletar opção: ${error.message}`); return; }
     setOpcoes(prev => {
       const next = { ...prev };
       for (const pid of Object.keys(next)) next[pid] = next[pid].filter(o => o.id !== id);
@@ -394,11 +478,12 @@ export default function QuizBuilderPage() {
     });
   }
 
-  function toggleColetaCampo(campo: string) {
-    if (!quiz) return;
-    const current = quiz.coleta_campos || ['nome', 'whatsapp', 'cidade', 'instagram'];
-    const next = current.includes(campo) ? current.filter(c => c !== campo) : [...current, campo];
-    updateQuizField('coleta_campos', next);
+  function updateBlocoField(id: string, field: string, value: string) {
+    setBlocos(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+    debounce(`bloco_${id}_${field}`, async () => {
+      const { error } = await db.from('quiz_blocos').update({ [field]: value }).eq('id', id);
+      if (error) throw new Error(error.message);
+    });
   }
 
   function addBenefit() {
@@ -435,20 +520,15 @@ export default function QuizBuilderPage() {
     const isMultipla = perg.tipo_resposta === 'multipla';
     if (!isMultipla) {
       if (previewAdvanceTimer.current) clearTimeout(previewAdvanceTimer.current);
-      previewAdvanceTimer.current = setTimeout(() => {
-        advancePreview();
-      }, 350);
+      previewAdvanceTimer.current = setTimeout(() => advancePreview(), 350);
     }
   }
 
   function advancePreview() {
     setPreviewSelectedOpcao(null);
     const nextIdx = previewIdx + 1;
-    if (nextIdx < flatPerguntas.length) {
-      setPreviewIdx(nextIdx);
-    } else {
-      setPreviewPhase('aprovado_form');
-    }
+    if (nextIdx < flatPerguntas.length) setPreviewIdx(nextIdx);
+    else setPreviewPhase('aprovado_form');
   }
 
   // ── Styles ──────────────────────────────────────────────────────────────────
@@ -490,30 +570,16 @@ export default function QuizBuilderPage() {
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <button onClick={() => handleCreateQuiz(true)} disabled={creating} style={{
-                padding: '32px 24px', borderRadius: '16px', border: '1.5px solid #e5e7eb',
-                background: '#fff', color: '#111', cursor: creating ? 'default' : 'pointer',
-                fontFamily: 'inherit', textAlign: 'left',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
-              }}
+              <button onClick={() => handleCreateQuiz(true)} disabled={creating} style={{ padding: '32px 24px', borderRadius: '16px', border: '1.5px solid #e5e7eb', background: '#fff', color: '#111', cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease' }}
                 onMouseEnter={e => { if (!creating) { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#2563eb'; el.style.boxShadow = '0 4px 16px rgba(37,99,235,0.12)'; el.style.transform = 'translateY(-2px)'; } }}
-                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e5e7eb'; el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'; el.style.transform = 'translateY(0)'; }}
-              >
+                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e5e7eb'; el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'; el.style.transform = 'translateY(0)'; }}>
                 <div style={{ fontSize: '28px', marginBottom: '14px' }}>🎯</div>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '6px' }}>Usar modelo Becker</div>
                 <div style={{ fontSize: '12px', color: '#9ca3af', lineHeight: 1.55 }}>Quiz de semijoias pronto para usar</div>
               </button>
-              <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{
-                padding: '32px 24px', borderRadius: '16px', border: '1.5px solid #e5e7eb',
-                background: '#fff', color: '#111', cursor: creating ? 'default' : 'pointer',
-                fontFamily: 'inherit', textAlign: 'left',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease',
-              }}
+              <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{ padding: '32px 24px', borderRadius: '16px', border: '1.5px solid #e5e7eb', background: '#fff', color: '#111', cursor: creating ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', transition: 'border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease' }}
                 onMouseEnter={e => { if (!creating) { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#111'; el.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'; el.style.transform = 'translateY(-2px)'; } }}
-                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e5e7eb'; el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'; el.style.transform = 'translateY(0)'; }}
-              >
+                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#e5e7eb'; el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'; el.style.transform = 'translateY(0)'; }}>
                 <div style={{ fontSize: '28px', marginBottom: '14px' }}>📝</div>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '6px' }}>Começar em branco</div>
                 <div style={{ fontSize: '12px', color: '#9ca3af', lineHeight: 1.55 }}>Comece do zero</div>
@@ -533,9 +599,15 @@ export default function QuizBuilderPage() {
   }
 
   const primary = quiz.cor_primaria || '#2563eb';
+  const isPublicado = !!quiz.publicado;
 
   // ── Fixed page card style ──────────────────────────────────────────────────
   const fixedCardActive = (id: string) => selectedPageId === id;
+
+  // ── Coleta config for collect panel ────────────────────────────────────────
+  const currentColetaConfig: ColetaCampo[] = quiz.coleta_config?.length
+    ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
+    : [...DEFAULT_COLETA_CONFIG];
 
   // ── Right panel ────────────────────────────────────────────────────────────
   function renderRightPanel() {
@@ -574,13 +646,12 @@ export default function QuizBuilderPage() {
                     onChange={e => updateQuizField('capa_subtitulo', e.target.value)}
                     placeholder="Texto de apoio..." style={{ ...iStyle, resize: 'vertical' }} />
                 </div>
-                {/* Imagem de capa upload */}
                 <div>
                   <label style={lbl}>Imagem de capa</label>
                   {quiz.capa_imagem_url ? (
                     <div style={{ position: 'relative' }}>
                       <img src={quiz.capa_imagem_url} alt="" style={{ width: '100%', height: '90px', objectFit: 'cover', borderRadius: tokens.radius.sm, display: 'block' }} />
-                      <button onClick={() => { updateQuizField('capa_imagem_url', null); }} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button onClick={() => updateQuizField('capa_imagem_url', null)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <X style={{ width: '12px', height: '12px' }} />
                       </button>
                     </div>
@@ -594,7 +665,6 @@ export default function QuizBuilderPage() {
                     </>
                   )}
                 </div>
-                {/* Benefits */}
                 <div>
                   <label style={lbl}>Benefícios</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '6px' }}>
@@ -640,7 +710,7 @@ export default function QuizBuilderPage() {
                   <label style={lbl}>Logo</label>
                   {quiz.logo_url ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg }}>
-                      <img src={quiz.logo_url.startsWith('data:') ? quiz.logo_url : quiz.logo_url} alt="Logo" style={{ height: '26px', maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
+                      <img src={quiz.logo_url} alt="Logo" style={{ height: '26px', maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
                       <span style={{ flex: 1, fontSize: '12px', color: textMut }}>Logo ativa</span>
                       <button onClick={async () => { await db.from('quizzes').update({ logo_url: null }).eq('id', quiz.id); setQuiz(q => q ? { ...q, logo_url: null } : q); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
                         <X style={{ width: '14px', height: '14px' }} />
@@ -670,14 +740,11 @@ export default function QuizBuilderPage() {
 
       return (
         <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Tipo de resposta */}
           <div>
             <label style={lbl}>Tipo de resposta</label>
-            <select
-              value={selectedPergunta.tipo_resposta || 'unica'}
+            <select value={selectedPergunta.tipo_resposta || 'unica'}
               onChange={e => updatePergunta(selectedPergunta.id, 'tipo_resposta', e.target.value)}
-              style={{ ...iStyle }}
-            >
+              style={{ ...iStyle }}>
               <option value="unica">Seleção única (avança automático)</option>
               <option value="multipla">Múltipla escolha (botão continuar)</option>
             </select>
@@ -693,11 +760,8 @@ export default function QuizBuilderPage() {
             <label style={lbl}>Sub-texto <span style={{ fontWeight: 400, color: textMut }}>(opcional)</span></label>
             <input value={selectedPergunta.subtexto || ''}
               onChange={e => updatePergunta(selectedPergunta.id, 'subtexto', e.target.value || null)}
-              placeholder="Contexto adicional..."
-              style={iStyle} />
+              placeholder="Contexto adicional..." style={iStyle} />
           </div>
-
-          {/* Options */}
           <div>
             <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>Opções</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
@@ -707,26 +771,20 @@ export default function QuizBuilderPage() {
                     onChange={e => updateOpcao(op.id, 'texto', e.target.value)}
                     placeholder="Texto da opção (ex: 💎 Quero renda extra)"
                     style={{ ...iStyle, flex: 1, padding: '6px 8px' }} />
-
                   <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
                     <input type="number" value={op.pontos} title="Pontos"
                       onChange={e => updateOpcao(op.id, 'pontos', Number(e.target.value))}
                       style={{ ...iStyle, width: '52px', textAlign: 'center', padding: '6px 4px' }} />
                     <span style={{ fontSize: '10px', color: textMut, flexShrink: 0 }}>pts</span>
                   </div>
-
-                  {/* Reprova toggle */}
-                  <div
-                    title="Reprova imediato"
+                  <div title="Reprova imediato"
                     onClick={() => updateOpcao(op.id, 'reprova_imediato', !op.reprova_imediato)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0 }}
-                  >
+                    style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', flexShrink: 0 }}>
                     <div style={{ width: '26px', height: '14px', borderRadius: 99, background: op.reprova_imediato ? '#ef4444' : (isDark ? '#333' : '#d1d5db'), position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
                       <div style={{ position: 'absolute', top: '2px', left: op.reprova_imediato ? '13px' : '2px', width: '10px', height: '10px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)' }} />
                     </div>
                     <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700, whiteSpace: 'nowrap' }}>✗</span>
                   </div>
-
                   <button onClick={() => deleteOpcao(op.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
                     <Trash2 style={{ width: '12px', height: '12px' }} />
                   </button>
@@ -741,8 +799,6 @@ export default function QuizBuilderPage() {
               <Plus style={{ width: '11px', height: '11px' }} /> Adicionar opção
             </button>
           </div>
-
-          {/* Conditional */}
           <div style={{ paddingTop: '12px', borderTop: `1px solid ${border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', marginBottom: '8px' }}
               onClick={() => {
@@ -761,10 +817,7 @@ export default function QuizBuilderPage() {
             {showConditional && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <select value={selectedPergunta.condicao_pergunta_id || ''}
-                  onChange={e => {
-                    updatePergunta(selectedPergunta.id, 'condicao_pergunta_id', e.target.value || null);
-                    updatePergunta(selectedPergunta.id, 'condicao_opcao_id', null);
-                  }}
+                  onChange={e => { updatePergunta(selectedPergunta.id, 'condicao_pergunta_id', e.target.value || null); updatePergunta(selectedPergunta.id, 'condicao_opcao_id', null); }}
                   style={{ ...iStyle }}>
                   <option value="">Selecionar etapa...</option>
                   {flatPerguntas.filter(p => p.id !== selectedPergunta.id).map(p => (
@@ -788,7 +841,7 @@ export default function QuizBuilderPage() {
       );
     }
 
-    // APPROVAL
+    // APPROVAL — FEATURE 2: Pixel Meta
     if (selectedPageType === 'approval') {
       return (
         <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -824,27 +877,104 @@ export default function QuizBuilderPage() {
               ✅ Verde: ≥ {quiz.corte_verde} pts · 🟡 Amarelo: ≥ {quiz.corte_amarelo} pts · ❌ Reprovado: abaixo de {quiz.corte_amarelo} pts
             </p>
           </div>
+          {/* Pixel Meta */}
+          <div style={{ borderTop: `1px solid ${border}`, paddingTop: '12px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>Pixel Meta (opcional)</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <label style={lbl}>Pixel ID</label>
+                <input value={quiz.pixel_id || ''}
+                  onChange={e => updateQuizField('pixel_id', e.target.value || null)}
+                  placeholder="ex: 1234567890" style={iStyle} />
+              </div>
+              <div>
+                <label style={lbl}>Evento</label>
+                <input value={quiz.pixel_evento_lead || 'Lead'}
+                  onChange={e => updateQuizField('pixel_evento_lead', e.target.value || 'Lead')}
+                  placeholder="Lead" style={iStyle} />
+              </div>
+              <p style={{ fontSize: '11px', color: textMut, margin: 0, lineHeight: 1.5 }}>
+                Dispara <code style={{ background: inputBg, padding: '1px 4px', borderRadius: 4 }}>fbq('track', '{quiz.pixel_evento_lead || 'Lead'}')</code> quando o lead for aprovado.
+              </p>
+            </div>
+          </div>
+          {/* Coleta de dados inline */}
+          <div style={{ borderTop: `1px solid ${border}`, paddingTop: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>Campos do formulário</p>
+              <button onClick={() => setSelectedPageId('collect')} style={{ fontSize: '10px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, padding: 0 }}>
+                Editar campos →
+              </button>
+            </div>
+            {currentColetaConfig.map(cfg => (
+              <div key={cfg.campo} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg, marginBottom: '4px' }}>
+                <div style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Check style={{ width: '8px', height: '8px', color: '#fff', strokeWidth: 3 }} />
+                </div>
+                <span style={{ fontSize: '11px', color: textMain }}>{cfg.label}</span>
+                {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700, marginLeft: 'auto' }}>obrigatório</span>}
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
 
-    // COLLECT
+    // COLLECT — FEATURE 3: Visual coleta config editor
     if (selectedPageType === 'collect') {
-      const campos = ['nome', 'whatsapp', 'cidade', 'instagram'];
-      const campoLabels: Record<string, string> = { nome: 'Nome completo', whatsapp: 'WhatsApp', cidade: 'Cidade', instagram: 'Instagram (opcional)' };
-      const current = quiz.coleta_campos || ['nome', 'whatsapp', 'cidade', 'instagram'];
       return (
-        <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 4px' }}>Campos do formulário</p>
-          {campos.map(campo => (
-            <div key={campo} onClick={() => toggleColetaCampo(campo)}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.md, border: `1px solid ${border}`, background: cardBg, cursor: 'pointer', userSelect: 'none' }}>
-              <div style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, border: `2px solid ${current.includes(campo) ? '#2563eb' : border}`, background: current.includes(campo) ? '#2563eb' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {current.includes(campo) && <Check style={{ width: '10px', height: '10px', color: '#fff', strokeWidth: 3 }} />}
+        <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 4px' }}>Editor de campos</p>
+          {currentColetaConfig.map(cfg => {
+            const isExpanded = expandedColetaCampo === cfg.campo;
+            return (
+              <div key={cfg.campo} style={{ borderRadius: tokens.radius.md, border: `1px solid ${isExpanded ? primary : border}`, background: cardBg, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setExpandedColetaCampo(isExpanded ? null : cfg.campo)}>
+                  <span style={{ fontSize: '13px' }}>
+                    {{ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' }[cfg.campo] ?? '📝'}
+                  </span>
+                  <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: textMain }}>{cfg.label}</span>
+                  {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700 }}>obrigatório</span>}
+                  {isExpanded
+                    ? <ChevronUp style={{ width: '14px', height: '14px', color: textMut }} />
+                    : <ChevronDown style={{ width: '14px', height: '14px', color: textMut }} />
+                  }
+                </div>
+                {/* Expanded editor */}
+                {isExpanded && (
+                  <div style={{ padding: '0 12px 12px', borderTop: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '10px' }}>
+                    <div>
+                      <label style={lbl}>Label</label>
+                      <input value={cfg.label}
+                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, label: e.target.value } : c))}
+                        style={iStyle} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Placeholder</label>
+                      <input value={cfg.placeholder}
+                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, placeholder: e.target.value } : c))}
+                        style={iStyle} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: textMain }}>Obrigatório</span>
+                      <div style={{ width: '30px', height: '16px', borderRadius: 99, background: cfg.obrigatorio ? primary : (isDark ? '#333' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}
+                        onClick={() => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, obrigatorio: !c.obrigatorio } : c))}>
+                        <div style={{ position: 'absolute', top: '2px', left: cfg.obrigatorio ? '15px' : '2px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Ordem</label>
+                      <input type="number" min={1} max={10} value={cfg.ordem}
+                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, ordem: Number(e.target.value) } : c))}
+                        style={{ ...iStyle, width: '70px' }} />
+                    </div>
+                  </div>
+                )}
               </div>
-              <span style={{ fontSize: '13px', color: textMain }}>{campoLabels[campo]}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       );
     }
@@ -867,9 +997,9 @@ export default function QuizBuilderPage() {
   }
 
   // ── SCALE for phone preview ─────────────────────────────────────────────────
-  const PHONE_INNER_W = 242; // 260 - 18px borders
+  const PHONE_INNER_W = 242;
   const SCALE = PHONE_INNER_W / 480;
-  const PHONE_INNER_H = 485; // 520 - 18 borders - 17 notch
+  const PHONE_INNER_H = 485;
   const CONTENT_H = Math.round(PHONE_INNER_H / SCALE);
 
   // ── MAIN RENDER ──────────────────────────────────────────────────────────────
@@ -889,19 +1019,56 @@ export default function QuizBuilderPage() {
 
           {/* ══ LEFT COLUMN ═════════════════════════════════════════════════ */}
           <div style={{ width: '232px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${border}`, background: cardBg }}>
-            {/* Header */}
-            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <div style={{ overflow: 'hidden' }}>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: textMain, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{quiz.titulo}</p>
-                <p style={{ fontSize: '11px', color: textMut, margin: '1px 0 0' }}>/{quiz.slug}</p>
+            {/* Header — FEATURE 1: Salvar + Publicar */}
+            <div style={{ padding: '10px 12px', borderBottom: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                  <p style={{ fontSize: '12px', fontWeight: 700, color: textMain, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{quiz.titulo}</p>
+                  <p style={{ fontSize: '10px', color: textMut, margin: '1px 0 0' }}>/{quiz.slug}</p>
+                </div>
+                <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '4px', flexShrink: 0 }}>
+                  <Settings style={{ width: '14px', height: '14px' }} />
+                </button>
               </div>
-              <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '4px', flexShrink: 0 }}>
-                <Settings style={{ width: '15px', height: '15px' }} />
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {/* Salvar */}
+                <button onClick={handleManualSave} disabled={isSaving} style={{
+                  flex: 1, padding: '5px 8px', borderRadius: 7, border: `1px solid ${border}`,
+                  background: 'transparent', color: textMut, fontSize: '11px', fontWeight: 500,
+                  cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                }}>
+                  {isSaving
+                    ? <><Loader2 style={{ width: '10px', height: '10px', animation: 'spin 0.7s linear infinite' }} /> Salvando...</>
+                    : saving
+                      ? <><Loader2 style={{ width: '10px', height: '10px', animation: 'spin 0.7s linear infinite' }} /> Auto...</>
+                      : savedRecently
+                        ? <><Check style={{ width: '10px', height: '10px', color: '#16a34a' }} /> <span style={{ color: '#16a34a' }}>Salvo</span></>
+                        : 'Salvar'
+                  }
+                </button>
+                {/* Publicar */}
+                {isPublicado ? (
+                  <button onClick={() => setShowUnpublishModal(true)} style={{
+                    flex: 1, padding: '5px 8px', borderRadius: 7, border: '1px solid #16a34a',
+                    background: 'transparent', color: '#16a34a', fontSize: '11px', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                    Publicado ✓
+                  </button>
+                ) : (
+                  <button onClick={() => setShowPublishModal(true)} style={{
+                    flex: 1, padding: '5px 8px', borderRadius: 7, border: 'none',
+                    background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}>
+                    Publicar
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Page list */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
+            <div ref={pageListRef} style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
 
               {/* Fixed: Capa */}
               {(() => {
@@ -910,12 +1077,10 @@ export default function QuizBuilderPage() {
                   <div onClick={() => setSelectedPageId('cover')} style={{
                     padding: '10px 10px 10px 8px', borderRadius: '10px', marginBottom: '3px',
                     cursor: 'pointer', border: `1.5px solid ${active ? primary : 'transparent'}`,
-                    background: active ? hexToRgba(primary, 0.06) : 'transparent',
-                    transition: tokens.transition,
+                    background: active ? hexToRgba(primary, 0.06) : 'transparent', transition: tokens.transition,
                   }}
                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
-                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                  >
+                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                       <span style={{ fontSize: '14px' }}>📋</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -927,98 +1092,82 @@ export default function QuizBuilderPage() {
                 );
               })()}
 
-              {/* Questions as cards */}
+              {/* Questions grouped by bloco */}
               {flatPerguntas.length > 0 && (
                 <div style={{ borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`, marginBottom: '3px', paddingTop: '4px', paddingBottom: '4px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', padding: '2px 4px 4px' }}>
-                    Etapas ({flatPerguntas.length})
-                  </div>
-                  {flatPerguntas.map(perg => {
-                    const active = selectedPageId === perg.id;
-                    const isDraggingOver = dragOverId === perg.id && draggedId !== perg.id;
-                    const ops = (opcoes[perg.id] || []).slice(0, 2);
-                    const tipoLabel = (perg.tipo_resposta || 'unica') === 'multipla' ? 'múltipla' : 'única';
+                  {[...blocos].sort((a, b) => a.ordem - b.ordem).map(bloco => {
+                    const blocoFlatPergs = flatPerguntas.filter(p => p.bloco_id === bloco.id);
+                    if (blocoFlatPergs.length === 0) return null;
+                    const isEditingBloco = editingBlocoId === bloco.id;
                     return (
-                      <div
-                        key={perg.id}
-                        draggable
-                        onDragStart={() => setDraggedId(perg.id)}
-                        onDragOver={e => { e.preventDefault(); setDragOverId(perg.id); }}
-                        onDragLeave={() => setDragOverId(null)}
-                        onDrop={() => {
-                          if (draggedId && draggedId !== perg.id) swapByDrag(draggedId, perg.id);
-                          setDraggedId(null); setDragOverId(null);
-                        }}
-                        onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                        onClick={() => setSelectedPageId(perg.id)}
-                        onMouseEnter={() => setHoveredCard(perg.id)}
-                        onMouseLeave={() => setHoveredCard(null)}
-                        style={{
-                          padding: '8px 8px 8px 4px', borderRadius: '10px', marginBottom: '2px',
-                          cursor: 'pointer',
-                          border: `1.5px solid ${active ? primary : isDraggingOver ? '#94a3b8' : 'transparent'}`,
-                          background: active
-                            ? hexToRgba(primary, 0.06)
-                            : isDraggingOver ? '#f1f5f9'
-                            : hoveredCard === perg.id ? (isDark ? '#1a1a1e' : '#f9fafb')
-                            : 'transparent',
-                          opacity: draggedId === perg.id ? 0.4 : 1,
-                          transition: 'background 0.1s, border-color 0.1s, opacity 0.1s',
-                          boxShadow: active ? `0 0 0 3px ${hexToRgba(primary, 0.12)}` : 'none',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                          {/* Drag handle */}
-                          <div style={{ paddingTop: '2px', color: textMut, cursor: 'grab', flexShrink: 0 }}
-                            title="Arrastar para reordenar">
-                            <GripVertical style={{ width: '12px', height: '12px' }} />
-                          </div>
-                          {/* Content */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-                              <span style={{ fontSize: '10px', fontWeight: 700, color: active ? primary : textMut, flexShrink: 0, minWidth: '14px' }}>
-                                {perg.globalIndex}.
-                              </span>
-                              <span style={{ fontSize: '11px', fontWeight: active ? 700 : 500, color: active ? primary : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                {perg.texto ? perg.texto.slice(0, 28) : 'Sem texto'}
-                              </span>
-                            </div>
-                            {/* Type + options mini preview */}
-                            <div style={{ paddingLeft: '18px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-                                <div style={{ height: '5px', width: '5px', borderRadius: '50%', background: active ? primary : '#d1d5db', flexShrink: 0 }} />
-                                <span style={{ fontSize: '9px', color: textMut }}>{tipoLabel}</span>
-                              </div>
-                              {ops.map((op, i) => (
-                                <div key={op.id || i} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
-                                  <div style={{ height: '4px', flex: 1, borderRadius: '3px', background: isDark ? '#2a2a2e' : '#f0f0f0', maxWidth: '80%' }}>
-                                    <div style={{ height: '100%', borderRadius: '3px', background: active ? hexToRgba(primary, 0.4) : '#d1d5db', width: op.texto ? `${Math.min(100, Math.max(20, op.texto.length * 4))}%` : '40%' }} />
-                                  </div>
-                                </div>
-                              ))}
-                              {ops.length === 0 && (
-                                <div style={{ height: '4px', width: '60%', borderRadius: '3px', background: isDark ? '#2a2a2e' : '#f0f0f0' }} />
-                              )}
-                            </div>
-                          </div>
-                          {/* Actions */}
-                          {(hoveredCard === perg.id || active) && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                              <button onClick={() => duplicatePergunta(perg.id)} title="Duplicar"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#2a2a2e' : '#f3f4f6'; (e.currentTarget as HTMLElement).style.color = textMain; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
-                                <Copy style={{ width: '11px', height: '11px' }} />
-                              </button>
-                              <button onClick={() => deletePergunta(perg.id)} title="Deletar"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
-                                <Trash2 style={{ width: '11px', height: '11px' }} />
-                              </button>
-                            </div>
+                      <div key={bloco.id}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 4px 3px' }}
+                          onClick={e => e.stopPropagation()}>
+                          <span style={{ fontSize: '12px', flexShrink: 0 }}>{bloco.emoji || defaultEmojiForBloco(bloco.titulo)}</span>
+                          {isEditingBloco ? (
+                            <input autoFocus value={bloco.titulo}
+                              onChange={e => updateBlocoField(bloco.id, 'titulo', e.target.value)}
+                              onBlur={() => setEditingBlocoId(null)}
+                              onKeyDown={e => e.key === 'Enter' && setEditingBlocoId(null)}
+                              style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: textMain, border: `1px solid ${primary}`, borderRadius: '4px', padding: '1px 5px', background: inputBg, outline: 'none', fontFamily: 'inherit' }} />
+                          ) : (
+                            <span onClick={() => setEditingBlocoId(bloco.id)} title="Clique para renomear"
+                              style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'text' }}>
+                              {bloco.titulo}
+                            </span>
                           )}
                         </div>
+                        {blocoFlatPergs.map(perg => {
+                          const active = selectedPageId === perg.id;
+                          const isDraggingOver = dragOverId === perg.id && draggedId !== perg.id;
+                          return (
+                            <div key={perg.id} draggable
+                              onDragStart={e => { e.dataTransfer.setData('text/plain', perg.id); setDraggedId(perg.id); }}
+                              onDragOver={e => { e.preventDefault(); setDragOverId(perg.id); }}
+                              onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOverId(null); }}
+                              onDrop={() => { if (draggedId && draggedId !== perg.id) swapByDrag(draggedId, perg.id); setDraggedId(null); setDragOverId(null); }}
+                              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+                              onClick={() => setSelectedPageId(perg.id)}
+                              onMouseEnter={() => setHoveredCard(perg.id)}
+                              onMouseLeave={() => setHoveredCard(null)}
+                              style={{
+                                padding: '7px 8px 7px 4px', borderRadius: '10px', marginBottom: '2px', cursor: 'pointer',
+                                border: `1.5px solid ${active ? primary : isDraggingOver ? '#94a3b8' : 'transparent'}`,
+                                background: active ? hexToRgba(primary, 0.06) : isDraggingOver ? '#f1f5f9' : hoveredCard === perg.id ? (isDark ? '#1a1a1e' : '#f9fafb') : 'transparent',
+                                opacity: draggedId === perg.id ? 0.4 : 1,
+                                transition: 'background 0.1s, border-color 0.1s, opacity 0.1s',
+                                boxShadow: active ? `0 0 0 3px ${hexToRgba(primary, 0.12)}` : 'none',
+                              }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <div style={{ color: textMut, cursor: 'grab', flexShrink: 0 }} title="Arrastar para reordenar">
+                                  <GripVertical style={{ width: '12px', height: '12px' }} />
+                                </div>
+                                <span style={{ fontSize: '10px', fontWeight: 700, color: active ? primary : textMut, flexShrink: 0 }}>
+                                  {perg.globalIndex}.
+                                </span>
+                                <span style={{ flex: 1, fontSize: '11px', fontWeight: active ? 700 : 500, color: active ? primary : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {perg.texto ? perg.texto.slice(0, 26) : 'Sem texto'}
+                                </span>
+                                {(hoveredCard === perg.id || active) && (
+                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                                    <button onClick={() => duplicatePergunta(perg.id)} title="Duplicar"
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#2a2a2e' : '#f3f4f6'; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                                      <Copy style={{ width: '11px', height: '11px' }} />
+                                    </button>
+                                    <button onClick={() => setShowDeleteModal(perg.id)} title="Excluir"
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
+                                      <Trash2 style={{ width: '11px', height: '11px' }} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -1027,21 +1176,19 @@ export default function QuizBuilderPage() {
 
               {/* Fixed: Approval, Collect, Rejection */}
               {[
-                { id: 'approval', icon: '✅', label: 'Aprovação', sub: 'Tela de sucesso' },
-                { id: 'collect',  icon: '📝', label: 'Coleta de dados', sub: 'Formulário' },
-                { id: 'rejection',icon: '❌', label: 'Reprovação', sub: 'Tela de reprova' },
+                { id: 'approval',  icon: '✅', label: 'Aprovação',      sub: 'Tela de sucesso' },
+                { id: 'collect',   icon: '📝', label: 'Coleta de dados', sub: 'Formulário' },
+                { id: 'rejection', icon: '❌', label: 'Reprovação',      sub: 'Tela de reprova' },
               ].map(({ id, icon, label, sub }) => {
                 const active = fixedCardActive(id);
                 return (
                   <div key={id} onClick={() => setSelectedPageId(id)} style={{
                     padding: '10px 10px 10px 8px', borderRadius: '10px', marginBottom: '3px',
                     cursor: 'pointer', border: `1.5px solid ${active ? primary : 'transparent'}`,
-                    background: active ? hexToRgba(primary, 0.06) : 'transparent',
-                    transition: tokens.transition,
+                    background: active ? hexToRgba(primary, 0.06) : 'transparent', transition: tokens.transition,
                   }}
                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
-                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                  >
+                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                       <span style={{ fontSize: '14px' }}>{icon}</span>
                       <div>
@@ -1075,15 +1222,10 @@ export default function QuizBuilderPage() {
           </div>
 
           {/* ══ CENTER COLUMN: Phone preview ════════════════════════════════ */}
-          <div className="quiz-phone-panel" style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: bg, padding: '24px', overflow: 'hidden',
-          }}>
+          <div className="quiz-phone-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '24px', overflow: 'hidden' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: textMut, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  Preview ao vivo
-                </p>
+                <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: textMut, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Preview ao vivo</p>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {(['capa', 'quiz', 'aprovado_form', 'reprovado'] as Phase[]).map(ph => (
                     <button key={ph} onClick={() => { setPreviewPhase(ph); if (ph === 'quiz') setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
@@ -1093,46 +1235,19 @@ export default function QuizBuilderPage() {
                   ))}
                 </div>
               </div>
-
               {/* Phone frame */}
-              <div style={{
-                width: '260px', height: '520px', borderRadius: '44px',
-                border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`,
-                boxShadow: isDark
-                  ? '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.02)'
-                  : '0 40px 80px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.5)',
-                overflow: 'hidden', background: '#fff', position: 'relative', flexShrink: 0,
-              }}>
-                {/* Notch */}
-                <div style={{
-                  position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-                  width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111',
-                  borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20,
-                }} />
-                {/* Scaled QuizRenderer */}
+              <div style={{ width: '260px', height: '520px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: isDark ? '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 40px 80px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.5)', overflow: 'hidden', background: '#fff', position: 'relative', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20 }} />
                 <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
-                  <div style={{
-                    position: 'absolute', top: '17px', left: 0,
-                    width: `${480}px`,
-                    height: `${CONTENT_H}px`,
-                    transformOrigin: 'top left',
-                    transform: `scale(${SCALE})`,
-                  }}>
+                  <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
                     {quiz && (
-                      <QuizRenderer
-                        quiz={quiz}
-                        blocos={blocos}
-                        phase={previewPhase}
-                        currentPergunta={previewPerguntaWithOpcoes as any}
-                        currentBloco={previewCurrentBloco}
-                        currentIdx={previewIdx}
-                        totalVisible={flatPerguntas.length}
+                      <QuizRenderer quiz={quiz} blocos={blocos} phase={previewPhase}
+                        currentPergunta={previewPerguntaWithOpcoes as any} currentBloco={previewCurrentBloco}
+                        currentIdx={previewIdx} totalVisible={flatPerguntas.length}
                         selectedOpcao={previewSelectedOpcao}
                         onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                         onOpcaoClick={handlePreviewOpcaoClick as any}
-                        onContinue={advancePreview}
-                        isPreview
-                      />
+                        onContinue={advancePreview} isPreview />
                     )}
                   </div>
                 </div>
@@ -1143,7 +1258,6 @@ export default function QuizBuilderPage() {
 
           {/* ══ RIGHT COLUMN: Edit panel ════════════════════════════════════ */}
           <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${border}`, background: cardBg }}>
-            {/* Header */}
             <div style={{ padding: '8px 14px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <span style={{ fontSize: '12px', fontWeight: 600, color: textMain }}>
                 {selectedPageType === 'cover'     ? '📋 Capa' :
@@ -1153,7 +1267,7 @@ export default function QuizBuilderPage() {
                  `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
               </span>
               <span style={{ fontSize: '11px', color: textMut, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                {saving && <><Loader2 style={{ width: '11px', height: '11px', animation: 'spin 0.7s linear infinite' }} /> Salvando...</>}
+                {saving && <><Loader2 style={{ width: '11px', height: '11px', animation: 'spin 0.7s linear infinite' }} /> Auto...</>}
                 {!saving && savedRecently && <><Check style={{ width: '11px', height: '11px', color: '#16a34a' }} /> <span style={{ color: '#16a34a' }}>Salvo</span></>}
               </span>
             </div>
@@ -1226,20 +1340,78 @@ export default function QuizBuilderPage() {
               <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
                 <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
                   {quiz && (
-                    <QuizRenderer
-                      quiz={quiz} blocos={blocos} phase={previewPhase}
-                      currentPergunta={previewPerguntaWithOpcoes as any}
-                      currentBloco={previewCurrentBloco}
+                    <QuizRenderer quiz={quiz} blocos={blocos} phase={previewPhase}
+                      currentPergunta={previewPerguntaWithOpcoes as any} currentBloco={previewCurrentBloco}
                       currentIdx={previewIdx} totalVisible={flatPerguntas.length}
                       selectedOpcao={previewSelectedOpcao}
                       onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                       onOpcaoClick={handlePreviewOpcaoClick as any}
-                      onContinue={advancePreview}
-                      isPreview
-                    />
+                      onContinue={advancePreview} isPreview />
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BUG 4: DELETE MODAL ─────────────────────────────────────────────── */}
+      {showDeleteModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+          onClick={() => setShowDeleteModal(null)}>
+          <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Excluir etapa?</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: textMut }}>Esta ação não pode ser desfeita.</p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button onClick={() => setShowDeleteModal(null)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancelar
+              </button>
+              <button onClick={async () => { const id = showDeleteModal; setShowDeleteModal(null); await deletePergunta(id); }} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: 'none', background: '#ef4444', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FEATURE 1: PUBLISH MODAL ────────────────────────────────────────── */}
+      {showPublishModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+          onClick={() => setShowPublishModal(false)}>
+          <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Publicar quiz?</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: textMut }}>
+              <span style={{ color: '#2563eb', fontWeight: 600 }}>{quizLink}</span> ficará público e visível para todos.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button onClick={() => setShowPublishModal(false)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancelar
+              </button>
+              <button onClick={handlePublish} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Publicar agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FEATURE 1: UNPUBLISH MODAL ──────────────────────────────────────── */}
+      {showUnpublishModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+          onClick={() => setShowUnpublishModal(false)}>
+          <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Despublicar quiz?</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: textMut }}>O quiz ficará inacessível para novos visitantes.</p>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button onClick={() => setShowUnpublishModal(false)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancelar
+              </button>
+              <button onClick={handleUnpublish} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: 'none', background: '#ef4444', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Despublicar
+              </button>
             </div>
           </div>
         </div>
