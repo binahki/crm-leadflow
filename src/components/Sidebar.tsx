@@ -45,23 +45,44 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const isDark = theme === 'dark';
 
   const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
+  const [waUnread, setWaUnread] = useState(0);
 
   useEffect(() => {
     if (!orgId) return;
     async function fetchBadges() {
-      const [{ data: wh }, { data: org }, { count }] = await Promise.all([
-        supabase.from('configuracoes_whatsapp').select('instance_id, webhook_token').eq('org_id', orgId!).maybeSingle(),
+      const [{ data: org }, { count }] = await Promise.all([
         supabase.from('organizations').select('meta_token').eq('id', orgId!).single(),
         supabase.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', orgId!),
       ]);
       setAlertBadges({
-        '/whatsapp': !((wh as any)?.instance_id),
         '/webhook': (count ?? 0) === 0,
         '/meta-ads': !((org as any)?.meta_token),
       });
     }
     fetchBadges();
   }, [orgId, location.pathname]);
+
+  // Badge unread WhatsApp — realtime
+  useEffect(() => {
+    if (!orgId) return;
+    async function fetchUnread() {
+      const { data } = await (supabase as any)
+        .from('whatsapp_conversations')
+        .select('unread_count')
+        .eq('org_id', orgId!);
+      const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
+      setWaUnread(total);
+    }
+    fetchUnread();
+    const ch = supabase
+      .channel('sidebar-wa-unread-' + orgId)
+      .on('postgres_changes' as any, {
+        event: '*', schema: 'public', table: 'whatsapp_conversations',
+        filter: `org_id=eq.${orgId}`,
+      }, fetchUnread)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [orgId]);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === 'true'; } catch { return false; }
@@ -140,6 +161,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
           {items.map(item => {
             const active = isActive(item.href);
+            const isWa = item.href === '/whatsapp';
             return (
               <Link
                 key={item.href}
@@ -154,11 +176,20 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                   textDecoration: 'none', transition: 'background 0.12s, color 0.12s',
                   background: active ? '#2563eb' : 'transparent',
                   color: active ? '#ffffff' : mutClr,
+                  position: 'relative',
                 }}
                 onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = hovBg; (e.currentTarget as HTMLElement).style.color = isDark ? '#fff' : '#111'; } }}
                 onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = mutClr; } }}
               >
-                <item.icon style={{ width: '16px', height: '16px', flexShrink: 0, strokeWidth: active ? 2.2 : 1.7 }} />
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <item.icon style={{ width: '16px', height: '16px', strokeWidth: active ? 2.2 : 1.7 }} />
+                  {/* Badge collapsed WhatsApp unread */}
+                  {isCollapsed && isWa && waUnread > 0 && (
+                    <span style={{ position: 'absolute', top: '-5px', right: '-6px', minWidth: '14px', height: '14px', borderRadius: '99px', background: '#25D366', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                      {waUnread > 99 ? '99+' : waUnread}
+                    </span>
+                  )}
+                </div>
                 {!isCollapsed && (
                   <>
                     <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
@@ -168,6 +199,17 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                         background: '#ef4444', flexShrink: 0,
                         boxShadow: '0 0 4px rgba(239,68,68,0.5)',
                       }} />
+                    )}
+                    {/* Badge expanded WhatsApp unread */}
+                    {isWa && waUnread > 0 && (
+                      <span style={{
+                        fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '20px',
+                        background: active ? 'rgba(255,255,255,0.22)' : '#25D366',
+                        color: '#fff',
+                        minWidth: '22px', textAlign: 'center',
+                      }}>
+                        {waUnread > 99 ? '99+' : waUnread}
+                      </span>
                     )}
                     {item.badge && leadCount > 0 && (
                       <span style={{
