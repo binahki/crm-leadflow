@@ -27,7 +27,7 @@ export interface QuizConfig {
   coleta_config?: ColetaCampo[] | null;
   pixel_id?: string | null; pixel_evento_lead?: string | null;
   cor_botao?: string | null; cor_fundo?: string | null;
-  capa_imagem_height?: number | null;
+  capa_imagem_height?: number | null; logo_altura?: number | null;
   emoji_aprovado?: string | null; emoji_reprovado?: string | null;
 }
 export interface Bloco { id: string; titulo: string; ordem: number; emoji?: string | null; }
@@ -166,7 +166,7 @@ export function QuizRenderer({
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '14px 24px 8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           {quiz.logo_url ? (
             <img src={quiz.logo_url} alt={quiz.titulo}
-              style={{ maxHeight: '32px', maxWidth: '120px', objectFit: 'contain' }} />
+              style={{ maxHeight: `${quiz.logo_altura || 32}px`, maxWidth: '160px', objectFit: 'contain' }} />
           ) : (
             <span style={{ fontSize: '14px', fontWeight: 700, color: '#111' }}>{quiz.titulo}</span>
           )}
@@ -444,8 +444,31 @@ export function QuizRenderer({
             </div>
           )}
           {isPreview && (
-            <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '20px', textAlign: 'center', border: '1px solid #f0f0f0' }}>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>📝 Formulário de coleta</p>
+            <div style={{ padding: '0 0 20px' }}>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px', textAlign: 'center', lineHeight: 1.6 }}>
+                Preencha seus dados para concluir o cadastro.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {coletaConfig.map(cfg => (
+                  <div key={cfg.campo}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>
+                      {cfg.label}
+                      {cfg.obrigatorio
+                        ? <span style={{ color: '#ef4444' }}> *</span>
+                        : <span style={{ color: '#9ca3af' }}> (opcional)</span>}
+                    </label>
+                    <div style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '14px', color: '#9ca3af', background: '#f9fafb' }}>
+                      {cfg.placeholder}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ width: '100%', padding: '15px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '14px', fontWeight: 700, textAlign: 'center', marginTop: '4px' }}>
+                  Enviar meus dados →
+                </div>
+                <p style={{ textAlign: 'center', fontSize: '11px', color: '#9ca3af', margin: 0 }}>
+                  ⏰ Responda em até 24h para garantir sua vaga
+                </p>
+              </div>
             </div>
           )}
         </div>

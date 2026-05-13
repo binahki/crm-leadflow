@@ -306,9 +306,10 @@ export default function QuizBuilderPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function updateQuizField(field: string, value: any) {
     if (!quiz) return;
-    setQuiz({ ...quiz, [field]: value } as QuizConfig);
     const quizId = quiz.id;
+    setQuiz(prev => prev ? { ...prev, [field]: value } : prev);
     debounce(`quiz_${field}`, async () => {
+      console.log('[save] quiz field:', field, value, 'id:', quizId);
       const { error } = await db.from('quizzes').update({ [field]: value }).eq('id', quizId);
       if (error) throw new Error(error.message);
     });
@@ -464,10 +465,12 @@ export default function QuizBuilderPage() {
   function updatePergunta(id: string, field: string, value: string | null) {
     setPerguntas(prev => {
       const next = { ...prev };
-      for (const bid of Object.keys(next)) next[bid] = next[bid].map(p => p.id === id ? { ...p, [field]: value } : p);
+      for (const bid of Object.keys(next))
+        next[bid] = next[bid].map(p => p.id === id ? { ...p, [field]: value } : p);
       return next;
     });
     debounce(`perg_${id}_${field}`, async () => {
+      console.log('[save] pergunta:', id, field, value);
       const { error } = await db.from('quiz_perguntas').update({ [field]: value }).eq('id', id);
       if (error) throw new Error(error.message);
     });
@@ -497,10 +500,12 @@ export default function QuizBuilderPage() {
   function updateOpcao(id: string, field: string, value: string | number | boolean | null) {
     setOpcoes(prev => {
       const next = { ...prev };
-      for (const pid of Object.keys(next)) next[pid] = next[pid].map(o => o.id === id ? { ...o, [field]: value } : o);
+      for (const pid of Object.keys(next))
+        next[pid] = next[pid].map(o => o.id === id ? { ...o, [field]: value } : o);
       return next;
     });
     debounce(`opcao_${id}_${field}`, async () => {
+      console.log('[save] opcao:', id, field, value);
       const { error } = await db.from('quiz_opcoes').update({ [field]: value }).eq('id', id);
       if (error) throw new Error(error.message);
     });
@@ -707,7 +712,7 @@ export default function QuizBuilderPage() {
                               if (error) throw new Error(error.message);
                             }, 500);
                           }}
-                          style={{ width: '100%', marginTop: '4px', accentColor: primary }} />
+                          style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }} />
                       </div>
                     </div>
                   ) : (
@@ -794,12 +799,31 @@ export default function QuizBuilderPage() {
                 <div>
                   <label style={lbl}>Logo</label>
                   {quiz.logo_url ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg }}>
-                      <img src={quiz.logo_url} alt="Logo" style={{ height: '26px', maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
-                      <span style={{ flex: 1, fontSize: '12px', color: textMut }}>Logo ativa</span>
-                      <button onClick={async () => { await db.from('quizzes').update({ logo_url: null }).eq('id', quiz.id); setQuiz(q => q ? { ...q, logo_url: null } : q); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
-                        <X style={{ width: '14px', height: '14px' }} />
-                      </button>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg }}>
+                        <img src={quiz.logo_url} alt="Logo" style={{ height: `${quiz.logo_altura || 32}px`, maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
+                        <span style={{ flex: 1, fontSize: '12px', color: textMut }}>Logo ativa</span>
+                        <button onClick={async () => { await db.from('quizzes').update({ logo_url: null }).eq('id', quiz.id); setQuiz(q => q ? { ...q, logo_url: null } : q); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
+                          <X style={{ width: '14px', height: '14px' }} />
+                        </button>
+                      </div>
+                      <div style={{ marginTop: '10px' }}>
+                        <label style={lbl}>Tamanho da logo: {quiz.logo_altura || 32}px</label>
+                        <input
+                          type="range" min={20} max={80} step={4}
+                          value={quiz.logo_altura || 32}
+                          onChange={e => {
+                            const val = Number(e.target.value);
+                            const qId = quiz.id;
+                            setQuiz(q => q ? { ...q, logo_altura: val } : q);
+                            debounce('quiz_logo_altura', async () => {
+                              const { error } = await db.from('quizzes').update({ logo_altura: val }).eq('id', qId);
+                              if (error) throw new Error(error.message);
+                            }, 300);
+                          }}
+                          style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }}
+                        />
+                      </div>
                     </div>
                   ) : (
                     <>
