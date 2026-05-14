@@ -76,7 +76,18 @@ export default function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     const { error } = await signIn(email, password);
-    if (error) toast.error('Email ou senha incorretos.');
+    if (error) {
+      console.error('Erro de login:', error.message, error.status);
+      if (error.status === 400 || error.message.includes('Invalid login credentials')) {
+        toast.error('Email ou senha incorretos.');
+      } else if (error.message.toLowerCase().includes('email not confirmed')) {
+        toast.error('Confirme seu email antes de entrar.');
+      } else if (error.status === 0 || error.message.toLowerCase().includes('fetch') || error.message.toLowerCase().includes('network')) {
+        toast.error('Sem conexão. Verifique sua internet e tente novamente.');
+      } else {
+        toast.error('Erro ao entrar. Tente novamente em alguns instantes.');
+      }
+    }
     setSubmitting(false);
   }
 
