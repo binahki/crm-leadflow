@@ -8,25 +8,38 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let resolved = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Renovação silenciosa de token — não altera estado de loading
       if (event === 'TOKEN_REFRESHED') return;
 
+      // Sessão encerrada ou token expirado sem possibilidade de refresh
       if (event === 'SIGNED_OUT' || (!session && event !== 'INITIAL_SESSION')) {
         localStorage.clear();
         window.location.href = '/login';
         return;
       }
 
+      resolved = true;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Carrega sessão inicial — sempre resolve o loading, mesmo em caso de erro
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!resolved) {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        // Falha de rede ou refresh_token inválido — encerra loading para não travar a tela
+        setLoading(false);
+      });
 
     return () => subscription.unsubscribe();
   }, []);

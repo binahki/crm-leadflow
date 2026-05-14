@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { BloqueioAssinatura } from './BloqueioAssinatura';
 
 const EXEMPT_PATHS = ['/admin'];
@@ -14,6 +16,18 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isExempt = EXEMPT_PATHS.includes(location.pathname);
   const isAdmin = user?.email === ADMIN_EMAIL;
+
+  // Timeout de segurança: se loading não resolver em 5s, o refresh_token provavelmente
+  // está inválido/expirado e o Supabase ficou travado. Força logout.
+  useEffect(() => {
+    if (!loading) return;
+    const timeout = setTimeout(async () => {
+      await supabase.auth.signOut();
+      localStorage.clear();
+      window.location.href = '/login';
+    }, 5000);
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   if (loading) {
     return (
