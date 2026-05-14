@@ -122,9 +122,18 @@ serve(async (req) => {
       for (const msg of value.messages) {
         const contactPhone = msg.from
         const contactName = value.contacts?.[0]?.profile?.name || contactPhone
-        let content = msg.text?.body || `[${msg.type}]`
-        const wamid = msg.id
         const type = msg.type
+        let content = ""
+        
+        if (type === 'text') content = msg.text?.body || ""
+        else if (type === 'contacts') {
+          content = msg.contacts?.map((c: any) => c.name?.formatted_name || c.phones?.[0]?.phone || 'Contato').join(', ')
+        } else if (type === 'reaction') {
+          content = msg.reaction?.emoji || '❤️'
+        } else {
+          content = `[${type}]`
+        }
+        const wamid = msg.id
 
         let media_url = null
         let media_mime_type = null

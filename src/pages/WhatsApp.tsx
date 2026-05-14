@@ -1164,16 +1164,47 @@ function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: 
       return <img src={src} alt="Figurinha" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />;
     }
 
+    // CONTACTS
+    if (msg.type === 'contacts') {
+      const names = msg.content?.split(', ') || ['Contato'];
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '160px' }}>
+          {names.map((name: string, i: number) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '8px 10px', borderRadius: '10px',
+              background: 'rgba(0,0,0,0.06)',
+            }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '50%',
+                background: '#25d366', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: 700,
+                flexShrink: 0,
+              }}>
+                {name[0]?.toUpperCase() || '?'}
+              </div>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>{name}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     // REACTION
     if (msg.type === 'reaction') {
-      return <span style={{ fontSize: '20px' }}>{msg.content}</span>;
+      return (
+        <div style={{ fontSize: '24px', lineHeight: 1, padding: '4px 0' }}>
+          {msg.content || '❤️'}
+        </div>
+      );
     }
 
     // TEXTO padrão
     return (
-      <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-        {msg.content}
-      </span>
+      <span
+        style={{ fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word' }}
+        dangerouslySetInnerHTML={{ __html: formatWAText(msg.content || '') }}
+      />
     );
   }
 
@@ -1181,10 +1212,10 @@ function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: 
     <div style={{ display: 'flex', width: '100%', marginBottom: '4px', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
       <div style={{
         maxWidth: '70%', 
-        padding: msg.type === 'sticker' ? '4px' : '6px 10px',
+        padding: msg.type === 'sticker' || msg.type === 'reaction' ? '4px' : '6px 10px',
         borderRadius: isMe ? '12px 0 12px 12px' : '0 12px 12px 12px',
-        background: msg.type === 'sticker' ? 'transparent' : (isMe ? (theme === 'dark' ? '#005c4b' : '#dcf8c6') : (theme === 'dark' ? '#1e1e22' : '#f0f0f0')),
-        boxShadow: msg.type === 'sticker' ? 'none' : '0 1px 0.5px rgba(0,0,0,0.13)',
+        background: msg.type === 'sticker' || msg.type === 'reaction' ? 'transparent' : (isMe ? (theme === 'dark' ? '#005c4b' : '#dcf8c6') : (theme === 'dark' ? '#1e1e22' : '#f0f0f0')),
+        boxShadow: msg.type === 'sticker' || msg.type === 'reaction' ? 'none' : '0 1px 0.5px rgba(0,0,0,0.13)',
         border: 'none',
         position: 'relative',
         color: isMe ? (theme === 'dark' ? '#e9edef' : '#111') : (theme === 'dark' ? '#f4f4f5' : '#111')
