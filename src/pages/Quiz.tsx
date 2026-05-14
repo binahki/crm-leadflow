@@ -13,8 +13,8 @@ import {
 import type { Phase } from '@/components/quiz/QuizRenderer';
 import {
   Plus, Trash2, Copy, ExternalLink, RotateCcw, ClipboardList, ChevronLeft,
-  Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp, TrendingUp, ArrowDownRight, ArrowUpRight, Filter, 
-  Search, Download, Calendar, ChevronRight, 
+  Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp, TrendingUp, ArrowDownRight, ArrowUpRight, Filter,
+  Search, Download, Calendar, ChevronRight,
   MessageCircle, Instagram, MapPin, Sparkles, BrainCircuit,
   Clock, Share2, MoreHorizontal, TrendingDown,
 } from 'lucide-react';
@@ -155,11 +155,11 @@ function SortableOpcaoCard({ op, isDark, border, textMut, primary, iStyle, lbl, 
             <Settings style={{ width: '13px', height: '13px' }} />
           </button>
         </div>
-        
+
         {isEditing && (
           <div style={{ margin: '2px 0 8px 18px', padding: '10px', borderRadius: '8px', background: isDark ? '#1a1a1e' : '#f9fafb', border: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ ...lbl, fontSize: '10px' }}>Redirecionar para:</label>
-            <select 
+            <select
               value={op.reprova_imediato ? 'reprovado' : (op as any).target_pergunta_id || 'next'}
               onChange={e => {
                 const val = e.target.value;
@@ -246,12 +246,12 @@ export default function QuizBuilderPage() {
   const pageListRef = useRef<HTMLDivElement>(null);
 
   // Theme colors
-  const bg       = isDark ? '#0d0d0f' : '#f4f2ef';
-  const cardBg   = isDark ? '#111113' : '#ffffff';
-  const border   = isDark ? '#1e1e22' : '#e8e6e3';
-  const textMut  = isDark ? 'rgba(255,255,255,0.4)' : '#9d9189';
+  const bg = isDark ? '#0d0d0f' : '#f4f2ef';
+  const cardBg = isDark ? '#111113' : '#ffffff';
+  const border = isDark ? '#1e1e22' : '#e8e6e3';
+  const textMut = isDark ? 'rgba(255,255,255,0.4)' : '#9d9189';
   const textMain = isDark ? '#f4f4f5' : '#1a1918';
-  const inputBg  = isDark ? '#1a1a1e' : '#f7f6f4';
+  const inputBg = isDark ? '#1a1a1e' : '#f7f6f4';
 
   // Computed flat list
   const flatPerguntas: FlatPergunta[] = [...blocos]
@@ -262,15 +262,15 @@ export default function QuizBuilderPage() {
   const quizLink = quiz ? `${BASE_URL}/quiz/${quiz.slug}` : '';
 
   type PageType = 'cover' | 'question' | 'approval' | 'collect' | 'rejection';
-    selectedPageId === 'analise'    ? 'analise'  :
+  selectedPageId === 'analise' ? 'analise' :
     selectedPageId === 'rejection' ? 'rejection' : 'question';
 
   const selectedPageType: PageType | 'analise' =
-    selectedPageId === 'cover'     ? 'cover'    :
-    selectedPageId === 'approval'  ? 'approval' :
-    selectedPageId === 'analise'   ? 'analise'  :
-    selectedPageId === 'collect'   ? 'collect'  :
-    selectedPageId === 'rejection' ? 'rejection' : 'question';
+    selectedPageId === 'cover' ? 'cover' :
+      selectedPageId === 'approval' ? 'approval' :
+        selectedPageId === 'analise' ? 'analise' :
+          selectedPageId === 'collect' ? 'collect' :
+            selectedPageId === 'rejection' ? 'rejection' : 'question';
 
   const selectedPergunta = selectedPageType === 'question'
     ? flatPerguntas.find(p => p.id === selectedPageId) ?? null
@@ -311,13 +311,13 @@ export default function QuizBuilderPage() {
   async function loadData() {
     if (!orgId) return;
     setLoading(true);
-    
+
     // Fetch all quizzes for this org
     const { data: quizzesData, error: qErr } = await db.from('quizzes')
       .select('*')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false });
-    
+
     if (qErr) {
       toast.error('Erro ao carregar quizes');
       setLoading(false);
@@ -368,7 +368,7 @@ export default function QuizBuilderPage() {
   // ── Create quiz ─────────────────────────────────────────────────────────────
   async function handleCreateQuiz(withSeed = false) {
     if (!orgId) return;
-    
+
     // Limit to 1 quiz
     if (quizzes.length >= 1) {
       toast.error('Limite de 1 quiz atingido. Por enquanto, você só pode ter um quiz ativo.', {
@@ -386,7 +386,7 @@ export default function QuizBuilderPage() {
       const baseSlug = (org?.nome || 'meu-quiz').toLowerCase()
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      
+
       // Slug more robust
       const randomSuffix = Math.random().toString(36).substring(2, 6);
       const slug = quizzes.length > 0 ? `${baseSlug}-${quizzes.length + 1}-${randomSuffix}` : `${baseSlug}-${randomSuffix}`;
@@ -396,7 +396,7 @@ export default function QuizBuilderPage() {
       if (withSeed) {
         // 1. Busca dados da Becker
         const beckerOrgId = '81b1ba7b-5c03-45c5-a74a-6ea8eb3432ae';
-        
+
         const { data: beckerQuiz } = await db.from('quizzes')
           .select('*').eq('org_id', beckerOrgId)
           .order('created_at', { ascending: false }).limit(1).single();
@@ -411,7 +411,7 @@ export default function QuizBuilderPage() {
 
         const { data: bOps } = bPergs?.length
           ? await db.from('quiz_opcoes')
-              .select('*').in('pergunta_id', bPergs.map((p: any) => p.id)).order('ordem')
+            .select('*').in('pergunta_id', bPergs.map((p: any) => p.id)).order('ordem')
           : { data: [] };
 
         // 3. Cria o quiz novo
@@ -432,14 +432,14 @@ export default function QuizBuilderPage() {
             insertData[key] = beckerQuiz[key];
           }
         });
-        
+
         // Título vem do modal
         insertData.titulo = nomeTemplate.trim() || 'Meu Quiz';
 
         const { data: newQuiz, error: quizErr } = await db.from('quizzes')
           .insert(insertData).select().single();
         if (quizErr || !newQuiz) throw new Error('Erro ao criar quiz: ' + (quizErr?.message || 'Desconhecido'));
-        
+
         createdQuizId = newQuiz.id;
 
         // 4. Cria blocos UM POR UM e mapeia IDs
@@ -454,7 +454,7 @@ export default function QuizBuilderPage() {
           }
           blocoIdMap[b.id] = newB.id;
         }
-        
+
         console.log('Blocos criados:', Object.keys(blocoIdMap).length, 'de', bBlocos.length);
 
         // 5. Cria perguntas UM POR UM e mapeia IDs
@@ -467,7 +467,7 @@ export default function QuizBuilderPage() {
             console.error('Bloco não encontrado para pergunta:', p.id, p.bloco_id);
             continue;
           }
-          
+
           const { data: newP, error: pErr } = await db.from('quiz_perguntas')
             .insert({
               quiz_id: newQuiz.id,
@@ -480,7 +480,7 @@ export default function QuizBuilderPage() {
               condicao_opcao_id: null,
             })
             .select().single();
-          
+
           if (pErr || !newP) {
             console.error('Erro ao criar pergunta:', pErr);
             continue;
@@ -494,7 +494,7 @@ export default function QuizBuilderPage() {
         for (const o of (bOps || [])) {
           const novaPergId = pergIdMap[o.pergunta_id];
           if (!novaPergId) continue;
-          
+
           const { data: newO, error: oErr } = await db.from('quiz_opcoes')
             .insert({
               pergunta_id: novaPergId,
@@ -508,7 +508,7 @@ export default function QuizBuilderPage() {
               target_pergunta_id: null, // resolve depois
             })
             .select().single();
-          
+
           if (oErr || !newO) {
             console.error('Erro ao criar opção:', oErr);
             continue;
@@ -523,7 +523,7 @@ export default function QuizBuilderPage() {
           if (!p.condicao_pergunta_id && !p.condicao_opcao_id) continue;
           const newPId = pergIdMap[p.id];
           if (!newPId) continue;
-          
+
           const updt: any = {};
           if (p.condicao_pergunta_id && pergIdMap[p.condicao_pergunta_id]) {
             updt.condicao_pergunta_id = pergIdMap[p.condicao_pergunta_id];
@@ -541,7 +541,7 @@ export default function QuizBuilderPage() {
           if (!o.target_pergunta_id) continue;
           const newOId = opIdMap[o.id];
           if (!newOId) continue;
-          
+
           const novoTarget = pergIdMap[o.target_pergunta_id] || null;
           if (novoTarget) {
             await db.from('quiz_opcoes').update({ target_pergunta_id: novoTarget }).eq('id', newOId);
@@ -566,11 +566,11 @@ export default function QuizBuilderPage() {
         }).select().single();
 
         if (error || !newQuiz) throw new Error(error?.message || 'Erro ao criar quiz em branco');
-        
+
         createdQuizId = newQuiz.id;
         toast.success('Quiz criado com sucesso!');
       }
-      
+
       await loadData();
       if (createdQuizId) await loadQuizData(createdQuizId);
     } catch (err: any) {
@@ -628,7 +628,7 @@ export default function QuizBuilderPage() {
   function updateQuizField(field: string, value: any) {
     if (!quiz) return;
     pushHistory();
-    
+
     const quizId = quiz.id;
     setQuiz(prev => prev ? { ...prev, [field]: value } : prev);
     debounce(`quiz_${field}`, async () => {
@@ -759,10 +759,10 @@ export default function QuizBuilderPage() {
       subtexto: null, tipo_resposta: 'unica',
       condicao_pergunta_id: null, condicao_opcao_id: null,
     }).select().single();
-    if (npErr || !np) { 
+    if (npErr || !np) {
       console.error('[addPergunta] ERRO:', npErr);
-      toast.error(`Erro ao criar etapa: ${npErr?.message || 'Erro desconhecido'}`); 
-      return; 
+      toast.error(`Erro ao criar etapa: ${npErr?.message || 'Erro desconhecido'}`);
+      return;
     }
     setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
     setOpcoes(o => ({ ...o, [np.id]: [] }));
@@ -782,10 +782,10 @@ export default function QuizBuilderPage() {
       subtexto: perg.subtexto, tipo_resposta: perg.tipo_resposta,
       condicao_pergunta_id: null, condicao_opcao_id: null,
     }).select().single();
-    if (npErr || !np) { 
+    if (npErr || !np) {
       console.error('[duplicatePergunta] ERRO:', npErr);
-      toast.error(`Erro ao duplicar: ${npErr?.message || 'Erro desconhecido'}`); 
-      return; 
+      toast.error(`Erro ao duplicar: ${npErr?.message || 'Erro desconhecido'}`);
+      return;
     }
     const ops = opcoes[perg.id] || [];
     if (ops.length > 0) {
@@ -807,7 +807,7 @@ export default function QuizBuilderPage() {
   async function handleDragEnd(event: any) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    
+
     // Pergunta drag
     const idA = active.id as string;
     const idB = over.id as string;
@@ -1061,9 +1061,9 @@ export default function QuizBuilderPage() {
 
             {/* Creation Buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '48px' }}>
-              <button onClick={() => { setNomeTemplate(''); setShowNameModal(true); }} disabled={creating} style={{ 
-                padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`, 
-                background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer', 
+              <button onClick={() => { setNomeTemplate(''); setShowNameModal(true); }} disabled={creating} style={{
+                padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`,
+                background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer',
                 fontFamily: 'inherit', textAlign: 'left', boxShadow: tokens.shadow.card, transition: tokens.transition,
                 display: 'flex', flexDirection: 'column'
               }}
@@ -1075,9 +1075,9 @@ export default function QuizBuilderPage() {
                 {creating && <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', fontSize: '12px', fontWeight: 600 }}><Loader2 size={14} className="animate-spin" /> Criando...</div>}
               </button>
 
-              <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{ 
-                padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`, 
-                background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer', 
+              <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{
+                padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`,
+                background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer',
                 fontFamily: 'inherit', textAlign: 'left', boxShadow: tokens.shadow.card, transition: tokens.transition,
                 display: 'flex', flexDirection: 'column'
               }}
@@ -1092,7 +1092,7 @@ export default function QuizBuilderPage() {
             {/* List Section */}
             <div style={{ borderTop: `1px solid ${border}`, paddingTop: '32px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 700, color: textMain, marginBottom: '20px' }}>Seus Quizes Criados</h2>
-              
+
               {quizzes.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff', borderRadius: '20px', border: `1px dashed ${border}` }}>
                   <div style={{ fontSize: '40px', marginBottom: '16px', opacity: 0.5 }}>📭</div>
@@ -1518,7 +1518,7 @@ export default function QuizBuilderPage() {
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={selectedPergOpcoes.map(o => o.id)} strategy={verticalListSortingStrategy}>
                   {selectedPergOpcoes.map(op => (
-                    <SortableOpcaoCard 
+                    <SortableOpcaoCard
                       key={op.id} op={op} isDark={isDark} border={border} textMut={textMut} primary={primary} iStyle={iStyle} lbl={lbl}
                       isEditing={editingOpcaoId === op.id}
                       onToggleEdit={() => setEditingOpcaoId(editingOpcaoId === op.id ? null : op.id)}
@@ -1556,7 +1556,7 @@ export default function QuizBuilderPage() {
             <label style={lbl}>Subtítulo</label>
             <textarea value={quiz.analise_subtitulo || ''}
               onChange={e => updateQuizField('analise_subtitulo', e.target.value)}
-              placeholder="Explique o que está acontecendo..." 
+              placeholder="Explique o que está acontecendo..."
               style={{ ...iStyle, height: '60px', resize: 'none' }} />
           </div>
           <div>
@@ -1570,26 +1570,26 @@ export default function QuizBuilderPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {(quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS).map((d, i) => (
                 <div key={i} style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${border}`, background: inputBg }}>
-                   <input value={d.nome} onChange={e => {
-                     const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
-                     const newDep = [...current];
-                     newDep[i] = { ...newDep[i], nome: e.target.value };
-                     updateQuizField('analise_depoimentos', newDep);
-                   }} placeholder="Nome" style={{ ...iStyle, marginBottom: '5px' }} />
-                   
-                   <input value={d.handle} onChange={e => {
-                     const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
-                     const newDep = [...current];
-                     newDep[i] = { ...newDep[i], handle: e.target.value };
-                     updateQuizField('analise_depoimentos', newDep);
-                   }} placeholder="@handle" style={{ ...iStyle, marginBottom: '5px', fontSize: '11px' }} />
-                   
-                   <textarea value={d.texto} onChange={e => {
-                     const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
-                     const newDep = [...current];
-                     newDep[i] = { ...newDep[i], texto: e.target.value };
-                     updateQuizField('analise_depoimentos', newDep);
-                   }} placeholder="Texto do depoimento" style={{ ...iStyle, height: '60px', resize: 'none' }} />
+                  <input value={d.nome} onChange={e => {
+                    const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                    const newDep = [...current];
+                    newDep[i] = { ...newDep[i], nome: e.target.value };
+                    updateQuizField('analise_depoimentos', newDep);
+                  }} placeholder="Nome" style={{ ...iStyle, marginBottom: '5px' }} />
+
+                  <input value={d.handle} onChange={e => {
+                    const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                    const newDep = [...current];
+                    newDep[i] = { ...newDep[i], handle: e.target.value };
+                    updateQuizField('analise_depoimentos', newDep);
+                  }} placeholder="@handle" style={{ ...iStyle, marginBottom: '5px', fontSize: '11px' }} />
+
+                  <textarea value={d.texto} onChange={e => {
+                    const current = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                    const newDep = [...current];
+                    newDep[i] = { ...newDep[i], texto: e.target.value };
+                    updateQuizField('analise_depoimentos', newDep);
+                  }} placeholder="Texto do depoimento" style={{ ...iStyle, height: '60px', resize: 'none' }} />
                 </div>
               ))}
             </div>
@@ -1612,7 +1612,7 @@ export default function QuizBuilderPage() {
             <label style={lbl}>Subtítulo</label>
             <textarea value={quiz.mensagem_aprovado_subtitulo || ''}
               onChange={e => updateQuizField('mensagem_aprovado_subtitulo', e.target.value)}
-              placeholder="Explique os próximos passos..." 
+              placeholder="Explique os próximos passos..."
               style={{ ...iStyle, height: '60px', resize: 'none' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1658,10 +1658,10 @@ export default function QuizBuilderPage() {
             {showAdvanced && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
                 <label style={lbl}>Script da página</label>
-                <textarea 
-                  value={(quiz as any).pixel_custom_event_name || ''} 
-                  onChange={e => updateQuizField('pixel_custom_event_name', e.target.value)} 
-                  placeholder="Digite seu script..." 
+                <textarea
+                  value={(quiz as any).pixel_custom_event_name || ''}
+                  onChange={e => updateQuizField('pixel_custom_event_name', e.target.value)}
+                  placeholder="Digite seu script..."
                   style={{ ...iStyle, height: '100px', fontFamily: 'monospace', fontSize: '11px', resize: 'vertical' }} />
               </div>
             )}
@@ -1685,7 +1685,7 @@ export default function QuizBuilderPage() {
           </p>
           {configToShow.map((cfg: ColetaCampo) => {
             const isExp = expandedColetaCampo === cfg.campo;
-            const emoji = ({ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' } as Record<string,string>)[cfg.campo] ?? '📝';
+            const emoji = ({ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' } as Record<string, string>)[cfg.campo] ?? '📝';
             return (
               <div key={cfg.campo} style={{ borderRadius: '10px', border: `1px solid ${isExp ? '#2563eb' : border}`, background: cardBg, flexShrink: 0, width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', cursor: 'pointer', userSelect: 'none' as const }}
@@ -1694,7 +1694,7 @@ export default function QuizBuilderPage() {
                   <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
                   {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700, flexShrink: 0, marginRight: '4px' }}>obrigatório</span>}
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.22s ease' }}>
-                    <path d="M3 5L7 9L11 5" stroke={textMut} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 5L7 9L11 5" stroke={textMut} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
                 <div style={{ maxHeight: isExp ? '260px' : '0px', overflow: 'hidden', transition: 'max-height 0.25s ease' }}>
@@ -1761,13 +1761,13 @@ export default function QuizBuilderPage() {
             <label style={lbl}>Subtítulo</label>
             <textarea value={(quiz as any).mensagem_reprovado_subtitulo || ''}
               onChange={e => updateQuizField('mensagem_reprovado_subtitulo', e.target.value)}
-              placeholder="No momento seu perfil não atende..." 
+              placeholder="No momento seu perfil não atende..."
               style={{ ...iStyle, height: '60px', resize: 'none' }} />
           </div>
 
           <div style={{ borderTop: `1px solid ${border}`, paddingTop: '12px' }}>
             <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>Dicas de melhoria</p>
-            <textarea 
+            <textarea
               value={Array.isArray(quiz.reprovado_conteudo) ? quiz.reprovado_conteudo.join('\n') : ''}
               onChange={e => updateQuizField('reprovado_conteudo', e.target.value.split('\n'))}
               placeholder="Ex: Regularize seu CPF"
@@ -1971,10 +1971,10 @@ export default function QuizBuilderPage() {
 
               {/* Fixed: Approval, Collect, Rejection */}
               {[
-                { id: 'analise',   icon: '⌛', label: 'Análise',        sub: 'Página de transição' },
-                { id: 'approval',  icon: '✅', label: 'Aprovação',      sub: 'Tela de sucesso' },
-                { id: 'collect',   icon: '📝', label: 'Coleta de dados', sub: 'Formulário' },
-                { id: 'rejection', icon: '❌', label: 'Reprovação',      sub: 'Tela de reprova' },
+                { id: 'analise', icon: '⌛', label: 'Análise', sub: 'Página de transição' },
+                { id: 'approval', icon: '✅', label: 'Aprovação', sub: 'Tela de sucesso' },
+                { id: 'collect', icon: '📝', label: 'Coleta de dados', sub: 'Formulário' },
+                { id: 'rejection', icon: '❌', label: 'Reprovação', sub: 'Tela de reprova' },
               ].map(({ id, icon, label, sub }) => {
                 const active = fixedCardActive(id);
                 return (
@@ -2054,15 +2054,15 @@ export default function QuizBuilderPage() {
                 <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: textMut, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Preview ao vivo</p>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {(['capa', 'quiz', 'analise', 'aprovado_form', 'coleta', 'reprovado'] as Phase[]).map(ph => (
-                    <button key={ph} onClick={() => { 
-                      setPreviewPhase(ph); 
-                      if (ph === 'quiz') setPreviewIdx(0); 
+                    <button key={ph} onClick={() => {
+                      setPreviewPhase(ph);
+                      if (ph === 'quiz') setPreviewIdx(0);
                       if (ph === 'capa') setSelectedPageId('cover');
                       if (ph === 'aprovado_form') setSelectedPageId('approval');
                       if (ph === 'analise') setSelectedPageId('analise');
                       if (ph === 'coleta') setSelectedPageId('collect');
                       if (ph === 'reprovado') setSelectedPageId('rejection');
-                      setPreviewSelectedOpcao(null); 
+                      setPreviewSelectedOpcao(null);
                     }}
                       style={{ padding: '2px 6px', fontSize: '9px', borderRadius: 4, border: `1px solid ${border}`, background: previewPhase === ph ? '#2563eb' : 'transparent', color: previewPhase === ph ? '#fff' : textMut, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                       {ph === 'capa' ? 'Capa' : ph === 'quiz' ? 'Quiz' : ph === 'analise' ? 'Análise' : ph === 'aprovado_form' ? 'Aprovado' : ph === 'coleta' ? 'Dados' : 'Reprovado'}
@@ -2097,12 +2097,12 @@ export default function QuizBuilderPage() {
           <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${border}`, background: cardBg }}>
             <div style={{ padding: '8px 14px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <span style={{ fontSize: '12px', fontWeight: 600, color: textMain }}>
-                {selectedPageType === 'cover'     ? '📋 Capa' :
-                 selectedPageType === 'approval'  ? '✅ Aprovação' :
-                 selectedPageType === 'analise'   ? '⌛ Análise' :
-                 selectedPageType === 'collect'   ? '📝 Coleta' :
-                 selectedPageType === 'rejection' ? '❌ Reprovação' :
-                 `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
+                {selectedPageType === 'cover' ? '📋 Capa' :
+                  selectedPageType === 'approval' ? '✅ Aprovação' :
+                    selectedPageType === 'analise' ? '⌛ Análise' :
+                      selectedPageType === 'collect' ? '📝 Coleta' :
+                        selectedPageType === 'rejection' ? '❌ Reprovação' :
+                          `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
               </span>
               <span style={{ fontSize: '11px', color: textMut, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {saving && <><Loader2 style={{ width: '11px', height: '11px', animation: 'spin 0.7s linear infinite' }} /> Auto...</>}
@@ -2126,7 +2126,7 @@ export default function QuizBuilderPage() {
                 <X style={{ width: '20px', height: '20px' }} />
               </button>
             </div>
-            
+
             <div style={{ display: 'flex', borderBottom: `1px solid ${border}`, background: inputBg }}>
               {['Geral', 'Pixel/Scripts'].map(t => (
                 <button key={t} onClick={() => setSettingsTab(t)} style={{
@@ -2180,7 +2180,7 @@ export default function QuizBuilderPage() {
                       <div style={{ position: 'absolute', top: '2px', left: (quiz as any).pixel_fire_lead_event !== false ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
                     </div>
                   </div>
-                  
+
                   <div style={{ borderTop: `1px solid ${border}`, paddingTop: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avançado (Scripts)</span>
@@ -2206,7 +2206,7 @@ export default function QuizBuilderPage() {
                 </>
               )}
             </div>
-            
+
             <div style={{ padding: '20px 24px', borderTop: `1px solid ${border}`, background: inputBg, display: 'flex', gap: '12px' }}>
               <button onClick={handleCopyLink} style={{ flex: 1, padding: '12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg, color: textMain, fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                 <Copy style={{ width: '14px' }} /> Copiar Link

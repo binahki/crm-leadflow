@@ -112,7 +112,7 @@ serve(async (req) => {
     if (value?.messages) {
       console.log(`[Webhook] Processing ${value.messages.length} messages`)
       
-      const { data: account, error: accErr } = await db.from('whatsapp_accounts').select('org_id').eq('phone_number_id', phoneNumberId).maybeSingle()
+      const { data: account, error: accErr } = await db.from('whatsapp_accounts').select('org_id, token').eq('phone_number_id', phoneNumberId).maybeSingle()
       
       if (!account || accErr) {
         console.error(`[Webhook] Account mapping not found for ${phoneNumberId}. Error:`, accErr)
@@ -122,10 +122,42 @@ serve(async (req) => {
       for (const msg of value.messages) {
         const contactPhone = msg.from
         const contactName = value.contacts?.[0]?.profile?.name || contactPhone
-        const content = msg.text?.body || `[${msg.type}]`
+        let content = msg.text?.body || `[${msg.type}]`
         const wamid = msg.id
+        const type = msg.type
 
-        console.log(`[Webhook] New Msg from ${contactPhone}: "${content}"`)
+        let media_url = null
+        let media_mime_type = null
+        let media_id = null
+
+        // Se for mídia, busca metadados e URL
+        if (['image', 'audio', 'video', 'document', 'sticker'].includes(type)) {
+          media_id = msg[type]?.id
+          
+          // Define content amigável
+          if (type === 'image') content = "[Imagem]"
+          else if (type === 'audio') content = "[Áudio]"
+          else if (type === 'video') content = "[Vídeo]"
+          else if (type === 'document') content = "[Documento]"
+          else if (type === 'sticker') content = "[Sticker]"
+          
+          if (media_id && account.token) {
+            try {
+              const mediaRes = await fetch(`https://graph.facebook.com/v18.0/${media_id}`, {
+                headers: { 'Authorization': `Bearer ${account.token}` }
+              })
+              const mediaData = await mediaRes.json()
+              if (mediaData.url) {
+                media_url = mediaData.url
+                media_mime_type = mediaData.mime_type
+              }
+            } catch (err) {
+              console.error('[Webhook] Error fetching media URL:', err)
+            }
+          }
+        }
+
+        console.log(`[Webhook] New Msg from ${contactPhone}: type=${type}`)
 
         // Busca Lead por sufixo (os 8 ou 9 últimos dígitos são mais seguros)
         const phoneSuffix = contactPhone.slice(-8)
@@ -155,7 +187,11 @@ serve(async (req) => {
           conversation_id: conv.id,
           org_id: account.org_id,
           direction: 'inbound',
+          type,
           content,
+          media_url,
+          media_mime_type,
+          media_id,
           wamid,
           raw_payload: msg,
           status: 'delivered'

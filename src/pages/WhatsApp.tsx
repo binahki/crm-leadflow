@@ -98,6 +98,15 @@ const CRM_STATUS_COLORS: Record<number, any> = STATUS_CONFIG;
 
 
 // ── Constants & Theme ─────────────────────────────────────────────────────────
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+function getMediaSrc(msg: any, orgId: string): string | null {
+  if (msg.media_id) {
+    return `${SUPABASE_URL}/functions/v1/whatsapp-webhook?action=media&media_id=${msg.media_id}&org_id=${orgId}`;
+  }
+  if (msg.media_url) return msg.media_url;
+  return null;
+}
 export const WA_COLORS = {
   light: {
     sidebarBg: '#ffffff',
@@ -193,7 +202,7 @@ const formatPhone = (phone: string) => {
 };
 
 // ── Message formatter ─────────────────────────────────────────────────────────
-function formatMessage(text: string): string {
+function formatWAText(text: string): string {
   // 1. Escapa HTML para evitar XSS
   const escaped = text
     .replace(/&/g, '&amp;')
@@ -218,6 +227,40 @@ function formatMessage(text: string): string {
     // 7. Quebras de linha
     .replace(/\n/g, '<br/>');
 }
+
+// Mensagens prontas — salvas no localStorage por org
+const DEFAULT_QUICK_REPLIES = [
+  {
+    id: '1',
+    titulo: 'Cadastro aprovado',
+    texto: 'Oi, {{nome}}!\n\n*Seu cadastro foi aprovado na Becker* ✅\n\nAgora falta só a *etapa final*: uma *reunião obrigatória* por vídeo (15 min).\n\nNela, explicamos os benefícios, tiramos dúvidas e alinhamos os próximos passos.\n\n*Importante*: sem essa reunião, *não liberamos as semijoias.*\n\nHoje tenho estes horários:\n12h | 15h | 17h\n\n*Qual deles você consegue participar?*\n\nSe hoje não funcionar, me responde com o melhor período e eu verifico o próximo encaixe.',
+  },
+  {
+    id: '2',
+    titulo: 'Link da reunião',
+    texto: 'Oii {{nome}}, segue o link da reunião 👇🏻\n\nhttps://meet.google.com/auj-kupq-rax\n\nEstou enviando agora, mas a reunião começa às (HORÁRIO) em ponto 😉',
+  },
+  {
+    id: '3',
+    titulo: 'Baixar app',
+    texto: 'Segue o passo a passo:\n\n1) Baixar aplicativo Executiva Becker.\n\nSe o seu celular for Android 👇\n https://play.google.com/store/apps/details?id=com.upvendas.becker\n\nSe for iPhone 👇\n https://apps.apple.com/us/app/executiva-becker/id6504882086',
+  },
+  {
+    id: '4',
+    titulo: 'Assinar contrato',
+    texto: '2)Ler e assinar o contrato virtual. Abaixo o link para assinatura. 👇\n\nhttps://app.zapsign.com.br/verificar/doc/e961bbff-950d-43aa-a32a-5820ee34c012',
+  },
+  {
+    id: '5',
+    titulo: 'Referências e Instagram',
+    texto: 'Me manda por favor:\n\n• Seu Instagram @\n• 3 contatos de referência que sejam parentes e maiores de idade, enviar telefone + nome + grau de parentesco',
+  },
+  {
+    id: '6',
+    titulo: 'Formulário mostruário',
+    texto: 'Vamos iniciar a montagem do seu mostruário, me conte neste formulário o que você gostaria que fosse enviado na sua maleta 💖\n\nhttps://docs.google.com/forms/d/e/1FAIpQLScf-_ZNfTgX9LUEINY2AgyqjXWyZ6eJuvkFErh45R96wedddg/viewform?usp=header',
+  },
+];
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -348,6 +391,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
   const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
+  const [showQuickEditor, setShowQuickEditor] = useState(false);
 
 
   const fetchConvs = useCallback(async () => {
@@ -405,16 +449,41 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
     }
   }, [selectedId, fetchMessages, fetchConvs]);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, []);
+
   useEffect(() => {
     if (!selectedId) return;
-    const ch = supabase.channel('wa-msgs-' + selectedId)
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'whatsapp_messages', filter: `conversation_id=eq.${selectedId}` }, () => {
-        fetchMessages();
-        fetchConvs();
+    const ch = supabase.channel(`wa-msgs-${selectedId}`)
+      .on('postgres_changes' as any, { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'whatsapp_messages', 
+        filter: `conversation_id=eq.${selectedId}` 
+      }, (payload) => {
+        setMessages(prev => {
+          // Evita duplicatas se o fetchMessages e o realtime dispararem quase juntos
+          if (prev.find(m => m.id === payload.new.id)) return prev;
+          return [...prev, payload.new as any];
+        });
+        setTimeout(scrollToBottom, 100);
+      })
+      .on('postgres_changes' as any, {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'whatsapp_messages',
+        filter: `conversation_id=eq.${selectedId}`
+      }, (payload) => {
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [selectedId, fetchMessages, fetchConvs]);
+  }, [selectedId, scrollToBottom]);
 
   const filteredConvs = useMemo(() => {
     return conversations.filter(c => {
@@ -600,15 +669,18 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
             <ChatHeader 
               colors={colors} conv={activeConv} messages={messages} theme={theme}
               onBack={isMobile ? () => setSelectedId(null) : undefined}
-              onToggleInfo={() => setShowInfo(!showInfo)}
+              onToggleInfo={() => { setShowInfo(!showInfo); setShowQuickEditor(false); }}
+              onToggleQuickEditor={() => { setShowQuickEditor(v => !v); setShowInfo(true); }}
             />
             <MessageArea 
               colors={colors} messages={messages} theme={theme}
+              scrollRef={scrollRef}
             />
             <ChatInput 
               colors={colors} orgId={orgId} conv={activeConv} account={account}
               isExpired={isExpired} messages={messages}
               onSent={() => { fetchMessages(); fetchConvs(); }}
+              lead={activeConv?.lead}
             />
           </>
         )}
@@ -619,11 +691,19 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
           className={`${isMobile ? 'fixed inset-0 z-50' : 'w-[280px] lg:w-[320px] border-l'} flex flex-col flex-shrink-0 relative z-30`}
           style={{ background: colors.sidebarBg, borderColor: colors.border }}
         >
-          <LeadInfoPanel 
-            colors={colors} conv={activeConv} theme={theme}
-            onClose={() => setShowInfo(false)} 
-            onUpdate={() => fetchConvs()}
-          />
+          {showQuickEditor ? (
+            <QuickRepliesEditor 
+              colors={colors} 
+              orgId={orgId} 
+              onClose={() => setShowQuickEditor(false)} 
+            />
+          ) : (
+            <LeadInfoPanel 
+              colors={colors} conv={activeConv} theme={theme}
+              onClose={() => setShowInfo(false)} 
+              onUpdate={() => fetchConvs()}
+            />
+          )}
         </div>
       )}
     </>
@@ -818,9 +898,9 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
 }
 
 
-function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, theme }: { 
+function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuickEditor, theme }: { 
   colors: any, conv: any, messages: WaMessage[], 
-  onBack?: () => void, onToggleInfo: () => void, theme: string
+  onBack?: () => void, onToggleInfo: () => void, onToggleQuickEditor: () => void, theme: string
 }) {
   const dark = theme === 'dark';
   const name = conv?.lead?.nome || conv?.contact_name || formatPhone(conv?.contact_phone || '');
@@ -880,6 +960,9 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, theme }: {
         </div>
       </div>
       <div className="flex items-center gap-1 text-gray-400">
+        <button onClick={onToggleQuickEditor} className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors">
+          <MessageSquare size={18} />
+        </button>
         <button className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><Search size={18} /></button>
         <button onClick={onToggleInfo} className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><Info size={20} /></button>
       </div>
@@ -888,14 +971,14 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, theme }: {
 }
 
 
-function MessageArea({ colors, messages, conv, lead, theme }: { colors: any, messages: WaMessage[], conv: any, lead: any, theme: string }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+function MessageArea({ colors, messages, conv, lead, theme, scrollRef }: { colors: any, messages: WaMessage[], conv: any, lead: any, theme: string, scrollRef: React.RefObject<HTMLDivElement> }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, scrollRef]);
 
   const groups = useMemo(() => {
     const r: { label: string, msgs: WaMessage[] }[] = [];
@@ -919,76 +1002,280 @@ function MessageArea({ colors, messages, conv, lead, theme }: { colors: any, mes
   return (
     <div 
       ref={scrollRef} 
-      className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1 relative z-0"
+      className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-1 relative z-0"
       style={{ 
-        backgroundColor: colors.chatBg,
-        backgroundImage: theme === 'dark' ? 'none' : 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d9d9d9\' fill-opacity=\'0.3\'%3E%3Ccircle cx=\'7\' cy=\'7\' r=\'1\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+        backgroundColor: theme === 'dark' ? '#0b141a' : '#efeae2',
+        backgroundImage: theme === 'dark' 
+          ? 'url("https://w0.peakpx.com/wallpaper/508/606/HD-wallpaper-whatsapp-dark-patterns-background-designs-thumbnail.jpg")' 
+          : 'url("https://i.pinimg.com/736x/8c/98/99/8c98994518b575bfd8d994e51d1a22a2.jpg")',
         backgroundSize: '400px',
-        backgroundBlendMode: 'overlay'
+        backgroundBlendMode: theme === 'dark' ? 'overlay' : 'normal',
+        backgroundRepeat: 'repeat'
       }}
     >
 
       {groups.map(g => (
         <div key={g.label} className="flex flex-col gap-1 z-10">
-          <div className="self-center my-3 px-3 py-1 rounded-md shadow-sm text-[9px] font-bold uppercase tracking-widest text-gray-500 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
+          <div className="self-center my-4 px-4 py-1.5 rounded-lg text-[11px] font-medium text-gray-600 bg-gray-200/60 backdrop-blur-sm dark:bg-gray-800/80 dark:text-gray-400">
             {g.label}
           </div>
           {g.msgs.map(m => (
-            <MessageBubble key={m.id} msg={m} colors={colors} />
+            <MessageBubble key={m.id} msg={m} colors={colors} onImageClick={setLightboxSrc} />
           ))}
         </div>
       ))}
+
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out',
+          }}
+        >
+          <button
+            onClick={e => { e.stopPropagation(); setLightboxSrc(null); }}
+            style={{
+              position: 'absolute', top: '20px', right: '20px',
+              background: 'rgba(255,255,255,0.15)', border: 'none',
+              borderRadius: '50%', width: '44px', height: '44px',
+              color: '#fff', fontSize: '22px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={lightboxSrc}
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw', maxHeight: '90vh',
+              borderRadius: '12px',
+              objectFit: 'contain',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function MessageBubble({ msg, colors }: { msg: WaMessage, colors: any }) {
-  const isMe = msg.direction === 'outbound';
-  const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    timeZone: 'America/Sao_Paulo'
-  });
+function MsgStatus({ status }: { status: string | null }) {
+  if (status === 'pending') return <Clock size={10} className="text-gray-400" />;
+  if (status === 'failed') return <span style={{ color: '#ef4444', fontSize: '12px' }}>✗</span>;
+  
+  const isRead = status === 'read';
+  const isDelivered = status === 'delivered' || status === 'read';
   
   return (
-    <div className={`flex w-full mb-0.5 group ${isMe ? 'justify-end' : 'justify-start'}`}>
-      <div 
-        className={`max-w-[75%] px-3 py-1.5 shadow-sm relative text-[13.5px] leading-relaxed`}
+    <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '14px' }}>
+      <CheckCheck 
+        size={13} 
         style={{ 
-          background: isMe ? colors.bubbleOut : colors.bubbleIn,
-          borderRadius: isMe ? '8px 0px 8px 8px' : '0px 8px 8px 8px',
-          color: colors.textPrimary,
-          border: `1px solid ${isMe ? 'transparent' : colors.border}`
-        }}
-      >
-        <div
-          className="break-words pr-12 min-w-[50px]"
-          dangerouslySetInnerHTML={{ __html: formatMessage(msg.content || '') }}
-        />
-        <div className="absolute bottom-1 right-2 flex items-center gap-1">
-          <span className="text-[8.5px] text-gray-500/70 font-medium">{time}</span>
-          {isMe && (
-            msg.status === 'pending' ? <Clock size={10} className="text-gray-400" /> :
-            <CheckCheck size={13} className={msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'} />
-          )}
+          color: isRead ? '#53bdeb' : '#9ca3af',
+          position: 'absolute',
+          right: 0
+        }} 
+      />
+    </div>
+  );
+}
+
+function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: any, onImageClick: (src: string) => void }) {
+  const { theme } = useTheme();
+  const { orgId: msgOrgId } = useOrgId();
+  const isMe = msg.direction === 'outbound';
+  const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+
+  function renderMensagemConteudo(msg: WaMessage, orgId: string, isDark: boolean) {
+    const src = getMediaSrc(msg, orgId);
+
+    // IMAGEM
+    if (msg.type === 'image') {
+      if (!src) return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '13px' }}>🖼️ Imagem</span>;
+      return (
+        <div className="relative">
+          <img
+            src={src}
+            alt="Imagem"
+            style={{ maxWidth: '240px', maxHeight: '200px', borderRadius: '8px', cursor: 'zoom-in', display: 'block' }}
+            onClick={() => onImageClick?.(src)}
+            onError={e => { 
+              const el = e.currentTarget as HTMLImageElement;
+              el.style.display = 'none';
+              const parent = el.parentElement;
+              if (parent) {
+                const span = document.createElement('span');
+                span.innerText = '🖼️ Imagem (Erro ao carregar)';
+                span.style.color = '#9ca3af';
+                span.style.fontStyle = 'italic';
+                span.style.fontSize = '13px';
+                parent.appendChild(span);
+              }
+            }}
+          />
         </div>
+      );
+    }
+
+    // ÁUDIO
+    if (msg.type === 'audio') {
+      if (!src) return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '13px' }}>🎵 Áudio</span>;
+      return (
+        <audio
+          controls
+          preload="metadata"
+          style={{ width: '220px', height: '40px', borderRadius: '20px', display: 'block' }}
+          src={src}
+        />
+      );
+    }
+
+    // VÍDEO
+    if (msg.type === 'video') {
+      if (!src) return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '13px' }}>🎥 Vídeo</span>;
+      return (
+        <video controls style={{ maxWidth: '240px', borderRadius: '8px', display: 'block' }}>
+          <source src={src} />
+        </video>
+      );
+    }
+
+    // DOCUMENTO
+    if (msg.type === 'document') {
+      if (!src) return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '13px' }}>📎 {msg.content}</span>;
+      return (
+        <a href={src} target="_blank" rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px',
+            background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            borderRadius: '8px', textDecoration: 'none', color: isDark ? '#f4f4f5' : '#111',
+            fontSize: '13px', fontWeight: 500 }}>
+          📎 {msg.content?.replace('[Documento]', '').replace('[Documento: ', '').replace(']', '') || 'Documento'}
+        </a>
+      );
+    }
+
+    // STICKER
+    if (msg.type === 'sticker') {
+      if (!src) return <span>😊</span>;
+      return <img src={src} alt="Figurinha" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />;
+    }
+
+    // REACTION
+    if (msg.type === 'reaction') {
+      return <span style={{ fontSize: '20px' }}>{msg.content}</span>;
+    }
+
+    // TEXTO padrão
+    return (
+      <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {msg.content}
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', width: '100%', marginBottom: '4px', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+      <div style={{
+        maxWidth: '70%', 
+        padding: msg.type === 'sticker' ? '4px' : '6px 10px',
+        borderRadius: isMe ? '12px 0 12px 12px' : '0 12px 12px 12px',
+        background: msg.type === 'sticker' ? 'transparent' : (isMe ? (theme === 'dark' ? '#005c4b' : '#dcf8c6') : (theme === 'dark' ? '#1e1e22' : '#f0f0f0')),
+        boxShadow: msg.type === 'sticker' ? 'none' : '0 1px 0.5px rgba(0,0,0,0.13)',
+        border: 'none',
+        position: 'relative',
+        color: isMe ? (theme === 'dark' ? '#e9edef' : '#111') : (theme === 'dark' ? '#f4f4f5' : '#111')
+      }}>
+        {renderMensagemConteudo(msg, msgOrgId || '', theme === 'dark')}
+        {msg.type !== 'sticker' && msg.type !== 'reaction' && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'flex-end', 
+            gap: '3px', 
+            marginTop: '2px',
+            marginLeft: '20px'
+          }}>
+            <span style={{ 
+              fontSize: '10px', 
+              color: isMe ? (theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)') : 'rgba(0,0,0,0.45)',
+              fontWeight: 500 
+            }}>{time}</span>
+            {isMe && <MsgStatus status={msg.status} />}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent }: { 
-  colors: any, orgId: string, conv: any, account: WaAccount, isExpired: boolean, messages: WaMessage[], onSent: () => void 
+function substituirVariaveis(texto: string, conversa: any): string {
+  if (!conversa) return texto;
+  const nome = conversa.contact_name || conversa.contact_phone || '';
+  const primeiroNome = nome.split(' ')[0];
+  
+  return texto
+    .replace(/\{\{nome\}\}/gi, primeiroNome)
+    .replace(/\{\{nome_completo\}\}/gi, nome)
+    .replace(/\{\{telefone\}\}/gi, conversa.contact_phone || '')
+    .replace(/\{\{data\}\}/gi, new Date().toLocaleDateString('pt-BR'));
+}
+
+function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, lead }: { 
+  colors: any, orgId: string, conv: any, account: WaAccount, isExpired: boolean, messages: WaMessage[], onSent: () => void, lead: Lead | null
 }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [quickReplies, setQuickReplies] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`quick_replies_${orgId}`);
+      return saved ? JSON.parse(saved) : DEFAULT_QUICK_REPLIES;
+    } catch { return DEFAULT_QUICK_REPLIES; }
+  });
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [quickFilter, setQuickFilter] = useState('');
+
+  // Detecta "/" no início da mensagem
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setText(val);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    
+    if (val === '/' || val.startsWith('/')) {
+      setShowQuickReplies(true);
+      setQuickFilter(val.slice(1).toLowerCase());
+    } else {
+      setShowQuickReplies(false);
+      setQuickFilter('');
+    }
+  };
+
+  // Substitui {{nome}} pelo nome do lead
+  function applyTemplate(texto: string): string {
+    const nomeDoLead = lead?.nome?.trim().split(' ')[0] || conv?.contact_name?.trim().split(' ')[0] || '';
+    return texto.replace(/\{\{nome\}\}/g, nomeDoLead);
+  }
+
+  // Filtra as mensagens prontas
+  const filteredReplies = quickReplies.filter((r: any) =>
+    !quickFilter || r.titulo.toLowerCase().includes(quickFilter) || r.texto.toLowerCase().includes(quickFilter)
+  );
+
   const handleSend = async () => {
     if (!text.trim() || sending || isExpired || !conv) return;
     setSending(true);
-    const msg = text.trim();
+    
+    // Substitui variáveis antes de enviar
+    const textoFinal = substituirVariaveis(text.trim(), conv);
+    
+    const msg = textoFinal;
     setText('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -1064,7 +1351,49 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent }
   };
 
   return (
-    <div className="min-h-[52px] flex flex-col flex-shrink-0 z-20 border-t" style={{ background: colors.inputAreaBg, borderColor: colors.border }}>
+    <div className="min-h-[52px] flex flex-col flex-shrink-0 z-20 border-t relative" style={{ background: colors.inputAreaBg, borderColor: colors.border }}>
+      {showQuickReplies && filteredReplies.length > 0 && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: 0, right: 0,
+          background: colors.sidebarBg || '#fff',
+          border: `1px solid ${colors.border}`,
+          borderRadius: '12px 12px 0 0',
+          maxHeight: '280px', overflowY: 'auto',
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
+          zIndex: 100,
+        }}>
+          <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.border}`, fontSize: '11px', color: colors.textSecondary, fontWeight: 600 }}>
+            RESPOSTAS RÁPIDAS
+          </div>
+          {filteredReplies.map((r: any) => (
+            <div
+              key={r.id}
+              onClick={() => {
+                setText(applyTemplate(r.texto));
+                setShowQuickReplies(false);
+                setQuickFilter('');
+                textareaRef.current?.focus();
+                setTimeout(() => {
+                  if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
+                  }
+                }, 10);
+              }}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${colors.border}` }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = colors.hover || '#f5f5f5'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 600, color: colors.textPrimary, marginBottom: '2px' }}>
+                /{r.titulo}
+              </div>
+              <div style={{ fontSize: '12px', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.texto.slice(0, 60)}...
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {isExpired && (
         <div className="bg-amber-50 px-4 py-2.5 text-[11px] text-amber-800 flex items-center justify-between border-b border-amber-100">
           <div className="flex items-center gap-2">
@@ -1116,11 +1445,7 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent }
               cursor: isExpired ? 'not-allowed' : 'text'
             }}
             value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-            }}
+            onChange={handleTextareaChange}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           />
         </div>
@@ -1362,6 +1687,102 @@ function QuizAnswers({ data, colors }: { data: any, colors: any }) {
           <span className="text-[12px] font-medium text-gray-700">{String(val)}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function QuickRepliesEditor({ colors, orgId, onClose }: any) {
+  const [replies, setReplies] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`quick_replies_${orgId}`);
+      return saved ? JSON.parse(saved) : DEFAULT_QUICK_REPLIES;
+    } catch { return DEFAULT_QUICK_REPLIES; }
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newTitulo, setNewTitulo] = useState('');
+  const [newTexto, setNewTexto] = useState('');
+
+  function save(updated: any[]) {
+    setReplies(updated);
+    localStorage.setItem(`quick_replies_${orgId}`, JSON.stringify(updated));
+  }
+
+  function handleAdd() {
+    if (!newTitulo.trim() || !newTexto.trim()) return;
+    const novo = { id: Date.now().toString(), titulo: newTitulo.trim(), texto: newTexto.trim() };
+    save([...replies, novo]);
+    setNewTitulo('');
+    setNewTexto('');
+  }
+
+  function handleDelete(id: string) {
+    save(replies.filter((r: any) => r.id !== id));
+  }
+
+  function handleEdit(r: any) {
+    setEditingId(r.id);
+    setNewTitulo(r.titulo);
+    setNewTexto(r.texto);
+  }
+
+  function handleSaveEdit() {
+    save(replies.map((r: any) => r.id === editingId ? { ...r, titulo: newTitulo, texto: newTexto } : r));
+    setEditingId(null);
+    setNewTitulo('');
+    setNewTexto('');
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: '14px 16px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 700, fontSize: '13px', color: colors.textPrimary }}>Respostas Rápidas</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textSecondary }}>
+          <X size={18} />
+        </button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        {replies.map((r: any) => (
+          <div key={r.id} style={{ marginBottom: '8px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${colors.border}`, background: colors.sidebarBg }}>
+            {editingId === r.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <input value={newTitulo} onChange={e => setNewTitulo(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '13px', fontFamily: 'inherit', outline: 'none', background: 'transparent', color: colors.textPrimary }} />
+                <textarea value={newTexto} onChange={e => setNewTexto(e.target.value)} rows={4}
+                  style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '12px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', background: 'transparent', color: colors.textPrimary }} />
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button onClick={handleSaveEdit} style={{ flex: 1, padding: '6px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Salvar</button>
+                  <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: '6px', borderRadius: '8px', border: `1px solid ${colors.border}`, background: 'transparent', color: colors.textSecondary, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: colors.textPrimary }}>/{r.titulo}</span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleEdit(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textSecondary, fontSize: '11px' }}>Editar</button>
+                    <button onClick={() => handleDelete(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '11px' }}>Remover</button>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: '11px', color: colors.textSecondary, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{r.texto}</p>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Adicionar nova */}
+      <div style={{ padding: '12px', borderTop: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Nova resposta rápida</p>
+        <input value={newTitulo} onChange={e => setNewTitulo(e.target.value)} placeholder="Título (ex: link reunião)"
+          style={{ padding: '8px 10px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '13px', fontFamily: 'inherit', outline: 'none', background: 'transparent', color: colors.textPrimary }} />
+        <textarea value={newTexto} onChange={e => setNewTexto(e.target.value)} placeholder="Texto da mensagem..." rows={3}
+          style={{ padding: '8px 10px', borderRadius: '8px', border: `1px solid ${colors.border}`, fontSize: '12px', fontFamily: 'inherit', outline: 'none', resize: 'none', background: 'transparent', color: colors.textPrimary }} />
+        <button onClick={handleAdd} disabled={!newTitulo.trim() || !newTexto.trim()}
+          style={{ padding: '8px', borderRadius: '8px', border: 'none', background: newTitulo.trim() && newTexto.trim() ? '#2563eb' : '#e5e7eb', color: newTitulo.trim() && newTexto.trim() ? '#fff' : '#9ca3af', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          + Adicionar
+        </button>
+      </div>
     </div>
   );
 }
