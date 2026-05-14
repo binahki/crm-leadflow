@@ -1,22 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore } from '@/stores/appStore';
+import { useAppStore, Lead, STATUS_CONFIG, STATUS_SEQUENCE } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import {
-  Settings, Save, Copy, Check, CheckCheck, Wifi, WifiOff,
-  Search, Send, User, ExternalLink, RefreshCw, Link2, UserPlus,
-  MessageCircle, ArrowLeft,
+import { 
+  Settings, Check, CheckCheck, Search, Send, User, 
+  ExternalLink, MessageCircle, ArrowLeft, MoreVertical, 
+  MapPin, Instagram, Clock, Shield, Info, Smile, 
+  Paperclip, ChevronDown, UserPlus, Trash2, LogOut,
+  X, Filter, MoreHorizontal, Loader2, AlertTriangle, Megaphone,
+  ChevronRight, Timer, UserCheck, Share2, MessageSquare, Zap
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-
-const PROJECT_ID = 'menowlaymlzehcpdbgks';
-const WEBHOOK_URL = `https://${PROJECT_ID}.supabase.co/functions/v1/whatsapp-webhook`;
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface WaAccount {
+export interface WaAccount {
   id: string;
   org_id: string;
   phone_number_id: string;
@@ -35,8 +36,14 @@ interface WaConversation {
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number | null;
-  lead_id: any;
+  lead_id: string | null;
   created_at: string;
+  session_active: boolean;
+  session_expires_at: string | null;
+  internal_notes: string | null;
+  is_hot_lead: boolean;
+  metadata: Record<string, any> | null;
+  lead?: any;
 }
 
 interface WaMessage {
@@ -51,921 +58,1506 @@ interface WaMessage {
   created_at: string;
 }
 
-interface LeadInfo {
-  id: any;
-  nome: string | null;
-  cidade: string | null;
-  score: number | null;
-  faixa: string | null;
-  status?: number | null;
-  whatsapp: string | null;
-}
+const QUIZ_LABELS: Record<string, string> = {
+  situacao_atual: 'Situação atual',
+  oque_mais_te_atrai: 'O que mais te atrai',
+  quanto_gostaria_de_ganhar_por_mes: 'Renda desejada',
+  qual_sua_idade: 'Idade',
+  tem_filhos: 'Tem filhos',
+  idade_do_filho_mais_novo: 'Idade do filho mais novo',
+  voce_tem_alguma_rede_de_apoio: 'Rede de apoio',
+  voce_mora_com_alguem: 'Mora com alguém',
+  por_quais_meios_pretende_vender: 'Meios de venda',
+  quantas_horas_por_semana_vai_se_dedicar: 'Horas por semana',
+  quando_gostaria_de_comecar: 'Quando quer começar',
+  experiencia_em_vendas: 'Experiência em vendas',
+  ja_tentou_vender_semijoia: 'Tentou vender semijoia',
+  para_comecar_no_consignado: 'Para começar',
+  seu_nome_esta_negativado: 'Nome negativado',
+  voce_aceita_as_regras_do_consignado: 'Aceita as regras',
+  opcoes_DA8DjT: 'Situação atual',
+  opcoes_ycxX5F: 'O que mais te atrai',
+  opcoes_9kTTVs: 'Renda desejada',
+  opcoes_yh5Vjx: 'Tem filhos',
+  opcoes_I82ixf: 'Idade do filho mais novo',
+  opcoes_pFlzeQ: 'Rede de apoio',
+  opcoes_mhhj1z: 'Área de atuação',
+  opcoes_dWlnR5: 'Já vende',
+  opcoes_dX55lt: 'Meios de venda',
+  opcoes_VzQ35i: 'Horas por semana',
+  opcoes_H9Q1lM: 'Quando quer começar',
+  opcoes_VsNjuc: 'Tentou semijoia',
+  opcoes_u5gvVw: 'Instagram ativo',
+  opcoes_qhtsek: 'Para começar',
+  opcoes_zs2MuV: 'Nome negativado',
+  opcoes_sN46It: 'Aceita as regras',
+};
+
+const CRM_STATUS_LABELS: Record<number, string> = Object.entries(STATUS_CONFIG).reduce((acc, [id, s]) => ({ ...acc, [id]: s.label }), {});
+const CRM_STATUS_COLORS: Record<number, any> = STATUS_CONFIG;
+
+
+// ── Constants & Theme ─────────────────────────────────────────────────────────
+export const WA_COLORS = {
+  light: {
+    sidebarBg: '#ffffff',
+    chatBg: '#efeae2',
+    headerBg: '#f0f2f5',
+    inputAreaBg: '#f0f2f5',
+    inputBg: '#ffffff',
+    bubbleOut: '#dcf8c6',
+    bubbleIn: '#ffffff',
+    textPrimary: '#111b21',
+    textSecondary: '#667781',
+    border: '#e9edef',
+    hover: '#f5f6f6',
+    selected: '#eff2f5',
+    badge: '#25d366',
+  },
+  dark: {
+    sidebarBg: '#111b21',
+    chatBg: '#0d1117',
+    headerBg: '#202c33',
+    inputAreaBg: '#202c33',
+    inputBg: '#2a3942',
+    bubbleOut: '#005c4b',
+    bubbleIn: '#202c33',
+    textPrimary: '#111b21', // Conforme solicitado: #111b21
+    textSecondary: '#8696a0',
+    border: '#222d34',
+    hover: '#202c33',
+    selected: '#2a3942',
+    badge: '#00a884',
+  }
+};
+
+
+const PROJECT_ID = 'obguidmfvfjaekaskgob';
+const WEBHOOK_URL = `https://${PROJECT_ID}.supabase.co/functions/v1/whatsapp-webhook`;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-const AVATAR_COLORS = ['#2563eb', '#7c3aed', '#dc2626', '#d97706', '#059669', '#db2777', '#0891b2', '#ea580c'];
-
-function avatarColor(str: string) {
-  let h = 0;
-  for (const c of str) h = (h * 31 + c.charCodeAt(0)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[Math.abs(h)];
-}
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase();
-}
-
-function relativeTime(iso: string | null) {
+const waRelativeTime = (iso: string | null) => {
   if (!iso) return '';
-  const now = Date.now();
-  const diff = now - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'agora';
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return 'ontem';
-  if (days < 7) return `${days}d`;
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
+  const date = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  
+  const isToday = date.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' }) === 
+                  now.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' });
+  if (isToday) return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
-function msgTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-}
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'ontem';
 
-function dateLabel(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return 'Hoje';
-  if (d.toDateString() === yesterday.toDateString()) return 'Ontem';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-}
-
-function groupByDate(messages: WaMessage[]) {
-  const groups: { label: string; msgs: WaMessage[] }[] = [];
-  let lastLabel = '';
-  for (const m of messages) {
-    const label = dateLabel(m.created_at);
-    if (label !== lastLabel) {
-      groups.push({ label, msgs: [] });
-      lastLabel = label;
-    }
-    groups[groups.length - 1].msgs.push(m);
+  const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (diffDays < 7) {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return days[date.getDay()];
   }
-  return groups;
-}
 
-// ── Status icons ──────────────────────────────────────────────────────────────
-function MsgStatus({ status }: { status: string | null }) {
-  if (status === 'read') return <CheckCheck size={13} style={{ color: '#3b82f6', flexShrink: 0 }} />;
-  if (status === 'delivered') return <CheckCheck size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />;
-  if (status === 'sent') return <Check size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />;
-  return null;
-}
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
 
-// ── Copy button helper ─────────────────────────────────────────────────────────
-function CopyBtn({ value, dark }: { value: string; dark: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-  return (
-    <button
-      onClick={copy}
-      title="Copiar"
-      style={{
-        padding: '4px 8px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`,
-        background: copied ? '#10b981' : (dark ? '#18181b' : '#f8fafc'),
-        color: copied ? '#fff' : (dark ? '#a1a1aa' : '#6b7280'),
-        fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-        transition: 'all 0.15s', fontFamily: 'inherit',
-      }}
-    >
-      {copied ? <Check size={11} /> : <Copy size={11} />}
-      {copied ? 'Copiado' : 'Copiar'}
-    </button>
-  );
-}
+const avatarColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e', '#ef4444', 
+    '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#4f46e5'
+  ];
+  return colors[Math.abs(hash) % colors.length];
+};
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
+const getInitials = (name: string) => {
+  if (!name) return '??';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return parts[0].slice(0, 2).toUpperCase();
+};
+
+const formatPhone = (phone: string) => {
+  if (!phone) return '';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 13) {
+    return `+${cleaned.slice(0, 2)} (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`;
+  }
+  if (cleaned.length === 11) {
+    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+  }
+  return phone;
+};
+
+// ── Components ────────────────────────────────────────────────────────────────
+
 export default function WhatsAppPage() {
-  const { leads } = useAppStore();
   const { theme } = useTheme();
-  const dark = theme === 'dark';
+  const colors = theme === 'dark' ? WA_COLORS.dark : WA_COLORS.light;
   const { orgId, ready: orgReady } = useOrgId();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { leads: storeLeads } = useAppStore();
 
-  const [view, setView] = useState<'config' | 'chat'>('chat');
   const [account, setAccount] = useState<WaAccount | null>(null);
-  const [accountLoading, setAccountLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  // ── Load account ──
+  const searchParams = new URLSearchParams(location.search);
+  const initialPhone = searchParams.get('phone');
+  const initialConvId = searchParams.get('conversation');
+
   useEffect(() => {
     if (!orgReady || !orgId) return;
     supabase
-      .from('whatsapp_accounts' as any)
+      .from('whatsapp_accounts')
       .select('*')
       .eq('org_id', orgId)
       .maybeSingle()
-      .then(({ data }: any) => {
-        setAccount(data || null);
-        setView(data ? 'chat' : 'config');
-        setAccountLoading(false);
+      .then(({ data }) => {
+        setAccount(data as WaAccount);
+        setLoading(false);
       });
   }, [orgId, orgReady]);
 
-  // ── Styles ──
-  const txt = dark ? '#f4f4f5' : '#111827';
-  const txtMid = dark ? '#a1a1aa' : '#6b7280';
-  const border = dark ? '#1e1e22' : 'rgba(0,0,0,0.08)';
-  const cardBg = dark ? '#111113' : '#ffffff';
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '9px 12px', borderRadius: '10px',
-    border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`,
-    background: dark ? '#0d0d0f' : '#f8fafc',
-    color: txt, fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
-  };
-  const labelStyle: React.CSSProperties = {
-    fontSize: '11px', fontWeight: 600, color: txtMid,
-    textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '6px',
-  };
-
-  if (accountLoading) {
+  if (!loading && !account) {
     return (
-      <AppLayout leadCount={leads.length}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-          <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderTopColor: '#2563eb', animation: 'spin 0.7s linear infinite' }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <AppLayout leadCount={storeLeads.length}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          height: '100vh', gap: '16px', padding: '32px',
+          background: '#f9fafb', textAlign: 'center',
+        }}>
+          <div style={{
+            width: '64px', height: '64px', borderRadius: '16px',
+            background: '#dcfce7', display: 'flex', alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Zap size={32} style={{ color: '#16a34a' }} />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
+            WhatsApp Oficial não configurado
+          </h2>
+          <p style={{ fontSize: '14px', color: '#6b7280', maxWidth: '400px', lineHeight: 1.6, margin: 0 }}>
+            Para usar o inbox de mensagens, configure sua conta do WhatsApp Cloud API da Meta.
+          </p>
+          <button
+            onClick={() => navigate('/whatsapp/configuracoes')}
+            style={{
+              padding: '10px 24px', borderRadius: '10px', border: 'none',
+              background: '#2563eb', color: '#fff', fontSize: '14px',
+              fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Configurar WhatsApp API
+          </button>
         </div>
       </AppLayout>
     );
   }
 
+  if (loading) return (
+    <AppLayout leadCount={storeLeads.length} hideSidebar>
+      <div style={{ display: 'flex', height: '100vh', width: '100%' }}>
+        <div style={{ width: '360px', borderRight: '1px solid #e9edef', background: '#fff' }} />
+        <div style={{ flex: 1, background: '#efeae2' }} />
+      </div>
+    </AppLayout>
+  );
+
   return (
-    <AppLayout leadCount={leads.length}>
-      {view === 'config' ? (
-        <ConfigView
-          dark={dark} txt={txt} txtMid={txtMid} border={border} cardBg={cardBg}
-          inputStyle={inputStyle} labelStyle={labelStyle}
-          orgId={orgId!} account={account}
-          onSaved={(acc) => { setAccount(acc); }}
-          onGoChat={() => setView('chat')}
-          hasAccount={!!account}
+    <AppLayout leadCount={storeLeads.length} hideSidebar>
+      <div className="h-screen w-full flex overflow-hidden" style={{ background: colors.chatBg, color: colors.textPrimary }}>
+        <ChatInbox 
+          colors={colors} orgId={orgId!} account={account} user={user}
+          initialPhone={initialPhone} initialConvId={initialConvId}
+          onOpenSettings={() => navigate('/whatsapp/configuracoes')}
         />
-      ) : (
-        <ChatView
-          dark={dark} txt={txt} txtMid={txtMid} border={border}
-          orgId={orgId!} account={account!}
-          onSettings={() => setView('config')}
-          navigate={navigate}
-        />
-      )}
+      </div>
     </AppLayout>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONFIG VIEW
-// ═══════════════════════════════════════════════════════════════════════════════
-function ConfigView({
-  dark, txt, txtMid, border, cardBg, inputStyle, labelStyle,
-  orgId, account, onSaved, onGoChat, hasAccount,
-}: {
-  dark: boolean; txt: string; txtMid: string; border: string; cardBg: string;
-  inputStyle: React.CSSProperties; labelStyle: React.CSSProperties;
-  orgId: string; account: WaAccount | null;
-  onSaved: (acc: WaAccount) => void;
-  onGoChat: () => void;
-  hasAccount: boolean;
+// ── Chat Inbox ──
+function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, onOpenSettings }: {
+  colors: any, orgId: string, account: WaAccount | null, user: any,
+  initialPhone?: string | null, initialConvId?: string | null,
+  onOpenSettings: () => void
 }) {
-  const [phoneNumberId, setPhoneNumberId] = useState(account?.phone_number_id || '');
-  const [businessAccountId, setBusinessAccountId] = useState(account?.business_account_id || '');
-  const [token, setToken] = useState(account?.token || '');
-  const [displayName, setDisplayName] = useState(account?.display_name || '');
-  const [saving, setSaving] = useState(false);
-  const [savedAccount, setSavedAccount] = useState<WaAccount | null>(account);
-  const [testing, setTesting] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
-
-  const card: React.CSSProperties = {
-    background: cardBg, border: `1px solid ${border}`, borderRadius: '18px',
-    overflow: 'hidden', boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.06)',
-  };
-  const cardHeader: React.CSSProperties = {
-    padding: '14px 20px', borderBottom: `1px solid ${border}`,
-    display: 'flex', alignItems: 'center', gap: '8px',
-    background: dark ? '#18181b' : '#fafafa',
-  };
-
-  const handleSave = async () => {
-    if (!phoneNumberId.trim() || !token.trim() || !businessAccountId.trim()) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
-    setSaving(true);
-    const verifyToken = account?.webhook_verify_token || crypto.randomUUID();
-    const payload = {
-      org_id: orgId,
-      phone_number_id: phoneNumberId.trim(),
-      business_account_id: businessAccountId.trim(),
-      token: token.trim(),
-      display_name: displayName.trim() || null,
-      webhook_verify_token: verifyToken,
-      status: 'active',
-    };
-    const { data, error } = await (supabase as any)
-      .from('whatsapp_accounts')
-      .upsert(payload, { onConflict: 'org_id' })
-      .select()
-      .single();
-
-    setSaving(false);
-    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
-    toast.success('Conta salva com sucesso!');
-    setSavedAccount(data as WaAccount);
-    onSaved(data as WaAccount);
-  };
-
-  const handleTest = async () => {
-    const acc = savedAccount || account;
-    if (!acc) return;
-    setTesting(true);
-    try {
-      const res = await fetch(
-        `https://graph.facebook.com/v18.0/${acc.phone_number_id}?access_token=${acc.token}`
-      );
-      if (res.ok) {
-        toast.success('Conexão funcionando!');
-        await (supabase as any).from('whatsapp_accounts').update({ status: 'active' }).eq('id', acc.id);
-        setSavedAccount(prev => prev ? { ...prev, status: 'active' } : prev);
-      } else {
-        const err = await res.json();
-        toast.error('Erro: ' + (err?.error?.message || res.statusText));
-        await (supabase as any).from('whatsapp_accounts').update({ status: 'error' }).eq('id', acc.id);
-        setSavedAccount(prev => prev ? { ...prev, status: 'error' } : prev);
-      }
-    } catch {
-      toast.error('Falha na conexão com a Graph API');
-    }
-    setTesting(false);
-  };
-
-  const handleDisconnect = async () => {
-    const acc = savedAccount || account;
-    if (!acc) return;
-    if (!confirm('Desconectar esta conta do WhatsApp?')) return;
-    setDisconnecting(true);
-    await (supabase as any).from('whatsapp_accounts').delete().eq('id', acc.id);
-    setDisconnecting(false);
-    setSavedAccount(null);
-    onSaved(null as any);
-    toast.success('Conta desconectada');
-  };
-
-  const displayAcc = savedAccount || account;
-
-  return (
-    <div style={{ padding: '32px', maxWidth: '760px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {hasAccount && (
-          <button
-            onClick={onGoChat}
-            style={{ padding: '7px', borderRadius: '9px', border: `1px solid ${border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', color: txtMid }}
-          >
-            <ArrowLeft size={16} />
-          </button>
-        )}
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>
-            WhatsApp Oficial
-          </h1>
-          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>
-            Conecte via WhatsApp Cloud API (Meta)
-          </p>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-        {/* Conectar card */}
-        <div style={card}>
-          <div style={cardHeader}>
-            <MessageCircle size={16} style={{ color: '#25D366' }} />
-            <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Conectar WhatsApp Oficial</span>
-          </div>
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-            <a
-              href="https://developers.facebook.com/apps"
-              target="_blank" rel="noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(37,211,102,0.08)' : '#f0fdf4', border: `1px solid ${dark ? 'rgba(37,211,102,0.2)' : '#bbf7d0'}`, textDecoration: 'none' }}
-            >
-              <ExternalLink size={13} style={{ color: '#25D366', flexShrink: 0 }} />
-              <span style={{ fontSize: '12.5px', color: dark ? '#86efac' : '#065f46' }}>
-                Encontre seus dados em <strong>Meta for Developers → seu app → WhatsApp → API Setup</strong>
-              </span>
-            </a>
-
-            <div>
-              <label style={labelStyle}>Phone Number ID *</label>
-              <input style={inputStyle} value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} placeholder="Ex: 123456789012345" />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Business Account ID *</label>
-              <input style={inputStyle} value={businessAccountId} onChange={e => setBusinessAccountId(e.target.value)} placeholder="Ex: 987654321098765" />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Token de acesso permanente *</label>
-              <input style={inputStyle} type="password" autoComplete="new-password" value={token} onChange={e => setToken(e.target.value)} placeholder="EAABsbCS..." />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Nome de exibição</label>
-              <input style={inputStyle} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Ex: Suporte FLOOW" />
-            </div>
-
-            <button
-              onClick={handleSave} disabled={saving}
-              style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: saving ? (dark ? '#27272a' : '#e5e7eb') : '#25D366', color: saving ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'background 0.15s' }}
-            >
-              <Save size={14} />
-              {saving ? 'Salvando...' : 'Salvar e conectar'}
-            </button>
-          </div>
-        </div>
-
-        {/* Webhook info — só aparece após salvar */}
-        {displayAcc && (
-          <div style={card}>
-            <div style={cardHeader}>
-              <Settings size={16} style={{ color: '#2563eb' }} />
-              <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Configure na Meta</span>
-            </div>
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
-                Em seu app Meta, vá em <strong>WhatsApp → Configuration → Webhook</strong> e configure:
-              </p>
-
-              <div>
-                <label style={labelStyle}>URL do Webhook</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <code style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', background: dark ? '#0d0d0f' : '#f3f4f6', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, fontSize: '12px', color: dark ? '#a1a1aa' : '#374151', wordBreak: 'break-all' }}>
-                    {WEBHOOK_URL}
-                  </code>
-                  <CopyBtn value={WEBHOOK_URL} dark={dark} />
-                </div>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Verify Token</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <code style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', background: dark ? '#0d0d0f' : '#f3f4f6', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, fontSize: '12px', color: dark ? '#a1a1aa' : '#374151', wordBreak: 'break-all' }}>
-                    {displayAcc.webhook_verify_token}
-                  </code>
-                  <CopyBtn value={displayAcc.webhook_verify_token} dark={dark} />
-                </div>
-              </div>
-
-              <p style={{ fontSize: '12px', color: dark ? '#71717a' : '#9ca3af', margin: 0 }}>
-                Após salvar o webhook, marque o campo <strong>messages</strong> em "Webhook fields".
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Status card */}
-        {displayAcc && (
-          <div style={card}>
-            <div style={cardHeader}>
-              {displayAcc.status === 'active'
-                ? <Wifi size={16} style={{ color: '#10b981' }} />
-                : <WifiOff size={16} style={{ color: '#ef4444' }} />}
-              <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Status da conexão</span>
-              <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '99px', background: displayAcc.status === 'active' ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : (dark ? 'rgba(239,68,68,0.12)' : '#fee2e2'), color: displayAcc.status === 'active' ? '#10b981' : '#ef4444' }}>
-                {displayAcc.status === 'active' ? 'Conectado' : displayAcc.status === 'error' ? 'Erro' : 'Desconhecido'}
-              </span>
-            </div>
-            <div style={{ padding: '16px 20px', display: 'flex', gap: '10px' }}>
-              <button
-                onClick={handleTest} disabled={testing}
-                style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txt, fontSize: '13px', fontWeight: 500, cursor: testing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-              >
-                <RefreshCw size={13} style={{ animation: testing ? 'spin 0.7s linear infinite' : 'none' }} />
-                {testing ? 'Testando...' : 'Testar conexão'}
-              </button>
-              <button
-                onClick={handleDisconnect} disabled={disconnecting}
-                style={{ flex: 1, padding: '9px', borderRadius: '9px', border: '1px solid rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : '#fff5f5', color: '#ef4444', fontSize: '13px', fontWeight: 500, cursor: disconnecting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-              >
-                <WifiOff size={13} />
-                {disconnecting ? 'Desconectando...' : 'Desconectar'}
-              </button>
-            </div>
-            {displayAcc.status === 'active' && (
-              <div style={{ padding: '0 20px 16px' }}>
-                <button
-                  onClick={onGoChat}
-                  style={{ width: '100%', padding: '9px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-                >
-                  <MessageCircle size={14} />
-                  Ir para o chat
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHAT VIEW
-// ═══════════════════════════════════════════════════════════════════════════════
-function ChatView({
-  dark, txt, txtMid, border, orgId, account, onSettings, navigate,
-}: {
-  dark: boolean; txt: string; txtMid: string; border: string;
-  orgId: string; account: WaAccount;
-  onSettings: () => void;
-  navigate: ReturnType<typeof useNavigate>;
-}) {
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const [conversations, setConversations] = useState<WaConversation[]>([]);
-  const [search, setSearch] = useState('');
-  const [selectedConv, setSelectedConv] = useState<WaConversation | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialConvId || null);
   const [messages, setMessages] = useState<WaMessage[]>([]);
-  const [messageText, setMessageText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [lead, setLead] = useState<LeadInfo | null>(null);
-  const [leadSearch, setLeadSearch] = useState<LeadInfo | null>(null);
-  const [linking, setLinking] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [searchText, setSearchText] = useState('');
+  const [filter, setFilter] = useState('all'); // all, unread
+  const [statusFilter, setStatusFilter] = useState<number | null>(null);
+  const [showInfo, setShowInfo] = useState(window.innerWidth > 1200);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // Constantes dos status (ordem correta do CRM)
+  const CRM_STATUS = [
+    { value: 1, label: 'Em atendimento', dot: '#3b82f6' },
+    { value: 2, label: 'Reunião', dot: '#8b5cf6' },
+    { value: 5, label: 'Contrato/App', dot: '#f59e0b' },
+    { value: 3, label: 'Aprovado', dot: '#10b981' },
+    { value: 4, label: 'Reprovado', dot: '#ef4444' },
+  ];
 
-  const sideBg = dark ? '#0f0f11' : '#ffffff';
-  const chatBg = dark ? '#090909' : '#f0f2f5';
-  const infoBg = dark ? '#111113' : '#ffffff';
+  const [showStatusDrop, setShowStatusDrop] = useState(false);
+  const statusDropRef = useRef<HTMLDivElement>(null);
 
-  // ── Load conversations ──
-  const loadConversations = useCallback(async () => {
-    const { data } = await (supabase as any)
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (statusDropRef.current && !statusDropRef.current.contains(e.target as Node)) {
+        setShowStatusDrop(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+  const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
+
+
+  const fetchConvs = useCallback(async () => {
+    const { data } = await supabase
       .from('whatsapp_conversations')
-      .select('*')
+      .select('*, lead:leads(*)')
       .eq('org_id', orgId)
-      .order('last_message_at', { ascending: false });
-    setConversations((data as WaConversation[]) || []);
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false });
+    
+    setConversations(data as WaConversation[]);
   }, [orgId]);
 
-  useEffect(() => { loadConversations(); }, [loadConversations]);
+  useEffect(() => { 
+    fetchConvs();
+  }, [fetchConvs]);
 
-  // ── Realtime: conversations ──
   useEffect(() => {
-    const ch = supabase
-      .channel('wa-convs-' + orgId)
-      .on('postgres_changes' as any, {
-        event: '*', schema: 'public', table: 'whatsapp_conversations',
-        filter: `org_id=eq.${orgId}`,
-      }, () => { loadConversations(); })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [orgId, loadConversations]);
+    const interval = setInterval(fetchConvs, 5000);
+    return () => clearInterval(interval);
+  }, [fetchConvs]);
 
-  // ── Load messages when conversation changes ──
   useEffect(() => {
-    if (!selectedConv) { setMessages([]); return; }
-    (supabase as any)
-      .from('whatsapp_messages')
-      .select('*')
-      .eq('conversation_id', selectedConv.id)
-      .order('created_at', { ascending: true })
-      .then(({ data }: any) => setMessages((data as WaMessage[]) || []));
-
-    // Reset unread
-    if ((selectedConv.unread_count ?? 0) > 0) {
-      (supabase as any)
-        .from('whatsapp_conversations')
-        .update({ unread_count: 0 })
-        .eq('id', selectedConv.id)
-        .then(() => {
-          setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, unread_count: 0 } : c));
-          setSelectedConv(prev => prev ? { ...prev, unread_count: 0 } : prev);
-        });
-    }
-  }, [selectedConv?.id]);
-
-  // ── Realtime: messages ──
-  useEffect(() => {
-    if (!selectedConv) return;
-    const ch = supabase
-      .channel('wa-msgs-' + selectedConv.id)
-      .on('postgres_changes' as any, {
-        event: '*', schema: 'public', table: 'whatsapp_messages',
-        filter: `conversation_id=eq.${selectedConv.id}`,
-      }, (payload: any) => {
-        if (payload.eventType === 'INSERT') {
-          setMessages(prev => [...prev, payload.new as WaMessage]);
-        } else if (payload.eventType === 'UPDATE') {
-          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
-        }
+    const ch = supabase.channel('wa-inbox-' + orgId)
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'whatsapp_conversations', filter: `org_id=eq.${orgId}` }, () => {
+        fetchConvs();
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [selectedConv?.id]);
+  }, [orgId, fetchConvs]);
 
-  // ── Scroll to bottom ──
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // ── Load lead info ──
-  useEffect(() => {
-    setLead(null);
-    setLeadSearch(null);
-    if (!selectedConv) return;
-
-    if (selectedConv.lead_id) {
-      (supabase as any)
-        .from('leads')
-        .select('id, nome, cidade, score, faixa, status, whatsapp')
-        .eq('id', selectedConv.lead_id)
-        .single()
-        .then(({ data }: any) => setLead(data as LeadInfo));
-    } else {
-      // Busca por telefone
-      const digits = selectedConv.contact_phone.slice(-9);
-      (supabase as any)
-        .from('leads')
-        .select('id, nome, cidade, score, faixa, status, whatsapp')
-        .ilike('whatsapp', `%${digits}`)
-        .limit(1)
-        .maybeSingle()
-        .then(({ data }: any) => {
-          if (data) {
-            setLeadSearch(data as LeadInfo);
-            // Auto-link
-            (supabase as any)
-              .from('whatsapp_conversations')
-              .update({ lead_id: data.id })
-              .eq('id', selectedConv.id)
-              .then(() => {
-                setSelectedConv(prev => prev ? { ...prev, lead_id: data.id } : prev);
-                setLead(data as LeadInfo);
-                setLeadSearch(null);
-              });
-          }
-        });
+    if (!initialPhone || !orgId || conversations.length === 0) return;
+    const cleanPhone = initialPhone.replace(/\D/g, '');
+    const existing = conversations.find(c => c.contact_phone === cleanPhone || c.contact_phone.endsWith(cleanPhone.slice(-9)));
+    if (existing && selectedId !== existing.id) {
+      setSelectedId(existing.id);
     }
-  }, [selectedConv?.id, selectedConv?.lead_id]);
+  }, [initialPhone, conversations, orgId, selectedId]);
 
-  // ── Textarea auto-resize ──
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessageText(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  };
+  const fetchMessages = useCallback(async () => {
+    if (!selectedId) return;
+    const { data } = await supabase
+      .from('whatsapp_messages')
+      .select('*')
+      .eq('conversation_id', selectedId)
+      .order('created_at', { ascending: true });
+    setMessages(data || []);
+  }, [selectedId]);
 
-  // ── Send message ──
-  const handleSend = async () => {
-    const text = messageText.trim();
-    if (!text || !selectedConv || sending) return;
-    setSending(true);
-    setMessageText('');
-    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
+  useEffect(() => {
+    fetchMessages();
+    if (selectedId) {
+      supabase.from('whatsapp_conversations').update({ unread_count: 0 }).eq('id', selectedId).then(() => fetchConvs());
+    }
+  }, [selectedId, fetchMessages, fetchConvs]);
 
-    try {
-      const res = await fetch(
-        `https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${account.token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: selectedConv.contact_phone,
-            type: 'text',
-            text: { body: text },
-          }),
+  useEffect(() => {
+    if (!selectedId) return;
+    const ch = supabase.channel('wa-msgs-' + selectedId)
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'whatsapp_messages', filter: `conversation_id=eq.${selectedId}` }, () => {
+        fetchMessages();
+        fetchConvs();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [selectedId, fetchMessages, fetchConvs]);
+
+  const filteredConvs = useMemo(() => {
+    return conversations.filter(c => {
+      // Se tinha um lead_id mas o lead não veio no join, significa que foi excluído
+      if (c.lead_id && !c.lead) return false;
+
+      const q = searchText.toLowerCase();
+      const searchMatch = (c.contact_name || '').toLowerCase().includes(q) || c.contact_phone.includes(q) || (c.lead?.nome || '').toLowerCase().includes(q);
+      const unreadMatch = filter === 'unread' ? (c.unread_count || 0) > 0 : true;
+      let statusMatch = statusFilter === null;
+      if (statusFilter !== null) {
+        if (statusFilter === 1) {
+          statusMatch = c.lead?.status === 0 || c.lead?.status === 1;
+        } else {
+          statusMatch = c.lead?.status === statusFilter;
         }
-      );
-
-      if (res.ok) {
-        const json = await res.json();
-        const wamid = json?.messages?.[0]?.id || null;
-        const now = new Date().toISOString();
-
-        const { data: newMsg } = await (supabase as any)
-          .from('whatsapp_messages')
-          .insert({
-            org_id: orgId,
-            conversation_id: selectedConv.id,
-            wamid,
-            direction: 'outbound',
-            type: 'text',
-            content: text,
-            status: 'sent',
-            created_at: now,
-          })
-          .select()
-          .single();
-
-        if (newMsg) setMessages(prev => [...prev, newMsg as WaMessage]);
-
-        await (supabase as any)
-          .from('whatsapp_conversations')
-          .update({ last_message: text, last_message_at: now })
-          .eq('id', selectedConv.id);
-
-        setConversations(prev =>
-          prev.map(c => c.id === selectedConv.id ? { ...c, last_message: text, last_message_at: now } : c)
-            .sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime())
-        );
-      } else {
-        const err = await res.json();
-        toast.error('Erro ao enviar: ' + (err?.error?.message || 'Falha na API'));
-        setMessageText(text); // restore
       }
-    } catch {
-      toast.error('Erro de rede ao enviar mensagem');
-      setMessageText(text);
-    }
-    setSending(false);
-  };
+      return searchMatch && unreadMatch && statusMatch;
+    }).sort((a, b) => {
+      const timeA = new Date(a.last_message_at || 0).getTime();
+      const timeB = new Date(b.last_message_at || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return b.id.localeCompare(a.id);
+    });
+  }, [conversations, searchText, filter, statusFilter]);
 
-  const handleLinkLead = async () => {
-    if (!leadSearch || !selectedConv) return;
-    setLinking(true);
-    await (supabase as any)
-      .from('whatsapp_conversations')
-      .update({ lead_id: leadSearch.id })
-      .eq('id', selectedConv.id);
-    setLead(leadSearch);
-    setLeadSearch(null);
-    setSelectedConv(prev => prev ? { ...prev, lead_id: leadSearch.id } : prev);
-    setLinking(false);
-    toast.success('Lead vinculado!');
-  };
+  const activeConv = conversations.find(c => c.id === selectedId);
+  
+  const lastInboundTime = messages
+    .filter(m => m.direction === 'inbound')
+    .map(m => new Date(m.created_at).getTime())
+    .sort((a, b) => b - a)[0] || null;
 
-  const filteredConvs = conversations.filter(c => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (c.contact_name || '').toLowerCase().includes(q) || c.contact_phone.includes(q);
-  });
+  const sessionFromInbound = lastInboundTime 
+    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000 
+    : false;
 
-  // ── Faixa color ──
-  const faixaColor = (f: string | null) => {
-    if (f === 'verde') return '#10b981';
-    if (f === 'amarelo') return '#f59e0b';
-    if (f === 'vermelho') return '#ef4444';
-    return txtMid;
-  };
+  const sessionFromDb = activeConv?.session_expires_at 
+    ? new Date(activeConv.session_expires_at).getTime() > Date.now() 
+    : false;
 
-  const statusLabel = (s: number | null | undefined) => {
-    const map: Record<number, string> = { 1: 'Novo', 2: 'Contato', 3: 'Qualificado', 4: 'Aprovado', 5: 'Reprovado' };
-    return s != null ? (map[s] || `Status ${s}`) : '—';
-  };
+  const isExpired = !sessionFromInbound && !sessionFromDb;
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <>
+      <div 
+        className={`${isMobile && selectedId ? 'hidden' : 'flex'} flex-col border-r w-[320px] lg:w-[360px] flex-shrink-0 relative z-20`}
+        style={{ background: colors.sidebarBg, borderColor: colors.border }}
+      >
+        <SidebarHeader colors={colors} user={user} onOpenSettings={onOpenSettings} />
+        <SidebarSearch colors={colors} value={searchText} onChange={setSearchText} />
+        
+        <div className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: colors.border }}>
+          {/* Todas */}
+          <button
+            onClick={() => { setFilter('all'); setStatusFilter(null); }}
+            style={{
+              padding: '4px 12px', borderRadius: '99px', fontSize: '12px',
+              fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: filter === 'all' && statusFilter === null ? '#2563eb' : 'transparent',
+              color: filter === 'all' && statusFilter === null ? '#fff' : colors.textSecondary,
+            }}
+          >
+            Todas
+          </button>
 
-      {/* ── Col 1: Sidebar conversations ── */}
-      <div style={{ width: '280px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: sideBg, borderRight: `1px solid ${border}`, overflow: 'hidden' }}>
-        {/* Header */}
-        <div style={{ padding: '14px 14px 10px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <span style={{ fontSize: '16px', fontWeight: 700, color: txt, letterSpacing: '-0.02em' }}>WhatsApp</span>
+          {/* Não lidas */}
+          <button
+            onClick={() => { setFilter('unread'); setStatusFilter(null); }}
+            style={{
+              padding: '4px 12px', borderRadius: '99px', fontSize: '12px',
+              fontWeight: 600, border: `1px solid ${colors.border}`, cursor: 'pointer',
+              background: filter === 'unread' ? '#2563eb' : 'transparent',
+              color: filter === 'unread' ? '#fff' : colors.textSecondary,
+            }}
+          >
+            Não lidas
+          </button>
+
+          {/* Status dropdown */}
+          <div ref={statusDropRef} style={{ position: 'relative' }}>
             <button
-              onClick={onSettings}
-              title="Configurações"
-              style={{ padding: '5px', borderRadius: '7px', border: 'none', background: 'transparent', cursor: 'pointer', color: txtMid, display: 'flex', alignItems: 'center' }}
+              onClick={() => setShowStatusDrop(v => !v)}
+              style={{
+                padding: '4px 10px', borderRadius: '99px', fontSize: '12px',
+                fontWeight: 600, border: `1px solid ${colors.border}`, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px',
+                background: statusFilter !== null ? '#2563eb' : 'transparent',
+                color: statusFilter !== null ? '#fff' : colors.textSecondary,
+              }}
             >
-              <Settings size={16} />
+              {statusFilter !== null
+                ? CRM_STATUS.find(s => s.value === statusFilter)?.label
+                : 'Status'}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              </svg>
             </button>
-          </div>
-          <div style={{ position: 'relative' }}>
-            <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: txtMid }} />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar conversa..."
-              style={{ width: '100%', padding: '7px 10px 7px 30px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#18181b' : '#f3f4f6', color: txt, fontSize: '12.5px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-            />
-          </div>
-        </div>
 
-        {/* Conversation list */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {filteredConvs.length === 0 && (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>
-              {search ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa ainda'}
-            </div>
-          )}
-          {filteredConvs.map(conv => {
-            const name = conv.contact_name || conv.contact_phone;
-            const isSelected = selectedConv?.id === conv.id;
-            return (
-              <div
-                key={conv.id}
-                onClick={() => setSelectedConv(conv)}
-                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', cursor: 'pointer', background: isSelected ? (dark ? '#1a1a2e' : '#eff6ff') : 'transparent', borderLeft: isSelected ? '3px solid #2563eb' : '3px solid transparent', transition: 'background 0.1s' }}
-                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = dark ? '#18181b' : '#f9fafb'; }}
-                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-              >
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: avatarColor(name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>
-                  {initials(name)}
+            {showStatusDrop && (
+              <>
+                <div
+                  onClick={() => setShowStatusDrop(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+                />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+                  zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb',
+                  borderRadius: '12px', padding: '4px', minWidth: '180px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                }}>
+                  <button
+                    onClick={() => { setStatusFilter(null); setFilter('all'); setShowStatusDrop(false); }}
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '8px 12px',
+                      borderRadius: '8px', border: 'none', cursor: 'pointer',
+                      fontSize: '13px', background: 'transparent', color: '#6b7280',
+                    }}
+                  >
+                    Todos os status
+                  </button>
+                  {STATUS_SEQUENCE.map(idx => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setStatusFilter(idx);
+                        setFilter('status');
+                        setShowStatusDrop(false);
+                      }}
+                      style={{
+                        width: '100%', textAlign: 'left', padding: '8px 12px',
+                        borderRadius: '8px', border: 'none', cursor: 'pointer',
+                        fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px',
+                        background: statusFilter === idx ? '#eff6ff' : 'transparent',
+                        color: statusFilter === idx ? '#2563eb' : '#374151',
+                      }}
+                    >
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '50%',
+                        background: STATUS_CONFIG[idx].dot, flexShrink: 0,
+                      }} />
+                      {STATUS_CONFIG[idx].label}
+                    </button>
+                  ))}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ fontSize: '13.5px', fontWeight: 600, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>{name}</span>
-                    <span style={{ fontSize: '11px', color: txtMid, flexShrink: 0, marginLeft: '6px' }}>{relativeTime(conv.last_message_at)}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: txtMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                      {(conv.last_message || '').slice(0, 40)}
-                    </span>
-                    {(conv.unread_count ?? 0) > 0 && (
-                      <span style={{ minWidth: '18px', height: '18px', borderRadius: '99px', background: '#25D366', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', flexShrink: 0, marginLeft: '6px' }}>
-                        {conv.unread_count}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              </>
+            )}
+          </div>
         </div>
+        
+        <ConversationList 
+          colors={colors} list={filteredConvs} selectedId={selectedId} theme={theme}
+          quickStatusId={quickStatusId} onSetQuickStatus={setQuickStatusId}
+          onUpdateLead={() => fetchConvs()}
+          orgId={orgId}
+          onSelect={(id: string) => { setSelectedId(id); navigate(`/whatsapp?conversation=${id}`, { replace: true }); }} 
+        />
+
       </div>
 
-      {/* ── Col 2: Chat ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: chatBg, overflow: 'hidden', minWidth: 0 }}>
-        {!selectedConv ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', color: txtMid }}>
-            <MessageCircle size={40} style={{ opacity: 0.3 }} />
-            <p style={{ fontSize: '14px', margin: 0 }}>Selecione uma conversa para começar</p>
-          </div>
+      <div 
+        className={`${isMobile && !selectedId ? 'hidden' : 'flex'} flex-1 flex-col relative z-10`}
+        style={{ background: colors.chatBg }}
+      >
+        {!account ? (
+           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center" style={{ background: colors.headerBg }}>
+             <div className="w-16 h-16 mb-6 text-amber-500"><AlertTriangle size={64} /></div>
+             <h2 className="text-2xl font-bold mb-2">WhatsApp não configurado</h2>
+             <p className="text-[14px] text-gray-500 max-w-sm mb-8">
+               Você precisa configurar sua API oficial do WhatsApp para começar a enviar e receber mensagens.
+             </p>
+             <button 
+               onClick={onOpenSettings}
+               className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+             >
+               Configurar API Agora
+             </button>
+           </div>
+        ) : !selectedId ? (
+          <EmptyState colors={colors} />
         ) : (
           <>
-            {/* Chat header */}
-            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, background: dark ? '#111113' : '#fff', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: avatarColor(selectedConv.contact_name || selectedConv.contact_phone), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>
-                {initials(selectedConv.contact_name || selectedConv.contact_phone)}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selectedConv.contact_name || selectedConv.contact_phone}
-                </p>
-                <p style={{ margin: 0, fontSize: '12px', color: txtMid }}>{selectedConv.contact_phone}</p>
-              </div>
-              {lead && (
-                <button
-                  onClick={() => navigate('/leads')}
-                  style={{ padding: '5px 12px', borderRadius: '8px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '5px' }}
-                >
-                  <User size={12} /> Ver lead
-                </button>
-              )}
-            </div>
-
-            {/* Messages */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-              {groupByDate(messages).map(group => (
-                <div key={group.label}>
-                  {/* Date separator */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '12px 0' }}>
-                    <div style={{ flex: 1, height: '1px', background: dark ? '#27272a' : '#e5e7eb' }} />
-                    <span style={{ fontSize: '11px', color: txtMid, fontWeight: 500, padding: '3px 10px', borderRadius: '99px', background: dark ? '#18181b' : '#f3f4f6' }}>{group.label}</span>
-                    <div style={{ flex: 1, height: '1px', background: dark ? '#27272a' : '#e5e7eb' }} />
-                  </div>
-                  {group.msgs.map(msg => {
-                    const isOut = msg.direction === 'outbound';
-                    return (
-                      <div key={msg.id} style={{ display: 'flex', justifyContent: isOut ? 'flex-end' : 'flex-start', marginBottom: '6px' }}>
-                        <div style={{ maxWidth: '68%', padding: '8px 12px', borderRadius: isOut ? '16px 4px 16px 16px' : '4px 16px 16px 16px', background: isOut ? '#2563eb' : (dark ? '#1e1e22' : '#ffffff'), boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
-                          <p style={{ margin: 0, fontSize: '13.5px', color: isOut ? '#fff' : txt, lineHeight: 1.5, wordBreak: 'break-word' }}>
-                            {msg.content}
-                          </p>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '3px' }}>
-                            <span style={{ fontSize: '10.5px', color: isOut ? 'rgba(255,255,255,0.65)' : txtMid }}>
-                              {msgTime(msg.created_at)}
-                            </span>
-                            {isOut && <MsgStatus status={msg.status} />}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Send box */}
-            <div style={{ padding: '12px 16px', background: dark ? '#111113' : '#fff', borderTop: `1px solid ${border}`, display: 'flex', alignItems: 'flex-end', gap: '10px', flexShrink: 0 }}>
-              <textarea
-                ref={textareaRef}
-                value={messageText}
-                onChange={handleTextareaChange}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                }}
-                placeholder="Digite uma mensagem..."
-                rows={1}
-                style={{ flex: 1, padding: '9px 14px', borderRadius: '20px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#18181b' : '#f3f4f6', color: txt, fontSize: '13.5px', outline: 'none', resize: 'none', fontFamily: 'inherit', lineHeight: 1.5, overflow: 'hidden', maxHeight: '120px' }}
-              />
-              <button
-                onClick={handleSend} disabled={sending || !messageText.trim()}
-                style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: (sending || !messageText.trim()) ? (dark ? '#27272a' : '#e5e7eb') : '#25D366', color: '#fff', cursor: (sending || !messageText.trim()) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
-              >
-                <Send size={16} />
-              </button>
-            </div>
+            <ChatHeader 
+              colors={colors} conv={activeConv} messages={messages} theme={theme}
+              onBack={isMobile ? () => setSelectedId(null) : undefined}
+              onToggleInfo={() => setShowInfo(!showInfo)}
+            />
+            <MessageArea 
+              colors={colors} messages={messages} theme={theme}
+            />
+            <ChatInput 
+              colors={colors} orgId={orgId} conv={activeConv} account={account}
+              isExpired={isExpired} messages={messages}
+              onSent={() => { fetchMessages(); fetchConvs(); }}
+            />
           </>
         )}
       </div>
 
-      {/* ── Col 3: Lead info ── */}
-      <div style={{ width: '260px', flexShrink: 0, background: infoBg, borderLeft: `1px solid ${border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: txt }}>Informações do Lead</span>
+      {showInfo && selectedId && (
+        <div 
+          className={`${isMobile ? 'fixed inset-0 z-50' : 'w-[280px] lg:w-[320px] border-l'} flex flex-col flex-shrink-0 relative z-30`}
+          style={{ background: colors.sidebarBg, borderColor: colors.border }}
+        >
+          <LeadInfoPanel 
+            colors={colors} conv={activeConv} theme={theme}
+            onClose={() => setShowInfo(false)} 
+            onUpdate={() => fetchConvs()}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Sub-components ──
+
+function FilterChip({ label, active, onClick, colors }: { label: string, active: boolean, onClick: () => void, colors: any }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-[11px] whitespace-nowrap transition-all font-medium border
+        ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-transparent text-gray-500 border-gray-200 hover:border-gray-300'}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SidebarHeader({ colors, user, onOpenSettings }: { colors: any, user: any, onOpenSettings: () => void }) {
+  const avatarUrl = user?.user_metadata?.avatar_url || null;
+  const initials = user?.email?.slice(0, 2).toUpperCase() || '??';
+
+  return (
+    <div className="h-[52px] flex items-center justify-between px-4 flex-shrink-0 border-b" style={{ background: colors.headerBg, borderColor: colors.border }}>
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-400 flex items-center justify-center text-white font-bold text-xs">
+            {avatarUrl ? <img src={avatarUrl} alt="Me" className="w-full h-full object-cover" /> : initials}
+          </div>
+          <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full border-2 border-white bg-green-500" />
+        </div>
+        <span className="font-bold text-[14px] hidden sm:inline">Floow Inbox</span>
+      </div>
+      <div className="flex items-center gap-1 text-gray-400">
+        <button className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><MessageSquare size={18} /></button>
+        <button onClick={onOpenSettings} className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><MoreVertical size={18} /></button>
+      </div>
+    </div>
+  );
+}
+
+function SidebarSearch({ colors, value, onChange }: { colors: any, value: string, onChange: (v: string) => void }) {
+  return (
+    <div className="p-2 px-3">
+      <div className="relative flex items-center h-[32px] rounded-lg bg-gray-100 px-3 gap-3 border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
+        <Search size={14} className="text-gray-400" />
+        <input 
+          className="w-full bg-transparent text-[13px] outline-none placeholder:text-gray-400"
+          placeholder="Pesquisar conversa..."
+          value={value}
+          onChange={e => onChange(e.target.value)}
+        />
+        {value && <X size={12} className="text-gray-400 cursor-pointer" onClick={() => onChange('')} />}
+      </div>
+    </div>
+  );
+}
+
+function ConversationList({ colors, list, selectedId, onSelect, theme, quickStatusId, onSetQuickStatus, onUpdateLead, orgId }: { 
+  colors: any, list: WaConversation[], selectedId: string | null, onSelect: (id: string) => void, theme: string,
+  quickStatusId: string | null, onSetQuickStatus: (id: string | null) => void, onUpdateLead: () => void, orgId: string
+}) {
+  const dark = theme === 'dark';
+
+  const handleStatusUpdate = async (leadId: string, status: number, orgId: string) => {
+    const { error } = await supabase.from('leads').update({ status }).eq('id', leadId).eq('org_id', orgId);
+    if (error) toast.error('Erro ao atualizar status');
+    else {
+      toast.success('Status atualizado');
+      onUpdateLead();
+    }
+    onSetQuickStatus(null);
+  };
+
+  if (list.length === 0) {
+    return <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400 text-sm">Nenhuma conversa encontrada.</div>;
+  }
+  return (
+    <div className="flex-1 overflow-y-auto no-scrollbar">
+      {list.map(c => {
+        const isSelected = selectedId === c.id;
+        const name = c.lead?.nome || c.contact_name || formatPhone(c.contact_phone);
+        const color = avatarColor(name);
+        const statusIdx = c.lead?.status;
+        const isQuickOpen = quickStatusId === c.id;
+        
+        return (
+          <div 
+            key={c.id}
+            onClick={() => onSelect(c.id)}
+            className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all relative border-b last:border-0"
+            style={{ 
+              background: isSelected ? colors.selected : 'transparent',
+              borderColor: colors.border
+            }}
+          >
+            <div className="relative flex-shrink-0">
+              <div 
+                className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base shadow-sm"
+                style={{ background: color }}
+              >
+                {getInitials(name)}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-start mb-0.5 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="font-semibold text-[14px] truncate text-gray-800 dark:text-gray-200 block">{name}</span>
+                  {statusIdx !== null && statusIdx !== undefined && CRM_STATUS_COLORS[statusIdx] && (
+                    <span 
+                      className="flex-shrink-0 whitespace-nowrap"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '2px 6px',
+                        borderRadius: '99px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        background: dark ? CRM_STATUS_COLORS[statusIdx].darkBg : CRM_STATUS_COLORS[statusIdx].lightBg,
+                        color: dark ? CRM_STATUS_COLORS[statusIdx].darkText : CRM_STATUS_COLORS[statusIdx].lightText,
+                      }}
+                    >
+                      <span style={{width:'4px',height:'4px',borderRadius:'50%',background:CRM_STATUS_COLORS[statusIdx].dot}}/>
+                      {CRM_STATUS_LABELS[statusIdx]}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col items-end flex-shrink-0 relative mt-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span className={`text-[9px] ${isSelected ? 'text-blue-500' : 'text-gray-400'}`}>
+                      {waRelativeTime(c.last_message_at)}
+                    </span>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetQuickStatus(isQuickOpen ? null : c.id);
+                      }}
+                      className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 transition-colors"
+                    >
+                      <ChevronDown size={12} className={isQuickOpen ? 'rotate-180' : ''} />
+                    </button>
+                  </div>
+
+                  {isQuickOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[60]" onClick={(e) => { e.stopPropagation(); onSetQuickStatus(null); }} />
+                      <div 
+                        className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[70] overflow-hidden dropdown-animate"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {STATUS_SEQUENCE.map(idx => {
+                          const label = CRM_STATUS_LABELS[idx];
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => c.lead_id && c.lead?.org_id && handleStatusUpdate(c.lead_id, idx, c.lead.org_id || orgId)}
+                              className="w-full px-3 py-2 text-left text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                              disabled={!c.lead_id}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ background: CRM_STATUS_COLORS[idx]?.dot }} />
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <p className="text-[12.5px] text-gray-500 truncate max-w-[180px] flex-1">
+                  {c.last_message || '...'}
+                </p>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {c.unread_count && c.unread_count > 0 ? (
+                    <div className="bg-green-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1 shadow-sm">
+                      {c.unread_count}
+                    </div>
+                  ) : null}
+                  {c.is_hot_lead && <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Lead Quente" />}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, theme }: { 
+  colors: any, conv: any, messages: WaMessage[], 
+  onBack?: () => void, onToggleInfo: () => void, theme: string
+}) {
+  const dark = theme === 'dark';
+  const name = conv?.lead?.nome || conv?.contact_name || formatPhone(conv?.contact_phone || '');
+  const color = avatarColor(name);
+  const statusIdx = conv?.lead?.status;
+  
+  const lastInboundTime = messages
+    .filter(m => m.direction === 'inbound')
+    .map(m => new Date(m.created_at).getTime())
+    .sort((a, b) => b - a)[0] || null;
+
+  const sessionFromInbound = lastInboundTime 
+    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000 
+    : false;
+
+  const sessionFromDb = conv?.session_expires_at 
+    ? new Date(conv.session_expires_at).getTime() > Date.now() 
+    : false;
+
+  const isExpired = !sessionFromInbound && !sessionFromDb;
+
+  return (
+    <div className="h-[52px] flex items-center px-4 gap-3 border-b flex-shrink-0 z-20 shadow-sm" style={{ background: colors.headerBg, borderColor: colors.border }}>
+      {onBack && <button onClick={onBack} className="p-1 -ml-1 text-gray-500 hover:bg-gray-200 rounded-full"><ArrowLeft size={18} /></button>}
+      <div 
+        onClick={onToggleInfo}
+        className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold cursor-pointer shadow-sm text-sm"
+        style={{ background: color }}
+      >
+        {getInitials(name)}
+      </div>
+      <div className="flex-1 cursor-pointer overflow-hidden" onClick={onToggleInfo}>
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-[14px] truncate text-gray-800 dark:text-gray-200">{name}</h3>
+          {statusIdx !== null && statusIdx !== undefined && CRM_STATUS_COLORS[statusIdx] && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              padding: '2px 6px',
+              borderRadius: '99px',
+              fontSize: '9px',
+              fontWeight: 700,
+              background: dark ? CRM_STATUS_COLORS[statusIdx].darkBg : CRM_STATUS_COLORS[statusIdx].lightBg,
+              color: dark ? CRM_STATUS_COLORS[statusIdx].darkText : CRM_STATUS_COLORS[statusIdx].lightText,
+            }}>
+              <span style={{width:'4px',height:'4px',borderRadius:'50%',background:CRM_STATUS_COLORS[statusIdx].dot}}/>
+              {CRM_STATUS_LABELS[statusIdx]}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <p className={`text-[10px] font-medium flex items-center gap-1 ${isExpired ? 'text-rose-500' : 'text-emerald-500'}`}>
+            <span className={`w-1 h-1 rounded-full ${isExpired ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
+            {isExpired ? 'Janela Fechada' : 'Janela Aberta'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 text-gray-400">
+        <button className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><Search size={18} /></button>
+        <button onClick={onToggleInfo} className="hover:bg-gray-200/50 p-1.5 rounded-full transition-colors"><Info size={20} /></button>
+      </div>
+    </div>
+  );
+}
+
+
+function MessageArea({ colors, messages, conv, lead, theme }: { colors: any, messages: WaMessage[], conv: any, lead: any, theme: string }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const groups = useMemo(() => {
+    const r: { label: string, msgs: WaMessage[] }[] = [];
+    messages.forEach(m => {
+      const date = new Date(m.created_at);
+      const now = new Date();
+      let label = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+      if (date.toDateString() === now.toDateString()) label = 'HOJE';
+      const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) label = 'ONTEM';
+      
+      if (r.length === 0 || r[r.length - 1].label !== label) {
+        r.push({ label, msgs: [m] });
+      } else {
+        r[r.length - 1].msgs.push(m);
+      }
+    });
+    return r;
+  }, [messages]);
+
+  return (
+    <div 
+      ref={scrollRef} 
+      className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-1 relative z-0"
+      style={{ 
+        backgroundColor: colors.chatBg,
+        backgroundImage: theme === 'dark' ? 'none' : 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d9d9d9\' fill-opacity=\'0.3\'%3E%3Ccircle cx=\'7\' cy=\'7\' r=\'1\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+        backgroundSize: '400px',
+        backgroundBlendMode: 'overlay'
+      }}
+    >
+
+      {groups.map(g => (
+        <div key={g.label} className="flex flex-col gap-1 z-10">
+          <div className="self-center my-3 px-3 py-1 rounded-md shadow-sm text-[9px] font-bold uppercase tracking-widest text-gray-500 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
+            {g.label}
+          </div>
+          {g.msgs.map(m => (
+            <MessageBubble key={m.id} msg={m} colors={colors} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MessageBubble({ msg, colors }: { msg: WaMessage, colors: any }) {
+  const isMe = msg.direction === 'outbound';
+  const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  });
+  
+  return (
+    <div className={`flex w-full mb-0.5 group ${isMe ? 'justify-end' : 'justify-start'}`}>
+      <div 
+        className={`max-w-[75%] px-3 py-1.5 shadow-sm relative text-[13.5px] leading-relaxed`}
+        style={{ 
+          background: isMe ? colors.bubbleOut : colors.bubbleIn,
+          borderRadius: isMe ? '8px 0px 8px 8px' : '0px 8px 8px 8px',
+          color: colors.textPrimary,
+          border: `1px solid ${isMe ? 'transparent' : colors.border}`
+        }}
+      >
+        <div className="whitespace-pre-wrap break-words pr-12 min-w-[50px]">
+          {msg.content}
+        </div>
+        <div className="absolute bottom-1 right-2 flex items-center gap-1">
+          <span className="text-[8.5px] text-gray-500/70 font-medium">{time}</span>
+          {isMe && (
+            msg.status === 'pending' ? <Clock size={10} className="text-gray-400" /> :
+            <CheckCheck size={13} className={msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent }: { 
+  colors: any, orgId: string, conv: any, account: WaAccount, isExpired: boolean, messages: WaMessage[], onSent: () => void 
+}) {
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSend = async () => {
+    if (!text.trim() || sending || isExpired || !conv) return;
+    setSending(true);
+    const msg = text.trim();
+    setText('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+
+    try {
+      // Busca token e phone_number_id da conta
+      const { data: acc } = await supabase
+        .from('whatsapp_accounts')
+        .select('token, phone_number_id')
+        .eq('org_id', orgId)
+        .single();
+
+      if (!acc) throw new Error('Conta não encontrada');
+
+      const res = await fetch(
+        `https://graph.facebook.com/v18.0/${acc.phone_number_id}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${acc.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: conv.contact_phone,
+            type: 'text',
+            text: { body: msg },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err?.error?.message || 'Falha no envio');
+      }
+
+      const json = await res.json();
+      const wamid = json?.messages?.[0]?.id || null;
+      const now = new Date().toISOString();
+
+      // Salva no banco
+      await supabase
+        .from('whatsapp_messages')
+        .insert({
+          org_id: orgId,
+          conversation_id: conv.id,
+          wamid,
+          direction: 'outbound',
+          type: 'text',
+          content: msg,
+          status: 'sent',
+          created_at: now,
+        });
+
+      // Atualiza conversa
+      await supabase
+        .from('whatsapp_conversations')
+        .update({ last_message: msg, last_message_at: now })
+        .eq('id', conv.id);
+
+      onSent();
+    } catch (e: any) {
+      toast.error('Erro ao enviar: ' + e.message);
+      setText(msg);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleOpenWA = () => {
+    const phone = conv?.contact_phone?.replace(/\D/g, '') || '';
+    if (!phone) return;
+    window.open(`https://wa.me/${phone}`, '_blank');
+  };
+
+  return (
+    <div className="min-h-[52px] flex flex-col flex-shrink-0 z-20 border-t" style={{ background: colors.inputAreaBg, borderColor: colors.border }}>
+      {isExpired && (
+        <div className="bg-amber-50 px-4 py-2.5 text-[11px] text-amber-800 flex items-center justify-between border-b border-amber-100">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={14} className="text-amber-600" /> 
+            <span className="font-semibold">Janela de 24h expirada.</span>
+            <span className="hidden sm:inline opacity-70">Envie um modelo ou aguarde o contato.</span>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setShowTemplates(true)}
+              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
+            >
+              <Zap size={13} fill="white" /> Enviar Modelo
+            </button>
+            <button 
+              onClick={handleOpenWA}
+              className="bg-white text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-50 transition-colors"
+            >
+              Abrir WhatsApp Externo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showTemplates && (
+        <TemplateModal 
+          acc={account} 
+          conv={conv} 
+          onClose={() => setShowTemplates(false)} 
+          onSent={() => { onSent(); }} 
+        />
+      )}
+      <div className="flex items-end gap-2 px-3 py-2">
+        <div className="flex items-center gap-1 pb-1 text-gray-500">
+          <button className="p-1.5 hover:text-gray-700 transition-colors"><Smile size={22} /></button>
+          <button className="p-1.5 hover:text-gray-700 transition-colors"><Paperclip size={22} /></button>
+        </div>
+        <div className="flex-1">
+          <textarea 
+            ref={textareaRef}
+            rows={1}
+            disabled={isExpired}
+            placeholder={isExpired ? "Conversa bloqueada" : "Digite uma mensagem"}
+            className="w-full bg-white dark:bg-[#2a3942] rounded-lg px-4 py-2 text-[14px] outline-none border-none resize-none no-scrollbar shadow-sm transition-all focus:ring-1 focus:ring-blue-500/20"
+            style={{ 
+              background: colors.inputBg, 
+              maxHeight: '120px', 
+              color: colors.textPrimary,
+              cursor: isExpired ? 'not-allowed' : 'text'
+            }}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          />
+        </div>
+        <div className="pb-1">
+          <button 
+            onClick={handleSend}
+            disabled={!text.trim() || sending || isExpired}
+            className={`p-2.5 rounded-full transition-all shadow-md ${text.trim() && !isExpired ? 'bg-blue-600 text-white scale-105 active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          >
+            <Send size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function EmptyState({ colors }: { colors: any }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center" style={{ background: colors.headerBg }}>
+      <div className="w-16 h-16 mb-6 opacity-10"><Zap size={64} /></div>
+      <h2 className="text-2xl font-light mb-2 text-gray-700">Floow Inbox</h2>
+      <p className="text-[14px] text-gray-400 max-w-sm leading-relaxed mb-10">
+        Gerencie seus leads e responda mensagens em tempo real com a inteligência do CRM integrada ao seu WhatsApp.
+      </p>
+      <div className="flex items-center gap-4 text-[12px] text-gray-400">
+        <div className="flex items-center gap-1.5"><Shield size={14} /> Seguro</div>
+        <div className="w-1 h-1 rounded-full bg-gray-300" />
+        <div className="flex items-center gap-1.5"><Check size={14} /> Oficial Meta</div>
+      </div>
+    </div>
+  );
+}
+
+function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any, conv: any, onClose: () => void, onUpdate: () => void, theme: string }) {
+  const navigate = useNavigate();
+  const [lead, setLead] = useState(conv?.lead);
+  const name = lead?.nome || conv?.contact_name || formatPhone(conv?.contact_phone || '');
+  const color = avatarColor(name);
+  const [updating, setUpdating] = useState(false);
+  const [statusDropOpen, setStatusDropOpen] = useState(false);
+
+  useEffect(() => {
+    setLead(conv?.lead);
+  }, [conv]);
+
+  const STATUS_OPTIONS_PANEL = [
+    { value: 1, label: 'Em atendimento', dot: '#3b82f6' },
+    { value: 2, label: 'Reunião', dot: '#8b5cf6' },
+    { value: 5, label: 'Contrato/App', dot: '#f59e0b' },
+    { value: 3, label: 'Aprovado', dot: '#10b981' },
+    { value: 4, label: 'Reprovado', dot: '#ef4444' },
+  ];
+
+  const currentStatus = STATUS_OPTIONS_PANEL.find(s => s.value === (lead?.status ?? 1));
+
+  const handleNotesUpdate = async (val: string) => {
+    if (!conv?.id) return;
+    const { error } = await supabase.from('whatsapp_conversations').update({ internal_notes: val }).eq('id', conv.id);
+    if (error) toast.error('Erro ao salvar notas');
+  };
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="h-[52px] flex items-center px-4 gap-4 border-b flex-shrink-0" style={{ background: colors.headerBg, borderColor: colors.border }}>
+        <button onClick={onClose} className="text-gray-400 hover:bg-gray-200 p-1 rounded-full"><X size={18} /></button>
+        <span className="font-bold text-[10px] uppercase tracking-widest text-gray-400">Dados da Lead</span>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-6">
+        <div className="flex flex-col items-center p-6 bg-white border-b" style={{ background: colors.sidebarBg, borderColor: colors.border }}>
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-3xl shadow-lg mb-3 ring-4 ring-offset-2 ring-gray-50"
+            style={{ background: color }}
+          >
+            {getInitials(name)}
+          </div>
+          <h2 className="text-[16px] font-bold text-center mb-0.5 flex items-center gap-1.5">
+            {name}
+            {lead?.faixa && (
+              <div className={`w-2 h-2 rounded-full ${lead.faixa === 'verde' ? 'bg-emerald-500' : lead.faixa === 'amarelo' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+            )}
+          </h2>
+          <p className="text-gray-400 text-xs font-medium mb-4">{formatPhone(conv?.contact_phone || '')}</p>
+          
+          <div className="flex flex-wrap gap-2 justify-center">
+            {lead && (
+              <button 
+                onClick={() => navigate(`/leads?search=${lead.id}`)}
+                className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-blue-50 text-blue-600 text-[11px] font-bold hover:bg-blue-100 transition-colors"
+              >
+                <ExternalLink size={13} /> Abrir Lead
+              </button>
+            )}
+          </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-          {!selectedConv && (
-            <p style={{ fontSize: '12.5px', color: txtMid, textAlign: 'center', marginTop: '40px' }}>Nenhuma conversa selecionada</p>
-          )}
-
-          {selectedConv && lead && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: avatarColor(lead.nome || '?'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '15px', fontWeight: 700, flexShrink: 0 }}>
-                  {initials(lead.nome || '?')}
+        <div className="px-4 py-5 flex flex-col gap-6">
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Painel do Funil</h4>
+              {updating && <Loader2 size={11} className="animate-spin text-blue-500" />}
+            </div>
+            
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setStatusDropOpen(v => !v)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: '10px',
+                  border: '1px solid #e5e7eb', background: '#f9fafb',
+                  fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    background: currentStatus?.dot || '#3b82f6', flexShrink: 0,
+                  }} />
+                  {currentStatus?.label || 'Em atendimento'}
                 </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: txt }}>{lead.nome}</p>
-                  <p style={{ margin: 0, fontSize: '12px', color: txtMid }}>{lead.cidade || '—'}</p>
-                </div>
-              </div>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 4L6 8L10 4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { label: 'Score', value: lead.score != null ? `${lead.score} pts` : '—' },
-                  { label: 'Faixa', value: lead.faixa ? <span style={{ color: faixaColor(lead.faixa), fontWeight: 600 }}>{lead.faixa}</span> : '—' },
-                  { label: 'Status', value: statusLabel(lead.status) },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', borderRadius: '8px', background: dark ? '#18181b' : '#f9fafb' }}>
-                    <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
-                    <span style={{ fontSize: '12px', color: txt, fontWeight: 500 }}>{value as any}</span>
+              {statusDropOpen && (
+                <>
+                  <div
+                    onClick={() => setStatusDropOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                    zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb',
+                    borderRadius: '10px', padding: '4px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  }}>
+                    {STATUS_OPTIONS_PANEL.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={async () => {
+                          setStatusDropOpen(false);
+                          if (!lead) return;
+                          setUpdating(true);
+                          const { error } = await supabase
+                            .from('leads')
+                            .update({
+                              status: opt.value,
+                              ultimo_status_change: new Date().toISOString(),
+                            })
+                            .eq('id', lead.id);
+                          if (error) toast.error('Erro ao atualizar status');
+                          else {
+                            toast.success('Status atualizado!');
+                            setLead(prev => prev ? { ...prev, status: opt.value } : prev);
+                            onUpdate();
+                          }
+                          setUpdating(false);
+                        }}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '8px 12px',
+                          borderRadius: '8px', border: 'none', cursor: 'pointer',
+                          fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px',
+                          background: (lead?.status ?? 1) === opt.value ? '#eff6ff' : 'transparent',
+                          color: (lead?.status ?? 1) === opt.value ? '#2563eb' : '#374151',
+                        }}
+                      >
+                        <span style={{
+                          width: '8px', height: '8px', borderRadius: '50%',
+                          background: opt.dot, flexShrink: 0,
+                        }} />
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
-                ))}
+                </>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Métricas</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <MetricBox icon={<Shield size={12} />} label="Score" value={lead?.score ? `${lead.score} pts` : '—'} color="text-emerald-600" />
+              <MetricBox icon={<MessageCircle size={12} />} label="Msgs" value={lead?.messages_count || 0} color="text-blue-600" />
+              <MetricBox icon={<MapPin size={12} />} label="Cidade" value={lead?.cidade || '—'} color="text-violet-600" />
+              <MetricBox icon={<Megaphone size={12} />} label="Origem" value={lead?.utm_source || 'Indireto'} color="text-amber-600" />
+            </div>
+          </section>
+
+          {lead?.quiz_respostas && (
+             <section>
+                <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Quiz</h4>
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <QuizAnswers data={lead.quiz_respostas} colors={colors} />
+                </div>
+             </section>
+          )}
+
+          <section>
+            <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Notas Internas</h4>
+            <textarea 
+              key={conv?.id}
+              defaultValue={conv?.internal_notes || ''}
+              onBlur={(e) => handleNotesUpdate(e.target.value)}
+              placeholder="Notas sobre este lead..."
+              className="w-full min-h-[80px] p-2.5 rounded-xl border border-gray-100 text-[12.5px] bg-gray-50 resize-none outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricBox({ icon, label, value, color }: { icon: any, label: string, value: any, color: string }) {
+  return (
+    <div className="bg-gray-50/50 p-2.5 rounded-xl border border-gray-100 flex flex-col gap-0.5">
+      <div className={`flex items-center gap-1 ${color} mb-0.5 opacity-80`}>
+        {icon}
+        <span className="text-[8px] font-bold uppercase tracking-wider">{label}</span>
+      </div>
+      <div className="text-[12px] font-bold text-gray-700 truncate">{value}</div>
+    </div>
+  );
+}
+
+function QuizAnswers({ data, colors }: { data: any, colors: any }) {
+  const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+  const filteredEntries = Object.entries(parsed).filter(([key]) => QUIZ_LABELS[key]);
+  
+  return (
+    <div className="flex flex-col gap-2.5">
+      {filteredEntries.map(([key, val]) => (
+        <div key={key} className="flex flex-col border-b border-gray-200/50 last:border-0 pb-1.5 mb-0.5">
+          <span className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">{QUIZ_LABELS[key]}</span>
+          <span className="text-[12px] font-medium text-gray-700">{String(val)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+// ── Config View ──
+export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colors: any, orgId: string, account: WaAccount | null, onSaved: (acc: WaAccount) => void, onCancel?: () => void }) {
+  const [formData, setFormData] = useState({
+    phone_number_id: account?.phone_number_id || '',
+    business_account_id: account?.business_account_id || '',
+    token: account?.token || '',
+    webhook_verify_token: account?.webhook_verify_token || 'floow_verify_token',
+    display_name: account?.display_name || ''
+  });
+  const [saving, setSending] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    const { data, error } = await supabase
+      .from('whatsapp_accounts')
+      .upsert({
+        org_id: orgId,
+        ...formData,
+        status: 'active'
+      })
+      .select()
+      .single();
+
+    if (error) toast.error('Erro ao salvar configuração');
+    else { toast.success('Configuração salva!'); onSaved(data as WaAccount); }
+    setSending(false);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden" style={{ background: colors.sidebarBg }}>
+        <div className="p-8 border-b" style={{ borderColor: colors.border }}>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-blue-50 rounded-xl text-blue-600"><Settings size={32} /></div>
+            <div>
+              <h1 className="text-2xl font-bold">Configuração WhatsApp Cloud API</h1>
+              <p className="text-gray-500 text-sm">Integre sua conta oficial da Meta para disparar mensagens.</p>
+            </div>
+          </div>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">ID do Número de Telefone</label>
+              <input 
+                required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
+                value={formData.phone_number_id} onChange={e => setFormData({...formData, phone_number_id: e.target.value})}
+                placeholder="Ex: 123456789012345"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">ID da Conta de Negócio</label>
+              <input 
+                required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
+                value={formData.business_account_id} onChange={e => setFormData({...formData, business_account_id: e.target.value})}
+                placeholder="Ex: 987654321098765"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">Token de Acesso Permanente</label>
+            <input 
+              required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
+              value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})}
+              placeholder="EAAG..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">Verify Token (Webhook)</label>
+            <input 
+              required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
+              value={formData.webhook_verify_token} onChange={e => setFormData({...formData, webhook_verify_token: e.target.value})}
+            />
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button 
+              type="button" onClick={onCancel}
+              className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" disabled={saving}
+              className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="animate-spin" size={18} /> : 'Salvar Configuração'}
+            </button>
+          </div>
+        </form>
+        
+        <div className="p-6 bg-gray-50 text-[11px] text-gray-400 flex flex-col gap-1 border-t">
+          <p>● Certifique-se de configurar a URL de Callback no Painel da Meta:</p>
+          <code className="bg-white p-1 rounded border block truncate">{WEBHOOK_URL}</code>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: any, onClose: () => void, onSent: () => void }) {
+  const [loading, setLoading] = useState(false);
+  
+  const templates = [
+    {
+      id: 'abordagem_inicial',
+      name: 'abordagem_inicial',
+      label: 'Abordagem Inicial (Aprovada)',
+      body: "Oi {{1}}!\n\nSeu perfil foi pré-aprovado! 🎉\n\nFico feliz em te dar as boas-vindas e explicar os próximos passos.\n\nPode falar comigo aqui? 😊"
+    }
+  ];
+
+  const handleSend = async (temp: any) => {
+    setLoading(true);
+    try {
+      const fullPhone = conv.contact_phone;
+      const leadName = conv.lead?.nome || conv.contact_name || 'Amiga';
+
+      const payload = {
+        messaging_product: "whatsapp",
+        to: fullPhone,
+        type: "template",
+        template: {
+          name: temp.name,
+          language: { code: "pt_BR" },
+          components: [{
+            type: "body",
+            parameters: [{ type: "text", text: leadName }]
+          }]
+        }
+      };
+
+      const res = await fetch(`https://graph.facebook.com/v18.0/${acc.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${acc.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Erro na API');
+
+      // Registrar no Supabase
+      const { error: msgErr } = await supabase.from('whatsapp_messages').insert({
+        org_id: acc.org_id,
+        conversation_id: conv.id,
+        wamid: data.messages?.[0]?.id,
+        direction: 'outbound',
+        type: 'template',
+        content: temp.body.replace('{{1}}', leadName),
+        status: 'sent',
+        raw_payload: data
+      });
+
+      if (msgErr) throw msgErr;
+
+      await supabase.from('whatsapp_conversations').update({
+        last_message: temp.body.replace('{{1}}', leadName),
+        last_message_at: new Date().toISOString()
+      }).eq('id', conv.id);
+
+      toast.success('Modelo enviado com sucesso!');
+      onSent();
+      onClose();
+    } catch (err: any) {
+      toast.error('Erro ao enviar modelo: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b flex items-center justify-between">
+          <h3 className="text-xl font-bold">Enviar Modelo</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
+        </div>
+        
+        <div className="p-6 flex flex-col gap-4">
+          <p className="text-sm text-gray-500 mb-2">Selecione um modelo aprovado para reativar a conversa.</p>
+          
+          {templates.map(t => (
+            <button 
+              key={t.id}
+              disabled={loading}
+              onClick={() => handleSend(t)}
+              className="group p-4 border rounded-2xl text-left hover:border-blue-500 hover:bg-blue-50/30 transition-all flex flex-col gap-2 relative"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-blue-600 uppercase tracking-wider">{t.label}</span>
+                <Send size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600" />
               </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3 leading-relaxed">
+                {t.body.replace('{{1}}', conv.lead?.nome || conv.contact_name || '...') }
+              </p>
+            </button>
+          ))}
 
-              <button
-                onClick={() => navigate('/leads')}
-                style={{ width: '100%', padding: '8px', borderRadius: '9px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-              >
-                <ExternalLink size={13} /> Abrir lead
-              </button>
+          {loading && (
+            <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 flex items-center justify-center z-10 rounded-3xl">
+              <Loader2 className="animate-spin text-blue-600" size={32} />
             </div>
           )}
-
-          {selectedConv && !lead && leadSearch && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ fontSize: '12.5px', color: txtMid, margin: 0 }}>Lead encontrado por telefone:</p>
-              <div style={{ padding: '10px', borderRadius: '10px', background: dark ? '#18181b' : '#f9fafb', border: `1px solid ${border}` }}>
-                <p style={{ margin: '0 0 4px', fontSize: '13.5px', fontWeight: 600, color: txt }}>{leadSearch.nome}</p>
-                <p style={{ margin: 0, fontSize: '12px', color: txtMid }}>{leadSearch.cidade || '—'}</p>
-              </div>
-              <button
-                onClick={handleLinkLead} disabled={linking}
-                style={{ width: '100%', padding: '8px', borderRadius: '9px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: linking ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-              >
-                <Link2 size={13} /> {linking ? 'Vinculando...' : 'Vincular lead'}
-              </button>
-            </div>
-          )}
-
-          {selectedConv && !lead && !leadSearch && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', marginTop: '20px' }}>
-              <User size={32} style={{ color: dark ? '#27272a' : '#d1d5db' }} />
-              <p style={{ fontSize: '12.5px', color: txtMid, textAlign: 'center', margin: 0 }}>Nenhum lead vinculado</p>
-              <button
-                onClick={() => navigate('/leads')}
-                style={{ width: '100%', padding: '8px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txt, fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontFamily: 'inherit' }}
-              >
-                <UserPlus size={13} /> Criar lead
-              </button>
-            </div>
-          )}
+        </div>
+        
+        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 flex gap-3">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-200 rounded-xl transition-colors"
+          >
+            Cancelar
+          </button>
         </div>
       </div>
     </div>

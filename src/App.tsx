@@ -15,12 +15,16 @@ import CampanhasPage from "./pages/Campanhas";
 import CriativosPage from "./pages/Criativos";
 import WebhookPage from "./pages/Webhook";
 import WhatsAppPage from "./pages/WhatsApp";
+import WhatsAppConfigPage from "./pages/WhatsAppConfig";
+import DisparosPage from "./pages/Disparos";
 import ConfiguracoesPage from "./pages/Configuracoes";
 import MetaAdsPage from "./pages/MetaAds";
 import ReportsPage from "./pages/Reports";
 import InvitePage from "./pages/InvitePage";
 import QuizPublico from "./pages/QuizPublico";
 import QuizBuilder from "./pages/Quiz";
+import QuizRespostas from "./pages/QuizRespostas";
+import AssinaturaPage from "./pages/Assinatura";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,11 +47,16 @@ const App = () => (
           <Route path="/criativos" element={<ProtectedRoute><CriativosPage /></ProtectedRoute>} />
           <Route path="/webhook" element={<ProtectedRoute><WebhookPage /></ProtectedRoute>} />
           <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
+          <Route path="/whatsapp/disparos" element={<ProtectedRoute><DisparosPage /></ProtectedRoute>} />
+          <Route path="/whatsapp/configuracoes" element={<ProtectedRoute><WhatsAppConfigPage /></ProtectedRoute>} />
+          <Route path="/disparos" element={<Navigate to="/whatsapp/disparos" replace />} />
           <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesPage /></ProtectedRoute>} />
           <Route path="/meta-ads" element={<ProtectedRoute><MetaAdsPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/convidar" element={<ProtectedRoute><InvitePage /></ProtectedRoute>} />
           <Route path="/quiz-builder" element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
+          <Route path="/quiz/respostas" element={<ProtectedRoute><QuizRespostas /></ProtectedRoute>} />
+          <Route path="/assinatura" element={<ProtectedRoute><AssinaturaPage /></ProtectedRoute>} />
           <Route path="/quiz/:slug" element={<QuizPublico />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

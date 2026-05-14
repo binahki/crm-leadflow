@@ -2,8 +2,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
   Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2, ClipboardList,
+  ChevronDown, Zap, User as UserIcon, CreditCard, ChevronUp, CircleDot
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -13,20 +14,46 @@ import { toast } from 'sonner';
 const NAV_MAIN = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/', badge: false },
   { icon: Users, label: 'Leads', href: '/leads', badge: true },
+  { 
+    icon: ClipboardList, 
+    label: 'Quiz', 
+    href: '/quiz-builder', 
+    badge: false,
+    children: [
+      { label: 'Meu Quiz', href: '/quiz-builder' },
+      { label: 'Respostas', href: '/quiz/respostas' }
+    ]
+  },
   { icon: BarChart3, label: 'Funil CRM', href: '/kanban', badge: false },
 ];
+
 const NAV_META = [
   { icon: Megaphone, label: 'Campanhas', href: '/campanhas', badge: false },
   { icon: ImageIcon, label: 'Criativos', href: '/criativos', badge: false },
+  { 
+    icon: MessageCircle, 
+    label: 'WhatsApp', 
+    href: '/whatsapp', 
+    badge: false,
+    children: [
+      { label: 'Mensagens', href: '/whatsapp' },
+      { label: 'Disparos', href: '/whatsapp/disparos' },
+      { label: 'Configurações', href: '/whatsapp/configuracoes' }
+    ]
+  },
 ];
+
 const NAV_INT = [
-  { icon: Webhook, label: 'Webhook', href: '/webhook', badge: false },
-  { icon: MessageCircle, label: 'WhatsApp', href: '/whatsapp', badge: false },
-  { icon: BarChart3, label: 'Meta Ads', href: '/meta-ads', badge: false },
-  { icon: ClipboardList, label: 'Quiz', href: '/quiz-builder', badge: false },
-];
-const NAV_CONTA = [
-  { icon: Settings, label: 'Configurações', href: '/configuracoes', badge: false },
+  { 
+    icon: Settings, 
+    label: 'Integrações', 
+    href: '/meta-ads', 
+    badge: false,
+    children: [
+      { label: 'Meta Ads', href: '/meta-ads' },
+      { label: 'Webhook', href: '/webhook' }
+    ]
+  },
 ];
 
 const COLLAPSE_KEY = 'sidebar_collapsed';
@@ -41,11 +68,31 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { orgId } = useOrgId();
+  const { orgId, ready } = useOrgId();
   const isDark = theme === 'dark';
 
   const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
   const [waUnread, setWaUnread] = useState(0);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    if (location.pathname.startsWith('/quiz')) initial['/quiz-builder'] = true;
+    if (location.pathname.startsWith('/whatsapp') || location.pathname === '/disparos') initial['/whatsapp'] = true;
+    if (location.pathname.startsWith('/meta-ads') || location.pathname === '/webhook') initial['/meta-ads'] = true;
+    return initial;
+  });
+
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!orgId) return;
@@ -62,67 +109,52 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
     fetchBadges();
   }, [orgId, location.pathname]);
 
-  // Badge unread WhatsApp — realtime
+
   useEffect(() => {
-    if (!orgId) return;
-    async function fetchUnread() {
-      const { data } = await (supabase as any)
+    if (!ready || !orgId) return;
+    
+    // Busca inicial
+    const fetchUnread = async () => {
+      const { data } = await supabase
         .from('whatsapp_conversations')
         .select('unread_count')
-        .eq('org_id', orgId!);
-      const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
+        .eq('org_id', orgId)
+        .gt('unread_count', 0);
+      const total = (data || []).length;
       setWaUnread(total);
-    }
+    };
+    
     fetchUnread();
-    const ch = supabase
-      .channel('sidebar-wa-unread-' + orgId)
+    
+    // Realtime
+    const ch = supabase.channel('sidebar-wa-unread-' + orgId)
       .on('postgres_changes' as any, {
-        event: '*', schema: 'public', table: 'whatsapp_conversations',
+        event: '*', schema: 'public',
+        table: 'whatsapp_conversations',
         filter: `org_id=eq.${orgId}`,
       }, fetchUnread)
       .subscribe();
+    
     return () => { supabase.removeChannel(ch); };
-  }, [orgId]);
+  }, [orgId, ready]);
 
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem(COLLAPSE_KEY) === 'true'; } catch { return false; }
+  const isWhatsApp = location.pathname.startsWith('/whatsapp');
+
+  const [pinned, setPinned] = useState<boolean>(() => {
+    if (isWhatsApp) return false;
+    try { 
+      const val = localStorage.getItem(COLLAPSE_KEY);
+      if (val !== null) return val !== 'true';
+      return true;
+    } catch { return true; }
   });
+  
+  const [hovered, setHovered] = useState(false);
 
-  const [showProfile, setShowProfile] = useState(false);
-  const [profName, setProfName] = useState('');
-  const [profEmail, setProfEmail] = useState('');
-  const [profPass, setProfPass] = useState('');
-  const [profLoading, setProfLoading] = useState(false);
-
-  function openProfile() {
-    setProfName(displayName);
-    setProfEmail(userEmail);
-    setProfPass('');
-    setShowProfile(true);
-  }
-
-  async function handleUpdateProfile() {
-    if (!user) return;
-    setProfLoading(true);
-    try {
-      const updates: any = {};
-      if (profName !== displayName) updates.data = { full_name: profName };
-      if (profEmail !== userEmail) updates.email = profEmail;
-      if (profPass.trim()) updates.password = profPass.trim();
-      const { error } = await supabase.auth.updateUser(updates);
-      if (error) throw error;
-      toast.success('Perfil atualizado com sucesso!');
-      setShowProfile(false);
-    } catch (err: any) {
-      toast.error(`Erro ao atualizar: ${err.message}`);
-    }
-    setProfLoading(false);
-  }
-
-  function toggle() {
-    const next = !collapsed;
-    setCollapsed(next);
-    try { localStorage.setItem(COLLAPSE_KEY, String(next)); } catch { }
+  function togglePin() {
+    const next = !pinned;
+    setPinned(next);
+    try { localStorage.setItem(COLLAPSE_KEY, String(!next)); } catch { }
   }
 
   function isActive(href: string) {
@@ -137,6 +169,8 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const userInitial = displayName[0]?.toUpperCase() || 'U';
 
   const isMobileDrawer = !!onMobileClose;
+  const isExpanded = isMobileDrawer ? true : (pinned || hovered);
+  const isCollapsed = !isExpanded;
 
   const sideBg = isDark ? '#0f0f11' : '#ffffff';
   const sideBdr = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
@@ -144,9 +178,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const mutClr = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.58)';
   const hovBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
 
-  const isCollapsed = isMobileDrawer ? false : collapsed;
-
-  function NavGroup({ label, items }: { label: string; items: typeof NAV_MAIN }) {
+  function NavGroup({ label, items }: { label: string; items: any[] }) {
     return (
       <div style={{ marginBottom: '18px' }}>
         {!isCollapsed && (
@@ -162,30 +194,29 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           {items.map(item => {
             const active = isActive(item.href);
             const isWa = item.href === '/whatsapp';
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
+            const hasChildren = item.children;
+            const isOpen = expandedItems[item.href];
+
+            const itemContent = (
+              <div 
                 title={isCollapsed ? item.label : undefined}
-                onClick={isMobileDrawer ? onMobileClose : undefined}
-                style={{
-                  display: 'flex', alignItems: 'center',
-                  justifyContent: isCollapsed ? 'center' : 'flex-start',
-                  gap: '10px', padding: isCollapsed ? '10px 0' : '9px 12px',
-                  borderRadius: '8px', fontSize: '13.5px', fontWeight: active ? 600 : 500,
-                  textDecoration: 'none', transition: 'background 0.12s, color 0.12s',
-                  background: active ? '#2563eb' : 'transparent',
-                  color: active ? '#ffffff' : mutClr,
-                  position: 'relative',
-                }}
-                onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = hovBg; (e.currentTarget as HTMLElement).style.color = isDark ? '#fff' : '#111'; } }}
-                onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = mutClr; } }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: '10px', padding: isCollapsed ? '10px 0' : '9px 12px', borderRadius: '8px', fontSize: '13.5px', fontWeight: active ? 600 : 500, transition: 'background 0.12s, color 0.12s', background: active && !hasChildren ? '#2563eb' : 'transparent', color: active && !hasChildren ? '#ffffff' : mutClr, position: 'relative', cursor: 'pointer' }}
+                onMouseEnter={e => { if (!(active && !hasChildren)) { e.currentTarget.style.background = hovBg; e.currentTarget.style.color = isDark ? '#fff' : '#111'; } }}
+                onMouseLeave={e => { if (!(active && !hasChildren)) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = mutClr; } }}
               >
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <item.icon style={{ width: '16px', height: '16px', strokeWidth: active ? 2.2 : 1.7 }} />
-                  {/* Badge collapsed WhatsApp unread */}
-                  {isCollapsed && isWa && waUnread > 0 && (
-                    <span style={{ position: 'absolute', top: '-5px', right: '-6px', minWidth: '14px', height: '14px', borderRadius: '99px', background: '#25D366', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                <div style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                  <item.icon style={{ width: '20px', height: '20px', strokeWidth: active ? 2.2 : 1.7 }} />
+                  {isWa && waUnread > 0 && (
+                    <span style={{
+                      position: 'absolute', top: '-6px', right: '-8px',
+                      background: '#25d366', color: '#fff',
+                      fontSize: '9px', fontWeight: 700,
+                      minWidth: '16px', height: '16px',
+                      borderRadius: '99px', padding: '0 4px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: isDark ? '2px solid #0f0f11' : '2px solid white',
+                      zIndex: 10
+                    }}>
                       {waUnread > 99 ? '99+' : waUnread}
                     </span>
                   )}
@@ -193,37 +224,56 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                 {!isCollapsed && (
                   <>
                     <span style={{ flex: 1, letterSpacing: '-0.01em' }}>{item.label}</span>
-                    {alertBadges[item.href] && (
-                      <span style={{
-                        width: '8px', height: '8px', borderRadius: '50%',
-                        background: '#ef4444', flexShrink: 0,
-                        boxShadow: '0 0 4px rgba(239,68,68,0.5)',
-                      }} />
-                    )}
-                    {/* Badge expanded WhatsApp unread */}
-                    {isWa && waUnread > 0 && (
-                      <span style={{
-                        fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '20px',
-                        background: active ? 'rgba(255,255,255,0.22)' : '#25D366',
-                        color: '#fff',
-                        minWidth: '22px', textAlign: 'center',
-                      }}>
-                        {waUnread > 99 ? '99+' : waUnread}
-                      </span>
+                    {hasChildren && <ChevronDown style={{ width: '12px', height: '12px', opacity: 0.5, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
+                    {alertBadges[item.href] && !hasChildren && (
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', flexShrink: 0, boxShadow: '0 0 4px rgba(239,68,68,0.5)' }} />
                     )}
                     {item.badge && leadCount > 0 && (
-                      <span style={{
-                        fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '20px',
-                        background: active ? 'rgba(255,255,255,0.22)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'),
-                        color: active ? '#fff' : (isDark ? 'rgba(255,255,255,0.8)' : '#374151'),
-                        minWidth: '22px', textAlign: 'center',
-                      }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '20px', background: active ? 'rgba(255,255,255,0.22)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'), color: active ? '#fff' : (isDark ? 'rgba(255,255,255,0.8)' : '#374151'), minWidth: '22px', textAlign: 'center' }}>
                         {leadCount}
                       </span>
                     )}
                   </>
                 )}
-              </Link>
+              </div>
+            );
+
+            return (
+              <div key={item.href}>
+                {hasChildren ? (
+                  <div onClick={() => setExpandedItems(prev => ({ ...prev, [item.href]: !prev[item.href] }))}>
+                    {itemContent}
+                  </div>
+                ) : (
+                  <Link to={item.href} style={{ textDecoration: 'none' }} onClick={isMobileDrawer ? onMobileClose : undefined}>
+                    {itemContent}
+                  </Link>
+                )}
+                
+                {isOpen && !isCollapsed && hasChildren && (
+                  <div style={{ paddingLeft: '28px', marginTop: '1px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    {item.children.map((child: any) => {
+                      const childActive = location.pathname === child.href;
+                      return (
+                        <Link
+                          key={child.href}
+                          to={child.href}
+                          onClick={isMobileDrawer ? onMobileClose : undefined}
+                          style={{
+                            display: 'flex', alignItems: 'center', padding: '7px 12px',
+                            borderRadius: '6px', fontSize: '12.5px', fontWeight: childActive ? 600 : 400,
+                            textDecoration: 'none', color: childActive ? (isDark ? '#fff' : '#111') : mutClr,
+                            background: childActive ? hovBg : 'transparent',
+                            transition: 'all 0.12s',
+                          }}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -232,58 +282,74 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   }
 
   return (
-    <aside style={{
-      width: isCollapsed ? '60px' : '228px',
-      flexShrink: 0,
-      display: 'flex', flexDirection: 'column',
-      background: sideBg,
-      borderRight: `1px solid ${sideBdr}`,
-      height: '100vh',
-      transition: isMobileDrawer ? 'none' : 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-      overflow: 'hidden',
-    }}>
+    <aside 
+      onMouseEnter={() => !pinned && setHovered(true)}
+      onMouseLeave={() => !pinned && setHovered(false)}
+      style={{
+        width: isExpanded ? '220px' : '56px',
+        flexShrink: 0,
+        display: 'flex', flexDirection: 'column',
+        background: sideBg,
+        borderRight: `1px solid ${sideBdr}`,
+        height: '100vh',
+        transition: isMobileDrawer ? 'none' : 'width 0.2s cubic-bezier(0.4,0,0.2,1)',
+        overflow: 'hidden',
+        zIndex: 40
+      }}
+    >
 
       {/* Header */}
       <div style={{
         height: '60px',
-        padding: isCollapsed ? '0' : '0 12px',
+        padding: isExpanded ? '0 12px 0 16px' : '0',
         display: 'flex', alignItems: 'center',
-        justifyContent: isCollapsed ? 'center' : 'space-between',
+        justifyContent: isExpanded ? 'space-between' : 'center',
         borderBottom: `1px solid ${sideBdr}`,
         flexShrink: 0,
       }}>
-        {isCollapsed ? (
-          <button onClick={toggle} title="Expandir" style={{
-            width: '34px', height: '34px', borderRadius: '9px',
-            background: isDark ? '#ffffff' : '#2a2c2b',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: 'none', cursor: 'pointer', flexShrink: 0,
-          }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: isDark ? '#090909' : '#ffffff', letterSpacing: '-0.03em' }}>FL</span>
-          </button>
-        ) : (
+        {isExpanded ? (
           <>
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <img
-                src={isDark ? '/logo-light.png' : '/logo-dark.png'}
-                alt="floow"
-                onClick={() => { navigate('/'); if (isMobileDrawer) onMobileClose?.(); }}
-                style={{ height: '26px', width: 'auto', objectFit: 'contain', cursor: 'pointer' }}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
-            </div>
+            <img
+              src={isDark ? '/logo-light.png' : '/logo-dark.png'}
+              alt="floow"
+              onClick={() => { navigate('/'); if (isMobileDrawer) onMobileClose?.(); }}
+              style={{ height: '24px', width: 'auto', objectFit: 'contain', cursor: 'pointer' }}
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
             {!isMobileDrawer && (
-              <button onClick={toggle} style={{
-                width: '26px', height: '26px', borderRadius: '7px',
-                background: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-              }} title="Recolher sidebar">
-                <ChevronLeft style={{ width: '13px', height: '13px', color: mutClr }} />
+              <button
+                onClick={togglePin}
+                title={pinned ? 'Desafixar sidebar' : 'Fixar sidebar'}
+                style={{
+                  padding: '4px', borderRadius: '6px', border: 'none',
+                  background: 'transparent', cursor: 'pointer',
+                  color: pinned ? '#2563eb' : mutClr,
+                  display: 'flex', alignItems: 'center',
+                  transform: pinned ? 'rotate(0deg)' : 'rotate(45deg)',
+                  transition: 'transform 0.2s, color 0.2s',
+                  opacity: pinned ? 1 : 0.6
+                }}
+              >
+                <CircleDot size={18} strokeWidth={pinned ? 2.5 : 1.8} />
               </button>
             )}
           </>
+        ) : (
+          <button
+            onClick={togglePin}
+            title={pinned ? 'Desafixar sidebar' : 'Fixar sidebar'}
+            style={{
+              padding: '4px', borderRadius: '6px', border: 'none',
+              background: 'transparent', cursor: 'pointer',
+              color: pinned ? '#2563eb' : mutClr,
+              display: 'flex', alignItems: 'center',
+              transform: pinned ? 'rotate(0deg)' : 'rotate(45deg)',
+              transition: 'transform 0.2s, color 0.2s',
+              opacity: pinned ? 1 : 0.6
+            }}
+          >
+            <CircleDot size={18} strokeWidth={pinned ? 2.5 : 1.8} />
+          </button>
         )}
       </div>
 
@@ -292,11 +358,90 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         <NavGroup label="Principal" items={NAV_MAIN} />
         <NavGroup label="Meta Ads" items={NAV_META} />
         <NavGroup label="Integrações" items={NAV_INT} />
-        <NavGroup label="Conta" items={NAV_CONTA} />
       </nav>
 
       {/* Footer */}
-      <div style={{ padding: '6px', borderTop: `1px solid ${sideBdr}`, flexShrink: 0 }}>
+      <div style={{ padding: '6px', borderTop: `1px solid ${sideBdr}`, flexShrink: 0, position: 'relative' }}>
+        
+        {/* Account Menu Popover */}
+        {showAccountMenu && (
+          <div ref={accountMenuRef} style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '6px',
+            right: '6px',
+            background: isDark ? '#1a1a1e' : '#fff',
+            border: `1px solid ${sideBdr}`,
+            borderRadius: '12px',
+            marginBottom: '8px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+            overflow: 'hidden',
+            zIndex: 50,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '4px'
+          }}>
+            <button onClick={() => { navigate('/'); setShowAccountMenu(false); if (isMobileDrawer) onMobileClose?.(); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: isDark ? '#eee' : '#333', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => e.currentTarget.style.background = hovBg}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <LayoutDashboard size={16} /> Dashboard
+            </button>
+            <button onClick={() => { navigate('/configuracoes'); setShowAccountMenu(false); if (isMobileDrawer) onMobileClose?.(); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: isDark ? '#eee' : '#333', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => e.currentTarget.style.background = hovBg}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <UserIcon size={16} /> Minha conta
+            </button>
+            <button onClick={() => { navigate('/assinatura'); setShowAccountMenu(false); if (isMobileDrawer) onMobileClose?.(); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: isDark ? '#eee' : '#333', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => e.currentTarget.style.background = hovBg}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <CreditCard size={16} /> Minha assinatura
+            </button>
+            <div style={{ height: '1px', background: sideBdr, margin: '4px 8px' }} />
+            <button onClick={signOut} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
+        )}
+
+        {/* User profile toggle */}
+        <div 
+          onClick={() => setShowAccountMenu(!showAccountMenu)}
+          style={{ 
+            display: 'flex', alignItems: 'center', 
+            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            gap: '9px', padding: isCollapsed ? '10px 0' : '9px 12px', 
+            borderRadius: '8px', cursor: 'pointer', transition: 'background 0.12s',
+            marginBottom: '4px'
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = hovBg)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <div style={{
+            width: '32px', height: '32px', borderRadius: '50%',
+            background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0,
+          }}>
+            {userInitial}
+          </div>
+          {!isCollapsed && (
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isDark ? '#f4f4f5' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayName}
+              </p>
+              <p style={{ margin: 0, fontSize: '11px', color: mutClr, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Configurações
+              </p>
+            </div>
+          )}
+          {!isCollapsed && (showAccountMenu ? <ChevronDown size={14} color={mutClr} /> : <ChevronUp size={14} color={mutClr} />)}
+        </div>
 
         {/* Dark mode toggle */}
         <div onClick={toggleTheme} style={{
@@ -328,131 +473,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             }} />
           </div>
         </div>
-
-        {/* User info — só aparece expandido E não é drawer mobile */}
-        {!isCollapsed && !isMobileDrawer && (
-          <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
-            <div
-              onClick={openProfile}
-              style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.12s', marginBottom: '4px' }}
-              onMouseEnter={e => (e.currentTarget.style.background = hovBg)}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0,
-              }}>
-                {userInitial}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isDark ? '#f4f4f5' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {displayName}
-                </p>
-                <p style={{ margin: 0, fontSize: '11px', color: mutClr, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {userEmail}
-                </p>
-              </div>
-            </div>
-
-            <button onClick={signOut} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '7px 4px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: isDark ? 'rgba(255,80,80,0.75)' : 'rgba(200,0,0,0.6)',
-              transition: 'all 0.12s', textAlign: 'left', fontFamily: 'inherit',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8 }} /> Sair
-            </button>
-          </div>
-        )}
-
-        {/* Mobile drawer — user info + UM único botão Sair */}
-        {isMobileDrawer && (
-          <div style={{ padding: '4px 8px', borderTop: `1px solid ${sideBdr}`, marginTop: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '6px', borderRadius: '8px', marginBottom: '4px' }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: '13px', fontWeight: 700, flexShrink: 0,
-              }}>
-                {userInitial}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: isDark ? '#f4f4f5' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {displayName}
-                </p>
-                <p style={{ margin: 0, fontSize: '11px', color: mutClr, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {userEmail}
-                </p>
-              </div>
-            </div>
-            {/* UM ÚNICO botão Sair no mobile */}
-            <button onClick={signOut} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-              background: isDark ? 'rgba(255,50,50,0.08)' : 'rgba(200,0,0,0.05)',
-              color: isDark ? 'rgba(255,80,80,0.9)' : 'rgba(200,0,0,0.75)',
-              fontSize: '13.5px', fontWeight: 600, marginTop: '4px',
-              fontFamily: 'inherit', textAlign: 'left',
-            }}>
-              <LogOut style={{ width: '15px', height: '15px', strokeWidth: 1.8, flexShrink: 0 }} /> Sair
-            </button>
-          </div>
-        )}
-
-        {/* Collapsed desktop — só ícone sair */}
-        {isCollapsed && !isMobileDrawer && (
-          <button onClick={signOut} title="Sair" style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '10px 0', borderRadius: '8px', border: 'none', cursor: 'pointer',
-            background: 'transparent',
-            color: isDark ? 'rgba(255,80,80,0.75)' : 'rgba(200,0,0,0.6)',
-          }}>
-            <LogOut style={{ width: '16px', height: '16px', strokeWidth: 1.8 }} />
-          </button>
-        )}
       </div>
-
-      {/* Profile Modal */}
-      {showProfile && (
-        <>
-          <div onClick={() => setShowProfile(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(3px)', zIndex: 1000 }} />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            background: isDark ? '#111113' : '#ffffff', border: `1px solid ${isDark ? '#27272a' : '#e5e7eb'}`,
-            borderRadius: '16px', padding: '24px', zIndex: 1001, width: '90%', maxWidth: '360px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.2)', fontFamily: 'inherit',
-          }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: isDark ? '#fff' : '#111' }}>Editar Perfil</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nome</label>
-                <input type="text" value={profName} onChange={e => setProfName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Email</label>
-                <input type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', color: mutClr, fontWeight: 500, marginBottom: '4px', display: 'block' }}>Nova Senha (opcional)</label>
-                <input type="password" value={profPass} onChange={e => setProfPass(e.target.value)} placeholder="Deixe em branco para não alterar" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: isDark ? '#fff' : '#111', fontSize: '16px', outline: 'none' }} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setShowProfile(false)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${sideBdr}`, background: 'transparent', color: isDark ? '#fff' : '#111', fontWeight: 500, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleUpdateProfile} disabled={profLoading} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 500, cursor: profLoading ? 'default' : 'pointer', opacity: profLoading ? 0.7 : 1 }}>
-                {profLoading ? 'Salvando...' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
     </aside>
   );
 }

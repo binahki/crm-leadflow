@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useAuth } from '@/hooks/useAuth';
-import { Save, Building2, Lock } from 'lucide-react';
+import { Save, Building2, Lock, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
@@ -34,6 +34,7 @@ export default function ConfiguracoesPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const { user } = useAuth();
 
+  const [userName, setUserName]   = useState('');
   const [nome, setNome]           = useState('');
   const [documento, setDocumento] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
@@ -42,7 +43,10 @@ export default function ConfiguracoesPage() {
   const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
-    if (!orgReady || !orgId) return;
+    if (!orgReady || !orgId || !user) return;
+    
+    setUserName(user.user_metadata?.full_name || '');
+
     supabase
       .from('organizations')
       .select('nome, documento')
@@ -55,7 +59,7 @@ export default function ConfiguracoesPage() {
         }
         setLoadingData(false);
       });
-  }, [orgId, orgReady]);
+  }, [orgId, orgReady, user]);
 
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }
@@ -71,37 +75,33 @@ export default function ConfiguracoesPage() {
 
     setSaving(true);
     try {
-      // Atualiza dados da empresa
+      // 1. Atualiza Perfil (Nome e Senha)
+      const profileUpdates: any = {};
+      if (userName !== user?.user_metadata?.full_name) profileUpdates.data = { full_name: userName };
+      
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: pErr } = await supabase.auth.updateUser(profileUpdates);
+        if (pErr) throw pErr;
+      }
+
+      // 2. Atualiza dados da empresa
       const { error: orgError } = await supabase
         .from('organizations')
         .update({ nome: nome.trim(), documento: documento.replace(/\D/g, '') || null })
         .eq('id', orgId);
-      if (orgError) { toast.error('Erro ao salvar dados da empresa'); setSaving(false); return; }
+      if (orgError) throw orgError;
 
-      // Atualiza senha se preenchida
+      // 3. Atualiza senha via Edge Function (ou auth helper)
       if (novaSenha) {
-        const { data: mem } = await supabase
-          .from('memberships')
-          .select('user_id')
-          .eq('org_id', orgId)
-          .single();
-        const userId = (mem as any)?.user_id;
-        if (!userId) { toast.error('Usuário não encontrado'); setSaving(false); return; }
-
-        const res = await fetch(ATUALIZAR_USUARIO_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, password: novaSenha }),
-        });
-        const data = await res.json();
-        if (!data.ok) { toast.error(data.erro || 'Erro ao atualizar senha'); setSaving(false); return; }
+        const { error: sErr } = await supabase.auth.updateUser({ password: novaSenha });
+        if (sErr) throw sErr;
         setNovaSenha('');
         setConfirmSenha('');
       }
 
       toast.success('Configurações salvas!');
-    } catch {
-      toast.error('Erro de conexão');
+    } catch (err: any) {
+      toast.error(`Erro ao salvar: ${err.message}`);
     }
     setSaving(false);
   }
@@ -147,14 +147,35 @@ export default function ConfiguracoesPage() {
       <div style={{ padding: '32px', fontFamily: FONT }}>
 
         <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Configurações</h1>
-          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Dados da empresa e acesso à conta</p>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Minha Conta</h1>
+          <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Gerencie seus dados pessoais e da sua empresa</p>
         </div>
 
         {loadingData ? (
           <p style={{ color: txtMid, fontSize: '13px' }}>Carregando…</p>
         ) : (
           <>
+            {/* Dados Pessoais */}
+            <div style={card}>
+              <div style={cardHeader}>
+                <User style={{ width: '16px', height: '16px', color: '#3b82f6' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Dados Pessoais</span>
+              </div>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={lbl}>Nome Completo</label>
+                  <input
+                    style={inp} value={userName} onChange={e => setUserName(e.target.value)}
+                    placeholder="Seu nome"
+                  />
+                </div>
+                <div>
+                  <label style={lbl}>Email</label>
+                  <input style={inpReadonly} value={user?.email || ''} readOnly />
+                </div>
+              </div>
+            </div>
+
             {/* Dados da Empresa */}
             <div style={card}>
               <div style={cardHeader}>
@@ -167,8 +188,6 @@ export default function ConfiguracoesPage() {
                   <input
                     style={inp} value={nome} onChange={e => setNome(e.target.value)}
                     placeholder="Nome da sua empresa"
-                    onFocus={e => (e.target.style.borderColor = '#10b981')}
-                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
                   />
                 </div>
                 <div>
@@ -177,35 +196,27 @@ export default function ConfiguracoesPage() {
                     style={inp}
                     value={documento}
                     onChange={e => setDocumento(mascaraDocumento(e.target.value))}
-                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    placeholder="00.000.000/0000-00"
                     maxLength={18}
-                    onFocus={e => (e.target.style.borderColor = '#10b981')}
-                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Dados de Acesso */}
+            {/* Segurança */}
             <div style={card}>
               <div style={cardHeader}>
                 <Lock style={{ width: '16px', height: '16px', color: '#8b5cf6' }} />
-                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Dados de Acesso</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Segurança</span>
               </div>
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <label style={lbl}>Email</label>
-                  <input style={inpReadonly} value={user?.email || ''} readOnly />
-                </div>
-                <div>
-                  <label style={lbl}>Nova senha <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
+                  <label style={lbl}>Alterar senha <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
                   <input
                     style={inp} type="password" value={novaSenha}
                     onChange={e => setNovaSenha(e.target.value)}
                     placeholder="Mínimo 8 caracteres"
                     autoComplete="new-password"
-                    onFocus={e => (e.target.style.borderColor = '#8b5cf6')}
-                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
                   />
                 </div>
                 {novaSenha && (
@@ -217,12 +228,7 @@ export default function ConfiguracoesPage() {
                       onChange={e => setConfirmSenha(e.target.value)}
                       placeholder="Repita a senha"
                       autoComplete="new-password"
-                      onFocus={e => (e.target.style.borderColor = '#8b5cf6')}
-                      onBlur={e => (e.target.style.borderColor = confirmSenha && confirmSenha !== novaSenha ? '#ef4444' : (dark ? '#27272a' : '#e5e7eb'))}
                     />
-                    {confirmSenha && confirmSenha !== novaSenha && (
-                      <p style={{ fontSize: '12px', color: '#ef4444', margin: '4px 0 0' }}>As senhas não coincidem</p>
-                    )}
                   </div>
                 )}
               </div>
@@ -231,7 +237,7 @@ export default function ConfiguracoesPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              style={{ padding: '11px 28px', borderRadius: '10px', border: 'none', background: saving ? (dark ? '#27272a' : '#e5e7eb') : '#10b981', color: saving ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}
+              style={{ padding: '11px 28px', borderRadius: '10px', border: 'none', background: saving ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: '#fff', fontSize: '13.5px', fontWeight: 600, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}
             >
               <Save style={{ width: '14px', height: '14px' }} />
               {saving ? 'Salvando…' : 'Salvar alterações'}

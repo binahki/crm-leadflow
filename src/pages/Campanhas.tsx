@@ -161,7 +161,6 @@ export default function CampanhasPage() {
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
-  const isBecker = orgId === BECKER_ORG_ID;
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
   const _initCampKey = orgId ? `meta_camp_${orgId}_today` : null;
@@ -207,9 +206,9 @@ export default function CampanhasPage() {
 
   // Busca log de otimização da IA — mostra se for das últimas 24h (evita problema de fuso)
   useEffect(()=>{
-    if (!isBecker || !orgReady || !orgId) return;
+    if (!orgReady || !orgId) return;
     (supabase as any).from('ai_optimization_logs').select('*')
-      .eq('org_id', BECKER_ORG_ID)
+      .eq('org_id', orgId)
       .order('created_at',{ascending:false})
       .limit(1)
       .then(({data})=>{
@@ -219,7 +218,7 @@ export default function CampanhasPage() {
           if(horas<=24) setAiLog(log);
         }
       });
-  },[isBecker, orgId, orgReady]); // eslint-disable-line
+  },[orgId, orgReady]); // eslint-disable-line
 
   const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);};
   useEffect(()=>{
@@ -332,7 +331,7 @@ export default function CampanhasPage() {
           <div>
             <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
             <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
-            {isBecker&&aiLog&&(
+            {aiLog&&(
               <button onClick={()=>setShowAiPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'6px',marginTop:'7px',padding:'6px 12px',borderRadius:'99px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',border:'1px solid rgba(139,92,246,0.3)',color:'#8b5cf6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
                 <Zap style={{width:'12px',height:'12px'}}/>
                 IA otimizou hoje
@@ -644,8 +643,8 @@ export default function CampanhasPage() {
           </div>
         )}
       </div>
-      {/* Painel IA — apenas Becker */}
-      {isBecker&&showAiPanel&&aiLog&&(
+      {/* Painel IA */}
+      {showAiPanel&&aiLog&&(
         <>
           <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
           <div style={{position:'fixed',right:0,top:0,bottom:0,width:isMobile?'100vw':'min(420px, 100vw)',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'20px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)',boxSizing:'border-box'}}>

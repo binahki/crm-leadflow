@@ -153,14 +153,33 @@ export function calcularFaixa(
   return faixaCalculada;
 }
 
-export const STATUS_LABELS = ['Em atendimento', 'Em atendimento', 'Reunião', 'Aprovado', 'Reprovado', 'Contrato/App'];
+export const STATUS_CONFIG: Record<number, { label: string; lightBg: string; lightText: string; darkBg: string; darkText: string; dot: string }> = {
+  0: { label: 'Em atendimento', lightBg:'#eff6ff', lightText:'#2563eb', darkBg:'#1e3a8a', darkText:'#60a5fa', dot:'#3b82f6' },
+  1: { label: 'Em atendimento', lightBg:'#eff6ff', lightText:'#2563eb', darkBg:'#1e3a8a', darkText:'#60a5fa', dot:'#3b82f6' },
+  2: { label: 'Reunião', lightBg:'#f5f3ff', lightText:'#7c3aed', darkBg:'#4c1d95', darkText:'#a78bfa', dot:'#8b5cf6' },
+  3: { label: 'Aprovado', lightBg:'#ecfdf5', lightText:'#059669', darkBg:'#064e3b', darkText:'#34d399', dot:'#10b981' },
+  4: { label: 'Reprovado', lightBg:'#fff1f2', lightText:'#e11d48', darkBg:'#881337', darkText:'#fb7185', dot:'#f43f5e' },
+  5: { label: 'Contrato/App', lightBg:'#fffbeb', lightText:'#d97706', darkBg:'#78350f', darkText:'#fbbf24', dot:'#f59e0b' },
+};
+
+export const STATUS_SEQUENCE = [1, 2, 5, 3, 4];
+
+export const STATUS_LABELS = [
+  'Em atendimento', // 0
+  'Em atendimento', // 1
+  'Reunião',        // 2
+  'Aprovado',       // 3
+  'Reprovado',      // 4
+  'Contrato/App',   // 5
+];
+
 export const STATUS_COLORS = [
-  { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
-  { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-400' },
-  { bg: 'bg-violet-50', text: 'text-violet-600', dot: 'bg-violet-400' },
-  { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-400' },
-  { bg: 'bg-rose-50', text: 'text-rose-600', dot: 'bg-rose-400' },
-  { bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-400' },
+  { bg: 'bg-blue-50',   text: 'text-blue-600',   dot: 'bg-blue-400'   }, // 0
+  { bg: 'bg-blue-50',   text: 'text-blue-600',   dot: 'bg-blue-400'   }, // 1
+  { bg: 'bg-violet-50', text: 'text-violet-600', dot: 'bg-violet-400' }, // 2
+  { bg: 'bg-emerald-50',text: 'text-emerald-600',dot: 'bg-emerald-400'}, // 3
+  { bg: 'bg-rose-50',   text: 'text-rose-600',   dot: 'bg-rose-400'   }, // 4
+  { bg: 'bg-amber-50',  text: 'text-amber-600',  dot: 'bg-amber-400'  }, // 5
 ];
 
 interface AppState {

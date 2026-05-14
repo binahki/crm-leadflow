@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { useAppStore, Lead, STATUS_LABELS, calcularFaixa } from '@/stores/appStore';
+import { useAppStore, Lead, STATUS_LABELS, STATUS_CONFIG, calcularFaixa } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useNavigate } from 'react-router-dom';
+import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -13,14 +15,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
 
-const STATUS_STYLE = [
-  { lightBg:'#dbeafe', lightText:'#1d4ed8', darkBg:'rgba(59,130,246,0.15)', darkText:'#60a5fa', dot:'#3b82f6' },
-  { lightBg:'#dbeafe', lightText:'#1d4ed8', darkBg:'rgba(59,130,246,0.15)', darkText:'#60a5fa', dot:'#3b82f6' },
-  { lightBg:'#ede9fe', lightText:'#5b21b6', darkBg:'rgba(139,92,246,0.15)', darkText:'#a78bfa', dot:'#8b5cf6' },
-  { lightBg:'#d1fae5', lightText:'#065f46', darkBg:'rgba(16,185,129,0.15)', darkText:'#34d399', dot:'#10b981' },
-  { lightBg:'#fee2e2', lightText:'#991b1b', darkBg:'rgba(239,68,68,0.15)', darkText:'#f87171', dot:'#ef4444' },
-  { lightBg:'#fef3c7', lightText:'#92400e', darkBg:'rgba(245,158,11,0.15)', darkText:'#fbbf24', dot:'#f59e0b' },
-];
+const STATUS_STYLE = STATUS_CONFIG;
 
 const PERIOD_OPTIONS = [
   { label: 'Todos', value: 'all' },
@@ -34,7 +29,11 @@ const PERIOD_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { label: 'Todos os status', value: 'all' },
-  ...STATUS_LABELS.map((l, i) => ({ label: l, value: String(i) })).filter((_, i) => i !== 0),
+  { label: 'Em atendimento', value: '1', dot: STATUS_CONFIG[1]?.dot },
+  { label: 'Reunião',        value: '2', dot: STATUS_CONFIG[2]?.dot },
+  { label: 'Contrato/App',   value: '5', dot: STATUS_CONFIG[5]?.dot },
+  { label: 'Aprovado',       value: '3', dot: STATUS_CONFIG[3]?.dot },
+  { label: 'Reprovado',      value: '4', dot: STATUS_CONFIG[4]?.dot },
 ];
 
 function getInitials(name: string) {
@@ -52,12 +51,10 @@ function parseLeadDate(str?: string | null): Date {
     const cleaned = str.replace(/(\.\d{3})\d+/, '$1');
     return new Date(cleaned);
   }
-  // Supabase: "2026-05-05 01:33:48.336+00" → ISO UTC
   if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
     const cleaned = str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z').replace(/(\.\d{3})\d+/, '$1');
     return new Date(cleaned);
   }
-  // Legado "DD/MM/YYYY HH:MM"
   const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
   if (m) {
     const [, d, mo, y, h = '0', mi = '0'] = m;
@@ -173,7 +170,7 @@ function FaixaDot({ lead, dark }: { lead: Lead; dark: boolean }) {
   return <div style={{ width:'10px', height:'10px', borderRadius:'50%', flexShrink:0, background:faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}` }}/>;
 }
 
-function FilterDropdown({ value, options, onChange, dark }: { value:string; options:{label:string;value:string}[]; onChange:(v:string)=>void; dark:boolean }) {
+function FilterDropdown({ value, options, onChange, dark }: { value:string; options:{label:string;value:string;dot?:string}[]; onChange:(v:string)=>void; dark:boolean }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -192,13 +189,16 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
   return (
     <div style={{ position:'relative' }}>
       <button ref={btnRef} onClick={handleOpen} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+        {selected?.dot && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:selected.dot, flexShrink:0 }}/>}
         {selected?.label}<ChevronDown style={{ width:'13px', height:'13px', transform:open?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
       </button>
       {open && (<>
         <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
         <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, background:dark?'#111113':'#ffffff', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
           {options.map(o => (<button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'7px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
-            {value===o.value?<Check style={{ width:'12px', height:'12px', flexShrink:0 }}/>:<span style={{ width:'12px', flexShrink:0 }}/>}{o.label}
+            {value===o.value?<Check style={{ width:'12px', height:'12px', flexShrink:0 }}/>:<span style={{ width:'12px', flexShrink:0 }}/>}
+            {o.dot && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>}
+            {o.label}
           </button>))}
         </div>
       </>)}
@@ -233,7 +233,52 @@ function CustomDateModal({ dark, customFrom, customTo, setCustomFrom, setCustomT
 }
 
 function PhoneInput({ value, onChange, style: st }: { value:string; onChange:(v:string)=>void; style?:React.CSSProperties }) {
-  return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={e => onChange(e.target.value)} style={st}/>;
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+    let masked = '';
+    if (digits.length === 0) masked = '';
+    else if (digits.length <= 2) masked = `(${digits}`;
+    else if (digits.length <= 7) masked = `(${digits.slice(0,2)}) ${digits.slice(2)}`;
+    else masked = `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+    onChange(masked);
+  }
+  return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={handleChange} style={st}/>;
+}
+
+function FormStatusSelect({ value, onChange, dark }: { value:number; onChange:(v:number)=>void; dark:boolean }) {
+  const [open, setOpen] = useState(false);
+  const options = [
+    { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
+    { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
+    { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
+    { value: 3, label: 'Aprovado',       dot: STATUS_CONFIG[3].dot },
+    { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
+  ];
+  const selected = options.find(o => o.value === value) || options[0];
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const bg = dark ? '#1a1a1e' : '#f9fafb';
+  const txt = dark ? '#f4f4f5' : '#111827';
+  
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(!open)} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
+        <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:selected.dot, flexShrink:0 }}/>
+        <span style={{ flex: 1 }}>{selected.label}</span>
+        <ChevronDown style={{ width:'14px', height:'14px', color:txt }}/>
+      </button>
+      {open && <>
+        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, marginTop:'4px', background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
+          {options.map(o => (
+            <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+              <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </>}
+    </div>
+  );
 }
 
 function DeleteConfirmDialog({ count, onConfirm, onCancel, loading, dark }: { count:number; onConfirm:()=>void; onCancel:()=>void; loading:boolean; dark:boolean }) {
@@ -254,7 +299,6 @@ function DeleteConfirmDialog({ count, onConfirm, onCancel, loading, dark }: { co
   );
 }
 
-// ObsTooltip com position:fixed — não é clipado pelo overflow:hidden da tabela
 function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -292,11 +336,27 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
 }
 
 function LeadsPage() {
+  const navigate = useNavigate();
   const { updateLead, configuracoes } = useAppStore();
   const { theme } = useTheme();
   const { user } = useAuth();
   const { orgId, ready: orgReady } = useOrgId();
   const dark = theme === 'dark';
+
+  const { hasWA } = useWhatsAppAccount();
+
+  const handleWhatsApp = useCallback((lead: Lead) => {
+    if (!lead.whatsapp) return;
+    const clean = lead.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('55') ? clean : `55${clean}`;
+    
+    if (hasWA) {
+      navigate(`/whatsapp?phone=${phone}`);
+    } else {
+      window.open(`https://wa.me/${phone}`, '_blank');
+    }
+  }, [navigate, hasWA]);
+
   const [isMobile, setIsMobile] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -318,7 +378,11 @@ function LeadsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
-  const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'' });
+  const [newLead, setNewLead] = useState({
+    nome: '', whatsapp: '', cidade: '',
+    origem: '', origemCustom: '', status: 1, observacoes: ''
+  });
+  const ORIGENS = ['Indicação', 'Outro'];
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConf, setShowDeleteConf] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -327,7 +391,6 @@ function LeadsPage() {
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
 
-  // Lê parâmetros da URL ao montar (redirect de Campanhas/Dashboard)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const periodo = params.get('periodo');
@@ -378,13 +441,12 @@ function LeadsPage() {
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{ setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id)); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [orgId, orgReady]); // eslint-disable-line
+  }, [orgId, orgReady]);
 
   const filtered = useMemo(() => {
     let r=[...allLeads];
     r=filterByPeriod(r,periodFilter,customFrom,customTo);
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
-    // Filtro de campanha vindo da URL
     if(campanhaFiltro.trim()){
       r=r.filter(l=>{
         try {
@@ -395,7 +457,6 @@ function LeadsPage() {
         } catch { return false; }
       });
     }
-    // Busca manual
     if(search.trim()&&!campanhaFiltro.trim()){
       const q=search.toLowerCase();
       r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||safeName((la.utm_campaign||'')).toLowerCase().includes(q); });
@@ -431,12 +492,55 @@ function LeadsPage() {
   function handleClearSelection() { setSelectedIds(new Set()); setAllSystemSelected(false); }
 
   const handleAddLead = async () => {
-    if(!newLead.nome.trim()||!newLead.whatsapp.trim()){ toast.error('Nome e WhatsApp são obrigatórios'); return; }
-    const cidadeNorm=normalizeCity(newLead.cidade); const phoneClean=newLead.whatsapp.replace(/\D/g,'');
-    const existing=allLeads.find(l=>l.whatsapp?.replace(/\D/g,'')=== phoneClean);
-    if(existing){ const{error}=await supabase.from('leads').update({nome:newLead.nome.trim(),cidade:cidadeNorm}).eq('id',existing.id); if(error){toast.error(`Erro: ${error.message}`);return;} setAllLeads(prev=>prev.map(l=>l.id===existing.id?{...l,nome:newLead.nome.trim(),cidade:cidadeNorm}:l)); setNewLead({nome:'',whatsapp:'',cidade:''}); setIsAddOpen(false); toast.success('Lead duplicado atualizado!'); return; }
-    const{data,error}=await supabase.from('leads').insert({nome:newLead.nome.trim(),whatsapp:newLead.whatsapp,cidade:cidadeNorm,status:1,created_at:new Date().toISOString(),org_id:orgId}).select('*').single();
-    if(error){toast.error(`Erro: ${error.message}`);return;} if(data)setAllLeads(prev=>[data as unknown as Lead,...prev]); setNewLead({nome:'',whatsapp:'',cidade:''}); setIsAddOpen(false); toast.success('Lead adicionado!');
+    if (!newLead.nome.trim()) { toast.error('Nome obrigatório'); return; }
+    if (!newLead.whatsapp.trim()) { toast.error('WhatsApp obrigatório'); return; }
+    if (!newLead.cidade.trim()) { toast.error('Cidade obrigatória'); return; }
+    if (!newLead.origem || (newLead.origem === 'Outro' && !newLead.origemCustom.trim())) { toast.error('Origem obrigatória'); return; }
+    if (!newLead.observacoes.trim()) { toast.error('Observações obrigatórias'); return; }
+
+    const cidadeNorm = normalizeCity(newLead.cidade);
+    const phoneClean = newLead.whatsapp.replace(/\D/g, '');
+
+    // Busca o score mínimo verde da org via quizzes
+    const { data: quizData } = await supabase
+      .from('quizzes')
+      .select('corte_verde')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    const scoreMinVerde = quizData?.corte_verde || 35;
+
+    const { data, error } = await supabase.from('leads').insert({
+      nome: newLead.nome.trim(),
+      whatsapp: phoneClean,
+      cidade: cidadeNorm,
+      status: newLead.status,
+      score: scoreMinVerde,
+      faixa: 'verde',
+      observacoes: newLead.observacoes || null,
+      utm_source: newLead.origem === 'Outro'
+        ? (newLead.origemCustom || 'Outro')
+        : (newLead.origem || null),
+      utm_campaign: null,
+      utm_medium: null,
+      utm_content: null,
+      utm_term: null,
+      utm_id: null,
+      org_id: orgId,
+      created_at: new Date().toISOString(),
+    }).select('*').single();
+
+    if (error) { toast.error(`Erro: ${error.message}`); return; }
+    if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
+
+    setNewLead({
+      nome: '', whatsapp: '', cidade: '',
+      origem: '', origemCustom: '', status: 1, observacoes: ''
+    });
+    setIsAddOpen(false);
+    toast.success('Lead adicionado!');
   };
 
   const handleEditLead = async () => {
@@ -487,10 +591,40 @@ function LeadsPage() {
                   <DialogContent style={{background:dark?'#111113':'#fff',border:`1px solid ${border}`,borderRadius:'16px'}}>
                     <DialogHeader><DialogTitle style={{color:dark?'#fff':'#111827'}}>Adicionar Lead</DialogTitle></DialogHeader>
                     <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
-                      <input placeholder="Nome completo" value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
+                      <input placeholder="Nome completo *" required value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
                       <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
-                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:500,cursor:'pointer'}}>Salvar</button>
+                      <input placeholder="Cidade *" required value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
+                      
+                      {/* ORIGEM */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Origem</label>
+                        <select value={newLead.origem} onChange={e => setNewLead(n => ({ ...n, origem: e.target.value }))} style={inputStyle}>
+                          <option value="">Selecionar origem...</option>
+                          {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        {newLead.origem === 'Outro' && (
+                          <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop: '8px' }} />
+                        )}
+                      </div>
+
+                      {/* STATUS INICIAL */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
+                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} />
+                      </div>
+
+                      {/* OBSERVAÇÕES */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Observações</label>
+                        <textarea 
+                          placeholder="Notas sobre o lead..." 
+                          value={newLead.observacoes} 
+                          onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} 
+                          style={{ ...inputStyle, height: '80px', resize: 'none' }}
+                        />
+                      </div>
+
+                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:600,cursor:'pointer',marginTop:'8px'}}>Adicionar Lead</button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -513,10 +647,40 @@ function LeadsPage() {
                   <DialogContent style={{background:dark?'#111113':'#fff',border:`1px solid ${border}`,borderRadius:'16px'}}>
                     <DialogHeader><DialogTitle style={{color:dark?'#fff':'#111827'}}>Adicionar Lead</DialogTitle></DialogHeader>
                     <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
-                      <input placeholder="Nome completo" value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
+                      <input placeholder="Nome completo *" required value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
                       <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade" value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
-                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:500,cursor:'pointer'}}>Salvar</button>
+                      <input placeholder="Cidade *" required value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
+                      
+                      {/* ORIGEM */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Origem</label>
+                        <select value={newLead.origem} onChange={e => setNewLead(n => ({ ...n, origem: e.target.value }))} style={inputStyle}>
+                          <option value="">Selecionar origem...</option>
+                          {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        {newLead.origem === 'Outro' && (
+                          <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop: '8px' }} />
+                        )}
+                      </div>
+
+                      {/* STATUS INICIAL */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
+                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} />
+                      </div>
+
+                      {/* OBSERVAÇÕES */}
+                      <div>
+                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Observações</label>
+                        <textarea 
+                          placeholder="Notas sobre o lead..." 
+                          value={newLead.observacoes} 
+                          onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} 
+                          style={{ ...inputStyle, height: '80px', resize: 'none' }}
+                        />
+                      </div>
+
+                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:600,cursor:'pointer',marginTop:'8px'}}>Adicionar Lead</button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -683,7 +847,7 @@ function LeadsPage() {
                       <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12px',whiteSpace:'nowrap'}}>{formatEntrada(lead.created_at)}</td>
                       <td className="px-3 py-3">
                         <div style={{display:'flex',alignItems:'center',gap:'5px'}} onClick={e=>e.stopPropagation()}>
-                          <a href={`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-green-500/15 text-green-500 hover:bg-green-500/25':'bg-green-50 text-green-600 hover:bg-green-100'}`}><MessageCircle className="w-3.5 h-3.5"/></a>
+                          <button onClick={()=>{ handleWhatsApp(lead); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-green-500/15 text-green-500 hover:bg-green-500/25':'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{border:'none',cursor:lead.whatsapp?'pointer':'default',opacity:lead.whatsapp?1:0.4}}><MessageCircle className="w-3.5 h-3.5"/></button>
                           <button onClick={()=>{setEditingLead(lead);setIsEditOpen(true);}} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25':'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
                         </div>
                       </td>

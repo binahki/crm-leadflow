@@ -1,14 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Lead, useAppStore, calcularFaixa } from '@/stores/appStore';
+import { Lead, useAppStore, calcularFaixa, STATUS_CONFIG } from '@/stores/appStore';
+import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
+  MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { useTheme } from '@/hooks/useTheme';
+import { useNavigate } from 'react-router-dom';
+import { useOrgId } from '@/hooks/useOrgId';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -17,13 +21,21 @@ interface LeadDrawerProps {
   onUpdate: (lead: Lead) => void;
 }
 
-const STATUS = [
-  { id: 1, label: 'Em atendimento', color: '#3b82f6', bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe', darkBg: 'rgba(59,130,246,0.15)', darkText: '#60a5fa' },
-  { id: 2, label: 'Reunião', color: '#8b5cf6', bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe', darkBg: 'rgba(139,92,246,0.15)', darkText: '#a78bfa' },
-  { id: 5, label: 'Contrato/App', color: '#f59e0b', bg: '#fef3c7', text: '#92400e', border: '#fde68a', darkBg: 'rgba(245,158,11,0.15)', darkText: '#fbbf24' },
-  { id: 3, label: 'Aprovado', color: '#10b981', bg: '#d1fae5', text: '#065f46', border: '#a7f3d0', darkBg: 'rgba(16,185,129,0.15)', darkText: '#34d399' },
-  { id: 4, label: 'Reprovado', color: '#ef4444', bg: '#fee2e2', text: '#991b1b', border: '#fecaca', darkBg: 'rgba(239,68,68,0.15)', darkText: '#f87171' },
-];
+const STATUS_SEQUENCE = [1, 2, 5, 3, 4];
+
+const STATUS = STATUS_SEQUENCE.map(idx => {
+  const s = STATUS_CONFIG[idx];
+  return {
+    id: idx,
+    label: s.label,
+    color: s.dot,
+    bg: s.lightBg,
+    text: s.lightText,
+    border: s.lightBg,
+    darkBg: s.darkBg,
+    darkText: s.darkText
+  };
+});
 
 const MOTIVOS = ['Sem retorno', 'Fora de SP', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Desistiu', 'Outro'];
 
@@ -71,15 +83,12 @@ function deveIgnorar(chave: string, valor: unknown): boolean {
 }
 
 function formatKey(key: string): string {
-  // Chaves opcoes_: exibe como "OPCOES YH5VJX" sem strip de prefixo
-  if (key.toLowerCase().startsWith('opcoes_')) {
-    return key.replace(/_/g, ' ').toUpperCase();
-  }
-  let k = key;
-  for (const prefix of STRIP_PREFIXES) {
-    if (k.startsWith(prefix)) { k = k.slice(prefix.length); break; }
-  }
-  return k.replace(/_/g, ' ').toUpperCase();
+  let s = key.toLowerCase()
+    .replace(/voce_|qual_|seu_|sua_|como_|onde_|quando_|para_|quem_|por_que_|em_qual_|por_|me_conte_|sobre_|pode_nos_|diga_|quais_|qual_e_|voce_ja_|ja_|quanto_|o_que_|quao_/g, '')
+    .replace(/_/g, ' ')
+    .trim();
+  if (!s) return key;
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function formatValue(val: unknown): string {
@@ -98,12 +107,12 @@ function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: strin
   if (score == null || score === undefined) return null;
   const isVerde = faixa === 'verde';
   const isAmarelo = faixa === 'amarelo';
-  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#6b7280';
-  const bg = isVerde ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7') : (dark ? 'rgba(107,114,128,0.15)' : '#f3f4f6');
+  const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#ef4444';
+  const bg = isVerde ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7') : (dark ? 'rgba(239,68,68,0.15)' : '#fee2e2');
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 9px', borderRadius: '99px', background: bg, border: `1px solid ${color}30` }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', background: bg, border: `1px solid ${color}30` }}>
       <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: '12px', fontWeight: 700, color, fontFamily: FONT }}>{score} pts</span>
+      <span style={{ fontSize: '12px', fontWeight: 800, color, fontFamily: FONT }}>{score} pts</span>
     </div>
   );
 }
@@ -143,9 +152,9 @@ function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark
 function Field({ label, value, dark }: { label: string; value?: string | null; dark: boolean }) {
   const display = (!value || String(value).trim() === '' || value === 'false') ? '—' : String(value);
   return (
-    <div>
-      <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px', fontFamily: FONT }}>{label}</p>
-      <p style={{ fontSize: '13.5px', color: display === '—' ? (dark ? '#3f3f46' : '#d1d5db') : (dark ? '#d4d4d8' : '#374151'), lineHeight: 1.5, fontFamily: FONT }}>{display}</p>
+    <div style={{ marginBottom: '4px' }}>
+      <p style={{ fontSize: '11px', fontWeight: 700, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px', fontFamily: FONT }}>{label}</p>
+      <p style={{ fontSize: '14.5px', color: display === '—' ? (dark ? '#3f3f46' : '#d1d5db') : (dark ? '#a1a1aa' : '#4b5563'), fontWeight: 500, lineHeight: 1.5, fontFamily: FONT, margin: 0 }}>{display}</p>
     </div>
   );
 }
@@ -211,6 +220,21 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { updateLead, configuracoes } = useAppStore();
+  const { orgId } = useOrgId();
+  const { hasWA } = useWhatsAppAccount();
+  const navigate = useNavigate();
+
+  const handleWhatsApp = useCallback(() => {
+    if (!lead || !lead.whatsapp) return;
+    const clean = lead.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('55') ? clean : `55${clean}`;
+    
+    if (hasWA) {
+      navigate(`/whatsapp?phone=${phone}`);
+    } else {
+      window.open(`https://wa.me/${phone}`, '_blank');
+    }
+  }, [lead, navigate, hasWA]);
 
   const [obs, setObs] = useState('');
   const [status, setStatus] = useState(1);
@@ -387,7 +411,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               const entries = Object.entries(respostas).filter(([k, v]) => !deveIgnorar(k, v));
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                  icon={<Briefcase style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Ver respostas do quiz">
+                  icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">
                   {entries.length === 0
                     ? <p style={{ fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontFamily: FONT }}>Nenhuma resposta do quiz disponível.</p>
                     : entries.map(([key, val]) => (
@@ -398,14 +422,20 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               );
             })()}
 
-            {/* Origem do Tráfego */}
-            {hasTraffic && (
+            {/* Origem do Lead / Tráfego */}
+            {(hasTraffic || (l.utm_source && !l.utm_campaign)) && (
               <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Origem do Tráfego">
-                <Field label="Fonte" value={l.utm_source} dark={dark} />
-                <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} dark={dark} />
-                <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} dark={dark} />
-                <Field label="Anúncio" value={l.utm_content} dark={dark} />
+                icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title={!l.utm_campaign && l.utm_source ? "Origem do Lead" : "Origem do Tráfego"}>
+                {(!l.utm_campaign && l.utm_source) ? (
+                  <Field label="Origem" value={l.utm_source} dark={dark} />
+                ) : (
+                  <>
+                    <Field label="Fonte" value={l.utm_source} dark={dark} />
+                    <Field label="Campanha" value={cleanCampaignName(l.utm_campaign)} dark={dark} />
+                    <Field label="Conjunto" value={cleanCampaignName(l.utm_medium)} dark={dark} />
+                    <Field label="Anúncio" value={l.utm_content} dark={dark} />
+                  </>
+                )}
                 {l.ip && <Field label="IP" value={l.ip} dark={dark} />}
               </Section>
             )}
@@ -424,8 +454,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
 
         {/* Footer */}
         <div style={{ padding: '10px 22px 20px', display: 'flex', gap: '8px', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, flexShrink: 0 }}>
-          <button onClick={() => window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g, '')}`, '_blank')} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#25D366', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s', fontFamily: FONT }} onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-            <WaIcon /> Chamar no WhatsApp
+          <button onClick={handleWhatsApp} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#25D366', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s', fontFamily: FONT }} onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+            <WaIcon /> {hasWA ? 'Abrir conversa' : 'Chamar no WhatsApp'}
           </button>
           <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }}>
             <Save style={{ width: '13px', height: '13px', strokeWidth: 1.8 }} />{saving ? 'Salvando…' : 'Salvar'}

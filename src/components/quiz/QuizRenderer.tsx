@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, X, Instagram } from 'lucide-react';
 
 // ── Shared types ─────────────────────────────────────────────────────────────
 export interface ColetaCampo {
@@ -27,14 +27,28 @@ export interface QuizConfig {
   coleta_config?: ColetaCampo[] | null;
   pixel_id?: string | null; pixel_evento_lead?: string | null;
   cor_botao?: string | null; cor_fundo?: string | null;
+  cor_titulo?: string | null; cor_subtitulo?: string | null;
   capa_imagem_height?: number | null; logo_altura?: number | null;
   emoji_aprovado?: string | null; emoji_reprovado?: string | null;
+  mensagem_aprovado_subtitulo?: string | null;
+  mensagem_reprovado_subtitulo?: string | null;
+  reprovado_conteudo?: string[] | null;
+  capa_ordem?: any | null;
+  reprovado_botao_url?: string | null;
+  analise_duracao?: number | null;
+  analise_titulo?: string | null;
+  analise_subtitulo?: string | null;
+  analise_texto_carregando?: string | null;
+  analise_depoimentos?: any[] | null;
+  whatsapp_mensagem_personalizada?: string | null;
+  whatsapp_redirecionar_direto?: boolean | null;
 }
 export interface Bloco { id: string; titulo: string; ordem: number; emoji?: string | null; }
 export interface Opcao {
   id: string; pergunta_id: string; texto: string;
   pontos: number; reprova_imediato: boolean; ordem: number;
   emoji?: string | null;
+  target_pergunta_id?: string | null;
 }
 export interface Pergunta {
   id: string; bloco_id: string; texto: string; ordem: number;
@@ -42,7 +56,7 @@ export interface Pergunta {
   condicao_pergunta_id: string | null; condicao_opcao_id: string | null;
   opcoes: Opcao[];
 }
-export type Phase = 'loading' | 'capa' | 'quiz' | 'aprovado_form' | 'coleta' | 'reprovado' | 'sucesso' | 'not_found';
+export type Phase = 'loading' | 'capa' | 'quiz' | 'analise' | 'aprovado_form' | 'coleta' | 'reprovado' | 'sucesso' | 'not_found';
 
 export interface QuizRendererProps {
   quiz: QuizConfig;
@@ -98,7 +112,12 @@ export function defaultEmojiForBloco(titulo: string): string {
   return '📝';
 }
 
-// Eased progress: faster at start, slower at end (false acceleration effect)
+export const DEFAULT_DEPOIMENTOS = [
+  { nome: 'Rafaela Nascimento', handle: '@rafaela.nascimento', texto: 'Comecei sem saber nada de vendas. Hoje faturei R$ 3.200 no mês passado só com as semi joias!' },
+  { nome: 'Camila Ferreira', handle: '@camila.ferreira', texto: 'O consignado mudou minha vida! Recebi o kit em casa, sem investir nada. No primeiro mês já lucrei R$ 1.400' },
+  { nome: 'Carla Ferraz', handle: '@carlamferraz_', texto: 'Sou mãe de 2 filhos e trabalho de casa. As semi joias me deram liberdade financeira e tempo com minha família!' },
+];
+
 function easedProgress(idx: number, total: number): number {
   if (total === 0) return 0;
   const raw = idx / total;
@@ -117,6 +136,49 @@ export function QuizRenderer({
   onGoToColeta,
   isPreview = false,
 }: QuizRendererProps) {
+  const [cities, setCities] = React.useState<string[]>([]);
+  const [citySearch, setCitySearch] = React.useState('');
+  const [showCitySugg, setShowCitySugg] = React.useState(false);
+  const [analiseProgress, setAnaliseProgress] = React.useState(0);
+  const [nomeErro, setNomeErro] = React.useState<string | null>(null);
+
+  const isMaleName = (name: string): boolean => {
+    const n = name.trim().toLowerCase();
+    if (!n) return false;
+    const lastWord = n.split(' ').pop() || '';
+    // Heurística básica para português: termina em 'o' ou 'os' e não é exceção
+    const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david'];
+    if (commonMaleNames.includes(n.split(' ')[0])) return true;
+    if (lastWord.endsWith('o') && !['conceição', 'socorro', 'rosário'].includes(lastWord)) return true;
+    if (lastWord.endsWith('os') && !['marcos'].includes(lastWord)) return true; // Marcos é masculino, mas 'marcos' aqui seria pego pelo endsWith 'os'
+    return false;
+  };
+
+  React.useEffect(() => {
+    if (phase === 'analise') {
+      const dur = (quiz.analise_duracao || 4) * 1000;
+      const start = Date.now();
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - start;
+        const p = Math.min(Math.round((elapsed / dur) * 100), 100);
+        setAnaliseProgress(p);
+        if (p >= 100) clearInterval(interval);
+      }, 50);
+      return () => clearInterval(interval);
+    }
+  }, [phase, quiz.analise_duracao]);
+
+  React.useEffect(() => {
+    if (citySearch.length > 2) {
+      fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios?nome=${citySearch}&orderBy=nome`)
+        .then(res => res.json())
+        .then(data => setCities(data.map((c: any) => c.nome)))
+        .catch(() => {});
+    } else {
+      setCities([]);
+    }
+  }, [citySearch]);
+
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
   const coletaCampos = coleta || (quiz.coleta_campos as string[] | null) || ['nome', 'whatsapp', 'cidade', 'instagram'];
@@ -127,10 +189,6 @@ export function QuizRenderer({
   const isMultipla = currentPergunta?.tipo_resposta === 'multipla';
   const hasSelection = isMultipla ? selectedOpcoes.length > 0 : !!selectedOpcao;
   const imgAltura = quiz.capa_imagem_height || 200;
-
-  const headerPos: React.CSSProperties = isPreview
-    ? { position: 'relative' }
-    : { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 };
 
   const continueBtnPos: React.CSSProperties = isPreview
     ? {}
@@ -144,172 +202,155 @@ export function QuizRenderer({
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
-        @keyframes questionIn {
-          from { opacity:0; transform:translateY(14px); }
-          to   { opacity:1; transform:translateY(0); }
+        @keyframes appleIn {
+          0% { opacity: 0; transform: scale(0.985) translateY(10px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
         }
-        @keyframes slideUp {
-          from { opacity:0; transform:translateY(12px); }
-          to   { opacity:1; transform:translateY(0); }
+        .quiz-option {
+          backface-visibility: hidden;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          transform: perspective(1px) translateZ(0);
         }
-        @keyframes fadeIn {
-          from { opacity:0; transform:translateY(8px); }
-          to   { opacity:1; transform:translateY(0); }
+        .quiz-option:active {
+          transform: perspective(1px) scale(0.98) translateZ(0) !important;
         }
-        @keyframes spin { to { transform:rotate(360deg); } }
+        .quiz-option span {
+          transform: translateZ(0);
+        }
         *{box-sizing:border-box;}
         input,textarea,button,select{font-family:inherit;}
       `}</style>
 
-      {/* ── HEADER ──────────────────────────────────────────────────────── */}
-      <div style={{ ...headerPos, background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid #f3f4f6' }}>
+      <div style={{ background: '#fff', borderBottom: '1px solid #f3f4f6', zIndex: 100 }}>
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '14px 24px 8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           {quiz.logo_url ? (
             <img src={quiz.logo_url} alt={quiz.titulo}
               style={{ maxHeight: `${quiz.logo_altura || 32}px`, maxWidth: '160px', objectFit: 'contain' }} />
           ) : (
-            <span style={{ fontSize: '14px', fontWeight: 700, color: '#111' }}>{quiz.titulo}</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: quiz.cor_titulo || '#111111' }}>{quiz.titulo}</span>
           )}
         </div>
-        {/* Progress bar — centered, max-width, rounded */}
         <div style={{ padding: '0 24px' }}>
           <div style={{ maxWidth: '480px', margin: '0 auto', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
             <div style={{
               height: '100%', background: primary,
               width: `${phase === 'capa' ? 0 : phase === 'quiz' ? Math.max(progress, 2) : 100}%`,
               borderRadius: '999px',
-              transition: 'width 600ms cubic-bezier(0.25,0.46,0.45,0.94)',
+              transition: 'width 800ms cubic-bezier(0.65, 0, 0.35, 1)',
             }} />
           </div>
         </div>
-        <div style={{ height: '6px' }} />
+        <div style={{ height: '24px' }} />
       </div>
 
-      {/* Spacer */}
-      {!isPreview && <div style={{ height: phase === 'quiz' ? '76px' : '76px' }} />}
-
-      {/* ── CAPA ─────────────────────────────────────────────────────────── */}
       {phase === 'capa' && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px 80px', animation: 'fadeIn 0.35s ease' }}>
-          {quiz.capa_imagem_url && (
-            <img src={quiz.capa_imagem_url} alt=""
-              style={{ width: '100%', borderRadius: '16px', marginBottom: '24px', objectFit: 'cover', maxHeight: `${imgAltura}px` }} />
-          )}
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#111', lineHeight: 1.15, margin: '0 0 10px', letterSpacing: '-0.03em', textAlign: 'center' }}>
-            {quiz.capa_titulo || quiz.titulo}
-          </h1>
-          {quiz.capa_subtitulo && (
-            <p style={{ fontSize: '15px', color: '#6b7280', margin: '0 0 24px', lineHeight: 1.6, textAlign: 'center' }}>
-              {quiz.capa_subtitulo}
-            </p>
-          )}
-          {(quiz.capa_beneficios?.length ?? 0) > 0 && (
-            <div style={{ marginBottom: '28px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {quiz.capa_beneficios!.map((b, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
-                    <Check style={{ width: '11px', height: '11px', color: '#fff', strokeWidth: 3 }} />
-                  </div>
-                  <span style={{ fontSize: '15px', color: '#374151', lineHeight: 1.5 }}>{b}</span>
+          {(() => {
+            const ordem = (quiz.capa_ordem as string[]) || ['titulo', 'subtitulo', 'imagem', 'beneficios', 'botao'];
+            return ordem.map(key => {
+              if (key === 'imagem' && quiz.capa_imagem_url) return (
+                <img key="imagem" src={quiz.capa_imagem_url} alt=""
+                  style={{ width: '100%', borderRadius: '16px', marginBottom: '24px', objectFit: 'cover', maxHeight: `${imgAltura}px` }} />
+              );
+              if (key === 'titulo') return (
+                <h1 key="titulo" style={{ fontSize: '28px', fontWeight: 800, color: quiz.cor_titulo || '#111111', lineHeight: 1.15, margin: '0 0 10px', textAlign: 'center' }}>
+                  {quiz.capa_titulo || quiz.titulo}
+                </h1>
+              );
+              if (key === 'subtitulo' && quiz.capa_subtitulo) return (
+                <p key="subtitulo" style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 24px', lineHeight: 1.6, textAlign: 'center' }}>
+                  {quiz.capa_subtitulo}
+                </p>
+              );
+              if (key === 'beneficios' && (quiz.capa_beneficios?.length ?? 0) > 0) return (
+                <div key="beneficios" style={{ marginBottom: '28px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {quiz.capa_beneficios!.map((b, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
+                        <Check style={{ width: '11px', height: '11px', color: '#fff', strokeWidth: 3 }} />
+                      </div>
+                      <span style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', lineHeight: 1.5 }}>{b}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-          <button onClick={onStart} style={{
-            width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
-            cursor: 'pointer', letterSpacing: '-0.01em',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
-          >
-            {quiz.capa_botao_texto || 'Clique para iniciar →'}
-          </button>
+              );
+              if (key === 'botao') return (
+                <button key="botao" onClick={onStart} style={{
+                  width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+                  background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                }}>
+                  {quiz.capa_botao_texto || 'Clique para iniciar →'}
+                </button>
+              );
+              return null;
+            });
+          })()}
         </div>
       )}
 
-      {/* ── QUIZ ──────────────────────────────────────────────────────────── */}
       {phase === 'quiz' && currentPergunta && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 140px' }}>
-          <div
-            key={questionKey}
-            style={{ animation: 'questionIn 0.32s cubic-bezier(0.25,0.46,0.45,0.94) forwards', willChange: 'transform, opacity' }}
-          >
-            {/* Badge — centered */}
+            <div
+              key={questionKey}
+              style={{ 
+                width: '100%', 
+                maxWidth: '480px', 
+                animation: 'appleIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards', 
+                willChange: 'transform, opacity' 
+              }}
+            >
             {currentBloco && (
               <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '5px 14px 5px 10px', borderRadius: '999px',
-                  background: hexRgba(primary, 0.08),
-                  border: `1px solid ${hexRgba(primary, 0.18)}`,
-                }}>
-                  <span style={{ fontSize: '14px', lineHeight: 1 }}>
-                    {currentBloco.emoji || defaultEmojiForBloco(currentBloco.titulo)}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: primary, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    {currentBloco.titulo}
-                  </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px 5px 10px', borderRadius: '999px', background: hexRgba(primary, 0.08), border: `1px solid ${hexRgba(primary, 0.18)}` }}>
+                  <span style={{ fontSize: '14px', lineHeight: 1 }}>{currentBloco.emoji}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: primary, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{currentBloco.titulo}</span>
                 </span>
               </div>
             )}
-
-            {/* Question */}
-            <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#111', lineHeight: 1.35, margin: '0 0 8px', textAlign: 'center' }}>
-              {currentPergunta.texto}
-            </h2>
-            {currentPergunta.subtexto ? (
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px', lineHeight: 1.5, textAlign: 'center' }}>
-                {currentPergunta.subtexto}
-              </p>
-            ) : (
-              <div style={{ height: '20px' }} />
-            )}
-
-            {/* Options */}
+            <h2 style={{ fontSize: '22px', fontWeight: 700, color: quiz.cor_titulo || '#111111', lineHeight: 1.35, margin: '0 0 8px', textAlign: 'center' }}>{currentPergunta.texto}</h2>
+            {currentPergunta.subtexto ? <p style={{ fontSize: '14px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 24px', lineHeight: 1.5, textAlign: 'center' }}>{currentPergunta.subtexto}</p> : <div style={{ height: '20px' }} />}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {currentPergunta.opcoes.map(opcao => {
-                const isSelected = isMultipla
-                  ? selectedOpcoes.includes(opcao.id)
-                  : selectedOpcao === opcao.id;
+                const isSelected = isMultipla ? selectedOpcoes.includes(opcao.id) : selectedOpcao === opcao.id;
                 const isDisabled = !isMultipla && !!selectedOpcao && !isSelected;
                 return (
-                  <button
-                    key={opcao.id}
+                  <button key={opcao.id}
+                    className="quiz-option"
                     onClick={() => !isDisabled && onOpcaoClick?.(currentPergunta, opcao)}
                     style={{
-                      width: '100%', padding: '16px 18px', borderRadius: '12px',
-                      border: `${isSelected ? '2px' : '1.5px'} solid ${isSelected ? primary : '#e2e8f0'}`,
+                      width: '100%', padding: '16px 20px', borderRadius: '16px',
+                      border: `${isSelected ? '2.5px' : '1.5px'} solid ${isSelected ? primary : '#e2e8f0'}`,
                       background: isSelected ? hexRgba(primary, 0.08) : '#fff',
                       cursor: isDisabled ? 'default' : 'pointer',
-                      display: 'flex', alignItems: 'center', gap: '12px',
-                      transition: 'all 150ms ease-out', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: '16px',
+                      transition: 'all 400ms cubic-bezier(0.2, 0.8, 0.2, 1)', textAlign: 'left',
                       opacity: isDisabled ? 0.5 : 1,
+                      transform: isSelected ? 'scale(1.01) translateZ(0)' : 'scale(1) translateZ(0)',
+                      boxShadow: isSelected ? `0 12px 32px ${hexRgba(primary, 0.12)}` : 'none',
                     }}
                     onMouseEnter={e => {
                       if (!isDisabled && !isSelected) {
-                        (e.currentTarget as HTMLElement).style.borderColor = primary;
-                        (e.currentTarget as HTMLElement).style.background = hexRgba(primary, 0.05);
+                        const btn = e.currentTarget as HTMLElement;
+                        btn.style.borderColor = primary;
+                        btn.style.background = hexRgba(primary, 0.04);
+                        btn.style.transform = 'perspective(1px) translateY(-2px) scale(1.01) translateZ(0)';
+                        btn.style.boxShadow = '0 6px 16px rgba(0,0,0,0.06)';
                       }
                     }}
                     onMouseLeave={e => {
                       if (!isSelected) {
-                        (e.currentTarget as HTMLElement).style.borderColor = '#e2e8f0';
-                        (e.currentTarget as HTMLElement).style.background = '#fff';
+                        const btn = e.currentTarget as HTMLElement;
+                        btn.style.borderColor = '#e2e8f0';
+                        btn.style.background = '#fff';
+                        btn.style.transform = 'translateY(0) scale(1)';
+                        btn.style.boxShadow = 'none';
                       }
                     }}
                   >
-                    {/* Checkbox indicator for multiple, circle for single */}
                     {isMultipla ? (
-                      <div style={{
-                        width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
-                        border: `2px solid ${isSelected ? primary : '#d1d5db'}`,
-                        background: isSelected ? primary : '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 150ms ease-out',
-                      }}>
+                      <div style={{ width: '22px', height: '22px', borderRadius: '6px', flexShrink: 0, border: `2px solid ${isSelected ? primary : '#d1d5db'}`, background: isSelected ? primary : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {isSelected && <Check style={{ width: '12px', height: '12px', color: '#fff', strokeWidth: 3 }} />}
                       </div>
                     ) : (
@@ -319,12 +360,8 @@ export function QuizRenderer({
                         </div>
                       )
                     )}
-                    {opcao.emoji && (
-                      <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0 }}>{opcao.emoji}</span>
-                    )}
-                    <span style={{ flex: 1, fontSize: '15px', color: '#111', fontWeight: 500, lineHeight: 1.4 }}>
-                      {opcao.texto}
-                    </span>
+                    {opcao.emoji && <span style={{ fontSize: '64px', lineHeight: 1, flexShrink: 0, transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{opcao.emoji}</span>}
+                    <span style={{ flex: 1, fontSize: '15px', color: quiz.cor_titulo || '#111', fontWeight: 500, lineHeight: 1.4 }}>{opcao.texto}</span>
                   </button>
                 );
               })}
@@ -333,194 +370,205 @@ export function QuizRenderer({
         </div>
       )}
 
-      {/* ── CONTINUE BUTTON (only for múltipla) ───────────────────────────── */}
       {phase === 'quiz' && isMultipla && hasSelection && (
-        <div style={{
-          ...continueBtnPos,
-          display: 'flex', justifyContent: 'center',
-          padding: '12px 24px 28px',
-          background: 'linear-gradient(to top, #fff 60%, transparent)',
-          animation: 'slideUp 200ms ease-out',
-        }}>
-          <button onClick={onContinue} style={{
-            width: '100%', maxWidth: '432px', padding: '16px',
-            borderRadius: '12px', border: 'none',
-            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 600,
-            cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
-          >
+        <div style={{ ...continueBtnPos, display: 'flex', justifyContent: 'center', padding: '12px 24px 28px', background: 'linear-gradient(to top, #fff 60%, transparent)', animation: 'slideUp 200ms ease-out' }}>
+          <button onClick={onContinue} style={{ width: '100%', maxWidth: '432px', padding: '16px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
             Continuar ({selectedOpcoes.length} selecionada{selectedOpcoes.length !== 1 ? 's' : ''}) →
           </button>
         </div>
       )}
 
-      {/* ── APROVADO FORM ──────────────────────────────────────────────────── */}
+      {phase === 'analise' && (
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px 100px', animation: 'fadeIn 0.4s ease' }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ fontSize: '42px', marginBottom: '12px' }}>⌛</div>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', lineHeight: 1.25, margin: '0 0 10px' }}>
+              {quiz.analise_titulo || 'Estamos analisando seu perfil...'}
+            </h2>
+            <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', lineHeight: 1.6, margin: '0' }}>
+              {quiz.analise_subtitulo || 'Aguarde enquanto verificamos se você tem o que é preciso para ser uma revendedora de sucesso!'}
+            </p>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #e5e7eb', borderBottom: '1px dashed #e5e7eb', padding: '20px 0', margin: '20px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#111' }}>Carregando...</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#111' }}>{analiseProgress}%</span>
+            </div>
+            <div style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
+              <div style={{ height: '100%', background: '#111', width: `${analiseProgress}%`, transition: 'width 100ms linear' }} />
+            </div>
+            <p style={{ fontSize: '13px', color: '#6b7280', textAlign: 'center', margin: 0 }}>
+              {analiseProgress < 30 ? 'Verificando seus dados...' : 
+               analiseProgress < 60 ? 'Analisando respostas...' : 
+               analiseProgress < 90 ? 'Cruzando informações...' : 'Finalizando análise...'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {(quiz.analise_depoimentos && quiz.analise_depoimentos.length > 0 ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS).map((d, i) => (
+              <div key={i} style={{ padding: '16px', borderRadius: '16px', border: '1.5px solid #f1f5f9', background: '#fff' }}>
+                <div style={{ display: 'flex', gap: '2px', marginBottom: '8px' }}>
+                  {[...Array(5)].map((_, j) => (
+                    <span key={j} style={{ fontSize: '14px', color: '#fbbf24' }}>⭐</span>
+                  ))}
+                </div>
+                <h4 style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: 700, color: '#111' }}>{d.nome}</h4>
+                <p style={{ margin: '0 0 8px', fontSize: '11px', color: '#9ca3af' }}>{d.handle}</p>
+                <p style={{ margin: 0, fontSize: '13px', color: '#4b5563', lineHeight: 1.5 }}>{d.texto}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {phase === 'aprovado_form' && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <div style={{ fontSize: '64px', lineHeight: 1, marginBottom: '18px' }}>{quiz.emoji_aprovado || '🎉'}</div>
-            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#111', margin: '0 0 14px', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', margin: '0 0 10px', textAlign: 'center' }}>
               {quiz.mensagem_aprovado || 'Parabéns! Você foi aprovada.'}
             </h2>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '999px', background: '#d1fae5', color: '#065f46', fontSize: '12px', fontWeight: 700 }}>
-                <Check style={{ width: '11px', height: '11px', strokeWidth: 3 }} /> Perfil verificado
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '999px', background: hexRgba(primary, 0.1), color: primary, fontSize: '12px', fontWeight: 700 }}>
-                ✨ Pronta para começar
-              </span>
-            </div>
+            {quiz.mensagem_aprovado_subtitulo && (
+              <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', textAlign: 'center', margin: '0 0 24px', lineHeight: 1.5 }}>
+                {quiz.mensagem_aprovado_subtitulo}
+              </p>
+            )}
           </div>
-          <button onClick={onGoToColeta} style={{
-            width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-            background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
-            cursor: 'pointer', letterSpacing: '-0.01em',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            transition: 'transform 150ms ease-out, box-shadow 150ms ease-out',
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
-          >
+          <button onClick={onGoToColeta} style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
             Preencher meus dados →
           </button>
         </div>
       )}
 
-      {/* ── COLETA ─────────────────────────────────────────────────────────── */}
       {phase === 'coleta' && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
-          {!isPreview && (
-            <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '24px' }}>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 20px', textAlign: 'center', lineHeight: 1.6 }}>
-                Preencha seus dados para concluir o cadastro.
-              </p>
-              <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {coletaConfig.map(cfg => {
-                  const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
-                  const val = fieldValues[cfg.campo] ?? '';
-                  const autoCompleteMap: Record<string, string> = { nome: 'name', whatsapp: 'tel', cidade: 'address-level2' };
-                  return (
-                    <div key={cfg.campo}>
-                      <label style={lblS}>
-                        {cfg.label}{' '}
-                        <span style={{ fontWeight: 400, color: '#9ca3af' }}>
-                          {cfg.obrigatorio ? '*' : '(opcional)'}
-                        </span>
-                      </label>
-                      <input
-                        type={cfg.campo === 'whatsapp' ? 'tel' : 'text'}
-                        value={val}
-                        onChange={e => {
-                          if (cfg.campo === 'nome') onNomeChange?.(e.target.value);
-                          else if (cfg.campo === 'whatsapp') onWhatsappChange?.(maskWhatsapp(e.target.value));
-                          else if (cfg.campo === 'cidade') onCidadeChange?.(e.target.value);
-                          else if (cfg.campo === 'instagram') onInstagramChange?.(e.target.value);
-                        }}
-                        placeholder={cfg.placeholder}
-                        autoComplete={autoCompleteMap[cfg.campo]}
-                        inputMode={cfg.campo === 'whatsapp' ? 'numeric' : undefined}
-                        style={inpS}
-                        onFocus={e => { e.currentTarget.style.borderColor = '#111'; }}
-                        onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
-                      />
-                    </div>
-                  );
-                })}
-                <button type="submit" disabled={submitting || !canSubmit} style={{
-                  width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px', border: 'none',
-                  background: !canSubmit || submitting ? '#9ca3af' : btnColor,
-                  color: '#fff', fontSize: '15px', fontWeight: 700,
-                  cursor: (!canSubmit || submitting) ? 'default' : 'pointer',
-                }}>
-                  {submitting ? 'Enviando...' : 'Enviar meus dados →'}
-                </button>
-                <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', margin: 0 }}>
-                  ⏰ Responda em até 24h para garantir sua vaga
-                </p>
-              </form>
-            </div>
-          )}
-          {isPreview && (
-            <div style={{ padding: '0 0 20px' }}>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px', textAlign: 'center', lineHeight: 1.6 }}>
-                Preencha seus dados para concluir o cadastro.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {coletaConfig.map(cfg => (
+          <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '24px' }}>
+            <p style={{ fontSize: '14px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 20px', textAlign: 'center', lineHeight: 1.6 }}>Preencha seus dados para concluir o cadastro.</p>
+            <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {coletaConfig.map(cfg => {
+                const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
+                const val = fieldValues[cfg.campo] ?? '';
+                return (
                   <div key={cfg.campo}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>
-                      {cfg.label}
-                      {cfg.obrigatorio
-                        ? <span style={{ color: '#ef4444' }}> *</span>
-                        : <span style={{ color: '#9ca3af' }}> (opcional)</span>}
-                    </label>
-                    <div style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '14px', color: '#9ca3af', background: '#f9fafb' }}>
-                      {cfg.placeholder}
-                    </div>
+                    <label style={lblS}>{cfg.label} <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.obrigatorio ? '*' : '(opcional)'}</span></label>
+                    {cfg.campo === 'cidade' ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          value={citySearch || cidade}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[0-9]/g, '');
+                            setCitySearch(val);
+                            onCidadeChange?.(val);
+                            setShowCitySugg(true);
+                          }}
+                          onBlur={() => setTimeout(() => setShowCitySugg(false), 200)}
+                          placeholder="Ex: São Paulo" 
+                          style={inpS} 
+                        />
+                        {showCitySugg && cities.length > 0 && (
+                          <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                            {cities.slice(0, 10).map(c => (
+                              <div key={c} onClick={() => { onCidadeChange?.(c); setCitySearch(c); setCities([]); }} style={{ padding: '10px 14px', fontSize: '13px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>{c}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : cfg.campo === 'whatsapp' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <input 
+                          value={maskWhatsapp(whatsapp)}
+                          onChange={e => onWhatsappChange?.(e.target.value)}
+                          placeholder="(00) 00000-0000" 
+                          style={inpS} 
+                        />
+                        <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ⚠️ Se o número estiver errado, você perderá sua vaga
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          value={fieldValues[cfg.campo] || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (cfg.campo === 'nome') {
+                              onNomeChange?.(val);
+                              if (isMaleName(val)) setNomeErro('Opa! Este quiz é exclusivo para o público feminino. 🌸');
+                              else setNomeErro(null);
+                            }
+                            if (cfg.campo === 'instagram') onInstagramChange?.(val);
+                          }}
+                          placeholder={cfg.placeholder} 
+                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nomeErro ? '#ef4444' : (cfg.campo === 'nome' && nome.length > 2 && !nomeErro ? '#10b981' : '#e2e8f0') }} 
+                        />
+                        {cfg.campo === 'nome' && nomeErro && (
+                          <p style={{ color: '#ef4444', fontSize: '11px', margin: '4px 0 0', fontWeight: 600 }}>{nomeErro}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))}
-                <div style={{ width: '100%', padding: '15px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '14px', fontWeight: 700, textAlign: 'center', marginTop: '4px' }}>
-                  Enviar meus dados →
-                </div>
-                <p style={{ textAlign: 'center', fontSize: '11px', color: '#9ca3af', margin: 0 }}>
-                  ⏰ Responda em até 24h para garantir sua vaga
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── SUCESSO ────────────────────────────────────────────────────────── */}
-      {phase === 'sucesso' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '60px 24px', textAlign: 'center', animation: 'fadeIn 0.4s ease' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <Check style={{ width: '36px', height: '36px', color: '#059669', strokeWidth: 2.5 }} />
+                );
+              })}
+              <button type="submit" disabled={submitting || !canSubmit} style={{ width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px', border: 'none', background: !canSubmit || submitting ? '#9ca3af' : btnColor, color: '#fff', fontSize: '15px', fontWeight: 700 }}>
+                {submitting ? 'Enviando...' : 'Enviar meus dados →'}
+              </button>
+            </form>
           </div>
-          <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#111', margin: '0 0 8px' }}>Cadastro realizado!</h2>
-          <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Você será redirecionada para o WhatsApp em instantes...</p>
         </div>
       )}
 
-      {/* ── REPROVADO ──────────────────────────────────────────────────────── */}
       {phase === 'reprovado' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
-          <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '32px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '52px', lineHeight: 1, marginBottom: '16px' }}>{quiz.emoji_reprovado || '🌱'}</div>
-            <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: '999px', background: '#fef3c7', color: '#92400e', fontSize: '11px', fontWeight: 700, marginBottom: '14px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Perfil em desenvolvimento
-            </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#111', lineHeight: 1.4, margin: '0 0 20px' }}>
-              {quiz.mensagem_reprovado || 'Obrigada pela participação!'}
-            </h2>
-            <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '16px 20px', textAlign: 'left', border: '1px solid #f0f0f0' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>O que você pode fazer agora</p>
-              {[
-                { emoji: '📋', text: 'Regularize seu CPF caso esteja negativado' },
-                { emoji: '💪', text: 'Organize sua situação financeira' },
-                { emoji: '📱', text: 'Continue acompanhando nosso conteúdo' },
-                { emoji: '🔄', text: 'Tente novamente em alguns meses' },
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: i < 3 ? '10px' : 0 }}>
-                  <span style={{ fontSize: '15px', flexShrink: 0, marginTop: '1px' }}>{item.emoji}</span>
-                  <span style={{ fontSize: '14px', color: '#4b5563', lineHeight: 1.5 }}>{item.text}</span>
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <X style={{ width: '32px', height: '32px', strokeWidth: 3 }} />
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', margin: '0 0 8px' }}>
+            {quiz.mensagem_reprovado || 'Obrigada pela participação!'}
+          </h2>
+          {(quiz as any).mensagem_reprovado_subtitulo && (
+            <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 24px', lineHeight: 1.5 }}>
+              {(quiz as any).mensagem_reprovado_subtitulo}
+            </p>
+          )}
+          <div style={{ background: '#f9fafb', borderRadius: '16px', padding: '20px', marginBottom: '32px', textAlign: 'left' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px' }}>Para uma próxima tentativa:</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {(Array.isArray(quiz.reprovado_conteudo) && quiz.reprovado_conteudo.length > 0 ? quiz.reprovado_conteudo : [
+                'Continue acompanhando nossas dicas no Instagram',
+                'Mantenha seu CPF regularizado',
+                'Tente novamente em 30 dias'
+              ]).map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d1d5db', marginTop: '6px', flexShrink: 0 }} />
+                  <span style={{ fontSize: '14px', color: '#4b5563', lineHeight: 1.4 }}>{item}</span>
                 </div>
               ))}
             </div>
           </div>
+          {(quiz as any).reprovado_botao_texto && (
+            <button onClick={() => window.open((quiz as any).reprovado_botao_url || '#', '_blank')} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+              {(quiz as any).reprovado_botao_texto}
+            </button>
+          )}
+        </div>
+      )}
+      {phase === 'sucesso' && (
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#d1fae5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <Check style={{ width: '32px', height: '32px', strokeWidth: 3 }} />
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', margin: '0 0 8px' }}>
+            Cadastro realizado!
+          </h2>
+          <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 24px', lineHeight: 1.5 }}>
+            Estamos te redirecionando para o WhatsApp...
+          </p>
         </div>
       )}
     </div>
   );
 }
 
-const lblS: React.CSSProperties = {
-  display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px',
-};
-const inpS: React.CSSProperties = {
-  width: '100%', padding: '13px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb',
-  fontSize: '15px', color: '#111', outline: 'none', transition: 'all 150ms ease-out', background: '#fff',
-};
+const lblS: React.CSSProperties = { display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' };
+const inpS: React.CSSProperties = { width: '100%', padding: '13px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '15px', color: '#111', outline: 'none', transition: 'all 150ms ease-out', background: '#fff' };

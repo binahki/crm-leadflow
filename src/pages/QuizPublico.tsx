@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   QuizRenderer,
@@ -24,6 +25,26 @@ function launchConfetti(primary: string) {
   s.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
   s.onload = fire;
   document.head.appendChild(s);
+}
+
+const MALE_ENDINGS = ['o', 'r', 'l', 's', 'm', 'n', 'v', 'x'];
+const FEMALE_EXCEPTIONS = ['alice', 'beatriz', 'nicole', 'yasmin', 'ellen', 'suelen', 'lilian', 'miriam', 'ester', 'ruth', 'izabel', 'raquel', 'abigail', 'joyce'];
+const MALE_EXCEPTIONS = ['lua', 'luca', 'joshua', 'elias', 'isaías', 'matias', 'nicolas', 'jonas', 'dimas'];
+
+function isProbablyMale(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  if (!n) return false;
+  const firstWord = n.split(' ')[0];
+  const lastWord = n.split(' ').pop() || '';
+  
+  const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre'];
+  if (commonMaleNames.includes(firstWord)) return true;
+
+  // Heurística para português: termina em 'o' ou 'os' e não é exceção
+  if (lastWord.endsWith('o') && !['conceição', 'socorro', 'rosário', 'damares'].includes(lastWord)) return true;
+  if (lastWord.endsWith('os') && !['marcos'].includes(lastWord)) return true;
+
+  return false;
 }
 
 export default function QuizPublico() {
@@ -138,6 +159,25 @@ export default function QuizPublico() {
     });
   }, [todasPerguntas, answers]);
 
+  function calculateScore(ans: Record<string, string>, multiAns: Record<string, string[]>) {
+    let totalScore = 0;
+    for (const [pergId, oId] of Object.entries(ans)) {
+      const perg = todasPerguntas.find(p => p.id === pergId);
+      if (!perg) continue;
+      if (perg.tipo_resposta === 'multipla') {
+        const selectedIds = multiAns[pergId] || [oId];
+        for (const opId of selectedIds) {
+          const op = perg.opcoes.find(o => o.id === opId);
+          if (op) totalScore += op.pontos ?? 0;
+        }
+      } else {
+        const op = perg.opcoes.find(o => o.id === oId);
+        if (op) totalScore += op.pontos ?? 0;
+      }
+    }
+    return totalScore;
+  }
+
   // ── Advance logic ─────────────────────────────────────────────────────────────
   function doAdvance(pergunta: Pergunta, opcaoIds: string[]) {
     if (opcaoIds.length === 0) return;
@@ -171,32 +211,48 @@ export default function QuizPublico() {
     });
 
     const nextIdx = currentIdx + 1;
-    if (nextIdx >= newVisible.length) {
-      // Calculate total score (handles both single and multiple choice)
-      let totalScore = 0;
-      for (const [pergId, oId] of Object.entries(newAnswers)) {
-        const perg = todasPerguntas.find(p => p.id === pergId);
-        if (!perg) continue;
-        if (perg.tipo_resposta === 'multipla') {
-          const selectedIds = newMultipleAnswers[pergId] || [oId];
-          for (const opId of selectedIds) {
-            const op = perg.opcoes.find(o => o.id === opId);
-            if (op) totalScore += op.pontos ?? 0;
-          }
-        } else {
-          const op = perg.opcoes.find(o => o.id === oId);
-          if (op) totalScore += op.pontos ?? 0;
-        }
+    
+    // Custom redirection logic
+    const selectedOpcaoObj = pergunta.opcoes.find(o => o.id === primaryAnswer);
+    if (selectedOpcaoObj?.target_pergunta_id) {
+      const targetId = selectedOpcaoObj.target_pergunta_id;
+      if (targetId === 'approval') {
+        const score = calculateScore(newAnswers, newMultipleAnswers);
+        setScore(score); setFaixa(score >= (quiz?.corte_verde ?? 35) ? 'verde' : 'amarelo');
+        setPhase('aprovado_form'); return;
       }
+      if (targetId === 'collect') {
+        const score = calculateScore(newAnswers, newMultipleAnswers);
+        setScore(score); setFaixa(score >= (quiz?.corte_verde ?? 35) ? 'verde' : 'amarelo');
+        setPhase('coleta'); return;
+      }
+      
+      const targetIdx = newVisible.findIndex(p => p.id === targetId);
+      if (targetIdx !== -1) {
+        setCurrentIdx(targetIdx);
+        setQuestionKey(k => k + 1);
+        return;
+      }
+    }
+
+    if (nextIdx >= newVisible.length) {
+      const totalScore = calculateScore(newAnswers, newMultipleAnswers);
       setScore(totalScore);
       if (!quiz) return;
-      if (totalScore >= quiz.corte_verde) {
-        setFaixa('verde'); setPhase('aprovado_form');
-      } else if (totalScore >= quiz.corte_amarelo) {
-        setFaixa('amarelo'); setPhase('aprovado_form');
-      } else {
-        setPhase('reprovado');
-      }
+      
+      const isApproved = totalScore >= quiz.corte_verde || totalScore >= (quiz.corte_amarelo ?? 0);
+      setFaixa(totalScore >= quiz.corte_verde ? 'verde' : 'amarelo');
+      
+      setPhase('analise');
+      
+      const duration = (quiz.analise_duracao || 4) * 1000;
+      setTimeout(() => {
+        if (isApproved) {
+          setPhase('aprovado_form');
+        } else {
+          setPhase('reprovado');
+        }
+      }, duration);
     } else {
       setCurrentIdx(nextIdx);
       setQuestionKey(k => k + 1);
@@ -243,40 +299,75 @@ export default function QuizPublico() {
     e.preventDefault();
     if (!quiz || !faixa) return;
     const rawWa = whatsapp.replace(/\D/g, '');
-    if (!nome.trim() || rawWa.length < 10 || !cidade.trim()) return;
+    
+    // Validações
+    if (isProbablyMale(nome)) {
+      alert('Desculpe, este quiz é exclusivo para o público feminino.');
+      return;
+    }
+    if (rawWa.length !== 11) {
+      alert('Por favor, informe um WhatsApp válido com DDD (11 dígitos).');
+      return;
+    }
+    if (rawWa[2] !== '9') {
+      alert('O número de WhatsApp deve ser um celular (começar com 9).');
+      return;
+    }
+
     setSubmitting(true);
 
+    const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
+
     const quizRespostas: Record<string, string> = {};
-    for (const [pergId, opcId] of Object.entries(answers)) {
-      const perg = todasPerguntas.find(p => p.id === pergId);
-      if (!perg) continue;
+    for (const perg of todasPerguntas) {
+      const opcId = answers[perg.id];
+      if (!opcId) continue;
+      
       if (perg.tipo_resposta === 'multipla') {
-        const selectedIds = multipleAnswers[pergId] || [opcId];
+        const selectedIds = multipleAnswers[perg.id] || [opcId as string];
         const textos = selectedIds
           .map(id => perg.opcoes.find(o => o.id === id)?.texto)
-          .filter(Boolean).join(', ');
+          .filter(Boolean).map(t => stripEmojis(t!)).join(', ');
         quizRespostas[perg.texto] = textos;
       } else {
-        const op = perg.opcoes.find(o => o.id === opcId);
-        if (op) quizRespostas[perg.texto] = op.texto;
+        const op = perg.opcoes.find(o => o.id === opcId as string);
+        if (op) quizRespostas[perg.texto] = stripEmojis(op.texto);
       }
     }
 
-    const { error } = await db.from('leads').insert({
-      nome: nome.trim(), whatsapp: rawWa, cidade: cidade.trim(),
-      instagram: instagram.trim() || null, score, faixa, status: 0,
-      org_id: quiz.org_id, quiz_respostas: quizRespostas,
-      created_at: new Date().toISOString(),
-    });
+      const leadData = {
+        org_id: quiz.org_id,
+        nome: nome.trim(),
+        whatsapp: rawWa,
+        cidade: cidade.trim(),
+        status: 1,
+        quiz_respostas: quizRespostas,
+        score,
+        faixa,
+        created_at: new Date().toISOString(),
+        ...utms.current
+      };
+      
+      const { error } = await db.from('leads').insert(leadData);
 
     setSubmitting(false);
     if (error) { alert('Erro ao salvar. Tente novamente.'); return; }
 
+    const num = quiz.redirect_whatsapp?.replace(/\D/g, '');
+    const msg = `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+    const redirectUrl = num ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}` : null;
+
+    if ((quiz as any).whatsapp_redirecionar_direto && redirectUrl) {
+      window.location.href = redirectUrl;
+      return;
+    }
+
     setPhase('sucesso');
-    setTimeout(() => {
-      const num = quiz.redirect_whatsapp.replace(/\D/g, '');
-      if (num) window.location.href = `https://wa.me/${num}`;
-    }, 2000);
+    if (redirectUrl) {
+      setTimeout(() => {
+        window.location.href = redirectUrl;
+      }, 2000);
+    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────────
@@ -293,10 +384,96 @@ export default function QuizPublico() {
     .filter(c => c.obrigatorio)
     .every(c => {
       const val = fieldValues[c.campo] ?? '';
-      if (c.campo === 'whatsapp') return val.replace(/\D/g, '').length >= 10;
+      if (c.campo === 'whatsapp') return val.replace(/\D/g, '').length === 11;
       return val.trim().length > 0;
     });
   const primary = quiz?.cor_primaria || '#2563eb';
+
+  const [searchParams] = useSearchParams();
+  const utms = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    // Capture UTMs on mount
+    const captured: Record<string, string> = {};
+    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+    utmKeys.forEach(key => {
+      const val = searchParams.get(key);
+      if (val) captured[key] = val;
+    });
+    utms.current = captured;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!quiz) return;
+
+    // ── Inject Scripts ──────────────────────────────────────────────────────
+    const injectScript = (content: string, position: 'head' | 'body' | 'footer') => {
+      if (!content) return;
+      const el = document.createElement('div');
+      el.innerHTML = content;
+      const scripts = el.querySelectorAll('script');
+      scripts.forEach(s => {
+        const newS = document.createElement('script');
+        if (s.src) newS.src = s.src;
+        else newS.textContent = s.textContent;
+        if (position === 'head') document.head.appendChild(newS);
+        else if (position === 'body') document.body.prepend(newS);
+        else document.body.appendChild(newS);
+      });
+    };
+
+    // GTM
+    if ((quiz as any).gtm_id) {
+      const gtmId = (quiz as any).gtm_id;
+      const script = document.createElement('script');
+      script.textContent = `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');`;
+      document.head.appendChild(script);
+    }
+
+    // Facebook Pixel
+    if (quiz.pixel_id) {
+      const script = document.createElement('script');
+      script.textContent = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init', '${quiz.pixel_id}');fbq('track', 'PageView');`;
+      document.head.appendChild(script);
+    }
+
+    // Custom Scripts
+    if ((quiz as any).script_head) injectScript((quiz as any).script_head, 'head');
+    if ((quiz as any).script_body) injectScript((quiz as any).script_body, 'body');
+    if ((quiz as any).script_footer) injectScript((quiz as any).script_footer, 'footer');
+
+  }, [quiz?.id]);
+
+  useEffect(() => {
+    // Fire Lead Event on Approval
+    if (phase === 'aprovado_form' && quiz?.pixel_id) {
+      // 1. Standard Lead event
+      if ((quiz as any).pixel_fire_lead_event !== false) {
+        if ((window as any).fbq) (window as any).fbq('track', 'Lead');
+      }
+
+      // 2. Custom Script / Event from Approval Page
+      const custom = (quiz as any).pixel_custom_event_name;
+      if (custom) {
+        // If it looks like a script or complex JS, inject it
+        if (custom.includes('<script') || custom.includes('fbq(') || custom.includes('gtag(')) {
+          const s = document.createElement('script');
+          if (custom.includes('<script')) {
+            const temp = document.createElement('div');
+            temp.innerHTML = custom;
+            const found = temp.querySelector('script');
+            s.textContent = found ? found.textContent : custom;
+          } else {
+            s.textContent = custom;
+          }
+          document.body.appendChild(s);
+        } else {
+          // Otherwise treat as a simple event name
+          if ((window as any).fbq) (window as any).fbq('track', custom);
+        }
+      }
+    }
+  }, [phase, quiz?.id]);
 
   // ── Loading ───────────────────────────────────────────────────────────────────
   if (phase === 'loading') {

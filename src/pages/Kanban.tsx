@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -6,7 +6,7 @@ import {
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
+import { useAppStore, Lead, calcularFaixa, STATUS_CONFIG, STATUS_SEQUENCE } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,14 +15,16 @@ import { safeName, safeInitials } from '@/utils/safeName';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
+import { useNavigate } from 'react-router-dom';
 
-const COLUMNS = [
-  { status: 1, label: 'Em atendimento', border: '#3b82f6', dot: '#3b82f6', bg: 'rgba(59,130,246,0.06)' },
-  { status: 2, label: 'Reunião',        border: '#8b5cf6', dot: '#8b5cf6', bg: 'rgba(139,92,246,0.06)'  },
-  { status: 5, label: 'Contrato/App',  border: '#f59e0b', dot: '#f59e0b', bg: 'rgba(245,158,11,0.06)'  },
-  { status: 3, label: 'Aprovado',       border: '#10b981', dot: '#10b981', bg: 'rgba(16,185,129,0.06)' },
-  { status: 4, label: 'Reprovado',      border: '#ef4444', dot: '#ef4444', bg: 'rgba(239,68,68,0.06)'   },
-];
+const COLUMNS = STATUS_SEQUENCE.map(status => ({
+  status,
+  label: STATUS_CONFIG[status].label,
+  border: STATUS_CONFIG[status].dot,
+  dot: STATUS_CONFIG[status].dot,
+  bg: `${STATUS_CONFIG[status].dot}10`
+}));
 
 const MOTIVOS = ['Sem retorno','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Desistiu','Outro'];
 const AVATAR_COLORS = ['#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#ec4899','#8b5cf6'];
@@ -256,7 +258,22 @@ export default function KanbanPage() {
   const { leads, setLeads, updateLead } = useAppStore();
   const { theme } = useTheme();
   const { orgId, ready: orgReady } = useOrgId();
+  const navigate = useNavigate();
   const dark = theme === 'dark';
+
+  const { hasWA } = useWhatsAppAccount();
+
+  const handleWhatsApp = useCallback((lead: Lead) => {
+    if (!lead.whatsapp) return;
+    const clean = lead.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('55') ? clean : `55${clean}`;
+    
+    if (hasWA) {
+      navigate(`/whatsapp?phone=${phone}`);
+    } else {
+      window.open(`https://wa.me/${phone}`, '_blank');
+    }
+  }, [navigate, hasWA]);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
@@ -411,7 +428,7 @@ export default function KanbanPage() {
                       {colLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={true}
                           onCardClick={() => setViewingLead(lead)}
-                          onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
+                          onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                         />
                       ))}
@@ -430,7 +447,7 @@ export default function KanbanPage() {
                       {colLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={false}
                           onCardClick={() => setViewingLead(lead)}
-                          onWhatsApp={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.whatsapp?.replace(/\D/g,'')}`, '_blank'); }}
+                          onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                         />
                       ))}

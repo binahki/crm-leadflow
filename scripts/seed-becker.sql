@@ -1,112 +1,95 @@
--- ============================================================
--- SEED QUIZ BECKER
--- Quiz ID: b9d1186f-13b7-41d3-9656-21f95ec78fd4
--- Execute no Supabase SQL Editor (Authentication > SQL Editor)
--- ============================================================
+-- ================================================================
+-- SEED QUIZ BECKER — versão limpa
+-- Quiz ID : b9d1186f-13b7-41d3-9656-21f95ec78fd4
+-- Execute no Supabase SQL Editor
+-- ================================================================
 
 DO $$
 DECLARE
-  quiz_id  UUID := 'b9d1186f-13b7-41d3-9656-21f95ec78fd4';
+  v_quiz_id UUID := 'b9d1186f-13b7-41d3-9656-21f95ec78fd4';
 
-  -- blocos
+  -- IDs dos blocos
   b1 UUID; b2 UUID; b3 UUID; b4 UUID;
 
-  -- bloco 2
-  p_idade    UUID;
-  p_filhos   UUID;
+  -- IDs das perguntas do bloco 2
+  p_idade      UUID;
+  p_filhos     UUID;
   p_filhoIdade UUID;
-  p_apoio    UUID;
-  p_marido   UUID;
-  op_sim1    UUID;  -- "Sim, tenho 1 filho"
+  p_apoio      UUID;
+  p_marido     UUID;
+  op_sim1      UUID;   -- ID da opção "Sim, tenho 1 filho"
 
-  -- bloco 3
-  pc UUID[]; -- array de 8 perguntas
+  -- IDs das perguntas do bloco 3
+  p_area       UUID;
+  p_situacao   UUID;
+  p_vendas     UUID;
+  p_meios      UUID;
+  p_horas      UUID;
+  p_quando     UUID;
+  p_semijoia   UUID;
+  p_instagram  UUID;
 
-  -- bloco 4
-  sf UUID[]; -- array de 3 perguntas
+  -- IDs das perguntas do bloco 4
+  p_consignado UUID;
+  p_negativo   UUID;
+  p_regras     UUID;
 
 BEGIN
 
-  -- ── 0. Limpar dados anteriores (seguro re-rodar) ────────────────
+  -- ── 0. LIMPAR DADOS ANTERIORES ──────────────────────────────────
   DELETE FROM quiz_opcoes
    WHERE pergunta_id IN (
-     SELECT qp.id FROM quiz_perguntas qp
-     JOIN quiz_blocos qb ON qb.id = qp.bloco_id
-     WHERE qb.quiz_id = quiz_id
+     SELECT qp.id
+       FROM quiz_perguntas qp
+       JOIN quiz_blocos    qb ON qb.id = qp.bloco_id
+      WHERE qb.quiz_id = v_quiz_id
    );
+
   DELETE FROM quiz_perguntas
-   WHERE bloco_id IN (SELECT id FROM quiz_blocos WHERE quiz_id = quiz_id);
-  DELETE FROM quiz_blocos WHERE quiz_id = quiz_id;
+   WHERE bloco_id IN (
+     SELECT id FROM quiz_blocos WHERE quiz_id = v_quiz_id
+   );
 
-  -- ── 1. BLOCOS ─────────────────────────────────────────────────────
+  DELETE FROM quiz_blocos WHERE quiz_id = v_quiz_id;
+
+  -- ── 1. BLOCOS ────────────────────────────────────────────────────
   INSERT INTO quiz_blocos (quiz_id, titulo, ordem) VALUES
-    (quiz_id, 'Aquecimento',          1),
-    (quiz_id, 'Perfil Pessoal',       2),
-    (quiz_id, 'Potencial Comercial',  3),
-    (quiz_id, 'Segurança Financeira', 4)
-  RETURNING id INTO b1;
+    (v_quiz_id, 'Aquecimento',          1),
+    (v_quiz_id, 'Perfil Pessoal',       2),
+    (v_quiz_id, 'Potencial Comercial',  3),
+    (v_quiz_id, 'Segurança Financeira', 4);
 
-  SELECT id INTO b1 FROM quiz_blocos WHERE quiz_id = quiz_id AND ordem = 1;
-  SELECT id INTO b2 FROM quiz_blocos WHERE quiz_id = quiz_id AND ordem = 2;
-  SELECT id INTO b3 FROM quiz_blocos WHERE quiz_id = quiz_id AND ordem = 3;
-  SELECT id INTO b4 FROM quiz_blocos WHERE quiz_id = quiz_id AND ordem = 4;
+  SELECT id INTO b1 FROM quiz_blocos WHERE quiz_id = v_quiz_id AND ordem = 1;
+  SELECT id INTO b2 FROM quiz_blocos WHERE quiz_id = v_quiz_id AND ordem = 2;
+  SELECT id INTO b3 FROM quiz_blocos WHERE quiz_id = v_quiz_id AND ordem = 3;
+  SELECT id INTO b4 FROM quiz_blocos WHERE quiz_id = v_quiz_id AND ordem = 4;
 
-  -- ── 2. BLOCO 1 — AQUECIMENTO ─────────────────────────────────────
-  WITH ins AS (
-    INSERT INTO quiz_perguntas (bloco_id, texto, ordem) VALUES
-      (b1, 'Por que você quer começar a vender semijoias agora?', 1),
-      (b1, 'Se você começasse hoje, quanto gostaria de ganhar por mês?',  2)
-    RETURNING id, ordem
-  )
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT p.id,
-         o.texto, o.pontos, false, o.ord
-  FROM ins p
-  JOIN (VALUES
-    (1, 'Renda extra',                1),
-    (1, 'Trabalhar de casa',          2),
-    (1, 'Ter meu próprio negócio',    3),
-    (1, 'Independência financeira',   4),
-    (2, 'Até R$500',                  1),
-    (2, 'R$500 a R$1.000',            2),
-    (2, 'R$1.000 a R$3.000',          3),
-    (2, 'Mais de R$3.000',            4)
-  ) AS o(pord, texto, ord) ON p.ordem = o.pord
-  -- pontos todos 0
-  -- (abusing JOIN to set pontos=0 in SELECT)
-  -- pontos is already defaulted to 0 in table, but let's be explicit:
-  ;
-  -- ↑ pontos omitted → use default or fix below
-  -- Re-insert properly:
-  -- Actually the WITH ins above won't work cleanly for opcoes pontos.
-  -- Let's do it step by step instead.
+  -- ── 2. BLOCO 1 — AQUECIMENTO ────────────────────────────────────
+  -- Pergunta 1
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b1, 'Por que você quer começar a vender semijoias agora?', 1)
+  RETURNING id INTO p_area;   -- reutiliza variável como temp
 
-  -- Bloco 1: insert perguntas first, then opcoes
-  -- (reset and do it cleanly)
-  DELETE FROM quiz_perguntas WHERE bloco_id = b1;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_area, 'Renda extra',               0, false, 1),
+    (p_area, 'Trabalhar de casa',         0, false, 2),
+    (p_area, 'Ter meu próprio negócio',   0, false, 3),
+    (p_area, 'Independência financeira',  0, false, 4);
 
-  INSERT INTO quiz_perguntas (bloco_id, texto, ordem) VALUES
-    (b1, 'Por que você quer começar a vender semijoias agora?', 1),
-    (b1, 'Se você começasse hoje, quanto gostaria de ganhar por mês?',  2);
+  -- Pergunta 2
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b1, 'Se você começasse hoje, quanto gostaria de ganhar por mês?', 2)
+  RETURNING id INTO p_area;
 
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, 0, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    (1, 'Renda extra',              1),
-    (1, 'Trabalhar de casa',        2),
-    (1, 'Ter meu próprio negócio',  3),
-    (1, 'Independência financeira', 4),
-    (2, 'Até R$500',                1),
-    (2, 'R$500 a R$1.000',          2),
-    (2, 'R$1.000 a R$3.000',        3),
-    (2, 'Mais de R$3.000',          4)
-  ) AS o(pord, texto, ord) ON qp.ordem = o.pord
-  WHERE qp.bloco_id = b1;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_area, 'Até R$500',          0, false, 1),
+    (p_area, 'R$500 a R$1.000',    0, false, 2),
+    (p_area, 'R$1.000 a R$3.000',  0, false, 3),
+    (p_area, 'Mais de R$3.000',    0, false, 4);
 
-  -- ── 3. BLOCO 2 — PERFIL PESSOAL ──────────────────────────────────
+  -- ── 3. BLOCO 2 — PERFIL PESSOAL ─────────────────────────────────
 
-  -- Qual sua idade?
+  -- Pergunta 3 — Qual sua idade?
   INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
     VALUES (b2, 'Qual sua idade?', 1)
   RETURNING id INTO p_idade;
@@ -119,7 +102,7 @@ BEGIN
     (p_idade, '45 a 54 anos',     1, false, 5),
     (p_idade, '+55 anos',         1, false, 6);
 
-  -- Você tem filhos?
+  -- Pergunta 4 — Você tem filhos?
   INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
     VALUES (b2, 'Você tem filhos?', 2)
   RETURNING id INTO p_filhos;
@@ -130,12 +113,11 @@ BEGIN
     (p_filhos, 'Sim, tenho 2 filhos',         1, false, 3),
     (p_filhos, 'Sim, tenho 3 ou mais filhos', 0, false, 4);
 
-  -- Pega o ID de "Sim, tenho 1 filho" para a condição
   SELECT id INTO op_sim1
     FROM quiz_opcoes
    WHERE pergunta_id = p_filhos AND texto = 'Sim, tenho 1 filho';
 
-  -- Qual a idade do filho mais novo? (condicional)
+  -- Pergunta 5 — Qual a idade do filho mais novo? (condicional)
   INSERT INTO quiz_perguntas (bloco_id, texto, ordem, condicao_pergunta_id, condicao_opcao_id)
     VALUES (b2, 'Qual a idade do seu filho mais novo?', 3, p_filhos, op_sim1)
   RETURNING id INTO p_filhoIdade;
@@ -145,17 +127,17 @@ BEGIN
     (p_filhoIdade, '7 a 14 anos',     1, false, 2),
     (p_filhoIdade, 'Mais de 14 anos', 2, false, 3);
 
-  -- Você tem rede de apoio?
+  -- Pergunta 6 — Você tem rede de apoio?
   INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
     VALUES (b2, 'Você tem rede de apoio?', 4)
   RETURNING id INTO p_apoio;
 
   INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
-    (p_apoio, 'Sim, tenho apoio total',                      2, false, 1),
-    (p_apoio, 'Tenho apoio parcial',                         1, false, 2),
-    (p_apoio, 'Não tenho apoio, mas consigo me organizar',   0, false, 3);
+    (p_apoio, 'Sim, tenho apoio total',                    2, false, 1),
+    (p_apoio, 'Tenho apoio parcial',                       1, false, 2),
+    (p_apoio, 'Não tenho apoio, mas consigo me organizar', 0, false, 3);
 
-  -- Você mora com marido/companheiro?
+  -- Pergunta 7 — Você mora com marido/companheiro?
   INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
     VALUES (b2, 'Você mora com marido/companheiro?', 5)
   RETURNING id INTO p_marido;
@@ -164,171 +146,152 @@ BEGIN
     (p_marido, 'Sim', 1, false, 1),
     (p_marido, 'Não', 0, false, 2);
 
-  -- ── 4. BLOCO 3 — POTENCIAL COMERCIAL ─────────────────────────────
+  -- ── 4. BLOCO 3 — POTENCIAL COMERCIAL ────────────────────────────
 
-  INSERT INTO quiz_perguntas (bloco_id, texto, ordem) VALUES
-    (b3, 'Hoje você atua em qual dessas áreas?',             1),
-    (b3, 'Qual sua situação atual?',                         2),
-    (b3, 'Hoje você já vende algum produto ou serviço?',     3),
-    (b3, 'Por quais meios você pretende vender?',            4),
-    (b3, 'Quantas horas por semana consegue dedicar?',       5),
-    (b3, 'Quando gostaria de começar?',                      6),
-    (b3, 'Você já tentou vender semijoias antes?',           7),
-    (b3, 'Seu Instagram hoje está ativo?',                   8);
+  -- Pergunta 8 — Área de atuação
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Hoje você atua em qual dessas áreas?', 1)
+  RETURNING id INTO p_area;
 
-  -- Área de atuação (ordem 1)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Enfermagem / Técnica de enfermagem',      3, 1),
-    ('Professora / área da educação',           3, 2),
-    ('Beleza / estética / salão',               2, 3),
-    ('Comércio / atendimento / vendas',         2, 4),
-    ('Recepção / clínica / administrativo',     1, 5),
-    ('Outra área',                              0, 6)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 1;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_area, 'Enfermagem / Técnica de enfermagem',  3, false, 1),
+    (p_area, 'Professora / área da educação',       3, false, 2),
+    (p_area, 'Beleza / estética / salão',           2, false, 3),
+    (p_area, 'Comércio / atendimento / vendas',     2, false, 4),
+    (p_area, 'Recepção / clínica / administrativo', 1, false, 5),
+    (p_area, 'Outra área',                          0, false, 6);
 
-  -- Situação atual (ordem 2)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('CLT',                                          5, 1),
-    ('MEI com atividade e renda recorrente',         4, 2),
-    ('Empreendedora com negócio próprio',            4, 3),
-    ('Autônoma / renda informal / revenda catálogo', 2, 4),
-    ('Do lar',                                       1, 5),
-    ('Desempregada',                                 0, 6)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 2;
+  -- Pergunta 9 — Situação atual
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Qual sua situação atual?', 2)
+  RETURNING id INTO p_situacao;
 
-  -- Experiência em vendas (ordem 3)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Sim, vendo com frequência',   3, 1),
-    ('Sim, vendo às vezes',         2, 2),
-    ('Hoje não, mas já vendi',      1, 3),
-    ('Nunca vendi',                 0, 4)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 3;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_situacao, 'CLT',                                          5, false, 1),
+    (p_situacao, 'MEI com atividade e renda recorrente',         4, false, 2),
+    (p_situacao, 'Empreendedora com negócio próprio',            4, false, 3),
+    (p_situacao, 'Autônoma / renda informal / revenda catálogo', 2, false, 4),
+    (p_situacao, 'Do lar',                                       1, false, 5),
+    (p_situacao, 'Desempregada',                                 0, false, 6);
 
-  -- Meios de venda (ordem 4)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('WhatsApp',                         1, 1),
-    ('Instagram / Facebook',             1, 2),
-    ('Presencialmente',                  2, 3),
-    ('Já tenho clientes',                3, 4),
-    ('Ainda não sei, mas quero aprender',0, 5)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 4;
+  -- Pergunta 10 — Experiência em vendas
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Hoje você já vende algum produto ou serviço?', 3)
+  RETURNING id INTO p_vendas;
 
-  -- Horas/semana (ordem 5)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Não tenho certeza',           0, 1),
-    ('Menos de 5 horas/semana',     1, 2),
-    ('De 5 a 10 horas/semana',      3, 3),
-    ('Mais de 10 horas/semana',     4, 4)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 5;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_vendas, 'Sim, vendo com frequência',  3, false, 1),
+    (p_vendas, 'Sim, vendo às vezes',        2, false, 2),
+    (p_vendas, 'Hoje não, mas já vendi',     1, false, 3),
+    (p_vendas, 'Nunca vendi',                0, false, 4);
 
-  -- Quando começar (ordem 6)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Imediatamente',          4, 1),
-    ('Em até 7 dias',          3, 2),
-    ('Ainda estou avaliando',  0, 3)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 6;
+  -- Pergunta 11 — Meios de venda
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Por quais meios você pretende vender?', 4)
+  RETURNING id INTO p_meios;
 
-  -- Tentou vender semijoias (ordem 7)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Sim, tive sucesso',       3, 1),
-    ('Nunca tentei',            1, 2),
-    ('Estou prestes a tentar',  1, 3),
-    ('Tentei, mas não deu certo',0,4)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 7;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_meios, 'WhatsApp',                          1, false, 1),
+    (p_meios, 'Instagram / Facebook',              1, false, 2),
+    (p_meios, 'Presencialmente',                   2, false, 3),
+    (p_meios, 'Já tenho clientes',                 3, false, 4),
+    (p_meios, 'Ainda não sei, mas quero aprender', 0, false, 5);
 
-  -- Instagram ativo (ordem 8)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Sim, posto com frequência', 2, 1),
-    ('Tenho, mas posto pouco',    1, 2),
-    ('Quase não uso',             0, 3)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b3 AND qp.ordem = 8;
+  -- Pergunta 12 — Horas por semana
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Quantas horas por semana consegue dedicar?', 5)
+  RETURNING id INTO p_horas;
 
-  -- ── 5. BLOCO 4 — SEGURANÇA FINANCEIRA ────────────────────────────
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_horas, 'Não tenho certeza',        0, false, 1),
+    (p_horas, 'Menos de 5 horas/semana', 1, false, 2),
+    (p_horas, 'De 5 a 10 horas/semana',  3, false, 3),
+    (p_horas, 'Mais de 10 horas/semana', 4, false, 4);
 
-  INSERT INTO quiz_perguntas (bloco_id, texto, ordem) VALUES
-    (b4, 'Para começar no consignado, você tem pelo menos uma dessas opções?', 1),
-    (b4, 'Seu nome está negativado hoje?',                                     2),
-    (b4, 'Você aceita as regras do consignado?',                               3);
+  -- Pergunta 13 — Quando começar
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Quando gostaria de começar?', 6)
+  RETURNING id INTO p_quando;
 
-  -- Consignado (ordem 1)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Tenho os dois',                          5, 1),
-    ('Cartão de crédito',                      4, 2),
-    ('Tenho uma reserva para custos iniciais', 3, 3),
-    ('Não tenho nenhum dos dois',              1, 4)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b4 AND qp.ordem = 1;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_quando, 'Imediatamente',         4, false, 1),
+    (p_quando, 'Em até 7 dias',         3, false, 2),
+    (p_quando, 'Ainda estou avaliando', 0, false, 3);
 
-  -- Negativado (ordem 2)
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, false, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Sim, está negativado', 1, 1),
-    ('Não',                  5, 2)
-  ) AS o(texto, pts, ord) ON true
-  WHERE qp.bloco_id = b4 AND qp.ordem = 2;
+  -- Pergunta 14 — Tentou vender semijoias
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Você já tentou vender semijoias antes?', 7)
+  RETURNING id INTO p_semijoia;
 
-  -- Aceita regras (ordem 3) — "Não" reprova imediato
-  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem)
-  SELECT qp.id, o.texto, o.pts, o.reprova, o.ord
-  FROM quiz_perguntas qp
-  JOIN (VALUES
-    ('Sim, aceito as regras', 0, false, 1),
-    ('Não',                   0, true,  2)
-  ) AS o(texto, pts, reprova, ord) ON true
-  WHERE qp.bloco_id = b4 AND qp.ordem = 3;
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_semijoia, 'Sim, tive sucesso',        3, false, 1),
+    (p_semijoia, 'Nunca tentei',             1, false, 2),
+    (p_semijoia, 'Estou prestes a tentar',   1, false, 3),
+    (p_semijoia, 'Tentei, mas não deu certo',0, false, 4);
 
-  RAISE NOTICE '✅ Seed concluído!';
-  RAISE NOTICE '   Blocos: 4';
-  RAISE NOTICE '   Perguntas: 18 (1 condicional)';
-  RAISE NOTICE '   Quiz URL: /quiz/becker';
+  -- Pergunta 15 — Instagram ativo
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b3, 'Seu Instagram hoje está ativo?', 8)
+  RETURNING id INTO p_instagram;
+
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_instagram, 'Sim, posto com frequência', 2, false, 1),
+    (p_instagram, 'Tenho, mas posto pouco',    1, false, 2),
+    (p_instagram, 'Quase não uso',             0, false, 3);
+
+  -- ── 5. BLOCO 4 — SEGURANÇA FINANCEIRA ───────────────────────────
+
+  -- Pergunta 16 — Consignado
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b4, 'Para começar no consignado, você tem pelo menos uma dessas opções?', 1)
+  RETURNING id INTO p_consignado;
+
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_consignado, 'Tenho os dois',                          5, false, 1),
+    (p_consignado, 'Cartão de crédito',                      4, false, 2),
+    (p_consignado, 'Tenho uma reserva para custos iniciais', 3, false, 3),
+    (p_consignado, 'Não tenho nenhum dos dois',              1, false, 4);
+
+  -- Pergunta 17 — Negativado
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b4, 'Seu nome está negativado hoje?', 2)
+  RETURNING id INTO p_negativo;
+
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_negativo, 'Sim, está negativado', 1, false, 1),
+    (p_negativo, 'Não',                  5, false, 2);
+
+  -- Pergunta 18 — Aceita as regras
+  INSERT INTO quiz_perguntas (bloco_id, texto, ordem)
+    VALUES (b4, 'Você aceita as regras do consignado?', 3)
+  RETURNING id INTO p_regras;
+
+  INSERT INTO quiz_opcoes (pergunta_id, texto, pontos, reprova_imediato, ordem) VALUES
+    (p_regras, 'Sim, aceito as regras', 0, false, 1),
+    (p_regras, 'Não',                   0, true,  2);
+
+  RAISE NOTICE 'Seed concluído com sucesso!';
 
 END $$;
 
--- Verificação final
+-- ── VERIFICAÇÃO FINAL ────────────────────────────────────────────
 SELECT
-  (SELECT count(*) FROM quiz_blocos    WHERE quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4') AS blocos,
-  (SELECT count(*) FROM quiz_perguntas WHERE bloco_id IN (
-    SELECT id FROM quiz_blocos WHERE quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4'
-  )) AS perguntas,
-  (SELECT count(*) FROM quiz_opcoes WHERE pergunta_id IN (
-    SELECT qp.id FROM quiz_perguntas qp
-    JOIN quiz_blocos qb ON qb.id = qp.bloco_id
-    WHERE qb.quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4'
-  )) AS opcoes;
+  (SELECT count(*) FROM quiz_blocos
+    WHERE quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4'
+  ) AS blocos,
+
+  (SELECT count(*) FROM quiz_perguntas
+    WHERE bloco_id IN (
+      SELECT id FROM quiz_blocos
+       WHERE quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4'
+    )
+  ) AS perguntas,
+
+  (SELECT count(*) FROM quiz_opcoes
+    WHERE pergunta_id IN (
+      SELECT qp.id
+        FROM quiz_perguntas qp
+        JOIN quiz_blocos    qb ON qb.id = qp.bloco_id
+       WHERE qb.quiz_id = 'b9d1186f-13b7-41d3-9656-21f95ec78fd4'
+    )
+  ) AS opcoes;

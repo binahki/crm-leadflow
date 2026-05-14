@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
@@ -32,9 +33,9 @@ const PERIOD_FILTERS = [
 
 const FUNNEL_CONFIG = [
   { stage: 'Em atendimento', statusId: 1, color: '#3b82f6' },
-  { stage: 'Reunião', statusId: 2, color: '#a855f7' },
-  { stage: 'Contrato/App', statusId: 5, color: '#f59e0b' },
-  { stage: 'Aprovado', statusId: 3, color: '#22c55e' },
+  { stage: 'Reunião',        statusId: 2, color: '#8b5cf6' },
+  { stage: 'Contrato/App',   statusId: 5, color: '#f59e0b' },
+  { stage: 'Aprovado',       statusId: 3, color: '#10b981' },
 ];
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App' };
@@ -219,6 +220,20 @@ export default function Dashboard() {
   const location = useLocation();
   const dark = theme === 'dark';
   const { configuracoes } = useAppStore();
+
+  const { hasWA } = useWhatsAppAccount();
+
+  const handleWhatsApp = useCallback((lead: Lead) => {
+    if (!lead.whatsapp) return;
+    const clean = lead.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('55') ? clean : `55${clean}`;
+    
+    if (hasWA) {
+      navigate(`/whatsapp?phone=${phone}`);
+    } else {
+      window.open(`https://wa.me/${phone}`, '_blank');
+    }
+  }, [navigate, hasWA]);
 
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   useEffect(() => {
@@ -585,11 +600,12 @@ export default function Dashboard() {
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st]??''}`} style={{ fontSize:'10.5px' }}>{STATUS_LABEL[st]??'Aguardando'}</span>
                     <span style={{ fontSize:'11px', color:txtLow, flexShrink:0, minWidth:'28px', textAlign:'right' }}>{relativeTime(lead.created_at)}</span>
-                    <a href={lead.whatsapp?`https://wa.me/55${lead.whatsapp.replace(/\D/g,'')}`:'#'} target="_blank" rel="noreferrer"
-                      onClick={e=>e.stopPropagation()}
-                      className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center transition-colors flex-shrink-0">
+                    <button
+                      onClick={e => { e.stopPropagation(); handleWhatsApp(lead); }}
+                      className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center transition-colors flex-shrink-0"
+                      style={{ border: 'none', cursor: lead.whatsapp ? 'pointer' : 'default', opacity: lead.whatsapp ? 1 : 0.4 }}>
                       <MessageCircle className="w-3 h-3 text-white"/>
-                    </a>
+                    </button>
                   </div>
                 );
               })}
