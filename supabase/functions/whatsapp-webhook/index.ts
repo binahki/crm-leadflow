@@ -1,228 +1,207 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.21.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-serve(async (req) => {
+const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'];
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const db = createClient(supabaseUrl, supabaseKey)
+  const url = new URL(req.url);
 
-  try {
-    const url = new URL(req.url)
-    
-    // 1. Verificação do Webhook (GET)
-    if (req.method === 'GET') {
-      console.log('[Webhook Verify] Request received')
-      const mode = url.searchParams.get('hub.mode')
-      const token = url.searchParams.get('hub.verify_token')
-      const challenge = url.searchParams.get('hub.challenge')
+  if (req.method === 'GET') {
+    // Proxy de mídia
+    if (url.searchParams.get('action') === 'media') {
+      const mediaId = url.searchParams.get('media_id');
+      const orgId = url.searchParams.get('org_id');
+      if (!mediaId || !orgId) return new Response('Missing params', { status: 400, headers: corsHeaders });
 
-      console.log(`[Webhook Verify] Mode: ${mode}, Token: ${token}`)
+      const { data: acc } = await db.from('whatsapp_accounts').select('token').eq('org_id', orgId).maybeSingle();
+      if (!acc?.token) return new Response('Account not found', { status: 404, headers: corsHeaders });
 
-      if (mode === 'subscribe' && token) {
-        const { data: acc } = await db.from('whatsapp_accounts').select('webhook_verify_token').eq('webhook_verify_token', token).maybeSingle()
-        if (acc || token === 'floow_verify_token') {
-          console.log('[Webhook Verify] Success!')
-          return new Response(challenge, { status: 200 })
-        } else {
-          console.error('[Webhook Verify] Token mismatch or not found')
-        }
-      }
-      return new Response('Forbidden', { status: 403 })
+      const infoRes = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
+        headers: { Authorization: `Bearer ${acc.token}` }
+      });
+      if (!infoRes.ok) return new Response('Media not found', { status: 404, headers: corsHeaders });
+      
+      const info = await infoRes.json();
+      if (!info.url) return new Response('No URL', { status: 404, headers: corsHeaders });
+
+      const mediaRes = await fetch(info.url, {
+        headers: { Authorization: `Bearer ${acc.token}` }
+      });
+      if (!mediaRes.ok) return new Response('Failed to fetch media', { status: mediaRes.status, headers: corsHeaders });
+
+      const buffer = await mediaRes.arrayBuffer();
+      return new Response(buffer, {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': info.mime_type || 'application/octet-stream', 'Cache-Control': 'public, max-age=3600' }
+      });
     }
 
-    // 2. Recebimento de Mensagens/Status (POST)
-    const body = await req.json()
-    
-    // LOG DE DEBUG PARA O USUÁRIO VER NO PAINEL DO SUPABASE
-    console.log('--------------------------------------------------')
-    console.log('WEBHOOK RECEIVED AT:', new Date().toISOString())
-    console.log('PAYLOAD:', JSON.stringify(body, null, 2))
-    console.log('--------------------------------------------------')
+    // Verificação do webhook
+    const mode = url.searchParams.get('hub.mode');
+    const token = url.searchParams.get('hub.verify_token');
+    const challenge = url.searchParams.get('hub.challenge');
 
-    // Ação interna do CRM: Enviar Mensagem
+    if (mode === 'subscribe' && token) {
+      const { data } = await db.from('whatsapp_accounts').select('id').eq('webhook_verify_token', token).maybeSingle();
+      if (data || token === 'floow_verify_token') {
+        return new Response(challenge, { status: 200, headers: corsHeaders });
+      }
+    }
+    return new Response('Forbidden', { status: 403, headers: corsHeaders });
+  }
+
+  if (req.method === 'POST') {
+    const body = await req.json();
+
+    // Enviar mensagem
     if (url.searchParams.get('action') === 'send') {
-      const { org_id, conversation_id, text } = body
-      console.log(`[Action Send] Org: ${org_id}, Conv: ${conversation_id}`)
-      
-      const { data: account, error: accErr } = await db.from('whatsapp_accounts').select('phone_number_id, token').eq('org_id', org_id).single()
-      if (!account || accErr) {
-        console.error('[Action Send] Account error:', accErr)
-        return new Response(JSON.stringify({ error: 'Conta não configurada' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+      const { org_id, conversation_id, text } = body;
+      const { data: acc } = await db.from('whatsapp_accounts').select('phone_number_id, token').eq('org_id', org_id).maybeSingle();
+      if (!acc) return new Response(JSON.stringify({ error: 'Conta não encontrada' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-      const { data: conv, error: convErr } = await db.from('whatsapp_conversations').select('contact_phone, session_active, session_expires_at').eq('id', conversation_id).single()
-      if (!conv || convErr) {
-        console.error('[Action Send] Conv error:', convErr)
-        return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+      const { data: conv } = await db.from('whatsapp_conversations').select('contact_phone').eq('id', conversation_id).maybeSingle();
+      if (!conv) return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-      const metaRes = await fetch(`https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`, {
+      const metaRes = await fetch(`https://graph.facebook.com/v18.0/${acc.phone_number_id}/messages`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${account.token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: conv.contact_phone,
-          type: 'text',
-          text: { body: text }
-        })
-      })
+        headers: { 'Authorization': `Bearer ${acc.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: conv.contact_phone, type: 'text', text: { body: text } })
+      });
+      const metaJson = await metaRes.json();
+      if (!metaRes.ok) return new Response(JSON.stringify(metaJson), { status: metaRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-      const metaJson = await metaRes.json()
-      if (!metaRes.ok) {
-        console.error('[Action Send] Meta Error:', metaJson)
-        return new Response(JSON.stringify({ error: metaJson }), { status: metaRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-
-      const wamid = metaJson.messages?.[0]?.id
-      const { data: newMsg } = await db.from('whatsapp_messages').insert({
-        conversation_id,
-        org_id,
-        direction: 'outbound',
-        content: text,
-        wamid,
-        status: 'sent'
-      }).select().single()
-
-      return new Response(JSON.stringify({ message: newMsg }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      const wamid = metaJson?.messages?.[0]?.id || null;
+      const now = new Date().toISOString();
+      const { data: newMsg } = await db.from('whatsapp_messages').insert({ org_id, conversation_id, wamid, direction: 'outbound', type: 'text', content: text, status: 'sent', created_at: now }).select().single();
+      await db.from('whatsapp_conversations').update({ last_message: text, last_message_at: now }).eq('id', conversation_id);
+      return new Response(JSON.stringify({ message: newMsg }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Processamento de Webhook da Meta (Incoming)
-    const entry = body.entry?.[0]
-    const changes = entry?.changes?.[0]
-    const value = changes?.value
-    
-    if (!value) {
-      console.log('[Webhook] No value field in change')
-      return new Response('ok', { status: 200, headers: corsHeaders })
-    }
+    // Webhook da Meta
+    const value = body?.entry?.[0]?.changes?.[0]?.value;
+    if (!value) return new Response('ok', { status: 200, headers: corsHeaders });
 
-    const metadata = value?.metadata
-    const phoneNumberId = metadata?.phone_number_id
-    console.log(`[Webhook] Incoming for Phone ID: ${phoneNumberId}`)
+    const phoneNumberId = value.metadata?.phone_number_id;
+    const { data: account } = await db.from('whatsapp_accounts').select('*').eq('phone_number_id', phoneNumberId).maybeSingle();
+    if (!account) return new Response('ok', { status: 200, headers: corsHeaders });
 
-    if (value?.messages) {
-      console.log(`[Webhook] Processing ${value.messages.length} messages`)
-      
-      const { data: account, error: accErr } = await db.from('whatsapp_accounts').select('org_id, token').eq('phone_number_id', phoneNumberId).maybeSingle()
-      
-      if (!account || accErr) {
-        console.error(`[Webhook] Account mapping not found for ${phoneNumberId}. Error:`, accErr)
-        return new Response('Account Mapping Missing', { status: 200 })
+    const orgId = account.org_id;
+
+    for (const msg of (value.messages || [])) {
+      const contactPhone = msg.from;
+      const contactName = value.contacts?.[0]?.profile?.name || contactPhone;
+      const msgType = msg.type || 'text';
+      const wamid = msg.id;
+      const now = new Date().toISOString();
+      const msgTimestamp = msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000).toISOString() : now;
+      const sessionExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      let content = msgType === 'text' ? msg.text?.body :
+        msgType === 'document' ? `[Documento${msg.document?.filename ? ': ' + msg.document.filename : ''}]` :
+        msgType === 'image' ? '[Imagem]' :
+        msgType === 'audio' ? '[Áudio]' :
+        msgType === 'video' ? '[Vídeo]' :
+        msgType === 'sticker' ? '[Figurinha]' :
+        msgType === 'reaction' ? (msg.reaction?.emoji || '❤️') :
+        msgType === 'contacts' ? (msg.contacts?.map((c: any) => c.name?.formatted_name || 'Contato').join(', ')) :
+        `[${msgType}]`;
+
+      let mediaId: string | null = null;
+      let mediaMimeType: string | null = null;
+
+      if (MEDIA_TYPES.includes(msgType)) {
+        const mediaObj = msg[msgType];
+        if (mediaObj?.id) {
+          mediaId = mediaObj.id;
+          mediaMimeType = mediaObj.mime_type || null;
+        }
       }
 
-      for (const msg of value.messages) {
-        const contactPhone = msg.from
-        const contactName = value.contacts?.[0]?.profile?.name || contactPhone
-        const type = msg.type
-        let content = ""
-        
-        if (type === 'text') content = msg.text?.body || ""
-        else if (type === 'contacts') {
-          content = msg.contacts?.map((c: any) => c.name?.formatted_name || c.phones?.[0]?.phone || 'Contato').join(', ')
-        } else if (type === 'reaction') {
-          content = msg.reaction?.emoji || '❤️'
-        } else {
-          content = `[${type}]`
-        }
-        const wamid = msg.id
+      // Busca conversa existente
+      const { data: existingConv } = await db.from('whatsapp_conversations')
+        .select('id, unread_count, lead_id')
+        .eq('org_id', orgId)
+        .eq('contact_phone', contactPhone)
+        .maybeSingle();
 
-        let media_url = null
-        let media_mime_type = null
-        let media_id = null
+      let convId: string;
 
-        // Se for mídia, busca metadados e URL
-        if (['image', 'audio', 'video', 'document', 'sticker'].includes(type)) {
-          media_id = msg[type]?.id
-          
-          // Define content amigável
-          if (type === 'image') content = "[Imagem]"
-          else if (type === 'audio') content = "[Áudio]"
-          else if (type === 'video') content = "[Vídeo]"
-          else if (type === 'document') content = "[Documento]"
-          else if (type === 'sticker') content = "[Sticker]"
-          
-          if (media_id && account.token) {
-            try {
-              const mediaRes = await fetch(`https://graph.facebook.com/v18.0/${media_id}`, {
-                headers: { 'Authorization': `Bearer ${account.token}` }
-              })
-              const mediaData = await mediaRes.json()
-              if (mediaData.url) {
-                media_url = mediaData.url
-                media_mime_type = mediaData.mime_type
-              }
-            } catch (err) {
-              console.error('[Webhook] Error fetching media URL:', err)
-            }
-          }
-        }
-
-        console.log(`[Webhook] New Msg from ${contactPhone}: type=${type}`)
-
-        // Busca Lead por sufixo (os 8 ou 9 últimos dígitos são mais seguros)
-        const phoneSuffix = contactPhone.slice(-8)
-        const { data: lead } = await db.from('leads').select('id').ilike('whatsapp', `%${phoneSuffix}`).maybeSingle()
-        if (lead) console.log(`[Webhook] Lead linked: ${lead.id}`)
-
-        // Upsert Conversa
-        const { data: conv, error: convError } = await db.from('whatsapp_conversations').upsert({
-          org_id: account.org_id,
+      if (existingConv) {
+        convId = existingConv.id;
+        await db.from('whatsapp_conversations').update({
+          contact_name: contactName,
+          last_message: content,
+          last_message_at: now,
+          unread_count: (existingConv.unread_count || 0) + 1,
+          session_active: true,
+          session_expires_at: sessionExpires,
+        }).eq('id', convId);
+      } else {
+        const { data: newConv, error: convErr } = await db.from('whatsapp_conversations').insert({
+          org_id: orgId,
           contact_phone: contactPhone,
           contact_name: contactName,
-          lead_id: lead?.id || null,
           last_message: content,
-          last_message_at: new Date().toISOString(),
+          last_message_at: now,
+          unread_count: 1,
           session_active: true,
-          session_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          status: 'open'
-        }, { onConflict: 'org_id,contact_phone' }).select().single()
-
-        if (convError) {
-          console.error('[Webhook] Error upserting conversation:', convError)
-          continue
-        }
-
-        // Inserir Mensagem
-        const { error: msgError } = await db.from('whatsapp_messages').insert({
-          conversation_id: conv.id,
-          org_id: account.org_id,
-          direction: 'inbound',
-          type,
-          content,
-          media_url,
-          media_mime_type,
-          media_id,
-          wamid,
-          raw_payload: msg,
-          status: 'delivered'
-        })
-
-        if (msgError) console.error('[Webhook] Error inserting message:', msgError)
-        else console.log('[Webhook] Message saved successfully')
+          session_expires_at: sessionExpires,
+        }).select('id, lead_id').single();
+        if (convErr || !newConv) { console.error('[webhook] Erro ao criar conversa:', convErr); continue; }
+        convId = newConv.id;
       }
-    } else if (value?.statuses) {
-      console.log(`[Webhook] Processing ${value.statuses.length} status updates`)
-      for (const status of value.statuses) {
-        const { error: stError } = await db.from('whatsapp_messages')
-          .update({ status: status.status })
-          .eq('wamid', status.id)
-        if (stError) console.error(`[Webhook] Error updating status for ${status.id}:`, stError)
+
+      // Evita duplicata
+      const { data: existingMsg } = await db.from('whatsapp_messages').select('id').eq('wamid', wamid).maybeSingle();
+      if (!existingMsg) {
+        const { error: msgErr } = await db.from('whatsapp_messages').insert({
+          org_id: orgId,
+          conversation_id: convId,
+          wamid,
+          direction: 'inbound',
+          type: msgType,
+          content,
+          status: 'received',
+          created_at: msgTimestamp,
+          media_id: mediaId,
+          media_mime_type: mediaMimeType,
+        });
+        if (msgErr) console.error('[webhook] Erro ao salvar mensagem:', msgErr);
+      }
+
+      // Vincula lead
+      const { data: convAtual } = await db.from('whatsapp_conversations').select('lead_id').eq('id', convId).single();
+      if (!convAtual?.lead_id) {
+        const digits = contactPhone.replace(/\D/g, '');
+        let lead = null;
+        const { data: byLast9 } = await db.from('leads').select('id').eq('org_id', orgId).ilike('whatsapp', `%${digits.slice(-9)}`).maybeSingle();
+        if (byLast9) lead = byLast9;
+        if (!lead) {
+          const { data: byLast8 } = await db.from('leads').select('id').eq('org_id', orgId).ilike('whatsapp', `%${digits.slice(-8)}`).maybeSingle();
+          if (byLast8) lead = byLast8;
+        }
+        if (lead) await db.from('whatsapp_conversations').update({ lead_id: lead.id }).eq('id', convId);
       }
     }
 
-    return new Response('ok', { status: 200, headers: corsHeaders })
-  } catch (error) {
-    console.error('--- CRITICAL WEBHOOK ERROR ---')
-    console.error(error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    for (const st of (value.statuses || [])) {
+      await db.from('whatsapp_messages').update({ status: st.status }).eq('wamid', st.id);
+    }
+
+    return new Response('ok', { status: 200, headers: corsHeaders });
   }
-})
+
+  return new Response('Method not allowed', { status: 405, headers: corsHeaders });
+});

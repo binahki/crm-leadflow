@@ -19,14 +19,7 @@ interface Template {
   variables: string[];
 }
 
-const TEMPLATES: Template[] = [
-  {
-    id: 'abordagem_inicial',
-    name: 'abordagem_inicial',
-    body: "Oi {{1}}!\n\nSeu perfil foi pré-aprovado! 🎉\n\nFico feliz em te dar as boas-vindas e explicar os próximos passos.\n\nPode falar comigo aqui? 😊",
-    variables: ['nome']
-  }
-];
+// Templates serão buscados via API da Meta
 
 interface DisparoProgress {
   total: number;
@@ -47,14 +40,48 @@ export default function DisparosPage() {
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [account, setAccount] = useState<any>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template>(TEMPLATES[0]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
   
+  const selectedTemplate = useMemo(() => 
+    templates.find(t => t.name === selectedTemplateName), 
+    [templates, selectedTemplateName]
+  );
   const [progress, setProgress] = useState<DisparoProgress>({
     total: 0, current: 0, success: 0, errors: [], status: 'idle'
   });
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [hasAccount, setHasAccount] = useState<boolean | null>(null);
+
+  const fetchTemplates = useCallback(async () => {
+    if (!orgReady || !orgId) return;
+    const { data: acc } = await supabase
+      .from('whatsapp_accounts')
+      .select('token, business_account_id')
+      .eq('org_id', orgId)
+      .single();
+    
+    if (!acc) return;
+
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v18.0/${acc.business_account_id}/message_templates?limit=50&fields=name,status,language,components,category`,
+        { headers: { 'Authorization': `Bearer ${acc.token}` } }
+      );
+      
+      const json = await res.json();
+      if (json.data) {
+        const approved = json.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setTemplates(approved);
+        if (approved.length > 0 && !selectedTemplateName) {
+          setSelectedTemplateName(approved[0].name);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar templates:', err);
+    }
+  }, [orgId, orgReady, selectedTemplateName]);
 
   useEffect(() => {
     if (!orgReady || !orgId) return;
@@ -64,8 +91,11 @@ export default function DisparosPage() {
       .eq('org_id', orgId)
       .eq('status', 'active')
       .maybeSingle()
-      .then(({ data }) => setHasAccount(!!data));
-  }, [orgId, orgReady]);
+      .then(({ data }) => {
+        setHasAccount(!!data);
+        if (data) fetchTemplates();
+      });
+  }, [orgId, orgReady, fetchTemplates]);
 
   const fetchData = useCallback(async () => {
     if (!orgReady || !orgId) return;
@@ -161,8 +191,105 @@ export default function DisparosPage() {
     setSelectedIds(next);
   };
 
+  async function dispararTemplate(lead: any, templateName: string) {
+    if (!account) return { ok: false, erro: 'Conta não encontrada' };
+
+    const template = templates.find(t => t.name === templateName);
+    if (!template) return { ok: false, erro: 'Template não encontrado' };
+
+    const bodyComponent = template.components?.find((c: any) => c.type === 'BODY');
+    const hasVariables = bodyComponent?.text?.includes('{{');
+
+    const components = hasVariables ? [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: lead.nome?.split(' ')[0] || 'você' }
+      ]
+    }] : undefined;
+
+    const rawPhone = (lead.whatsapp || '').replace(/\D/g, '');
+    const phone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+
+    const payload: any = {
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: template.language || 'pt_BR' },
+      }
+    };
+
+    if (components) payload.template.components = components;
+
+    try {
+      const res = await fetch(`https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${account.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) return { ok: false, erro: json.error?.message || 'Erro Meta API' };
+
+      const wamid = json.messages?.[0]?.id;
+      const now = new Date().toISOString();
+      const content = bodyComponent?.text?.replace(/{{1}}/g, lead.nome?.split(' ')[0] || 'você') || `[Template: ${templateName}]`;
+
+      // Busca conversa por telefone (fim do número)
+      const digits = rawPhone.slice(-9);
+      let { data: conv } = await supabase
+        .from('whatsapp_conversations')
+        .select('id')
+        .eq('org_id', orgId)
+        .ilike('contact_phone', `%${digits}`)
+        .maybeSingle();
+
+      if (!conv) {
+        const { data: newConv } = await supabase
+          .from('whatsapp_conversations')
+          .insert({
+            org_id: orgId,
+            contact_phone: phone,
+            contact_name: lead.nome,
+            lead_id: lead.id,
+            last_message: content,
+            last_message_at: now,
+          })
+          .select('id')
+          .single();
+        conv = newConv;
+      }
+
+      if (conv) {
+        await supabase.from('whatsapp_messages').insert({
+          org_id: orgId,
+          conversation_id: conv.id,
+          wamid,
+          direction: 'outbound',
+          type: 'template',
+          content,
+          status: 'sent',
+          created_at: now,
+        });
+
+        await supabase
+          .from('whatsapp_conversations')
+          .update({ last_message: content, last_message_at: now })
+          .eq('id', conv.id);
+      }
+
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, erro: err.message };
+    }
+  }
+
   const runDisparo = async () => {
-    if (!account) return;
+    if (!account || !selectedTemplateName) return;
     setShowConfirm(false);
     
     const selectedLeads = leads.filter(l => selectedIds.has(l.id));
@@ -176,87 +303,24 @@ export default function DisparosPage() {
 
     for (let i = 0; i < selectedLeads.length; i++) {
       const lead = selectedLeads[i];
-      const cleanPhone = (lead.whatsapp || '').replace(/\D/g, '');
-      const fullPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+      const result = await dispararTemplate(lead, selectedTemplateName);
       
-      try {
-        const payload = {
-          messaging_product: "whatsapp",
-          to: fullPhone,
-          type: "template",
-          template: {
-            name: selectedTemplate.name,
-            language: { code: "pt_BR" },
-            components: [{
-              type: "body",
-              parameters: [{ type: "text", text: lead.nome }]
-            }]
-          }
-        };
-
-        const res = await fetch(`https://graph.facebook.com/v18.0/${account.phone_number_id}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${account.token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error?.message || 'Erro na API da Meta');
-
-        const wamid = data.messages?.[0]?.id;
-
-        // 1. Update/Create Conversation
-        const { data: conv } = await supabase
-          .from('whatsapp_conversations')
-          .upsert({
-            org_id: orgId,
-            contact_phone: fullPhone,
-            contact_name: lead.nome,
-            lead_id: lead.id,
-            last_message: selectedTemplate.body.replace('{{1}}', lead.nome),
-            last_message_at: new Date().toISOString(),
-            session_active: false // Template doesn't open session usually, but status will tell
-          }, { onConflict: 'org_id,contact_phone' })
-          .select()
-          .single();
-
-        // 2. Insert Message
-        if (conv) {
-          await supabase.from('whatsapp_messages').insert({
-            org_id: orgId,
-            conversation_id: conv.id,
-            wamid: wamid,
-            direction: 'outbound',
-            type: 'template',
-            content: selectedTemplate.body.replace('{{1}}', lead.nome),
-            status: 'sent',
-            raw_payload: data
-          });
-        }
-
+      if (result.ok) {
         setProgress(prev => ({ ...prev, current: i + 1, success: prev.success + 1 }));
-      } catch (err: any) {
-        console.error('Erro no disparo:', err);
+      } else {
         setProgress(prev => ({
           ...prev,
           current: i + 1,
-          errors: [...prev.errors, { name: lead.nome, phone: fullPhone, error: err.message }]
+          errors: [...prev.errors, { name: lead.nome, phone: lead.whatsapp, error: result.erro }]
         }));
       }
 
-      // Delay 500ms
-      if (i < selectedLeads.length - 1) {
-        await new Promise(r => setTimeout(r, 500));
-      }
+      if (i < selectedLeads.length - 1) await new Promise(r => setTimeout(r, 400));
     }
 
     setProgress(prev => ({ ...prev, status: 'finished' }));
     toast.success('Disparo concluído!');
-    fetchData(); // Refresh list
+    fetchData();
   };
 
   // ── Styles ──
@@ -355,13 +419,53 @@ export default function DisparosPage() {
               {/* Template Card */}
               <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, color: txt, margin: '0 0 16px' }}>Template Selecionado</h3>
-                <div style={{ padding: '16px', background: dark ? '#1a1a1f' : '#f8fafc', borderRadius: '12px', border: `1px solid ${border}` }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#2563eb', marginBottom: '8px', textTransform: 'uppercase' }}>{selectedTemplate.name}</div>
-                  <div style={{ fontSize: '14px', color: txt, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                    {selectedTemplate.body.replace('{{1}}', '[Nome do Lead]')}
+                
+                <select 
+                  value={selectedTemplateName} 
+                  onChange={(e) => setSelectedTemplateName(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? '#1a1a1f' : '#fff', color: txt, marginBottom: '16px', outline: 'none' }}
+                >
+                  {templates.map(t => (
+                    <option key={t.name} value={t.name} disabled={t.status !== 'APPROVED'}>
+                      {t.name} ({t.status === 'APPROVED' ? '✅' : '⏳'})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedTemplate && (
+                  <div style={{ padding: '16px', background: dark ? '#1a1a1f' : '#f8fafc', borderRadius: '12px', border: `1px solid ${border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>{selectedTemplate.name}</div>
+                      <span style={{ fontSize: '11px', color: selectedTemplate.status === 'APPROVED' ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                        {selectedTemplate.status === 'APPROVED' ? '✅ Ativo' : '⏳ Em análise'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '14px', color: txt, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                      {selectedTemplate.components?.find((c: any) => c.type === 'BODY')?.text?.replace(/{{1}}/g, '[Nome]')}
+                    </div>
                   </div>
-                </div>
-                <p style={{ fontSize: '11px', color: txtMid, marginTop: '12px' }}>* Este template é enviado via API oficial e requer aprovação da Meta.</p>
+                )}
+                
+                <button
+                  onClick={async () => {
+                    const meuNumero = prompt('Digite seu número (com DDD, sem 55):');
+                    if (!meuNumero || !selectedTemplateName) return;
+                    const leadTeste = { nome: 'Teste', whatsapp: meuNumero };
+                    const result = await dispararTemplate(leadTeste, selectedTemplateName);
+                    if (result.ok) toast.success('Teste enviado!');
+                    else toast.error('Erro: ' + result.erro);
+                  }}
+                  style={{
+                    width: '100%', marginTop: '16px', padding: '10px', borderRadius: '10px',
+                    border: `1px solid ${border}`, background: 'transparent',
+                    color: txtMid, fontSize: '13px', cursor: 'pointer',
+                    fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                  }}
+                >
+                  🧪 Testar com meu número
+                </button>
+
+                <p style={{ fontSize: '11px', color: txtMid, marginTop: '12px' }}>* Apenas templates APROVADOS podem ser disparados.</p>
               </div>
 
               {/* Action Card */}

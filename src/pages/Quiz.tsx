@@ -31,7 +31,7 @@ const DEFAULT_DEPOIMENTOS = [
   { nome: 'Carla Ferraz', handle: '@carlamferraz_', texto: 'Sou mãe de 2 filhos e trabalho de casa. As semi joias me deram liberdade financeira e tempo com minha família!' },
 ];
 
-const BASE_URL = 'https://floowdashboard.vercel.app';
+const BASE_URL = 'https://www.floowcrm.online';
 
 const tokens = {
   radius: { sm: 8, md: 12, lg: 16 },

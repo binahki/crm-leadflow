@@ -56,6 +56,9 @@ interface WaMessage {
   content: string | null;
   status: string | null;
   created_at: string;
+  media_id?: string | null;
+  media_url?: string | null;
+  media_mime_type?: string | null;
 }
 
 const QUIZ_LABELS: Record<string, string> = {
@@ -102,9 +105,11 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 function getMediaSrc(msg: any, orgId: string): string | null {
   if (msg.media_id) {
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
     return `${SUPABASE_URL}/functions/v1/whatsapp-webhook?action=media&media_id=${msg.media_id}&org_id=${orgId}`;
   }
   if (msg.media_url) return msg.media_url;
+  if (msg.content && (msg.content.startsWith('http://') || msg.content.startsWith('https://'))) return msg.content;
   return null;
 }
 export const WA_COLORS = {
@@ -394,6 +399,8 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
   const [showQuickEditor, setShowQuickEditor] = useState(false);
 
 
+  const [pendingLead, setPendingLead] = useState<any>(null);
+
   const fetchConvs = useCallback(async () => {
     const { data } = await supabase
       .from('whatsapp_conversations')
@@ -426,9 +433,33 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
   useEffect(() => {
     if (!initialPhone || !orgId || conversations.length === 0) return;
     const cleanPhone = initialPhone.replace(/\D/g, '');
-    const existing = conversations.find(c => c.contact_phone === cleanPhone || c.contact_phone.endsWith(cleanPhone.slice(-9)));
-    if (existing && selectedId !== existing.id) {
-      setSelectedId(existing.id);
+    const existing = conversations.find(c => 
+      c.contact_phone === cleanPhone || 
+      c.contact_phone.endsWith(cleanPhone.slice(-9))
+    );
+    if (existing) {
+      if (selectedId !== existing.id) {
+        setSelectedId(existing.id);
+        setPendingLead(null);
+      }
+    } else {
+      // Busca o lead para exibir estado vazio
+      supabase.from('leads')
+        .select('*')
+        .or(`whatsapp.eq.${cleanPhone},whatsapp.eq.${cleanPhone.slice(-11)}`)
+        .eq('org_id', orgId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setPendingLead({
+              id: 'pending',
+              contact_phone: cleanPhone,
+              contact_name: data.nome,
+              lead: data
+            });
+            setSelectedId(null);
+          }
+        });
     }
   }, [initialPhone, conversations, orgId, selectedId]);
 
@@ -639,7 +670,11 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
           quickStatusId={quickStatusId} onSetQuickStatus={setQuickStatusId}
           onUpdateLead={() => fetchConvs()}
           orgId={orgId}
-          onSelect={(id: string) => { setSelectedId(id); navigate(`/whatsapp?conversation=${id}`, { replace: true }); }} 
+          onSelect={(id: string) => { 
+            setSelectedId(id); 
+            setPendingLead(null); 
+            navigate(`/whatsapp?conversation=${id}`, { replace: true }); 
+          }} 
         />
 
       </div>
@@ -662,25 +697,46 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
                Configurar API Agora
              </button>
            </div>
-        ) : !selectedId ? (
+        ) : !selectedId && !pendingLead ? (
           <EmptyState colors={colors} />
         ) : (
           <>
             <ChatHeader 
-              colors={colors} conv={activeConv} messages={messages} theme={theme}
-              onBack={isMobile ? () => setSelectedId(null) : undefined}
+              colors={colors} 
+              conv={activeConv || pendingLead} 
+              messages={messages} theme={theme}
+              onBack={isMobile ? () => { setSelectedId(null); setPendingLead(null); } : undefined}
               onToggleInfo={() => { setShowInfo(!showInfo); setShowQuickEditor(false); }}
               onToggleQuickEditor={() => { setShowQuickEditor(v => !v); setShowInfo(true); }}
             />
-            <MessageArea 
-              colors={colors} messages={messages} theme={theme}
-              scrollRef={scrollRef}
-            />
+            {pendingLead ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center" style={{ background: colors.chatBg }}>
+                <div className="w-16 h-16 mb-6 text-blue-500 opacity-20"><Zap size={64} /></div>
+                <h2 className="text-xl font-bold mb-2">Iniciar Conversa com {pendingLead.contact_name}</h2>
+                <p className="text-[14px] text-gray-500 max-w-sm mb-8">
+                  Este lead ainda não possui uma conversa ativa. Envie um modelo aprovado para iniciar o contato oficial.
+                </p>
+                <button 
+                  onClick={() => setShowTemplates(true)}
+                  className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl flex items-center gap-2"
+                >
+                  <Send size={18} /> Enviar Primeiro Modelo
+                </button>
+              </div>
+            ) : (
+              <MessageArea 
+                colors={colors} messages={messages} theme={theme}
+                scrollRef={scrollRef}
+                orgId={orgId}
+              />
+            )}
             <ChatInput 
-              colors={colors} orgId={orgId} conv={activeConv} account={account}
-              isExpired={isExpired} messages={messages}
-              onSent={() => { fetchMessages(); fetchConvs(); }}
-              lead={activeConv?.lead}
+              colors={colors} 
+              orgId={orgId} 
+              conv={activeConv || pendingLead} 
+              account={account}
+              onSent={() => { fetchMessages(); fetchConvs(); setPendingLead(null); }}
+              isExpired={isExpired || !!pendingLead}
             />
           </>
         )}
@@ -971,7 +1027,10 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuic
 }
 
 
-function MessageArea({ colors, messages, conv, lead, theme, scrollRef }: { colors: any, messages: WaMessage[], conv: any, lead: any, theme: string, scrollRef: React.RefObject<HTMLDivElement> }) {
+function MessageArea({ colors, messages, theme, scrollRef, orgId }: { 
+  colors: any, messages: WaMessage[], theme: string, 
+  scrollRef: React.RefObject<HTMLDivElement>, orgId: string 
+}) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   
   useEffect(() => {
@@ -1020,7 +1079,7 @@ function MessageArea({ colors, messages, conv, lead, theme, scrollRef }: { color
             {g.label}
           </div>
           {g.msgs.map(m => (
-            <MessageBubble key={m.id} msg={m} colors={colors} onImageClick={setLightboxSrc} />
+            <MessageBubble key={m.id} msg={m} colors={colors} onImageClick={setLightboxSrc} orgId={orgId} />
           ))}
         </div>
       ))}
@@ -1052,8 +1111,7 @@ function MessageArea({ colors, messages, conv, lead, theme, scrollRef }: { color
             onClick={e => e.stopPropagation()}
             style={{
               maxWidth: '90vw', maxHeight: '90vh',
-              borderRadius: '12px',
-              objectFit: 'contain',
+              borderRadius: '12px', objectFit: 'contain',
               boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
             }}
           />
@@ -1084,14 +1142,15 @@ function MsgStatus({ status }: { status: string | null }) {
   );
 }
 
-function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: any, onImageClick: (src: string) => void }) {
+function MessageBubble({ msg, colors, onImageClick, orgId }: { msg: WaMessage, colors: any, onImageClick: (src: string) => void, orgId: string }) {
   const { theme } = useTheme();
-  const { orgId: msgOrgId } = useOrgId();
   const isMe = msg.direction === 'outbound';
   const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
-  function renderMensagemConteudo(msg: WaMessage, orgId: string, isDark: boolean) {
-    const src = getMediaSrc(msg, orgId);
+  console.log('[bubble] orgId:', orgId, 'msg.media_id:', (msg as any).media_id, 'msg.type:', msg.type);
+
+  function renderMensagemConteudo(msg: WaMessage, currentOrgId: string, isDark: boolean) {
+    const src = getMediaSrc(msg, currentOrgId);
 
     // IMAGEM
     if (msg.type === 'image') {
@@ -1105,15 +1164,18 @@ function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: 
             onClick={() => onImageClick?.(src)}
             onError={e => { 
               const el = e.currentTarget as HTMLImageElement;
-              el.style.display = 'none';
-              const parent = el.parentElement;
-              if (parent) {
-                const span = document.createElement('span');
-                span.innerText = '🖼️ Imagem (Erro ao carregar)';
-                span.style.color = '#9ca3af';
-                span.style.fontStyle = 'italic';
-                span.style.fontSize = '13px';
-                parent.appendChild(span);
+              // Tenta carregar direto se o proxy falhar
+              if (msg.media_url && el.src !== msg.media_url) {
+                el.src = msg.media_url;
+              } else {
+                el.style.display = 'none';
+                const parent = el.parentElement;
+                if (parent) {
+                  const div = document.createElement('div');
+                  div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px;';
+                  div.innerHTML = '🖼️ <span style="font-size:13px;color:#9ca3af">Imagem não disponível</span>';
+                  parent.appendChild(div);
+                }
               }
             }}
           />
@@ -1220,7 +1282,7 @@ function MessageBubble({ msg, colors, onImageClick }: { msg: WaMessage, colors: 
         position: 'relative',
         color: isMe ? (theme === 'dark' ? '#e9edef' : '#111') : (theme === 'dark' ? '#f4f4f5' : '#111')
       }}>
-        {renderMensagemConteudo(msg, msgOrgId || '', theme === 'dark')}
+        {renderMensagemConteudo(msg as any, orgId, theme === 'dark')}
         {msg.type !== 'sticker' && msg.type !== 'reaction' && (
           <div style={{ 
             display: 'flex', 
@@ -1967,10 +2029,31 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Erro na API');
 
+      let conversationId = conv.id;
+
+      // Se for um lead pendente (sem conversa), cria a conversa primeiro
+      if (conversationId === 'pending') {
+        const { data: newConv, error: convErr } = await supabase
+          .from('whatsapp_conversations')
+          .insert({
+            org_id: acc.org_id,
+            contact_phone: fullPhone,
+            contact_name: leadName,
+            lead_id: conv.lead?.id,
+            last_message: temp.body.replace('{{1}}', leadName),
+            last_message_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+        
+        if (convErr) throw convErr;
+        conversationId = newConv.id;
+      }
+
       // Registrar no Supabase
       const { error: msgErr } = await supabase.from('whatsapp_messages').insert({
         org_id: acc.org_id,
-        conversation_id: conv.id,
+        conversation_id: conversationId,
         wamid: data.messages?.[0]?.id,
         direction: 'outbound',
         type: 'template',
@@ -1981,10 +2064,12 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
 
       if (msgErr) throw msgErr;
 
-      await supabase.from('whatsapp_conversations').update({
-        last_message: temp.body.replace('{{1}}', leadName),
-        last_message_at: new Date().toISOString()
-      }).eq('id', conv.id);
+      if (conv.id !== 'pending') {
+        await supabase.from('whatsapp_conversations').update({
+          last_message: temp.body.replace('{{1}}', leadName),
+          last_message_at: new Date().toISOString()
+        }).eq('id', conversationId);
+      }
 
       toast.success('Modelo enviado com sucesso!');
       onSent();
