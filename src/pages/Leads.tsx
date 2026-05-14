@@ -366,6 +366,10 @@ function LeadsPage() {
 
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const bgCancelRef = useRef(false);
+  const INITIAL_SIZE = 200;
+  const PAGE_SIZE = 100;
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState('all');
@@ -411,32 +415,82 @@ function LeadsPage() {
     if (status) setStatusFilter(status);
   }, []);
 
+  const loadRestInBackground = useCallback(async (total: number, loaded: number) => {
+    bgCancelRef.current = false;
+    let from = loaded;
+    while (from < total) {
+      if (bgCancelRef.current) break;
+      const to = Math.min(from + PAGE_SIZE - 1, total - 1);
+      const { data } = await supabase
+        .from('leads')
+        .select(`
+          id, nome, whatsapp, cidade, status, created_at,
+          utm_source, utm_campaign, score, faixa,
+          observacoes, motivo_reprovacao, ultimo_status_change,
+          org_id, wa_sent
+        `)
+        .order('created_at', { ascending: false })
+        .eq('org_id', orgId)
+        .range(from, to);
+      if (bgCancelRef.current) break;
+      if (data?.length) setAllLeads(prev => [...prev, ...(data as unknown as Lead[])]);
+      from += PAGE_SIZE;
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }, [orgId]);
+
   const fetchLeads = useCallback(async () => {
     if (!orgReady || !orgId) return;
+    bgCancelRef.current = true; // cancela qualquer background load anterior
     setIsLoading(true);
     setAllLeads([]);
-    const PAGE = 1000;
-    let from = 0;
-    let all: Lead[] = [];
-    while (true) {
-      const { data, error } = await supabase
-        .from('leads').select('*').order('created_at', { ascending: false })
-        .eq('org_id', orgId).range(from, from + PAGE - 1);
-      if (error) { toast.error(`Erro: ${error.message}`); break; }
-      if (data?.length) all = all.concat(data as unknown as Lead[]);
-      if (!data || data.length < PAGE) break;
-      from += PAGE;
-    }
-    setAllLeads(all);
-    setIsLoading(false);
-  }, [orgId, orgReady]);
 
-  useEffect(() => { fetchLeads(); }, [fetchLeads]);
+    // Count total (query leve — só id)
+    const { count } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId);
+    setTotalCount(count || 0);
+
+    // Busca os primeiros 200 imediatamente
+    const { data, error } = await supabase
+      .from('leads')
+      .select(`
+        id, nome, whatsapp, cidade, status, created_at,
+        utm_source, utm_campaign, score, faixa,
+        observacoes, motivo_reprovacao, ultimo_status_change,
+        org_id, wa_sent
+      `)
+      .order('created_at', { ascending: false })
+      .eq('org_id', orgId)
+      .range(0, INITIAL_SIZE - 1);
+
+    if (error) { toast.error('Erro ao carregar leads'); setIsLoading(false); return; }
+    setAllLeads((data || []) as unknown as Lead[]);
+    setIsLoading(false);
+
+    // Carrega o restante em background sem travar a UI
+    if (count && count > INITIAL_SIZE) {
+      loadRestInBackground(count, INITIAL_SIZE);
+    }
+  }, [orgId, orgReady, loadRestInBackground]);
+
+  useEffect(() => {
+    if (!orgReady || !orgId) return;
+    fetchLeads();
+  }, [orgId, orgReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Abre o drawer com dados parciais imediatamente, depois enriquece com quiz_respostas
+  const handleViewLead = useCallback(async (lead: Lead) => {
+    setViewingLead(lead);
+    const { data } = await supabase.from('leads').select('*').eq('id', lead.id).single();
+    if (data) setViewingLead(data as unknown as Lead);
+  }, []);
 
   useEffect(() => {
     if (!orgReady || !orgId) return;
     const ch = supabase.channel(`leads-rt2-${orgId}`)
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ const novo=p.new as Lead; setAllLeads(prev=>[novo,...prev]); toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'}); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ const novo=p.new as Lead; setAllLeads(prev=>[novo,...prev]); setTotalCount(c=>c+1); toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'}); })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l)); })
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{ setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id)); })
       .subscribe();
@@ -575,12 +629,12 @@ function LeadsPage() {
   const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
   return (
-    <AppLayout leadCount={allLeads.length}>
+    <AppLayout leadCount={totalCount}>
       <div style={{ padding:isMobile?'12px':'28px', background:bg, minHeight:'100vh' }}>
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
-          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
+          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({totalCount})</span></h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
@@ -751,7 +805,7 @@ function LeadsPage() {
                   onTouchEnd={()=>pressTimer.current&&clearTimeout(pressTimer.current)}
                   onTouchMove={()=>pressTimer.current&&clearTimeout(pressTimer.current)}
                   onContextMenu={e=>e.preventDefault()}
-                  onClick={()=>{if(longPressTriggered.current){longPressTriggered.current=false;return;}if(selectedIds.size>0){const n=new Set(selectedIds);if(n.has(lead.id))n.delete(lead.id);else n.add(lead.id);setSelectedIds(n);}else{setViewingLead(lead);}}}
+                  onClick={()=>{if(longPressTriggered.current){longPressTriggered.current=false;return;}if(selectedIds.size>0){const n=new Set(selectedIds);if(n.has(lead.id))n.delete(lead.id);else n.add(lead.id);setSelectedIds(n);}else{handleViewLead(lead);}}}
                   style={{background:cardBg,borderRadius:'12px',padding:'12px 14px',border:`1px solid ${sel?'#2563eb':border}`,boxShadow:sel?'0 0 0 2px rgba(37,99,235,0.2)':'0 1px 4px rgba(0,0,0,0.04)',cursor:'pointer',transition:'all 0.12s',userSelect:'none',WebkitUserSelect:'none',touchAction:'pan-y'}}
                 >
                   <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
@@ -818,12 +872,20 @@ function LeadsPage() {
                 </tr>
               </thead>
               <tbody>
-                {isLoading?(<tr><td colSpan={8} className="px-6 py-12 text-center"><Loader2 className={`w-6 h-6 animate-spin mx-auto ${muted}`}/></td></tr>)
+                {isLoading?([...Array(10)].map((_,i)=>(
+                  <tr key={i} className={`border-b ${divider}`}>
+                    <td className="pl-4 pr-2 py-3"><div style={{width:'15px',height:'15px',borderRadius:'3px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></td>
+                    <td className="px-3 py-3"><div style={{display:'flex',alignItems:'center',gap:'7px'}}><div style={{width:'28px',height:'28px',borderRadius:'50%',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${90+Math.floor((i*37)%70)}px`}}/></div></td>
+                    {[60,90,110,90,80].map((w,j)=>(<td key={j} className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${w}px`}}/></td>))}
+                    <td className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:'80px'}}/></td>
+                    <td className="px-3 py-3"><div style={{display:'flex',gap:'5px'}}><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></div></td>
+                  </tr>
+                )))
                 :paginatedLeads.length===0?(<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
                 :paginatedLeads.map((lead,idx)=>{
                   const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined; const la=lead as any;
                   return(
-                    <tr key={lead.id} className={`${sel?(dark?'bg-blue-950/30':'bg-blue-50/60'):idx%2===0?'':(dark?'bg-[#0f0f11]':'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={()=>setViewingLead(lead)}>
+                    <tr key={lead.id} className={`${sel?(dark?'bg-blue-950/30':'bg-blue-50/60'):idx%2===0?'':(dark?'bg-[#0f0f11]':'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={()=>handleViewLead(lead)}>
                       <td className="pl-4 pr-2 py-3" onClick={e=>e.stopPropagation()}>
                         <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);if(!e.target.checked)setAllSystemSelected(false);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
                       </td>

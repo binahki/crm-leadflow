@@ -1228,9 +1228,14 @@ export default function QuizBuilderPage() {
   const fixedCardActive = (id: string) => selectedPageId === id;
 
   // ── Coleta config for collect panel ────────────────────────────────────────
-  const currentColetaConfig: ColetaCampo[] = quiz.coleta_config?.length
-    ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
-    : [...DEFAULT_COLETA_CONFIG];
+  // Merge stored config with DEFAULT to guarantee all fields are always present
+  const currentColetaConfig: ColetaCampo[] = (() => {
+    if (!quiz.coleta_config?.length) return [...DEFAULT_COLETA_CONFIG];
+    const stored = [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem);
+    const storedCampos = new Set(stored.map(c => c.campo));
+    const missing = DEFAULT_COLETA_CONFIG.filter(d => !storedCampos.has(d.campo));
+    return [...stored, ...missing];
+  })();
 
   // ── Right panel ────────────────────────────────────────────────────────────
   function renderRightPanel() {
@@ -1665,97 +1670,78 @@ export default function QuizBuilderPage() {
       );
     }
 
-    // COLLECT — FEATURE 3: Visual coleta config editor
     if (selectedPageType === 'collect') {
+      const configToShow: ColetaCampo[] = (() => {
+        if (!quiz.coleta_config?.length) return [...DEFAULT_COLETA_CONFIG];
+        const stored = [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem);
+        const storedCampos = new Set(stored.map((c: ColetaCampo) => c.campo));
+        const missing = DEFAULT_COLETA_CONFIG.filter(d => !storedCampos.has(d.campo));
+        return [...stored, ...missing];
+      })();
       return (
-        <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 4px' }}>Editor de campos</p>
-          {currentColetaConfig.map(cfg => {
-            const isExpanded = expandedColetaCampo === cfg.campo;
+        <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>
+            Campos do formulário
+          </p>
+          {configToShow.map((cfg: ColetaCampo) => {
+            const isExp = expandedColetaCampo === cfg.campo;
+            const emoji = ({ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' } as Record<string,string>)[cfg.campo] ?? '📝';
             return (
-              <div key={cfg.campo} style={{ borderRadius: tokens.radius.md, border: `1px solid ${isExpanded ? '#2563eb' : border}`, background: cardBg, overflow: 'hidden', transition: 'border-color 0.15s' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => setExpandedColetaCampo(isExpanded ? null : cfg.campo)}>
-                  <span style={{ fontSize: '13px' }}>
-                    {{ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' }[cfg.campo] ?? '📝'}
-                  </span>
-                  <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: textMain }}>{cfg.label}</span>
-                  {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700 }}>obrigatório</span>}
-                  {isExpanded
-                    ? <ChevronUp style={{ width: '14px', height: '14px', color: textMut }} />
-                    : <ChevronDown style={{ width: '14px', height: '14px', color: textMut }} />
-                  }
+              <div key={cfg.campo} style={{ borderRadius: '10px', border: `1px solid ${isExp ? '#2563eb' : border}`, background: cardBg, flexShrink: 0, width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', cursor: 'pointer', userSelect: 'none' as const }}
+                  onClick={() => setExpandedColetaCampo(isExp ? null : cfg.campo)}>
+                  <span style={{ fontSize: '14px', flexShrink: 0 }}>{emoji}</span>
+                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
+                  {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700, flexShrink: 0, marginRight: '4px' }}>obrigatório</span>}
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.22s ease' }}>
+                    <path d="M3 5L7 9L11 5" stroke={textMut} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </div>
-                {/* Expanded editor */}
-                {isExpanded && (
-                  <div style={{ padding: '0 12px 12px', borderTop: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '10px' }}>
+                <div style={{ maxHeight: isExp ? '260px' : '0px', overflow: 'hidden', transition: 'max-height 0.25s ease' }}>
+                  <div style={{ padding: '12px', borderTop: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box' as const }}>
                     <div>
                       <label style={lbl}>Label</label>
-                      <input value={cfg.label}
-                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, label: e.target.value } : c))}
-                        style={iStyle} />
+                      <input value={cfg.label} onChange={e => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, label: e.target.value } : c))} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
                     </div>
                     <div>
                       <label style={lbl}>Placeholder</label>
-                      <input value={cfg.placeholder}
-                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, placeholder: e.target.value } : c))}
-                        style={iStyle} />
+                      <input value={cfg.placeholder} onChange={e => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, placeholder: e.target.value } : c))} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '12px', color: textMain }}>Obrigatório</span>
-                      <div style={{ width: '30px', height: '16px', borderRadius: 99, background: cfg.obrigatorio ? '#2563eb' : (isDark ? '#333' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}
-                        onClick={() => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, obrigatorio: !c.obrigatorio } : c))}>
-                        <div style={{ position: 'absolute', top: '2px', left: cfg.obrigatorio ? '15px' : '2px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)' }} />
+                      <span style={{ fontSize: '13px', color: textMain }}>Obrigatório</span>
+                      <div onClick={() => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, obrigatorio: !c.obrigatorio } : c))}
+                        style={{ width: '34px', height: '20px', borderRadius: '99px', background: cfg.obrigatorio ? '#2563eb' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+                        <div style={{ position: 'absolute', top: '3px', left: cfg.obrigatorio ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
                       </div>
                     </div>
-                    <div>
-                      <label style={lbl}>Ordem</label>
-                      <input type="number" min={1} max={10} value={cfg.ordem}
-                        onChange={e => updateColetaConfig(currentColetaConfig.map(c => c.campo === cfg.campo ? { ...c, ordem: Number(e.target.value) } : c))}
-                        style={{ ...iStyle, width: '70px' }} />
-                    </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
-          
-          <div style={{ padding: '16px', borderRadius: '12px', background: hexToRgba('#2563eb', 0.04), border: `1px solid ${hexToRgba('#2563eb', 0.1)}`, marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ marginTop: '8px', padding: '14px', borderRadius: '12px', background: hexToRgba('#2563eb', 0.04), border: `1px solid ${hexToRgba('#2563eb', 0.12)}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: textMain }}>WhatsApp</span>
-                <span style={{ fontSize: '11px', color: textMut }}>Configurações de contato</span>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block' }}>Redirecionar para WhatsApp</span>
+                <span style={{ fontSize: '11px', color: textMut }}>Após envio do formulário</span>
               </div>
-              <div onClick={() => updateQuizField('whatsapp_redirecionar_direto', !quiz.whatsapp_redirecionar_direto)} style={{ width: '32px', height: '18px', borderRadius: 99, background: quiz.whatsapp_redirecionar_direto ? '#2563eb' : '#d1d5db', position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}>
-                <div style={{ position: 'absolute', top: '2px', left: quiz.whatsapp_redirecionar_direto ? '16px' : '2px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
+              <div onClick={() => updateQuizField('whatsapp_redirecionar_direto', !quiz.whatsapp_redirecionar_direto)}
+                style={{ width: '34px', height: '20px', borderRadius: '99px', background: quiz.whatsapp_redirecionar_direto ? '#2563eb' : '#d1d5db', position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}>
+                <div style={{ position: 'absolute', top: '3px', left: quiz.whatsapp_redirecionar_direto ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
               </div>
             </div>
-            
-            <div style={{ opacity: quiz.whatsapp_redirecionar_direto ? 1 : 0.5, transition: 'opacity 0.2s', pointerEvents: quiz.whatsapp_redirecionar_direto ? 'auto' : 'none' }}>
-              <div onClick={() => updateQuizField('whatsapp_redirecionar_direto', !quiz.whatsapp_redirecionar_direto)} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', cursor: 'pointer' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: quiz.whatsapp_redirecionar_direto ? '#2563eb' : 'transparent' }}>
-                   {quiz.whatsapp_redirecionar_direto && <Check size={12} color="#fff" />}
-                </div>
-                <span style={{ fontSize: '11px', color: textMut }}>Redirecionar direto após formulário?</span>
-              </div>
-
+            {quiz.whatsapp_redirecionar_direto && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
-                  <label style={lbl}>Número do WhatsApp (DDI + DDD + Num)</label>
-                  <input value={quiz.redirect_whatsapp || ''}
-                    onChange={e => updateQuizField('redirect_whatsapp', e.target.value)}
-                    placeholder="5511999999999" style={iStyle} />
+                  <label style={lbl}>Número (DDI + DDD + Número)</label>
+                  <input value={quiz.redirect_whatsapp || ''} onChange={e => updateQuizField('redirect_whatsapp', e.target.value)} placeholder="5511999999999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
                 </div>
                 <div>
                   <label style={lbl}>Mensagem automática</label>
-                  <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''}
-                    onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)}
-                    placeholder="Olá, acabei de finalizar o quiz..." 
-                    style={{ ...iStyle, height: '60px', resize: 'none' }} />
+                  <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''} onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       );

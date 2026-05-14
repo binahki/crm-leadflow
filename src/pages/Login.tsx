@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -75,20 +76,32 @@ export default function LoginPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    const { error } = await signIn(email, password);
-    if (error) {
-      console.error('Erro de login:', error.message, error.status);
-      if (error.status === 400 || error.message.includes('Invalid login credentials')) {
-        toast.error('Email ou senha incorretos.');
-      } else if (error.message.toLowerCase().includes('email not confirmed')) {
-        toast.error('Confirme seu email antes de entrar.');
-      } else if (error.status === 0 || error.message.toLowerCase().includes('fetch') || error.message.toLowerCase().includes('network')) {
-        toast.error('Sem conexão. Verifique sua internet e tente novamente.');
-      } else {
-        toast.error('Erro ao entrar. Tente novamente em alguns instantes.');
+    try {
+      const loginPromise = supabase.auth.signInWithPassword({ email, password });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 10000)
+      );
+      const { data: _data, error } = await Promise.race([loginPromise, timeoutPromise]);
+      if (error) {
+        console.error('Erro de login:', error.message, error.status);
+        if (error.status === 400 || error.message.includes('Invalid login credentials')) {
+          toast.error('Email ou senha incorretos.');
+        } else if (error.message.toLowerCase().includes('email not confirmed')) {
+          toast.error('Confirme seu email antes de entrar.');
+        } else {
+          toast.error('Erro ao conectar. Tente novamente em alguns segundos.');
+        }
       }
+      // login ok — onAuthStateChange cuida da navegação
+    } catch (err: any) {
+      if (err.message === 'timeout') {
+        toast.error('Conexão lenta. Verifique sua internet e tente novamente.');
+      } else {
+        toast.error('Erro inesperado. Tente novamente.');
+      }
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   async function handleForgot(e: React.FormEvent) {

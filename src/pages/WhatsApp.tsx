@@ -192,6 +192,33 @@ const formatPhone = (phone: string) => {
   return phone;
 };
 
+// ── Message formatter ─────────────────────────────────────────────────────────
+function formatMessage(text: string): string {
+  // 1. Escapa HTML para evitar XSS
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  return escaped
+    // 2. Links (https:// ou http://)
+    .replace(
+      /(https?:\/\/[^\s<&]+)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;word-break:break-all;">$1</a>'
+    )
+    // 3. Negrito (*texto*)
+    .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+    // 4. Itálico (_texto_)
+    .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+    // 5. Tachado (~texto~)
+    .replace(/~([^~\n]+)~/g, '<del>$1</del>')
+    // 6. Monospace (```texto```)
+    .replace(/```([^`]+)```/g, '<code style="font-family:monospace;background:rgba(0,0,0,0.08);padding:1px 4px;border-radius:3px;">$1</code>')
+    // 7. Quebras de linha
+    .replace(/\n/g, '<br/>');
+}
+
 // ── Components ────────────────────────────────────────────────────────────────
 
 export default function WhatsAppPage() {
@@ -934,9 +961,10 @@ function MessageBubble({ msg, colors }: { msg: WaMessage, colors: any }) {
           border: `1px solid ${isMe ? 'transparent' : colors.border}`
         }}
       >
-        <div className="whitespace-pre-wrap break-words pr-12 min-w-[50px]">
-          {msg.content}
-        </div>
+        <div
+          className="break-words pr-12 min-w-[50px]"
+          dangerouslySetInnerHTML={{ __html: formatMessage(msg.content || '') }}
+        />
         <div className="absolute bottom-1 right-2 flex items-center gap-1">
           <span className="text-[8.5px] text-gray-500/70 font-medium">{time}</span>
           {isMe && (
