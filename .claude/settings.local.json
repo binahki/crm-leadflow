@@ -12,7 +12,8 @@
       "Bash(npm run:*)",
       "Bash(find:*)",
       "Bash(cat /c/Users/Murilo/leadflow-dashboard/supabase/migrations/*.sql)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(wc -l /c/Users/Murilo/leadflow-dashboard/src/pages/*.tsx)"
     ]
   }
 }

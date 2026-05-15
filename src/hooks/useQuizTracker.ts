@@ -18,6 +18,8 @@ function getUTMs() {
     utm_source: p.get('utm_source') || undefined,
     utm_medium: p.get('utm_medium') || undefined,
     utm_campaign: p.get('utm_campaign') || undefined,
+    utm_content: p.get('utm_content') || undefined,
+    utm_term: p.get('utm_term') || undefined,
   };
 }
 
@@ -25,8 +27,8 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
   const sessionIdRef = useRef<string>(generateSessionId());
   const iniciadoRef = useRef(false);
   const respostasRef = useRef<Record<string, any>>({});
-  // Ref para sempre ter o valor mais atual de totalEtapas dentro dos callbacks
   const totalEtapasRef = useRef<number>(totalEtapas || 0);
+
   useEffect(() => { totalEtapasRef.current = totalEtapas || 0; }, [totalEtapas]);
 
   const iniciarSessao = useCallback(async () => {
@@ -37,7 +39,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       session_id: sessionIdRef.current,
       quiz_slug: quizSlug,
       org_id: orgId || null,
-      total_etapas: totalEtapas || 0,
+      total_etapas: totalEtapasRef.current,
       ultima_etapa: 0,
       concluiu: false,
       virou_lead: false,
@@ -45,7 +47,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       user_agent: navigator.userAgent.slice(0, 200),
       ...getUTMs(),
     }, { onConflict: 'session_id' });
-  }, [quizSlug, orgId, totalEtapas]);
+  }, [quizSlug, orgId]);
 
   const registrarEtapa = useCallback(async (etapaIndex: number, pergunta?: string, resposta?: any) => {
     if (!iniciadoRef.current) await iniciarSessao();
@@ -54,18 +56,26 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       respostasRef.current[pergunta] = resposta;
     }
 
-    await supabase.from('quiz_sessoes').update({
+    // Garante que total_etapas seja atualizado se ainda estava 0
+    const updatePayload: any = {
       ultima_etapa: etapaIndex,
       respostas: respostasRef.current,
       updated_at: new Date().toISOString(),
-    }).eq('session_id', sessionIdRef.current);
+    };
+    if (totalEtapasRef.current > 0) {
+      updatePayload.total_etapas = totalEtapasRef.current;
+    }
+
+    await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
   }, [iniciarSessao]);
 
   const marcarConcluido = useCallback(async (leadId?: string | number) => {
+    const total = totalEtapasRef.current;
     await supabase.from('quiz_sessoes').update({
       concluiu: true,
-      // ultima_etapa sempre recebe o total real — nunca 99 nem valor errado
-      ultima_etapa: totalEtapasRef.current,
+      // ultima_etapa sempre recebe o total real — NUNCA 98, 99 ou valor errado
+      ultima_etapa: total > 0 ? total : undefined,
+      total_etapas: total > 0 ? total : undefined,
       virou_lead: !!leadId,
       lead_id: leadId || null,
       updated_at: new Date().toISOString(),

@@ -203,7 +203,12 @@ export default function QuizPublico() {
     setSelectedOpcao(null);
     setSelectedOpcoes([]);
 
-    if (hasReprova) { setPhase('reprovado'); return; }
+    if (hasReprova) {
+      registrarEtapa(currentIdx + 1, pergunta.texto, 'Reprovada imediata');
+      marcarConcluido(undefined);
+      setPhase('reprovado');
+      return;
+    }
 
     const newVisible = todasPerguntas.filter(p => {
       if (!p.condicao_pergunta_id) return true;
@@ -255,6 +260,7 @@ export default function QuizPublico() {
           setPhase('aprovado_form');
           registrarEtapa(newVisible.length + 1, 'Formulário', 'Viu formulário');
         } else {
+          marcarConcluido(undefined);
           setPhase('reprovado');
         }
       }, duration);

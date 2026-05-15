@@ -265,17 +265,35 @@ export default function Dashboard() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const _initMetaKey = orgId ? `meta_dash_${orgId}_today` : null;
-  const _initMetaCached = _initMetaKey ? getMetaCache(_initMetaKey) : null;
-  const [metaMetrics, setMetaMetrics] = useState<MetaMetrics>(_initMetaCached?.metrics || { spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 });
-  const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>(_initMetaCached?.campaigns || []);
-  const [metaLoading, setMetaLoading] = useState(!_initMetaCached);
+  const [metaMetrics, setMetaMetrics] = useState<MetaMetrics>({ spend:0, leads:0, cpl:0, impressions:0, clicks:0, ctr:0, cplRealTime:0 });
+  const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
 
   const dropRef = useRef<HTMLDivElement>(null);
   const customRef = useRef<HTMLDivElement>(null);
+  // Refs para evitar stale closure em callbacks assíncronos
+  const metaReadyRef = useRef(false);
+  const metaTokenRef = useRef('');
+  const metaAccountRef = useRef('');
+  const selectedPeriodRef = useRef(selectedPeriod);
+  const customFromRef = useRef(customFrom);
+  const customToRef = useRef(customTo);
+  const orgIdRef = useRef(orgId);
+  const allLeadsRef = useRef<Lead[]>([]);
+  const isFirstLoadRef = useRef(true);
+
+  // Mantém refs sempre atualizadas
+  useEffect(() => { metaReadyRef.current = metaReady; }, [metaReady]);
+  useEffect(() => { metaTokenRef.current = metaToken; }, [metaToken]);
+  useEffect(() => { metaAccountRef.current = metaAccount; }, [metaAccount]);
+  useEffect(() => { selectedPeriodRef.current = selectedPeriod; }, [selectedPeriod]);
+  useEffect(() => { customFromRef.current = customFrom; }, [customFrom]);
+  useEffect(() => { customToRef.current = customTo; }, [customTo]);
+  useEffect(() => { orgIdRef.current = orgId; }, [orgId]);
+  useEffect(() => { allLeadsRef.current = allLeads; }, [allLeads]);
 
   useEffect(() => { const check=()=>setIsMobile(window.innerWidth<768); check(); window.addEventListener('resize',check); return()=>window.removeEventListener('resize',check); }, []);
   useEffect(() => { function close(e:MouseEvent){ if(dropRef.current&&!dropRef.current.contains(e.target as Node))setShowDropdown(false); if(customRef.current&&!customRef.current.contains(e.target as Node))setShowCustom(false); } document.addEventListener('mousedown',close); return()=>document.removeEventListener('mousedown',close); }, []);
@@ -308,8 +326,20 @@ export default function Dashboard() {
   }
 
   const loadMeta = async (currentLeads?: Lead[]) => {
-    if (!metaToken || !metaAccount) { setMetaLoading(false); return; }
-    const key = getMetaCacheKey(selectedPeriod, customFrom, customTo);
+    // Usa refs para sempre ter os valores mais atuais (evita stale closure)
+    const token = metaTokenRef.current;
+    const account = metaAccountRef.current;
+    const period = selectedPeriodRef.current;
+    const from = customFromRef.current;
+    const to = customToRef.current;
+    const currentOrgId = orgIdRef.current;
+
+    if (!token || !account) { setMetaLoading(false); return; }
+
+    const key = (period === 'custom' && from && to)
+      ? `meta_dash_${currentOrgId}_custom_${from}_${to}`
+      : `meta_dash_${currentOrgId}_${period}`;
+
     const cached = getMetaCache(key);
     if (cached) {
       setMetaMetrics(cached.metrics);
@@ -321,8 +351,8 @@ export default function Dashboard() {
     setMetaLoading(true);
     setMetaError(false);
     try {
-      const { metrics, campaigns } = await fetchMetaData(selectedPeriod, customFrom, customTo, currentLeads || allLeads, metaToken, metaAccount);
-      // Só cacheia se tiver dados reais — nunca cacheia resultado zerado
+      const leads = currentLeads ?? allLeadsRef.current;
+      const { metrics, campaigns } = await fetchMetaData(period, from, to, leads, token, account);
       if (metrics.spend > 0 || campaigns.length > 0) {
         setMetaCache(key, { metrics, campaigns });
       }
@@ -333,25 +363,61 @@ export default function Dashboard() {
     setMetaLoading(false);
   };
 
-  useEffect(() => { if(!user||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(metaReady&&leads.length>0)loadMeta(leads); }); }, [user?.id,orgReady,orgId,location.key]); // eslint-disable-line
-  useEffect(() => { if(!metaReady)return; if(allLeads.length>0)loadMeta(); }, [metaReady,selectedPeriod,customFrom,customTo]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!user || !orgReady || !orgId) return;
+    // No primeiro carregamento (F5), sempre limpa o cache para forçar fetch fresco da API
+    if (isFirstLoadRef.current) {
+      const period = selectedPeriodRef.current;
+      const from = customFromRef.current;
+      const to = customToRef.current;
+      const cacheKey = (period === 'custom' && from && to)
+        ? `meta_dash_${orgId}_custom_${from}_${to}`
+        : `meta_dash_${orgId}_${period}`;
+      clearMetaCache(cacheKey);
+      isFirstLoadRef.current = false;
+    }
+    fetchLeads().then(leads => {
+      // Usa ref para ler metaReady — evita stale closure do momento em que o effect foi criado
+      if (metaReadyRef.current && leads.length > 0) loadMeta(leads);
+    });
+  }, [user?.id, orgReady, orgId, location.key]); // eslint-disable-line
+
+  // Quando metaReady muda para true, tenta carregar Meta se já tiver leads
+  useEffect(() => {
+    if (!metaReady) return;
+    const leads = allLeadsRef.current;
+    if (leads.length > 0) loadMeta(leads);
+  }, [metaReady]); // eslint-disable-line
+
+  // Quando muda o período, recarrega os dados do Meta
+  useEffect(() => {
+    if (!metaReady) return;
+    const leads = allLeadsRef.current;
+    if (leads.length > 0) loadMeta(leads);
+  }, [selectedPeriod, customFrom, customTo]); // eslint-disable-line
+
   useEffect(() => { if(!orgReady||!orgId)return; const ch=supabase.channel(`dash-rt-${orgId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, [orgId,orgReady]); // eslint-disable-line
 
   // Polling: recarrega leads + Meta a cada 5 minutos
   useEffect(() => {
     if (!orgReady || !orgId || !metaReady || !metaToken || !metaAccount) return;
     const interval = setInterval(async () => {
-      clearMetaCache(getMetaCacheKey(selectedPeriod, customFrom, customTo));
+      const p = selectedPeriodRef.current;
+      const f = customFromRef.current;
+      const t = customToRef.current;
+      const key = (p === 'custom' && f && t) ? `meta_dash_${orgId}_custom_${f}_${t}` : `meta_dash_${orgId}_${p}`;
+      clearMetaCache(key);
       const leads = await fetchLeads();
       await loadMeta(leads);
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [orgId, orgReady, metaReady, metaToken, metaAccount, selectedPeriod, customFrom, customTo]); // eslint-disable-line
+  }, [orgId, orgReady, metaReady, metaToken, metaAccount]); // eslint-disable-line
 
   function selectPeriod(value: string) {
     if (value === 'custom') { setShowDropdown(false); setShowCustom(true); return; }
-    // Limpa cache do período novo antes de buscar — nunca serve cache de período diferente
-    clearMetaCache(getMetaCacheKey(value));
+    const key = `meta_dash_${orgIdRef.current}_${value}`;
+    clearMetaCache(key);
     setSelectedPeriod(value);
     try { localStorage.setItem(STORAGE_KEY, value); } catch {}
     setShowDropdown(false);
@@ -359,8 +425,11 @@ export default function Dashboard() {
   }
   function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); try { localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); } catch {} setShowCustom(false); }
   async function handleRefresh() {
-    // Limpa o cache do período atual antes de buscar dados frescos
-    clearMetaCache(getMetaCacheKey(selectedPeriod, customFrom, customTo));
+    const p = selectedPeriodRef.current;
+    const f = customFromRef.current;
+    const t = customToRef.current;
+    const key = (p === 'custom' && f && t) ? `meta_dash_${orgIdRef.current}_custom_${f}_${t}` : `meta_dash_${orgIdRef.current}_${p}`;
+    clearMetaCache(key);
     setIsRefreshing(true);
     try {
       const timeout = new Promise<never>((_, reject) =>

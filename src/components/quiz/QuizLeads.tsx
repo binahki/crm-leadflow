@@ -118,6 +118,8 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
     // Status Filter
     if (statusFilter === 'abandon') {
       result = result.filter(s => !s.concluiu);
+    } else if (statusFilter === 'reprovada') {
+      result = result.filter(s => s.concluiu && !s.virou_lead);
     } else if (statusFilter === 'concluiu') {
       result = result.filter(s => s.concluiu && !s.virou_lead);
     } else if (statusFilter === 'lead') {
@@ -185,8 +187,8 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
             <div style={{ width: '1px', background: border, margin: '0 8px' }} />
             <FilterPill label="Todos" active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} isDark={isDark} />
             <FilterPill label="Abandonou" active={statusFilter === 'abandon'} onClick={() => setStatusFilter('abandon')} color="#ef4444" isDark={isDark} />
-            <FilterPill label="Concluiu" active={statusFilter === 'concluiu'} onClick={() => setStatusFilter('concluiu')} color="#3b82f6" isDark={isDark} />
-            <FilterPill label="Lead" active={statusFilter === 'lead'} onClick={() => setStatusFilter('lead')} color="#10b981" isDark={isDark} />
+            <FilterPill label="Reprovada" active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
+            <FilterPill label="Virou Lead" active={statusFilter === 'lead'} onClick={() => setStatusFilter('lead')} color="#10b981" isDark={isDark} />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -234,13 +236,15 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
                 <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>Última Resposta</th>
                 <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut }}>Pts</th>
                 <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>UTM</th>
+                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Source</th>
+                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Campaign</th>
+                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Medium</th>
               </tr>
             </thead>
             <tbody>
               {filteredSessoes.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
+                  <td colSpan={11} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
                     Nenhuma sessão encontrada para os filtros selecionados.
                   </td>
                 </tr>
@@ -256,6 +260,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
                     onViewLead={(leadId: string | number) => navigate(`/leads?id=${leadId}`)}
                     calculateScore={calculateSessionScore}
                     totalPerguntas={perguntas.length}
+                    colSpan={11}
                   />
                 ))
               )}
@@ -287,7 +292,7 @@ function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, 
 
   const statusInfo = useMemo(() => {
     if (session.virou_lead) return { label: 'Virou Lead', color: '#10b981', bg: '#10b98115' };
-    if (session.concluiu) return { label: 'Concluiu', color: '#3b82f6', bg: '#3b82f615' };
+    if (session.concluiu) return { label: 'Reprovada', color: '#f59e0b', bg: '#f59e0b15' };
     return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
   }, [session]);
 
@@ -339,13 +344,19 @@ function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, 
             {statusInfo.label}
           </div>
         </td>
-        <td style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <span style={{ color: textMut, fontSize: '11px' }}>{session.utm_source || 'Direto'}</span>
+        <td style={{ padding: '14px 10px', color: textMut, fontSize: '11px', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {session.utm_source || '—'}
+        </td>
+        <td style={{ padding: '14px 10px', color: textMut, fontSize: '11px', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {session.utm_campaign || '—'}
+        </td>
+        <td style={{ padding: '14px 10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: textMut, fontSize: '11px' }}>{session.utm_medium || '—'}</span>
             {session.virou_lead && (
               <button 
                 onClick={(e) => { e.stopPropagation(); onViewLead(session.lead_id); }}
-                style={{ padding: '4px 8px', borderRadius: '6px', border: `1px solid ${statusInfo.color}40`, background: 'transparent', color: statusInfo.color, fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                style={{ padding: '3px 7px', borderRadius: '6px', border: `1px solid ${statusInfo.color}40`, background: 'transparent', color: statusInfo.color, fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
               >
                 Lead <ExternalLink size={10} />
               </button>
@@ -355,7 +366,7 @@ function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, 
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={9} style={{ padding: '0', background: isDark ? 'rgba(0,0,0,0.2)' : '#f9fafb' }}>
+          <td colSpan={11} style={{ padding: '0', background: isDark ? 'rgba(0,0,0,0.2)' : '#f9fafb' }}>
             <div style={{ padding: '20px 48px', display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: `1px solid ${border}` }}>
               <div style={{ fontSize: '12px', fontWeight: 800, color: textMain, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                 <MessageSquare size={14} /> Detalhes das Respostas
