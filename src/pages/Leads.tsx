@@ -402,6 +402,7 @@ function LeadsPage() {
     const de = params.get('de');
     const ate = params.get('ate');
     const status = params.get('status');
+    const searchParam = params.get('search');
     if (periodo) setPeriodFilter(periodo);
     if (de) setCustomFrom(de);
     if (ate) setCustomTo(ate);
@@ -413,6 +414,7 @@ function LeadsPage() {
       }
     }
     if (status) setStatusFilter(status);
+    if (searchParam) setSearch(decodeURIComponent(searchParam));
   }, []);
 
   const loadRestInBackground = useCallback(async (total: number, loaded: number) => {
@@ -604,8 +606,18 @@ function LeadsPage() {
   };
 
   const handleDeleteSelected = async () => {
-    setDeleting(true); const ids=Array.from(selectedIds); const{error}=await supabase.from('leads').delete().in('id',ids); setDeleting(false);
-    if(error){toast.error('Erro ao excluir');return;} setAllLeads(prev=>prev.filter(l=>!selectedIds.has(l.id))); setSelectedIds(new Set()); setAllSystemSelected(false); setShowDeleteConf(false); toast.success(`${ids.length} lead(s) excluído(s)!`);
+    setDeleting(true);
+    const ids = Array.from(selectedIds);
+    // Remove FK em quiz_sessoes antes de deletar o lead (evita erro 409)
+    await supabase.from('quiz_sessoes').update({ lead_id: null }).in('lead_id', ids);
+    const { error } = await supabase.from('leads').delete().in('id', ids);
+    setDeleting(false);
+    if (error) { toast.error('Erro ao excluir'); return; }
+    setAllLeads(prev => prev.filter(l => !selectedIds.has(l.id)));
+    setSelectedIds(new Set());
+    setAllSystemSelected(false);
+    setShowDeleteConf(false);
+    toast.success(`${ids.length} lead(s) excluído(s)!`);
   };
 
   const exportCSV = () => {

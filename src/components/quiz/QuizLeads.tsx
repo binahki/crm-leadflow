@@ -6,8 +6,7 @@ import {
   Smartphone, Monitor, Tablet, ArrowUpRight,
   ChevronDown, ExternalLink, Filter, User
 } from 'lucide-react';
-import { LeadDrawer } from '@/components/ui/lead-drawer';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface QuizLeadsProps {
   quizId: string;
@@ -16,22 +15,19 @@ interface QuizLeadsProps {
 }
 
 export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState<any>(null);
   const [sessoes, setSessoes] = useState<any[]>([]);
   const [perguntas, setPerguntas] = useState<any[]>([]);
   const [opcoes, setOpcoes] = useState<any[]>([]);
-  const [leads, setLeads] = useState<any[]>([]);
-  
+
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('7d');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deviceFilter, setDeviceFilter] = useState('all');
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  const [selectedLead, setSelectedLead] = useState<any>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const textMain = isDark ? '#f4f4f5' : '#111827';
   const textMut = isDark ? '#71717a' : '#6b7280';
@@ -42,14 +38,13 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: qData } = await supabase.from('quizzes').select('slug, id').eq('id', quizId).single();
+      const { data: qData } = await supabase.from('quizzes').select('slug, id, org_id').eq('id', quizId).single();
       if (!qData) return;
       setQuiz(qData);
 
-      const [pData, sData, lData] = await Promise.all([
+      const [pData, sData] = await Promise.all([
         supabase.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_sessoes').select('*').eq('quiz_slug', qData.slug).order('updated_at', { ascending: false }),
-        supabase.from('leads').select('*').eq('quiz_id', quizId).order('created_at', { ascending: false })
       ]);
 
       if (pData.data) {
@@ -60,8 +55,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
       }
       
       if (sData.data) setSessoes(sData.data);
-      if (lData.data) setLeads(lData.data);
-      
+
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -169,7 +163,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
   );
 
   return (
-    <div style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: pageBg, color: textMain }}>
+    <div style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: pageBg, color: textMain }}>
       
       {/* KPI Cards */}
       <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', flexShrink: 0 }}>
@@ -252,17 +246,14 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
                 </tr>
               ) : (
                 filteredSessoes.map((sess, idx) => (
-                  <SessionRow 
+                  <SessionRow
                     key={sess.id}
                     index={filteredSessoes.length - idx}
                     session={sess}
                     isDark={isDark}
                     isExpanded={expandedSessionId === sess.id}
                     onToggle={() => setExpandedSessionId(expandedSessionId === sess.id ? null : sess.id)}
-                    onViewLead={(leadId) => {
-                      const lead = leads.find(l => l.id === leadId);
-                      if (lead) { setSelectedLead(lead); setDrawerOpen(true); }
-                    }}
+                    onViewLead={(leadId: string) => navigate(`/leads?search=${leadId}`)}
                     calculateScore={calculateSessionScore}
                   />
                 ))
@@ -272,14 +263,6 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
         </div>
       </div>
 
-      {selectedLead && (
-        <LeadDrawer 
-          lead={selectedLead} 
-          isOpen={drawerOpen} 
-          onClose={() => setDrawerOpen(false)} 
-          onUpdate={fetchData}
-        />
-      )}
     </div>
   );
 }
