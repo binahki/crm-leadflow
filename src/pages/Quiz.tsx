@@ -11,12 +11,14 @@ import {
   hexRgba, defaultEmojiForBloco, DEFAULT_COLETA_CONFIG,
 } from '@/components/quiz/QuizRenderer';
 import type { Phase } from '@/components/quiz/QuizRenderer';
+import { QuizLeads } from '@/components/quiz/QuizLeads';
 import {
   Plus, Trash2, Copy, ExternalLink, RotateCcw, ClipboardList, ChevronLeft,
   Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp, TrendingUp, ArrowDownRight, ArrowUpRight, Filter,
-  Search, Download, Calendar, ChevronRight,
+  Search, Download, Calendar, ChevronRight, Users,
   MessageCircle, Instagram, MapPin, Sparkles, BrainCircuit,
   Clock, Share2, MoreHorizontal, TrendingDown,
+  LayoutDashboard,
 } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -198,6 +200,7 @@ export default function QuizBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [quizzes, setQuizzes] = useState<QuizConfig[]>([]);
+  const [activeTab, setActiveTab] = useState<'editor' | 'leads'>('editor');
   const [quiz, setQuiz] = useState<QuizConfig | null>(null);
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [perguntas, setPerguntas] = useState<Record<string, Pergunta[]>>({});
@@ -1835,77 +1838,78 @@ export default function QuizBuilderPage() {
   return (
     <AppLayout>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', overflow: 'hidden', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
-        {/* Mobile top bar */}
-        <div className="quiz-mobile-bar" style={{ display: 'none', padding: '10px 16px', borderBottom: `1px solid ${border}`, background: cardBg, alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={() => setQuiz(null)} style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: textMut }}>
+        {/* Tabs and Navigation */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${border}`, background: cardBg, padding: '0 16px', alignItems: 'center', height: '52px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '32px' }}>
+            <button onClick={() => setQuiz(null)} style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: textMut, display: 'flex' }}>
               <ChevronLeft size={18} />
             </button>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: textMain }}>{quiz.titulo}</span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: textMain }}>{quiz.titulo}</span>
+              <span style={{ fontSize: '10px', color: textMut }}>/{quiz.slug}</span>
+            </div>
           </div>
-          <button onClick={() => setShowPreviewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg, color: textMain, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
-            <Eye style={{ width: '13px', height: '13px' }} /> Preview
-          </button>
+
+          <div style={{ display: 'flex', gap: '4px', height: '100%', alignItems: 'center' }}>
+            {(['editor', 'leads'] as const).map(tab => (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  height: '100%', padding: '0 16px', border: 'none', background: 'transparent',
+                  color: activeTab === tab ? '#2563eb' : textMut,
+                  fontSize: '13px', fontWeight: 600, cursor: 'pointer', position: 'relative',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  transition: 'color 0.2s'
+                }}
+              >
+                {tab === 'editor' ? <Plus size={14} /> : <Users size={14} />}
+                {tab === 'editor' ? 'Editor' : 'Leads'}
+                {activeTab === tab && (
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', background: '#2563eb' }} />
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {activeTab === 'editor' && (
+              <>
+                <button onClick={handleManualSave} disabled={isSaving} style={{
+                  padding: '6px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`,
+                  background: 'transparent', color: textMut, fontSize: '12px', fontWeight: 600,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                }}>
+                  {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  {isSaving ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button onClick={() => setShowPublishModal(true)} style={{
+                  padding: '6px 12px', borderRadius: tokens.radius.sm, border: 'none',
+                  background: isPublicado ? 'transparent' : '#2563eb', 
+                  color: isPublicado ? '#16a34a' : '#fff',
+                  border: isPublicado ? '1px solid #16a34a' : 'none',
+                  fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+                }}>
+                  {isPublicado ? 'Publicado' : 'Publicar'}
+                </button>
+              </>
+            )}
+            <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex' }}>
+              <Settings size={18} />
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {activeTab === 'leads' ? (
+            <QuizLeads quizId={quiz.id} isDark={isDark} theme={theme} />
+          ) : (
+            <>
 
           {/* ══ LEFT COLUMN ═════════════════════════════════════════════════ */}
           <div style={{ width: '232px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${border}`, background: cardBg }}>
-            {/* Header — FEATURE 1: Salvar + Publicar */}
-            <div style={{ padding: '10px 12px', borderBottom: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
-                  <button onClick={() => setQuiz(null)} title="Voltar para lista" style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '4px', flexShrink: 0 }}>
-                    <ChevronLeft style={{ width: '16px', height: '16px' }} />
-                  </button>
-                  <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                    <p style={{ fontSize: '12px', fontWeight: 700, color: textMain, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{quiz.titulo}</p>
-                    <p style={{ fontSize: '10px', color: textMut, margin: '1px 0 0' }}>/{quiz.slug}</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSettings(true)} title="Configurações" style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '4px', flexShrink: 0 }}>
-                  <Settings style={{ width: '14px', height: '14px' }} />
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {/* Salvar */}
-                <button onClick={handleManualSave} disabled={isSaving} style={{
-                  flex: 1, padding: '5px 8px', borderRadius: 7, border: `1px solid ${border}`,
-                  background: 'transparent', color: textMut, fontSize: '11px', fontWeight: 500,
-                  cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                }}>
-                  {isSaving
-                    ? <><Loader2 style={{ width: '10px', height: '10px', animation: 'spin 0.7s linear infinite' }} /> Salvando...</>
-                    : saving
-                      ? <><Loader2 style={{ width: '10px', height: '10px', animation: 'spin 0.7s linear infinite' }} /> Auto...</>
-                      : savedRecently
-                        ? <><Check style={{ width: '10px', height: '10px', color: '#16a34a' }} /> <span style={{ color: '#16a34a' }}>Salvo</span></>
-                        : 'Salvar'
-                  }
-                </button>
-                {/* Publicar */}
-                {isPublicado ? (
-                  <button onClick={() => setShowUnpublishModal(true)} style={{
-                    flex: 1, padding: '5px 8px', borderRadius: 7, border: '1px solid #16a34a',
-                    background: 'transparent', color: '#16a34a', fontSize: '11px', fontWeight: 600,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
-                    Publicado ✓
-                  </button>
-                ) : (
-                  <button onClick={() => setShowPublishModal(true)} style={{
-                    flex: 1, padding: '5px 8px', borderRadius: 7, border: 'none',
-                    background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 600,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
-                    Publicar
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Page list */}
             <div ref={pageListRef} style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
 
@@ -2139,8 +2143,9 @@ export default function QuizBuilderPage() {
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {renderRightPanel()}
             </div>
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── SETTINGS MODAL ─────────────────────────────────────────────────── */}
@@ -2337,8 +2342,9 @@ export default function QuizBuilderPage() {
           </div>
         </div>
       )}
+    </div>
 
-      <style>{`
+    <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 1024px) {

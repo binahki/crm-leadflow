@@ -168,7 +168,8 @@ export function QuizRenderer({
 
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
-  const coletaCampos = coleta || (quiz.coleta_campos as string[] | null) || ['nome', 'whatsapp', 'cidade', 'instagram'];
+  const rawColetaCampos = coleta || (quiz.coleta_campos as string[] | null);
+  const coletaCampos = rawColetaCampos?.length ? rawColetaCampos : ['nome', 'whatsapp', 'cidade', 'instagram'];
   const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
     ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
     : DEFAULT_COLETA_CONFIG.filter(d => coletaCampos.includes(d.campo));
@@ -460,19 +461,20 @@ export function QuizRenderer({
                       </div>
                     ) : (
                       <div style={{ position: 'relative' }}>
-                        <input 
-                          value={fieldValues[cfg.campo] || ''}
+                        <input
+                          value={fieldValues[cfg.campo] ?? ''}
                           onChange={e => {
                             const val = e.target.value;
                             if (cfg.campo === 'nome') {
                               onNomeChange?.(val);
                               if (isMaleName(val)) setNomeErro('Opa! Este quiz é exclusivo para o público feminino. 🌸');
                               else setNomeErro(null);
+                            } else if (cfg.campo === 'instagram') {
+                              onInstagramChange?.(val);
                             }
-                            if (cfg.campo === 'instagram') onInstagramChange?.(val);
                           }}
-                          placeholder={cfg.placeholder} 
-                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nomeErro ? '#ef4444' : (cfg.campo === 'nome' && nome.length > 2 && !nomeErro ? '#10b981' : '#e2e8f0') }} 
+                          placeholder={cfg.placeholder}
+                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nomeErro ? '#ef4444' : (cfg.campo === 'nome' && nome.length > 2 && !nomeErro ? '#10b981' : '#e2e8f0') }}
                         />
                         {cfg.campo === 'nome' && nomeErro && (
                           <p style={{ color: '#ef4444', fontSize: '11px', margin: '4px 0 0', fontWeight: 600 }}>{nomeErro}</p>

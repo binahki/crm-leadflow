@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useOrgId } from '@/hooks/useOrgId';
+import { useQuizTracker } from '@/hooks/useQuizTracker';
 import { supabase } from '@/integrations/supabase/client';
 import {
   QuizRenderer,
@@ -40,6 +41,8 @@ function isProbablyMale(name: string): boolean {
 
 export default function QuizPublico() {
   const { slug } = useParams<{ slug: string }>();
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'true';
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [quiz, setQuiz] = useState<QuizConfig | null>(null);
@@ -58,6 +61,12 @@ export default function QuizPublico() {
   const [whatsapp, setWhatsapp] = useState('');
   const [cidade, setCidade] = useState('');
   const [instagram, setInstagram] = useState('');
+
+  const { iniciarSessao, registrarEtapa, marcarConcluido } = useQuizTracker(
+    slug || '',
+    quiz?.org_id,
+    todasPerguntas.length
+  );
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,9 +111,12 @@ export default function QuizPublico() {
 
       setTodasPerguntas(perguntasComOpcoes);
       setPhase('capa');
+      
+      // Start Session
+      if (!isPreview) iniciarSessao();
     }
     loadQuiz();
-  }, [slug]);
+  }, [slug, isPreview, iniciarSessao]);
 
   // ── Confetti on approval ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -235,11 +247,13 @@ export default function QuizPublico() {
       setFaixa(totalScore >= quiz.corte_verde ? 'verde' : 'amarelo');
       
       setPhase('analise');
+      registrarEtapa(newVisible.length, 'Análise', 'Iniciou análise');
       
       const duration = (quiz.analise_duracao || 4) * 1000;
       setTimeout(() => {
         if (isApproved) {
           setPhase('aprovado_form');
+          registrarEtapa(newVisible.length + 1, 'Formulário', 'Viu formulário');
         } else {
           setPhase('reprovado');
         }
@@ -266,6 +280,10 @@ export default function QuizPublico() {
     if (selectedOpcao) return;
     navigator.vibrate?.(10);
     setSelectedOpcao(opcao.id);
+    
+    // Registrar etapa no tracker
+    registrarEtapa(currentIdx + 1, pergunta.texto, opcao.texto);
+
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
       doAdvance(pergunta, [opcao.id]);
@@ -305,6 +323,18 @@ export default function QuizPublico() {
       return;
     }
 
+    // Validate all required coleta fields
+    const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
+    for (const cfg of coletaConfig) {
+      if (!cfg.obrigatorio) continue;
+      if (cfg.campo === 'whatsapp') continue; // already validated above
+      const val = (fieldValues[cfg.campo] ?? '').trim();
+      if (!val) {
+        alert(`Por favor, preencha o campo "${cfg.label}".`);
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
@@ -331,6 +361,7 @@ export default function QuizPublico() {
         nome: nome.trim(),
         whatsapp: rawWa,
         cidade: cidade.trim(),
+        instagram: instagram.trim(),
         status: 1,
         quiz_respostas: quizRespostas,
         score,
@@ -339,10 +370,13 @@ export default function QuizPublico() {
         ...utms.current
       };
       
-      const { error } = await db.from('leads').insert(leadData);
+      const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
 
     setSubmitting(false);
     if (error) { alert('Erro ao salvar. Tente novamente.'); return; }
+
+    // Marcar sessão como concluída e vincular ao lead
+    if (newLead?.id) await marcarConcluido(newLead.id);
 
     const num = quiz.redirect_whatsapp?.replace(/\D/g, '');
     const msg = `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
@@ -366,7 +400,8 @@ export default function QuizPublico() {
   const totalVisible = visible.length;
   const currentPergunta = visible[currentIdx] ?? null;
   const currentBloco = blocos.find(b => b.id === currentPergunta?.bloco_id) ?? null;
-  const coleta = (quiz?.coleta_campos as string[] | null) || ['nome', 'whatsapp', 'cidade', 'instagram'];
+  const rawColeta = (quiz?.coleta_campos as string[] | null);
+  const coleta = rawColeta?.length ? rawColeta : ['nome', 'whatsapp', 'cidade', 'instagram'];
   const coletaConfig: ColetaCampo[] = quiz?.coleta_config?.length
     ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
     : DEFAULT_COLETA_CONFIG.filter(d => coleta.includes(d.campo));
@@ -380,7 +415,6 @@ export default function QuizPublico() {
     });
   const primary = quiz?.cor_primaria || '#2563eb';
 
-  const [searchParams] = useSearchParams();
   const utms = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -507,10 +541,16 @@ export default function QuizPublico() {
       instagram={instagram}
       submitting={submitting}
       canSubmit={canSubmit}
-      onStart={() => setPhase('quiz')}
+      onStart={() => {
+        setPhase('quiz');
+        registrarEtapa(0, 'Início', 'Iniciou o quiz');
+      }}
       onOpcaoClick={handleOpcaoClick}
       onContinue={handleContinue}
-      onGoToColeta={() => setPhase('coleta')}
+      onGoToColeta={() => {
+        setPhase('coleta');
+        registrarEtapa(99, 'Coleta Manual', 'Acessou coleta manual');
+      }}
       onNomeChange={setNome}
       onWhatsappChange={setWhatsapp}
       onCidadeChange={setCidade}

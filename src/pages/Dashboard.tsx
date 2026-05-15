@@ -283,29 +283,29 @@ export default function Dashboard() {
   const fetchLeads = async (): Promise<Lead[]> => {
     if (!orgId) { setLoading(false); return []; }
     setLoading(true);
-    setAllLeads([]);
-    let allData: Lead[] = [];
-    let from = 0;
-    const PAGE = 1000;
-    while (true) {
-      const { data, error } = await supabase
-        .from('leads').select('*').eq('org_id', orgId)
-        .order('created_at', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error) { console.error('[Dashboard]', error.message); break; }
-      if (!data || data.length === 0) break;
-      allData = [...allData, ...data as Lead[]];
-      if (data.length < PAGE) break;
-      from += PAGE;
+
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    if (error) { 
+      console.error('[Dashboard]', error.message);
+      setLoading(false);
+      return [];
     }
-    setAllLeads(allData);
+
+    const fetchedLeads = (data || []) as Lead[];
+    setAllLeads(fetchedLeads);
     setLoading(false);
-    return allData;
+    return fetchedLeads;
   };
   const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaLoading(false);return;} const key=`meta_dash_${orgId}_${selectedPeriod}`; const cached=getMetaCache(key); if(cached){setMetaMetrics(cached.metrics);setMetaCampaigns(cached.campaigns);setMetaLoading(false);setMetaError(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaCache(key,{metrics,campaigns}); setMetaMetrics(metrics); setMetaCampaigns(campaigns); setMetaError(false); } catch { setMetaError(true); } setMetaLoading(false); };
 
-  useEffect(() => { if(!user||!metaReady||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(leads.length>0)loadMeta(leads); }); }, [user?.id,metaReady,orgReady,orgId,location.key]); // eslint-disable-line
-  useEffect(() => { if(allLeads.length>0&&metaReady)loadMeta(); }, [selectedPeriod,customFrom,customTo,allLeads.length,metaReady]); // eslint-disable-line
+  useEffect(() => { if(!user||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(metaReady&&leads.length>0)loadMeta(leads); }); }, [user?.id,orgReady,orgId,location.key]); // eslint-disable-line
+  useEffect(() => { if(!metaReady)return; if(allLeads.length>0)loadMeta(); }, [metaReady,selectedPeriod,customFrom,customTo]); // eslint-disable-line
   useEffect(() => { if(!orgReady||!orgId)return; const ch=supabase.channel(`dash-rt-${orgId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, [orgId,orgReady]); // eslint-disable-line
 
   function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }

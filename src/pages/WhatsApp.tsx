@@ -6,10 +6,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { 
-  Settings, Check, CheckCheck, Search, Send, User, 
-  ExternalLink, MessageCircle, ArrowLeft, MoreVertical, 
-  MapPin, Instagram, Clock, Shield, Info, Smile, 
+import {
+  Settings, Check, CheckCheck, Search, Send, User,
+  ExternalLink, MessageCircle, ArrowLeft, MoreVertical,
+  MapPin, Instagram, Clock, Shield, Info, Smile,
   Paperclip, ChevronDown, UserPlus, Trash2, LogOut,
   X, Filter, MoreHorizontal, Loader2, AlertTriangle, Megaphone,
   ChevronRight, Timer, UserCheck, Share2, MessageSquare, Zap
@@ -155,9 +155,9 @@ const waRelativeTime = (iso: string | null) => {
   const date = new Date(iso);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
-  
-  const isToday = date.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' }) === 
-                  now.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' });
+
+  const isToday = date.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' }) ===
+    now.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' });
   if (isToday) return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
   const yesterday = new Date(now);
@@ -179,7 +179,7 @@ const avatarColor = (name: string) => {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   const colors = [
-    '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e', '#ef4444', 
+    '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e', '#ef4444',
     '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#4f46e5'
   ];
   return colors[Math.abs(hash) % colors.length];
@@ -298,6 +298,8 @@ export default function WhatsAppPage() {
       });
   }, [orgId, orgReady]);
 
+
+
   if (!loading && !account) {
     return (
       <AppLayout leadCount={storeLeads.length}>
@@ -347,7 +349,7 @@ export default function WhatsAppPage() {
   return (
     <AppLayout leadCount={storeLeads.length} hideSidebar>
       <div className="h-screen w-full flex overflow-hidden" style={{ background: colors.chatBg, color: colors.textPrimary }}>
-        <ChatInbox 
+        <ChatInbox
           colors={colors} orgId={orgId!} account={account} user={user}
           initialPhone={initialPhone} initialConvId={initialConvId}
           onOpenSettings={() => navigate('/whatsapp/configuracoes')}
@@ -408,11 +410,11 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
       .eq('org_id', orgId)
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false });
-    
+
     setConversations(data as WaConversation[]);
   }, [orgId]);
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchConvs();
   }, [fetchConvs]);
 
@@ -433,8 +435,8 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
   useEffect(() => {
     if (!initialPhone || !orgId || conversations.length === 0) return;
     const cleanPhone = initialPhone.replace(/\D/g, '');
-    const existing = conversations.find(c => 
-      c.contact_phone === cleanPhone || 
+    const existing = conversations.find(c =>
+      c.contact_phone === cleanPhone ||
       c.contact_phone.endsWith(cleanPhone.slice(-9))
     );
     if (existing) {
@@ -491,11 +493,11 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
   useEffect(() => {
     if (!selectedId) return;
     const ch = supabase.channel(`wa-msgs-${selectedId}`)
-      .on('postgres_changes' as any, { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'whatsapp_messages', 
-        filter: `conversation_id=eq.${selectedId}` 
+      .on('postgres_changes' as any, {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'whatsapp_messages',
+        filter: `conversation_id=eq.${selectedId}`
       }, (payload) => {
         setMessages(prev => {
           // Evita duplicatas se o fetchMessages e o realtime dispararem quase juntos
@@ -542,31 +544,31 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
   }, [conversations, searchText, filter, statusFilter]);
 
   const activeConv = conversations.find(c => c.id === selectedId);
-  
+
   const lastInboundTime = messages
     .filter(m => m.direction === 'inbound')
     .map(m => new Date(m.created_at).getTime())
     .sort((a, b) => b - a)[0] || null;
 
-  const sessionFromInbound = lastInboundTime 
-    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000 
+  const sessionFromInbound = lastInboundTime
+    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000
     : false;
 
-  const sessionFromDb = activeConv?.session_expires_at 
-    ? new Date(activeConv.session_expires_at).getTime() > Date.now() 
+  const sessionFromDb = activeConv?.session_expires_at
+    ? new Date(activeConv.session_expires_at).getTime() > Date.now()
     : false;
 
   const isExpired = !sessionFromInbound && !sessionFromDb;
 
   return (
     <>
-      <div 
+      <div
         className={`${isMobile && selectedId ? 'hidden' : 'flex'} flex-col border-r w-[320px] lg:w-[360px] flex-shrink-0 relative z-20`}
         style={{ background: colors.sidebarBg, borderColor: colors.border }}
       >
         <SidebarHeader colors={colors} user={user} onOpenSettings={onOpenSettings} />
         <SidebarSearch colors={colors} value={searchText} onChange={setSearchText} />
-        
+
         <div className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: colors.border }}>
           {/* Todas */}
           <button
@@ -610,7 +612,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
                 ? CRM_STATUS.find(s => s.value === statusFilter)?.label
                 : 'Status'}
               <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
               </svg>
             </button>
 
@@ -664,46 +666,46 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
             )}
           </div>
         </div>
-        
-        <ConversationList 
+
+        <ConversationList
           colors={colors} list={filteredConvs} selectedId={selectedId} theme={theme}
           quickStatusId={quickStatusId} onSetQuickStatus={setQuickStatusId}
           onUpdateLead={() => fetchConvs()}
           orgId={orgId}
-          onSelect={(id: string) => { 
-            setSelectedId(id); 
-            setPendingLead(null); 
-            navigate(`/whatsapp?conversation=${id}`, { replace: true }); 
-          }} 
+          onSelect={(id: string) => {
+            setSelectedId(id);
+            setPendingLead(null);
+            navigate(`/whatsapp?conversation=${id}`, { replace: true });
+          }}
         />
 
       </div>
 
-      <div 
+      <div
         className={`${isMobile && !selectedId ? 'hidden' : 'flex'} flex-1 flex-col relative z-10`}
         style={{ background: colors.chatBg }}
       >
         {!account ? (
-           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center" style={{ background: colors.headerBg }}>
-             <div className="w-16 h-16 mb-6 text-amber-500"><AlertTriangle size={64} /></div>
-             <h2 className="text-2xl font-bold mb-2">WhatsApp não configurado</h2>
-             <p className="text-[14px] text-gray-500 max-w-sm mb-8">
-               Você precisa configurar sua API oficial do WhatsApp para começar a enviar e receber mensagens.
-             </p>
-             <button 
-               onClick={onOpenSettings}
-               className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
-             >
-               Configurar API Agora
-             </button>
-           </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center" style={{ background: colors.headerBg }}>
+            <div className="w-16 h-16 mb-6 text-amber-500"><AlertTriangle size={64} /></div>
+            <h2 className="text-2xl font-bold mb-2">WhatsApp não configurado</h2>
+            <p className="text-[14px] text-gray-500 max-w-sm mb-8">
+              Você precisa configurar sua API oficial do WhatsApp para começar a enviar e receber mensagens.
+            </p>
+            <button
+              onClick={onOpenSettings}
+              className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+            >
+              Configurar API Agora
+            </button>
+          </div>
         ) : !selectedId && !pendingLead ? (
           <EmptyState colors={colors} />
         ) : (
           <>
-            <ChatHeader 
-              colors={colors} 
-              conv={activeConv || pendingLead} 
+            <ChatHeader
+              colors={colors}
+              conv={activeConv || pendingLead}
               messages={messages} theme={theme}
               onBack={isMobile ? () => { setSelectedId(null); setPendingLead(null); } : undefined}
               onToggleInfo={() => { setShowInfo(!showInfo); setShowQuickEditor(false); }}
@@ -716,7 +718,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
                 <p className="text-[14px] text-gray-500 max-w-sm mb-8">
                   Este lead ainda não possui uma conversa ativa. Envie um modelo aprovado para iniciar o contato oficial.
                 </p>
-                <button 
+                <button
                   onClick={() => setShowTemplates(true)}
                   className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl flex items-center gap-2"
                 >
@@ -724,16 +726,16 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
                 </button>
               </div>
             ) : (
-              <MessageArea 
+              <MessageArea
                 colors={colors} messages={messages} theme={theme}
                 scrollRef={scrollRef}
                 orgId={orgId}
               />
             )}
-            <ChatInput 
-              colors={colors} 
-              orgId={orgId} 
-              conv={activeConv || pendingLead} 
+            <ChatInput
+              colors={colors}
+              orgId={orgId}
+              conv={activeConv || pendingLead}
               account={account}
               onSent={() => { fetchMessages(); fetchConvs(); setPendingLead(null); }}
               isExpired={isExpired || !!pendingLead}
@@ -743,20 +745,20 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
       </div>
 
       {showInfo && selectedId && (
-        <div 
+        <div
           className={`${isMobile ? 'fixed inset-0 z-50' : 'w-[280px] lg:w-[320px] border-l'} flex flex-col flex-shrink-0 relative z-30`}
           style={{ background: colors.sidebarBg, borderColor: colors.border }}
         >
           {showQuickEditor ? (
-            <QuickRepliesEditor 
-              colors={colors} 
-              orgId={orgId} 
-              onClose={() => setShowQuickEditor(false)} 
+            <QuickRepliesEditor
+              colors={colors}
+              orgId={orgId}
+              onClose={() => setShowQuickEditor(false)}
             />
           ) : (
-            <LeadInfoPanel 
+            <LeadInfoPanel
               colors={colors} conv={activeConv} theme={theme}
-              onClose={() => setShowInfo(false)} 
+              onClose={() => setShowInfo(false)}
               onUpdate={() => fetchConvs()}
             />
           )}
@@ -770,7 +772,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
 
 function FilterChip({ label, active, onClick, colors }: { label: string, active: boolean, onClick: () => void, colors: any }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={`px-3 py-1 rounded-full text-[11px] whitespace-nowrap transition-all font-medium border
         ${active ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-transparent text-gray-500 border-gray-200 hover:border-gray-300'}`}
@@ -808,7 +810,7 @@ function SidebarSearch({ colors, value, onChange }: { colors: any, value: string
     <div className="p-2 px-3">
       <div className="relative flex items-center h-[32px] rounded-lg bg-gray-100 px-3 gap-3 border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
         <Search size={14} className="text-gray-400" />
-        <input 
+        <input
           className="w-full bg-transparent text-[13px] outline-none placeholder:text-gray-400"
           placeholder="Pesquisar conversa..."
           value={value}
@@ -820,7 +822,7 @@ function SidebarSearch({ colors, value, onChange }: { colors: any, value: string
   );
 }
 
-function ConversationList({ colors, list, selectedId, onSelect, theme, quickStatusId, onSetQuickStatus, onUpdateLead, orgId }: { 
+function ConversationList({ colors, list, selectedId, onSelect, theme, quickStatusId, onSetQuickStatus, onUpdateLead, orgId }: {
   colors: any, list: WaConversation[], selectedId: string | null, onSelect: (id: string) => void, theme: string,
   quickStatusId: string | null, onSetQuickStatus: (id: string | null) => void, onUpdateLead: () => void, orgId: string
 }) {
@@ -847,19 +849,19 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
         const color = avatarColor(name);
         const statusIdx = c.lead?.status;
         const isQuickOpen = quickStatusId === c.id;
-        
+
         return (
-          <div 
+          <div
             key={c.id}
             onClick={() => onSelect(c.id)}
             className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all relative border-b last:border-0"
-            style={{ 
+            style={{
               background: isSelected ? colors.selected : 'transparent',
               borderColor: colors.border
             }}
           >
             <div className="relative flex-shrink-0">
-              <div 
+              <div
                 className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base shadow-sm"
                 style={{ background: color }}
               >
@@ -871,7 +873,7 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="font-semibold text-[14px] truncate text-gray-800 dark:text-gray-200 block">{name}</span>
                   {statusIdx !== null && statusIdx !== undefined && CRM_STATUS_COLORS[statusIdx] && (
-                    <span 
+                    <span
                       className="flex-shrink-0 whitespace-nowrap"
                       style={{
                         display: 'inline-flex',
@@ -885,7 +887,7 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
                         color: dark ? CRM_STATUS_COLORS[statusIdx].darkText : CRM_STATUS_COLORS[statusIdx].lightText,
                       }}
                     >
-                      <span style={{width:'4px',height:'4px',borderRadius:'50%',background:CRM_STATUS_COLORS[statusIdx].dot}}/>
+                      <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: CRM_STATUS_COLORS[statusIdx].dot }} />
                       {CRM_STATUS_LABELS[statusIdx]}
                     </span>
                   )}
@@ -895,7 +897,7 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
                     <span className={`text-[9px] ${isSelected ? 'text-blue-500' : 'text-gray-400'}`}>
                       {waRelativeTime(c.last_message_at)}
                     </span>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onSetQuickStatus(isQuickOpen ? null : c.id);
@@ -909,7 +911,7 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
                   {isQuickOpen && (
                     <>
                       <div className="fixed inset-0 z-[60]" onClick={(e) => { e.stopPropagation(); onSetQuickStatus(null); }} />
-                      <div 
+                      <div
                         className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[70] overflow-hidden dropdown-animate"
                         onClick={e => e.stopPropagation()}
                       >
@@ -954,26 +956,26 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
 }
 
 
-function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuickEditor, theme }: { 
-  colors: any, conv: any, messages: WaMessage[], 
+function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuickEditor, theme }: {
+  colors: any, conv: any, messages: WaMessage[],
   onBack?: () => void, onToggleInfo: () => void, onToggleQuickEditor: () => void, theme: string
 }) {
   const dark = theme === 'dark';
   const name = conv?.lead?.nome || conv?.contact_name || formatPhone(conv?.contact_phone || '');
   const color = avatarColor(name);
   const statusIdx = conv?.lead?.status;
-  
+
   const lastInboundTime = messages
     .filter(m => m.direction === 'inbound')
     .map(m => new Date(m.created_at).getTime())
     .sort((a, b) => b - a)[0] || null;
 
-  const sessionFromInbound = lastInboundTime 
-    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000 
+  const sessionFromInbound = lastInboundTime
+    ? (Date.now() - lastInboundTime) < 24 * 60 * 60 * 1000
     : false;
 
-  const sessionFromDb = conv?.session_expires_at 
-    ? new Date(conv.session_expires_at).getTime() > Date.now() 
+  const sessionFromDb = conv?.session_expires_at
+    ? new Date(conv.session_expires_at).getTime() > Date.now()
     : false;
 
   const isExpired = !sessionFromInbound && !sessionFromDb;
@@ -981,7 +983,7 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuic
   return (
     <div className="h-[52px] flex items-center px-4 gap-3 border-b flex-shrink-0 z-20 shadow-sm" style={{ background: colors.headerBg, borderColor: colors.border }}>
       {onBack && <button onClick={onBack} className="p-1 -ml-1 text-gray-500 hover:bg-gray-200 rounded-full"><ArrowLeft size={18} /></button>}
-      <div 
+      <div
         onClick={onToggleInfo}
         className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold cursor-pointer shadow-sm text-sm"
         style={{ background: color }}
@@ -1003,7 +1005,7 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuic
               background: dark ? CRM_STATUS_COLORS[statusIdx].darkBg : CRM_STATUS_COLORS[statusIdx].lightBg,
               color: dark ? CRM_STATUS_COLORS[statusIdx].darkText : CRM_STATUS_COLORS[statusIdx].lightText,
             }}>
-              <span style={{width:'4px',height:'4px',borderRadius:'50%',background:CRM_STATUS_COLORS[statusIdx].dot}}/>
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: CRM_STATUS_COLORS[statusIdx].dot }} />
               {CRM_STATUS_LABELS[statusIdx]}
             </span>
           )}
@@ -1027,12 +1029,12 @@ function ChatHeader({ colors, conv, messages, onBack, onToggleInfo, onToggleQuic
 }
 
 
-function MessageArea({ colors, messages, theme, scrollRef, orgId }: { 
-  colors: any, messages: WaMessage[], theme: string, 
-  scrollRef: React.RefObject<HTMLDivElement>, orgId: string 
+function MessageArea({ colors, messages, theme, scrollRef, orgId }: {
+  colors: any, messages: WaMessage[], theme: string,
+  scrollRef: React.RefObject<HTMLDivElement>, orgId: string
 }) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -1048,7 +1050,7 @@ function MessageArea({ colors, messages, theme, scrollRef, orgId }: {
       if (date.toDateString() === now.toDateString()) label = 'HOJE';
       const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
       if (date.toDateString() === yesterday.toDateString()) label = 'ONTEM';
-      
+
       if (r.length === 0 || r[r.length - 1].label !== label) {
         r.push({ label, msgs: [m] });
       } else {
@@ -1059,13 +1061,13 @@ function MessageArea({ colors, messages, theme, scrollRef, orgId }: {
   }, [messages]);
 
   return (
-    <div 
-      ref={scrollRef} 
+    <div
+      ref={scrollRef}
       className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-1 relative z-0"
-      style={{ 
+      style={{
         backgroundColor: theme === 'dark' ? '#0b141a' : '#efeae2',
-        backgroundImage: theme === 'dark' 
-          ? 'url("https://w0.peakpx.com/wallpaper/508/606/HD-wallpaper-whatsapp-dark-patterns-background-designs-thumbnail.jpg")' 
+        backgroundImage: theme === 'dark'
+          ? 'url("https://w0.peakpx.com/wallpaper/508/606/HD-wallpaper-whatsapp-dark-patterns-background-designs-thumbnail.jpg")'
           : 'url("https://i.pinimg.com/736x/8c/98/99/8c98994518b575bfd8d994e51d1a22a2.jpg")',
         backgroundSize: '400px',
         backgroundBlendMode: theme === 'dark' ? 'overlay' : 'normal',
@@ -1124,19 +1126,19 @@ function MessageArea({ colors, messages, theme, scrollRef, orgId }: {
 function MsgStatus({ status }: { status: string | null }) {
   if (status === 'pending') return <Clock size={10} className="text-gray-400" />;
   if (status === 'failed') return <span style={{ color: '#ef4444', fontSize: '12px' }}>✗</span>;
-  
+
   const isRead = status === 'read';
   const isDelivered = status === 'delivered' || status === 'read';
-  
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', position: 'relative', width: '14px' }}>
-      <CheckCheck 
-        size={13} 
-        style={{ 
+      <CheckCheck
+        size={13}
+        style={{
           color: isRead ? '#53bdeb' : '#9ca3af',
           position: 'absolute',
           right: 0
-        }} 
+        }}
       />
     </div>
   );
@@ -1162,7 +1164,7 @@ function MessageBubble({ msg, colors, onImageClick, orgId }: { msg: WaMessage, c
             alt="Imagem"
             style={{ maxWidth: '240px', maxHeight: '200px', borderRadius: '8px', cursor: 'zoom-in', display: 'block' }}
             onClick={() => onImageClick?.(src)}
-            onError={e => { 
+            onError={e => {
               const el = e.currentTarget as HTMLImageElement;
               // Tenta carregar direto se o proxy falhar
               if (msg.media_url && el.src !== msg.media_url) {
@@ -1211,10 +1213,12 @@ function MessageBubble({ msg, colors, onImageClick, orgId }: { msg: WaMessage, c
       if (!src) return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '13px' }}>📎 {msg.content}</span>;
       return (
         <a href={src} target="_blank" rel="noreferrer"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px',
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px',
             background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
             borderRadius: '8px', textDecoration: 'none', color: isDark ? '#f4f4f5' : '#111',
-            fontSize: '13px', fontWeight: 500 }}>
+            fontSize: '13px', fontWeight: 500
+          }}>
           📎 {msg.content?.replace('[Documento]', '').replace('[Documento: ', '').replace(']', '') || 'Documento'}
         </a>
       );
@@ -1273,7 +1277,7 @@ function MessageBubble({ msg, colors, onImageClick, orgId }: { msg: WaMessage, c
   return (
     <div style={{ display: 'flex', width: '100%', marginBottom: '4px', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
       <div style={{
-        maxWidth: '70%', 
+        maxWidth: '70%',
         padding: msg.type === 'sticker' || msg.type === 'reaction' ? '4px' : '6px 10px',
         borderRadius: isMe ? '12px 0 12px 12px' : '0 12px 12px 12px',
         background: msg.type === 'sticker' || msg.type === 'reaction' ? 'transparent' : (isMe ? (theme === 'dark' ? '#005c4b' : '#dcf8c6') : (theme === 'dark' ? '#1e1e22' : '#f0f0f0')),
@@ -1284,18 +1288,18 @@ function MessageBubble({ msg, colors, onImageClick, orgId }: { msg: WaMessage, c
       }}>
         {renderMensagemConteudo(msg as any, orgId, theme === 'dark')}
         {msg.type !== 'sticker' && msg.type !== 'reaction' && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'flex-end', 
-            gap: '3px', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: '3px',
             marginTop: '2px',
             marginLeft: '20px'
           }}>
-            <span style={{ 
-              fontSize: '10px', 
+            <span style={{
+              fontSize: '10px',
               color: isMe ? (theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)') : 'rgba(0,0,0,0.45)',
-              fontWeight: 500 
+              fontWeight: 500
             }}>{time}</span>
             {isMe && <MsgStatus status={msg.status} />}
           </div>
@@ -1309,7 +1313,7 @@ function substituirVariaveis(texto: string, conversa: any): string {
   if (!conversa) return texto;
   const nome = conversa.contact_name || conversa.contact_phone || '';
   const primeiroNome = nome.split(' ')[0];
-  
+
   return texto
     .replace(/\{\{nome\}\}/gi, primeiroNome)
     .replace(/\{\{nome_completo\}\}/gi, nome)
@@ -1317,7 +1321,7 @@ function substituirVariaveis(texto: string, conversa: any): string {
     .replace(/\{\{data\}\}/gi, new Date().toLocaleDateString('pt-BR'));
 }
 
-function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, lead }: { 
+function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, lead }: {
   colors: any, orgId: string, conv: any, account: WaAccount, isExpired: boolean, messages: WaMessage[], onSent: () => void, lead: Lead | null
 }) {
   const [text, setText] = useState('');
@@ -1340,7 +1344,7 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
     setText(val);
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-    
+
     if (val === '/' || val.startsWith('/')) {
       setShowQuickReplies(true);
       setQuickFilter(val.slice(1).toLowerCase());
@@ -1364,10 +1368,10 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
   const handleSend = async () => {
     if (!text.trim() || sending || isExpired || !conv) return;
     setSending(true);
-    
+
     // Substitui variáveis antes de enviar
     const textoFinal = substituirVariaveis(text.trim(), conv);
-    
+
     const msg = textoFinal;
     setText('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -1490,18 +1494,18 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
       {isExpired && (
         <div className="bg-amber-50 px-4 py-2.5 text-[11px] text-amber-800 flex items-center justify-between border-b border-amber-100">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={14} className="text-amber-600" /> 
+            <AlertTriangle size={14} className="text-amber-600" />
             <span className="font-semibold">Janela de 24h expirada.</span>
             <span className="hidden sm:inline opacity-70">Envie um modelo ou aguarde o contato.</span>
           </div>
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => setShowTemplates(true)}
               className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
             >
               <Zap size={13} fill="white" /> Enviar Modelo
             </button>
-            <button 
+            <button
               onClick={handleOpenWA}
               className="bg-white text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-50 transition-colors"
             >
@@ -1512,11 +1516,11 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
       )}
 
       {showTemplates && (
-        <TemplateModal 
-          acc={account} 
-          conv={conv} 
-          onClose={() => setShowTemplates(false)} 
-          onSent={() => { onSent(); }} 
+        <TemplateModal
+          acc={account}
+          conv={conv}
+          onClose={() => setShowTemplates(false)}
+          onSent={() => { onSent(); }}
         />
       )}
       <div className="flex items-end gap-2 px-3 py-2">
@@ -1525,15 +1529,15 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
           <button className="p-1.5 hover:text-gray-700 transition-colors"><Paperclip size={22} /></button>
         </div>
         <div className="flex-1">
-          <textarea 
+          <textarea
             ref={textareaRef}
             rows={1}
             disabled={isExpired}
             placeholder={isExpired ? "Conversa bloqueada" : "Digite uma mensagem"}
             className="w-full bg-white dark:bg-[#2a3942] rounded-lg px-4 py-2 text-[14px] outline-none border-none resize-none no-scrollbar shadow-sm transition-all focus:ring-1 focus:ring-blue-500/20"
-            style={{ 
-              background: colors.inputBg, 
-              maxHeight: '120px', 
+            style={{
+              background: colors.inputBg,
+              maxHeight: '120px',
               color: colors.textPrimary,
               cursor: isExpired ? 'not-allowed' : 'text'
             }}
@@ -1543,7 +1547,7 @@ function ChatInput({ colors, orgId, conv, account, isExpired, messages, onSent, 
           />
         </div>
         <div className="pb-1">
-          <button 
+          <button
             onClick={handleSend}
             disabled={!text.trim() || sending || isExpired}
             className={`p-2.5 rounded-full transition-all shadow-md ${text.trim() && !isExpired ? 'bg-blue-600 text-white scale-105 active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
@@ -1608,10 +1612,10 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
         <button onClick={onClose} className="text-gray-400 hover:bg-gray-200 p-1 rounded-full"><X size={18} /></button>
         <span className="font-bold text-[10px] uppercase tracking-widest text-gray-400">Dados da Lead</span>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto no-scrollbar pb-6">
         <div className="flex flex-col items-center p-6 bg-white border-b" style={{ background: colors.sidebarBg, borderColor: colors.border }}>
-          <div 
+          <div
             className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-3xl shadow-lg mb-3 ring-4 ring-offset-2 ring-gray-50"
             style={{ background: color }}
           >
@@ -1624,10 +1628,10 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
             )}
           </h2>
           <p className="text-gray-400 text-xs font-medium mb-4">{formatPhone(conv?.contact_phone || '')}</p>
-          
+
           <div className="flex flex-wrap gap-2 justify-center">
             {lead && (
-              <button 
+              <button
                 onClick={() => navigate(`/leads?search=${lead.id}`)}
                 className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-blue-50 text-blue-600 text-[11px] font-bold hover:bg-blue-100 transition-colors"
               >
@@ -1643,7 +1647,7 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
               <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">Painel do Funil</h4>
               {updating && <Loader2 size={11} className="animate-spin text-blue-500" />}
             </div>
-            
+
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setStatusDropOpen(v => !v)}
@@ -1662,7 +1666,7 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
                   {currentStatus?.label || 'Em atendimento'}
                 </div>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 4L6 8L10 4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M2 4L6 8L10 4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
 
@@ -1732,17 +1736,17 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
           </section>
 
           {lead?.quiz_respostas && (
-             <section>
-                <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Quiz</h4>
-                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  <QuizAnswers data={lead.quiz_respostas} colors={colors} />
-                </div>
-             </section>
+            <section>
+              <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Quiz</h4>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <QuizAnswers data={lead.quiz_respostas} colors={colors} />
+              </div>
+            </section>
           )}
 
           <section>
             <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Notas Internas</h4>
-            <textarea 
+            <textarea
               key={conv?.id}
               defaultValue={conv?.internal_notes || ''}
               onBlur={(e) => handleNotesUpdate(e.target.value)}
@@ -1771,7 +1775,7 @@ function MetricBox({ icon, label, value, color }: { icon: any, label: string, va
 function QuizAnswers({ data, colors }: { data: any, colors: any }) {
   const parsed = typeof data === 'string' ? JSON.parse(data) : data;
   const filteredEntries = Object.entries(parsed).filter(([key]) => QUIZ_LABELS[key]);
-  
+
   return (
     <div className="flex flex-col gap-2.5">
       {filteredEntries.map(([key, val]) => (
@@ -1888,7 +1892,7 @@ export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colo
     business_account_id: account?.business_account_id || '',
     token: account?.token || '',
     webhook_verify_token: account?.webhook_verify_token || 'floow_verify_token',
-    display_name: account?.display_name || ''
+    display_name: account?.display_name || '',
   });
   const [saving, setSending] = useState(false);
 
@@ -1922,22 +1926,22 @@ export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colo
             </div>
           </div>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">ID do Número de Telefone</label>
-              <input 
+              <input
                 required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
-                value={formData.phone_number_id} onChange={e => setFormData({...formData, phone_number_id: e.target.value})}
+                value={formData.phone_number_id} onChange={e => setFormData({ ...formData, phone_number_id: e.target.value })}
                 placeholder="Ex: 123456789012345"
               />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">ID da Conta de Negócio</label>
-              <input 
+              <input
                 required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
-                value={formData.business_account_id} onChange={e => setFormData({...formData, business_account_id: e.target.value})}
+                value={formData.business_account_id} onChange={e => setFormData({ ...formData, business_account_id: e.target.value })}
                 placeholder="Ex: 987654321098765"
               />
             </div>
@@ -1945,29 +1949,29 @@ export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colo
 
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">Token de Acesso Permanente</label>
-            <input 
+            <input
               required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
-              value={formData.token} onChange={e => setFormData({...formData, token: e.target.value})}
+              value={formData.token} onChange={e => setFormData({ ...formData, token: e.target.value })}
               placeholder="EAAG..."
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">Verify Token (Webhook)</label>
-            <input 
+            <input
               required className="p-3 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all bg-gray-50"
-              value={formData.webhook_verify_token} onChange={e => setFormData({...formData, webhook_verify_token: e.target.value})}
+              value={formData.webhook_verify_token} onChange={e => setFormData({ ...formData, webhook_verify_token: e.target.value })}
             />
           </div>
 
           <div className="pt-4 flex gap-3">
-            <button 
+            <button
               type="button" onClick={onCancel}
               className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
             >
               Cancelar
             </button>
-            <button 
+            <button
               type="submit" disabled={saving}
               className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
@@ -1975,7 +1979,7 @@ export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colo
             </button>
           </div>
         </form>
-        
+
         <div className="p-6 bg-gray-50 text-[11px] text-gray-400 flex flex-col gap-1 border-t">
           <p>● Certifique-se de configurar a URL de Callback no Painel da Meta:</p>
           <code className="bg-white p-1 rounded border block truncate">{WEBHOOK_URL}</code>
@@ -1987,7 +1991,7 @@ export function ConfigView({ colors, orgId, account, onSaved, onCancel }: { colo
 
 function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: any, onClose: () => void, onSent: () => void }) {
   const [loading, setLoading] = useState(false);
-  
+
   const templates = [
     {
       id: 'abordagem_inicial',
@@ -2045,7 +2049,7 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
           })
           .select()
           .single();
-        
+
         if (convErr) throw convErr;
         conversationId = newConv.id;
       }
@@ -2088,12 +2092,12 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
           <h3 className="text-xl font-bold">Enviar Modelo</h3>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
         </div>
-        
+
         <div className="p-6 flex flex-col gap-4">
           <p className="text-sm text-gray-500 mb-2">Selecione um modelo aprovado para reativar a conversa.</p>
-          
+
           {templates.map(t => (
-            <button 
+            <button
               key={t.id}
               disabled={loading}
               onClick={() => handleSend(t)}
@@ -2104,7 +2108,7 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
                 <Send size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600" />
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-3 leading-relaxed">
-                {t.body.replace('{{1}}', conv.lead?.nome || conv.contact_name || '...') }
+                {t.body.replace('{{1}}', conv.lead?.nome || conv.contact_name || '...')}
               </p>
             </button>
           ))}
@@ -2115,9 +2119,9 @@ function TemplateModal({ acc, conv, onClose, onSent }: { acc: WaAccount, conv: a
             </div>
           )}
         </div>
-        
+
         <div className="p-6 bg-gray-50 dark:bg-gray-800/50 flex gap-3">
-          <button 
+          <button
             onClick={onClose}
             className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-200 rounded-xl transition-colors"
           >

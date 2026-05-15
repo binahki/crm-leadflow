@@ -52,7 +52,7 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue"
 const CAMPOS_IGNORADOS = new Set([
   'nome', 'whatsapp', 'telefone', 'cidade', 'score', 'status', 'email',
   'utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term', 'utm_id',
-  'fbclid', 'brid', 'code', 'ip', 'platform', 'instagram', 'wa_sent', 'created_at', 'id',
+  'fbclid', 'brid', 'code', 'ip', 'platform', 'wa_sent', 'created_at', 'id',
   'tracking', 'responses', 'button', 'clicked',
 ]);
 const STRIP_PREFIXES = ['voce_', 'qual_sua_', 'quanto_gostaria_de_'];

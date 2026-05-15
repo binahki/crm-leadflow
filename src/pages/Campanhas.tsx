@@ -913,11 +913,3 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
     </div>
   );
 }
-      <style>{`
-        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-      `}</style>
-    </AppLayout>
-  );
-}
