@@ -253,7 +253,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
                     isDark={isDark}
                     isExpanded={expandedSessionId === sess.id}
                     onToggle={() => setExpandedSessionId(expandedSessionId === sess.id ? null : sess.id)}
-                    onViewLead={(leadId: string) => navigate(`/leads?search=${leadId}`)}
+                    onViewLead={(leadId: string | number) => navigate(`/leads?id=${leadId}`)}
                     calculateScore={calculateSessionScore}
                     totalPerguntas={perguntas.length}
                   />

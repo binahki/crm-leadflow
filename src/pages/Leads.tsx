@@ -394,6 +394,7 @@ function LeadsPage() {
   const [campanhaFiltro, setCampanhaFiltro] = useState('');
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
+  const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -415,6 +416,8 @@ function LeadsPage() {
     }
     if (status) setStatusFilter(status);
     if (searchParam) setSearch(decodeURIComponent(searchParam));
+    const idParam = params.get('id');
+    if (idParam) setTargetLeadId(idParam);
   }, []);
 
   const loadRestInBackground = useCallback(async (total: number, loaded: number) => {
@@ -498,6 +501,22 @@ function LeadsPage() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [orgId, orgReady]);
+
+  // Abre o drawer automaticamente quando ?id=NUMERO está na URL
+  useEffect(() => {
+    if (!targetLeadId || isLoading) return;
+    const lead = allLeads.find(l => String(l.id) === String(targetLeadId));
+    if (lead) {
+      handleViewLead(lead);
+      setTargetLeadId(null);
+    } else if (allLeads.length > 0) {
+      // Lead pode estar fora dos 200 carregados — busca direto no banco
+      supabase.from('leads').select('*').eq('id', targetLeadId).single()
+        .then(({ data }) => {
+          if (data) { handleViewLead(data as unknown as Lead); setTargetLeadId(null); }
+        });
+    }
+  }, [targetLeadId, isLoading, allLeads]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let r=[...allLeads];

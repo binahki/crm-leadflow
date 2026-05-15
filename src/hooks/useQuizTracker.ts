@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 function generateSessionId(): string {
@@ -25,6 +25,9 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
   const sessionIdRef = useRef<string>(generateSessionId());
   const iniciadoRef = useRef(false);
   const respostasRef = useRef<Record<string, any>>({});
+  // Ref para sempre ter o valor mais atual de totalEtapas dentro dos callbacks
+  const totalEtapasRef = useRef<number>(totalEtapas || 0);
+  useEffect(() => { totalEtapasRef.current = totalEtapas || 0; }, [totalEtapas]);
 
   const iniciarSessao = useCallback(async () => {
     if (iniciadoRef.current) return;
@@ -58,9 +61,11 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     }).eq('session_id', sessionIdRef.current);
   }, [iniciarSessao]);
 
-  const marcarConcluido = useCallback(async (leadId?: string) => {
+  const marcarConcluido = useCallback(async (leadId?: string | number) => {
     await supabase.from('quiz_sessoes').update({
       concluiu: true,
+      // ultima_etapa sempre recebe o total real — nunca 99 nem valor errado
+      ultima_etapa: totalEtapasRef.current,
       virou_lead: !!leadId,
       lead_id: leadId || null,
       updated_at: new Date().toISOString(),

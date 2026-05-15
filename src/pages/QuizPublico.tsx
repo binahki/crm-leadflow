@@ -372,11 +372,11 @@ export default function QuizPublico() {
       
       const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
 
-    setSubmitting(false);
-    if (error) { alert('Erro ao salvar. Tente novamente.'); return; }
+    if (error) { setSubmitting(false); alert('Erro ao salvar. Tente novamente.'); return; }
 
-    // Marcar sessão como concluída e vincular ao lead
+    // Marcar sessão como concluída IMEDIATAMENTE após o insert, antes de qualquer redirect
     if (newLead?.id) await marcarConcluido(newLead.id);
+    setSubmitting(false);
 
     const num = quiz.redirect_whatsapp?.replace(/\D/g, '');
     const msg = `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
@@ -549,7 +549,7 @@ export default function QuizPublico() {
       onContinue={handleContinue}
       onGoToColeta={() => {
         setPhase('coleta');
-        registrarEtapa(99, 'Coleta Manual', 'Acessou coleta manual');
+        registrarEtapa(totalVisible, 'Coleta Manual', 'Acessou coleta manual');
       }}
       onNomeChange={setNome}
       onWhatsappChange={setWhatsapp}
