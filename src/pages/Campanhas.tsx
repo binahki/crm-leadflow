@@ -643,95 +643,276 @@ export default function CampanhasPage() {
           </div>
         )}
       </div>
-      {/* Painel IA */}
-      {showAiPanel&&aiLog&&(
-        <>
-          <div onClick={()=>setShowAiPanel(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100}}/>
-          <div style={{position:'fixed',right:0,top:0,bottom:0,width:isMobile?'100vw':'min(420px, 100vw)',background:dark?'#111113':'#fff',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,zIndex:101,overflowY:'auto',padding:'20px',boxShadow:'-8px 0 32px rgba(0,0,0,0.2)',boxSizing:'border-box'}}>
-            {/* Header */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
-              <span style={{fontSize:'14px',fontWeight:600,color:dark?'#f4f4f5':'#111827'}}>
-                IA • hoje às {(() => {
-                  try {
-                    const d = new Date(aiLog.created_at);
-                    if (isNaN(d.getTime())) return '';
-                    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                  } catch { return ''; }
-                })()}
-              </span>
-              <button onClick={()=>setShowAiPanel(false)} style={{background:'none',border:'none',cursor:'pointer',color:dark?'#71717a':'#6b7280',padding:'4px',display:'flex',borderRadius:'6px'}}>
-                <X style={{width:'16px',height:'16px'}}/>
-              </button>
-            </div>
-            {/* Resumo */}
-            {aiLog.resumo&&(
-              <p style={{margin:'0 0 14px',fontSize:'13px',color:dark?'#a1a1aa':'#6b7280',lineHeight:1.6}}>{aiLog.resumo}</p>
-            )}
-            {/* Alerta */}
-            {aiLog.alerta&&(
-              <div style={{padding:'10px 12px',borderRadius:'8px',marginBottom:'14px',background:dark?'rgba(239,68,68,0.1)':'#fef2f2',border:'1px solid rgba(239,68,68,0.25)'}}>
-                <p style={{margin:0,fontSize:'12.5px',color:'#ef4444',lineHeight:1.5}}>{aiLog.alerta}</p>
-              </div>
-            )}
-            {/* Ações executadas */}
-            {aiLog.acoes_executadas?.length>0&&(
-              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                {aiLog.acoes_executadas.map((acao:any,i:number)=>{
-                  const isBudget = acao.tipo==='ajustar_budget_campanha'||acao.tipo==='ajustar_budget_adset';
-                  const isUp     = isBudget&&acao.direcao==='aumento';
-                  const isDown   = isBudget&&acao.direcao==='reducao';
-                  const isPause  = typeof acao.tipo==='string'&&acao.tipo.startsWith('pausar_');
-                  const hasError = acao.ok===false;
-
-                  const acaoColor = isUp?'#10b981':isDown?'#ef4444':'#71717a';
-                  const seta      = isUp?'↑':isDown?'↓':'⏸';
-                  const valorStr  = isBudget&&acao.novo_budget!=null
-                    ? `${seta} R$${acao.novo_budget}/dia`
-                    : seta;
-
-                  return(
-                    <div key={i} style={{
-                      display:'flex',alignItems:'flex-start',gap:'10px',
-                      padding:'9px 12px',borderRadius:'9px',
-                      background:dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)',
-                      border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,
-                    }}>
-                      {/* Seta/valor colorido */}
-                      <span style={{
-                        fontSize:'12.5px',fontWeight:700,color:acaoColor,
-                        whiteSpace:'nowrap',flexShrink:0,lineHeight:'18px',
-                        minWidth:'70px',
-                      }}>{valorStr}</span>
-
-                      {/* Nome + motivo + badge erro */}
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
-                          <span style={{
-                            fontSize:'12.5px',fontWeight:600,
-                            color:isPause?(dark?'#71717a':'#9ca3af'):(dark?'#f4f4f5':'#111827'),
-                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                          }}>{acao.nome||acao.campanha_nome||'—'}</span>
-                          {hasError&&(
-                            <span style={{
-                              fontSize:'10px',fontWeight:700,color:'#ef4444',
-                              background:dark?'rgba(239,68,68,0.12)':'#fef2f2',
-                              border:'1px solid rgba(239,68,68,0.3)',
-                              padding:'1px 6px',borderRadius:'4px',flexShrink:0,lineHeight:'16px',
-                            }}>ERRO</span>
-                          )}
-                        </div>
-                        {acao.motivo&&(
-                          <p style={{margin:'2px 0 0',fontSize:'11.5px',color:dark?'#52525b':'#9ca3af',lineHeight:1.45,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{acao.motivo}</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
+      {/* Painel IA - Refactor Premium */}
+      {showAiPanel && aiLog && (
+        <AIOptimizationPanel 
+          log={aiLog} 
+          dark={dark} 
+          isMobile={isMobile} 
+          allLeads={allLeads}
+          onClose={() => setShowAiPanel(false)} 
+        />
       )}
+      <style>{`
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+      `}</style>
+    </AppLayout>
+  );
+}
+
+// ── Componentes do Painel de Otimização IA ───────────────────────────────────
+
+function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#a1a1aa' : '#6b7280';
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const cardBg = dark ? '#161619' : '#fff';
+
+  const leadsEmAtendimento = allLeads.filter(l => Number(l.status) === 1).length;
+
+  // Parser simples para extrair métricas do resumo se estiver no formato texto
+  const parseMetric = (label: string) => {
+    const regex = new RegExp(`${label}:?\\s*([^|\\n\\.]+)(\\.|\\||\\n|$)`, 'i');
+    const match = log.resumo?.match(regex);
+    return match ? match[1].trim() : null;
+  };
+
+  const kpis = [
+    { label: 'Investimento', value: parseMetric('Investimento') || '—', icon: DollarSign, color: '#10b981' },
+    { label: 'Leads', value: parseMetric('Leads') || '—', icon: Users, color: '#3b82f6' },
+    { label: 'CPL médio', value: parseMetric('CPL médio') || '—', icon: TrendingUp, color: '#10b981' },
+    { label: 'Projeção', value: parseMetric('Projeção mensal') || '—', icon: BarChart, color: '#a855f7' },
+  ];
+
+  const statusBudget = parseMetric('Status do budget');
+  const hasAlert = !!log.alerta;
+  const isCritical = hasAlert && (log.alerta.toLowerCase().includes('crítico') || log.alerta.toLowerCase().includes('meta'));
+  
+  const statusColor = isCritical ? '#ef4444' : (hasAlert || (statusBudget?.includes('Acima'))) ? '#f59e0b' : '#10b981';
+  const statusLabel = isCritical ? 'CPL fora da meta' : (hasAlert || (statusBudget?.includes('Acima'))) ? 'Atenção ao budget' : 'IA estável';
+
+  return (
+    <>
+      <div 
+        onClick={onClose} 
+        style={{ 
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', 
+          backdropFilter: 'blur(4px)', zIndex: 1000,
+          opacity: mounted ? 1 : 0, transition: 'opacity 0.3s ease'
+        }} 
+      />
+      <div style={{
+        position: 'fixed', right: 0, top: 0, bottom: 0,
+        width: isMobile ? '100%' : '440px',
+        background: dark ? '#0d0d0f' : '#f8fafc',
+        borderLeft: `1px solid ${border}`,
+        zIndex: 1001,
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-20px 0 50px rgba(0,0,0,0.15)',
+        transform: mounted ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}>
+        {/* Header Section */}
+        <div style={{ padding: '24px', borderBottom: `1px solid ${border}`, background: cardBg }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>IA Otimizou suas campanhas</h2>
+              <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>
+                Hoje às {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: txtMid, borderRadius: '8px' }}>
+              <X size={20} />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(16,185,129,0.2)' }}>
+              {log.acoes_executadas?.length || 0} ações executadas
+            </span>
+            {kpis[2].value !== '—' && (
+              <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(59,130,246,0.2)' }}>
+                {kpis[2].value} CPL médio
+              </span>
+            )}
+            <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(245,158,11,0.2)' }}>
+              {leadsEmAtendimento} leads em atendimento
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}` }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: statusColor }}>{statusLabel}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Quick KPIs Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {kpis.map((kpi, i) => (
+              <div key={i} style={{ 
+                padding: '16px', borderRadius: '16px', background: cardBg, 
+                border: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px',
+                transition: 'transform 0.2s ease', cursor: 'default'
+              }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: `${kpi.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <kpi.icon size={14} color={kpi.color} />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</span>
+                </div>
+                <span style={{ fontSize: '18px', fontWeight: 800, color: txtHi }}>{kpi.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Budget Status Alert if relevant */}
+          {statusBudget && (
+            <div style={{ 
+              padding: '12px 16px', borderRadius: '12px', 
+              background: statusBudget.includes('Acima') ? 'rgba(245,158,11,0.05)' : 'rgba(16,185,129,0.05)',
+              border: `1px solid ${statusBudget.includes('Acima') ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
+              display: 'flex', alignItems: 'center', gap: '10px'
+            }}>
+              <AlertTriangle size={16} color={statusBudget.includes('Acima') ? '#f59e0b' : '#10b981'} />
+              <span style={{ fontSize: '12px', fontWeight: 500, color: statusBudget.includes('Acima') ? '#d97706' : '#059669' }}>
+                Budget: {statusBudget}
+              </span>
+            </div>
+          )}
+
+          {/* Critical Alert */}
+          {log.alerta && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#ef4444' }}>⚠️</span> Ponto de atenção
+              </p>
+              <div style={{ 
+                padding: '14px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', 
+                border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '13px', lineHeight: 1.5, fontWeight: 500
+              }}>
+                {log.alerta}
+              </div>
+            </div>
+          )}
+
+          {/* Top Performance (Insight fallback) */}
+          {log.insights?.length > 0 && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#f59e0b' }}>🏆</span> Top Performance
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {log.insights.slice(0, 2).map((insight: any, i: number) => (
+                  <div key={i} style={{ 
+                    padding: '12px 14px', borderRadius: '12px', background: cardBg, 
+                    border: `1px solid ${border}`, fontSize: '12.5px', color: txtHi, lineHeight: 1.5
+                  }}>
+                    {typeof insight === 'string' ? insight : insight.mensagem}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Executed Actions Cards */}
+          {log.acoes_executadas?.length > 0 && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>Ações Executadas</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {log.acoes_executadas.map((acao: any, i: number) => (
+                  <ActionCard key={i} acao={acao} dark={dark} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Summary (Secondary) */}
+          {log.resumo && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Observações</p>
+              <div style={{ padding: '16px', borderRadius: '16px', border: `1px dashed ${border}`, background: 'transparent' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.6 }}>{log.resumo}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer info */}
+        <div style={{ padding: '16px 24px', borderTop: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
+          <p style={{ fontSize: '11px', color: txtMid, margin: 0, textAlign: 'center' }}>
+            As decisões da IA são baseadas na performance dos últimos 7 dias.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
+  const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
+  const isUp = isBudget && acao.direcao === 'aumento';
+  const isDown = isBudget && acao.direcao === 'reducao';
+  const isPause = typeof acao.tipo === 'string' && acao.tipo.startsWith('pausar_');
+  const hasError = acao.ok === false;
+
+  const color = isUp ? '#10b981' : isDown ? '#ef4444' : isPause ? '#71717a' : '#3b82f6';
+  const bg = isUp ? 'rgba(16,185,129,0.05)' : isDown ? 'rgba(239,68,68,0.05)' : 'rgba(113,113,122,0.05)';
+  const Icon = isUp ? TrendingUp : isDown ? TrendingDown : isPause ? Pause : Zap;
+
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#a1a1aa' : '#6b7280';
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+
+  return (
+    <div style={{ 
+      padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', 
+      border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start',
+      transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden'
+    }}>
+      <div style={{ 
+        width: '36px', height: '36px', borderRadius: '10px', background: bg, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 
+      }}>
+        <Icon size={18} color={color} />
+      </div>
+      
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {isUp ? 'Budget aumentado' : isDown ? 'Budget reduzido' : isPause ? 'Pausado' : 'Ação IA'}
+          </span>
+          {hasError && (
+            <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>
+          )}
+        </div>
+        
+        <p style={{ fontSize: '13.5px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {acao.nome || acao.campanha_nome || '—'}
+        </p>
+
+        {isBudget && acao.novo_budget != null && (
+          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px' }}>
+            <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
+            <span style={{ margin: '0 8px', color: txtMid }}>→</span>
+            <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+          </p>
+        )}
+
+        {acao.motivo && (
+          <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>
+            {acao.motivo}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
