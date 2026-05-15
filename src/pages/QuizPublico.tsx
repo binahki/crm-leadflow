@@ -27,22 +27,13 @@ function launchConfetti(primary: string) {
   document.head.appendChild(s);
 }
 
-const MALE_ENDINGS = ['o', 'r', 'l', 's', 'm', 'n', 'v', 'x'];
-const FEMALE_EXCEPTIONS = ['alice', 'beatriz', 'nicole', 'yasmin', 'ellen', 'suelen', 'lilian', 'miriam', 'ester', 'ruth', 'izabel', 'raquel', 'abigail', 'joyce'];
-const MALE_EXCEPTIONS = ['lua', 'luca', 'joshua', 'elias', 'isaías', 'matias', 'nicolas', 'jonas', 'dimas'];
-
 function isProbablyMale(name: string): boolean {
   const n = name.trim().toLowerCase();
   if (!n) return false;
   const firstWord = n.split(' ')[0];
-  const lastWord = n.split(' ').pop() || '';
   
-  const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre'];
+  const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre', 'guilherme', 'henrique', 'murilo', 'vinicius', 'vitor', 'eduardo', 'leonardo', 'gabriel', 'rafael', 'thiago', 'bruno', 'felipe', 'gustavo', 'igor', 'caio', 'diego', 'marcelo', 'ricardo', 'andré', 'andre'];
   if (commonMaleNames.includes(firstWord)) return true;
-
-  // Heurística para português: termina em 'o' ou 'os' e não é exceção
-  if (lastWord.endsWith('o') && !['conceição', 'socorro', 'rosário', 'damares'].includes(lastWord)) return true;
-  if (lastWord.endsWith('os') && !['marcos'].includes(lastWord)) return true;
 
   return false;
 }

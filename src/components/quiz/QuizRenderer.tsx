@@ -145,12 +145,9 @@ export function QuizRenderer({
   const isMaleName = (name: string): boolean => {
     const n = name.trim().toLowerCase();
     if (!n) return false;
-    const lastWord = n.split(' ').pop() || '';
-    // Heurística básica para português: termina em 'o' ou 'os' e não é exceção
-    const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david'];
-    if (commonMaleNames.includes(n.split(' ')[0])) return true;
-    if (lastWord.endsWith('o') && !['conceição', 'socorro', 'rosário'].includes(lastWord)) return true;
-    if (lastWord.endsWith('os') && !['marcos'].includes(lastWord)) return true; // Marcos é masculino, mas 'marcos' aqui seria pego pelo endsWith 'os'
+    const firstWord = n.split(' ')[0];
+    const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre', 'guilherme', 'henrique', 'murilo', 'vinicius', 'eduardo', 'leonardo', 'andré', 'andre'];
+    if (commonMaleNames.includes(firstWord)) return true;
     return false;
   };
 
@@ -168,16 +165,6 @@ export function QuizRenderer({
     }
   }, [phase, quiz.analise_duracao]);
 
-  React.useEffect(() => {
-    if (citySearch.length > 2) {
-      fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios?nome=${citySearch}&orderBy=nome`)
-        .then(res => res.json())
-        .then(data => setCities(data.map((c: any) => c.nome)))
-        .catch(() => {});
-    } else {
-      setCities([]);
-    }
-  }, [citySearch]);
 
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
@@ -453,27 +440,12 @@ export function QuizRenderer({
                   <div key={cfg.campo}>
                     <label style={lblS}>{cfg.label} <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.obrigatorio ? '*' : '(opcional)'}</span></label>
                     {cfg.campo === 'cidade' ? (
-                      <div style={{ position: 'relative' }}>
-                        <input 
-                          value={citySearch || cidade}
-                          onChange={e => {
-                            const val = e.target.value.replace(/[0-9]/g, '');
-                            setCitySearch(val);
-                            onCidadeChange?.(val);
-                            setShowCitySugg(true);
-                          }}
-                          onBlur={() => setTimeout(() => setShowCitySugg(false), 200)}
-                          placeholder="Ex: São Paulo" 
-                          style={inpS} 
-                        />
-                        {showCitySugg && cities.length > 0 && (
-                          <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
-                            {cities.slice(0, 10).map(c => (
-                              <div key={c} onClick={() => { onCidadeChange?.(c); setCitySearch(c); setCities([]); }} style={{ padding: '10px 14px', fontSize: '13px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>{c}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <input 
+                        value={cidade}
+                        onChange={e => onCidadeChange?.(e.target.value.replace(/[0-9]/g, ''))}
+                        placeholder="Ex: São Paulo" 
+                        style={inpS} 
+                      />
                     ) : cfg.campo === 'whatsapp' ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <input 

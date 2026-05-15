@@ -1116,6 +1116,14 @@ export default function QuizBuilderPage() {
                         <div style={{ fontSize: '12px', color: textMut }}>/{q.slug} • {q.publicado ? 'Publicado' : 'Rascunho'}</div>
                       </div>
                       <div style={{ display: 'flex', gap: '4px' }}>
+                        <button onClick={e => { 
+                            e.stopPropagation(); 
+                            const link = `${BASE_URL}/quiz/${q.slug}`;
+                            navigator.clipboard.writeText(link);
+                            toast.success('Link copiado!');
+                          }} style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: textMut }} title="Copiar link">
+                          <Copy size={16} />
+                        </button>
                         <button onClick={e => { e.stopPropagation(); window.open(`${BASE_URL}/quiz/${q.slug}`, '_blank'); }} style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: textMut }} title="Visualizar">
                           <ExternalLink size={16} />
                         </button>
@@ -1742,6 +1750,25 @@ export default function QuizBuilderPage() {
                 </div>
               </div>
             )}
+            <button
+              onClick={() => {
+                const utm = 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}';
+                navigator.clipboard.writeText(utm);
+                toast.success('Parâmetros UTM copiados!');
+              }}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '10px',
+                border: `1.5px dashed ${isDark ? '#333' : '#cbd5e1'}`, background: 'transparent',
+                color: textMain, fontSize: '12px', fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.background = hexToRgba('#2563eb', 0.05); }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = isDark ? '#333' : '#cbd5e1'; e.currentTarget.style.color = textMain; e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Copy size={14} />
+              Copiar parâmetros de UTM
+            </button>
           </div>
         </div>
       );
