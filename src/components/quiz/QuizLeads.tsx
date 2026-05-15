@@ -255,6 +255,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
                     onToggle={() => setExpandedSessionId(expandedSessionId === sess.id ? null : sess.id)}
                     onViewLead={(leadId: string) => navigate(`/leads?search=${leadId}`)}
                     calculateScore={calculateSessionScore}
+                    totalPerguntas={perguntas.length}
                   />
                 ))
               )}
@@ -267,13 +268,15 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
   );
 }
 
-function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, calculateScore }: any) {
+function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, calculateScore, totalPerguntas }: any) {
   const textMain = isDark ? '#f4f4f5' : '#111827';
   const textMut = isDark ? '#71717a' : '#6b7280';
   const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  
+
   const score = calculateScore(session.respostas);
-  const progressPct = session.total_etapas > 0 ? Math.round((session.ultima_etapa / session.total_etapas) * 100) : 0;
+  // Usa total_etapas da sessão; se for 0, usa totalPerguntas do banco como fallback
+  const effectiveTotal = session.total_etapas > 0 ? session.total_etapas : (totalPerguntas || 0);
+  const progressPct = effectiveTotal > 0 ? Math.round((session.ultima_etapa / effectiveTotal) * 100) : 0;
   
   const lastAnswer = useMemo(() => {
     if (!session.respostas) return '—';
@@ -319,7 +322,7 @@ function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, 
         </td>
         <td style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600 }}>{session.ultima_etapa}/{session.total_etapas}</div>
+            <div style={{ fontSize: '11px', fontWeight: 600 }}>{session.ultima_etapa}/{effectiveTotal || '?'}</div>
             <div style={{ width: '80px', height: '4px', background: border, borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{ width: `${progressPct}%`, height: '100%', background: statusInfo.color }} />
             </div>

@@ -15,3 +15,7 @@ export function setMetaCache(key: string, data: any) {
     sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
   } catch {}
 }
+
+export function clearMetaCache(key: string) {
+  try { sessionStorage.removeItem(key); } catch {}
+}

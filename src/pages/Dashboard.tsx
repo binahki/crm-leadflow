@@ -12,7 +12,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { safeName, safeInitials } from '@/utils/safeName';
-import { getMetaCache, setMetaCache } from '@/lib/metaCache';
+import { getMetaCache, setMetaCache, clearMetaCache } from '@/lib/metaCache';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
 interface Campaign { id: string; name: string; status: string; spend: number; leads_api: number; }
@@ -302,21 +302,72 @@ export default function Dashboard() {
     setLoading(false);
     return fetchedLeads;
   };
-  const loadMeta = async (currentLeads?: Lead[]) => { if(!metaToken||!metaAccount){setMetaLoading(false);return;} const key=`meta_dash_${orgId}_${selectedPeriod}`; const cached=getMetaCache(key); if(cached){setMetaMetrics(cached.metrics);setMetaCampaigns(cached.campaigns);setMetaLoading(false);setMetaError(false);return;} setMetaLoading(true); setMetaError(false); try { const{metrics,campaigns}=await fetchMetaData(selectedPeriod,customFrom,customTo,currentLeads||allLeads,metaToken,metaAccount); setMetaCache(key,{metrics,campaigns}); setMetaMetrics(metrics); setMetaCampaigns(campaigns); setMetaError(false); } catch { setMetaError(true); } setMetaLoading(false); };
+  function getMetaCacheKey(period: string, from?: string, to?: string) {
+    if (period === 'custom' && from && to) return `meta_dash_${orgId}_custom_${from}_${to}`;
+    return `meta_dash_${orgId}_${period}`;
+  }
+
+  const loadMeta = async (currentLeads?: Lead[]) => {
+    if (!metaToken || !metaAccount) { setMetaLoading(false); return; }
+    const key = getMetaCacheKey(selectedPeriod, customFrom, customTo);
+    const cached = getMetaCache(key);
+    if (cached) {
+      setMetaMetrics(cached.metrics);
+      setMetaCampaigns(cached.campaigns);
+      setMetaLoading(false);
+      setMetaError(false);
+      return;
+    }
+    setMetaLoading(true);
+    setMetaError(false);
+    try {
+      const { metrics, campaigns } = await fetchMetaData(selectedPeriod, customFrom, customTo, currentLeads || allLeads, metaToken, metaAccount);
+      // Só cacheia se tiver dados reais — nunca cacheia resultado zerado
+      if (metrics.spend > 0 || campaigns.length > 0) {
+        setMetaCache(key, { metrics, campaigns });
+      }
+      setMetaMetrics(metrics);
+      setMetaCampaigns(campaigns);
+      setMetaError(false);
+    } catch { setMetaError(true); }
+    setMetaLoading(false);
+  };
 
   useEffect(() => { if(!user||!orgReady||!orgId)return; fetchLeads().then(leads=>{ if(metaReady&&leads.length>0)loadMeta(leads); }); }, [user?.id,orgReady,orgId,location.key]); // eslint-disable-line
   useEffect(() => { if(!metaReady)return; if(allLeads.length>0)loadMeta(); }, [metaReady,selectedPeriod,customFrom,customTo]); // eslint-disable-line
   useEffect(() => { if(!orgReady||!orgId)return; const ch=supabase.channel(`dash-rt-${orgId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, [orgId,orgReady]); // eslint-disable-line
 
-  function selectPeriod(value: string) { if(value==='custom'){setShowDropdown(false);setShowCustom(true);return;} setSelectedPeriod(value); try { localStorage.setItem(STORAGE_KEY,value); } catch {} setShowDropdown(false); setShowCustom(false); }
+  // Polling: recarrega leads + Meta a cada 5 minutos
+  useEffect(() => {
+    if (!orgReady || !orgId || !metaReady || !metaToken || !metaAccount) return;
+    const interval = setInterval(async () => {
+      clearMetaCache(getMetaCacheKey(selectedPeriod, customFrom, customTo));
+      const leads = await fetchLeads();
+      await loadMeta(leads);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [orgId, orgReady, metaReady, metaToken, metaAccount, selectedPeriod, customFrom, customTo]); // eslint-disable-line
+
+  function selectPeriod(value: string) {
+    if (value === 'custom') { setShowDropdown(false); setShowCustom(true); return; }
+    // Limpa cache do período novo antes de buscar — nunca serve cache de período diferente
+    clearMetaCache(getMetaCacheKey(value));
+    setSelectedPeriod(value);
+    try { localStorage.setItem(STORAGE_KEY, value); } catch {}
+    setShowDropdown(false);
+    setShowCustom(false);
+  }
   function applyCustom() { if(!customFrom||!customTo)return; setSelectedPeriod('custom'); try { localStorage.setItem(STORAGE_KEY,'custom'); localStorage.setItem(STORAGE_CUSTOM,JSON.stringify({from:customFrom,to:customTo})); } catch {} setShowCustom(false); }
   async function handleRefresh() {
+    // Limpa o cache do período atual antes de buscar dados frescos
+    clearMetaCache(getMetaCacheKey(selectedPeriod, customFrom, customTo));
     setIsRefreshing(true);
     try {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), 15000)
       );
-      await Promise.race([Promise.all([fetchLeads(), loadMeta()]), timeout]);
+      const leads = await fetchLeads();
+      await Promise.race([loadMeta(leads), timeout]);
     } catch (err) {
       console.warn('[refresh] timeout ou erro:', err);
     }
