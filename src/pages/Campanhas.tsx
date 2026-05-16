@@ -42,7 +42,7 @@ function calcScore(
     ? Math.min(...campLeads.map(l => new Date((l as any).created_at || Date.now()).getTime()))
     : Date.now();
   const ageDays = (Date.now() - oldest) / (1000 * 60 * 60 * 24);
-  const isNew = ageDays < 7;
+  const isNew = ageDays < 3;
   const potenciais = campLeads.filter(l => [2, 5].includes(Number((l as any).status))).length;
 
   const comCPR = allRows.filter(x => x.cpr > 0);
@@ -87,11 +87,10 @@ function calcScore(
   const maxLeads = Math.max(...allRows.map(x => x.leads), 1);
   score += Math.round((r.leads / maxLeads) * 5);
 
-  // 6. Bônus campanha nova
+  // 6. Bônus campanha nova (sem bônus fixo — aguarda dados mínimos)
   if (isNew) {
-    score += 10;
-    if (r.leads >= 10)   score += 5;
-    if (potenciais >= 1) score += 10;
+    if (r.leads >= 5 && potenciais >= 1) score += 10;
+    else if (r.leads >= 10) score += 5;
   }
 
   // 7. Dias ativos
@@ -111,7 +110,18 @@ function scoreColor(score: number): string {
   return '#b91c1c';
 }
 
-function scoreLabel(score: number): string {
+function scoreColorSolid(score: number): string {
+  if (score >= 90) return '#059669';
+  if (score >= 75) return '#10b981';
+  if (score >= 62) return '#34d399';
+  if (score >= 50) return '#fbbf24';
+  if (score >= 38) return '#f97316';
+  if (score >= 25) return '#ef4444';
+  return '#b91c1c';
+}
+
+function scoreLabel(score: number, isNew?: boolean): string {
+  if (isNew) return 'Aguardando dados';
   if (score >= 75) return 'Escalar';
   if (score >= 50) return 'Monitorar';
   if (score >= 38) return 'Otimizar';
@@ -623,19 +633,22 @@ export default function CampanhasPage() {
 
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart
-                  data={[...chartRows]
-                    .map(r => ({
-                      name: r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim(),
+                  data={rankedRows.map(r => {
+                    const campLeadsList = campLeadsMap.get(r.id) || [];
+                    const potenciais = campLeadsList.filter(l => [2, 5].includes(Number((l as any).status))).length;
+                    const raw = r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim();
+                    return {
+                      name: raw.length > 14 ? raw.slice(0, 14) + '…' : raw,
                       fullName: r.fullName,
                       leads: r.leads,
                       revs: r.rev,
                       cpl: r.cpl,
                       cpr: r.cpr > 0 ? Math.round(r.cpr) : 0,
                       spend: r.spend,
+                      potenciais,
                       id: r.id,
-                      score: campScores.get(r.id) ?? 50,
-                    }))
-                    .sort((a, b) => b.score - a.score)}
+                    };
+                  })}
                   margin={{ top: 10, right: 10, left: -10, bottom: 20 }}
                   barCategoryGap="30%"
                   barGap={4}
@@ -648,7 +661,6 @@ export default function CampanhasPage() {
                     tickLine={false}
                     interval={0}
                     height={40}
-                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 12) + '…' : v}
                   />
                   <YAxis tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                   <Tooltip
@@ -656,29 +668,29 @@ export default function CampanhasPage() {
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
                       const d = payload[0]?.payload;
-                      const isLeads = payload[0]?.dataKey === 'leads';
                       return (
-                        <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px' }}>
-                          <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 10px', lineHeight: 1.4 }}>{d.fullName}</p>
-                          {isLeads ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                              {[{ label: 'Leads', val: d.leads, color: '#10b981', bold: true }, { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
-                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
-                                  <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
-                                  <span style={{ fontSize: bold ? '13px' : '12px', fontWeight: bold ? 700 : 600, color }}>{val}</span>
-                                </div>
-                              ))}
+                        <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '210px' }}>
+                          <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 12px', lineHeight: 1.4 }}>{d.fullName}</p>
+                          {/* Seção Leads */}
+                          <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: `1px solid ${border}` }}>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Leads</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Total</span><span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981' }}>{d.leads}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>CPL</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>{d.cpl > 0 ? `R$ ${d.cpl}` : '—'}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Investido</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>R$ {fmt(d.spend)}</span></div>
                             </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                              {[{ label: 'Revendedoras', val: d.revs, color: '#a855f7', bold: true }, { label: 'CPR', val: d.cpr > 0 ? `R$ ${d.cpr}` : '—', color: '#a855f7', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
-                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
-                                  <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
-                                  <span style={{ fontSize: bold ? '13px' : '12px', fontWeight: bold ? 700 : 600, color }}>{val}</span>
-                                </div>
-                              ))}
+                          </div>
+                          {/* Seção Revendedoras */}
+                          <div>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Revendedoras</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Total</span><span style={{ fontSize: '12px', fontWeight: 700, color: '#a855f7' }}>{d.revs}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>CPR</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>{d.cpr > 0 ? `R$ ${d.cpr}` : '—'}</span></div>
+                              {d.potenciais > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Em potencial</span><span style={{ fontSize: '12px', fontWeight: 600, color: '#f59e0b' }}>+{d.potenciais}</span></div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     }}
@@ -712,7 +724,7 @@ export default function CampanhasPage() {
                   ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
                   : Date.now();
                 const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
-                const isNew = ageDays < 7;
+                const isNew = ageDays < 3;
                 const potenciais = campLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;
                 return (
                   <div key={r.id} style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
@@ -738,22 +750,20 @@ export default function CampanhasPage() {
                         {r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : r.leads > 0 ? `${r.leads} leads` : '—'}
                       </span>
                     </div>
-                    {/* Barra de score gradiente */}
+                    {/* Barra de score — cor sólida baseada no score */}
                     <div style={{ position: 'relative' }}>
                       <div style={{ height: '6px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                         <div style={{
                           height: '100%',
                           width: `${r.score}%`,
                           borderRadius: '99px',
-                          background: 'linear-gradient(90deg, #b91c1c 0%, #ef4444 20%, #f97316 35%, #fbbf24 50%, #34d399 65%, #10b981 80%, #059669 100%)',
-                          backgroundSize: '200% 100%',
-                          backgroundPosition: `${100 - r.score}% 0`,
+                          background: scoreColorSolid(r.score),
                           transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                        <span style={{ fontSize: '10px', color: txtMid }}>{scoreLabel(r.score)}</span>
-                        <span style={{ fontSize: '10px', fontWeight: 700, color }}>{r.score}%</span>
+                        <span style={{ fontSize: '10px', color: txtMid }}>{scoreLabel(r.score, isNew)}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: scoreColorSolid(r.score) }}>{r.score}%</span>
                       </div>
                     </div>
                   </div>
@@ -843,9 +853,9 @@ export default function CampanhasPage() {
                           {!isMobile&&(
                             <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
                               <div style={{height:'4px',width:'60px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                                <div style={{height:'100%',width:`${campScore}%`,background:'linear-gradient(90deg, #b91c1c 0%, #ef4444 20%, #f97316 35%, #fbbf24 50%, #34d399 65%, #10b981 80%, #059669 100%)',backgroundSize:'200% 100%',backgroundPosition:`${100-campScore}% 0`,borderRadius:'99px'}}/>
+                                <div style={{height:'100%',width:`${campScore}%`,background:scoreColorSolid(campScore),borderRadius:'99px'}}/>
                               </div>
-                              <span style={{fontSize:'11px',color:scoreCol,fontWeight:700}}>{campScore}%</span>
+                              <span style={{fontSize:'11px',color:scoreColorSolid(campScore),fontWeight:700}}>{campScore}%</span>
                             </div>
                           )}
                         </div>
