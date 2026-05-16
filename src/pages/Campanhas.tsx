@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, Cell, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, Cell, LabelList, ReferenceArea, ReferenceLine } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
@@ -496,105 +496,158 @@ export default function CampanhasPage() {
         {/* Gráfico de Eficiência (Substitui Ranking Antigo e Alertas) */}
         {!loading && campaigns.length > 0 && (
           <div style={{ marginTop: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Matriz de Eficiência
-                </h3>
-                <p style={{ fontSize: '12px', color: txtMid, margin: 0 }}>
-                  Campanhas eficientes e lucrativas (mais revendedoras, menor CPR) ficam no topo esquerdo.
-                </p>
-              </div>
-            </div>
-            
-            <div style={{ 
-              position: 'relative', width: '100%', height: isMobile ? '320px' : '420px', 
-              background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, 
-              overflow: 'hidden', padding: '24px'
-            }}>
-              {(()=>{
-                const validRevs = campaigns.map(c => {
-                  const campRevsList = getCampRevs(c.name, c.id);
-                  const cR = campRevsList.length;
-                  const cpr = cR > 0 && c.spend > 0 ? c.spend / cR : 0;
-                  return { ...c, cR, cpr };
-                });
-                
-                const maxRevs = Math.max(...validRevs.map(c => c.cR), 1);
-                const validCPRs = validRevs.filter(c => c.cR > 0).map(c => c.cpr);
-                const maxCPR = validCPRs.length > 0 ? Math.max(...validCPRs) : 100;
+            {(()=>{
+              const chartRows = campaigns.map(c => {
+                const campRevsList = getCampRevs(c.name, c.id);
+                const campCRMLeads = getCampLeads(c.name, c.id);
+                const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
+                const rev = campRevsList.length;
+                const cpr = rev > 0 && c.spend > 0 ? c.spend / rev : 0;
+                const cpl = cL > 0 && c.spend > 0 ? c.spend / cL : 0;
+                return {
+                  id: c.id,
+                  name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+                  fullName: c.name,
+                  rev,
+                  leads: cL,
+                  cpr,
+                  cpl: Math.round(cpl),
+                  spend: c.spend
+                };
+              });
 
-                return (
-                  <>
-                    {/* Eixos */}
-                    <div style={{ position: 'absolute', left: 40, right: 30, top: 30, bottom: 40, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
-                      <span style={{ position: 'absolute', top: -20, left: -10, fontSize: '10px', color: txtLow, fontWeight: 600 }}>+ REVS</span>
-                      <span style={{ position: 'absolute', bottom: -5, left: -25, fontSize: '10px', color: txtLow }}>0</span>
-                      <span style={{ position: 'absolute', right: -15, bottom: -22, fontSize: '10px', color: txtLow, fontWeight: 600 }}>+ CPR</span>
+              const mediaRevs = chartRows.reduce((s,r) => s + r.rev, 0) / Math.max(chartRows.length, 1);
+              const mediaCPR = chartRows.filter(r => r.cpr > 0).reduce((s,r) => s + r.cpr, 0) / Math.max(chartRows.filter(r => r.cpr > 0).length, 1);
+
+              const scatterData = chartRows.map(r => ({
+                x: r.cpr || 0,
+                y: r.rev,
+                z: Math.max(r.spend, 50),
+                name: r.name,
+                fullName: r.fullName,
+                leads: r.leads,
+                cpl: r.cpl,
+                id: r.id,
+              }));
+
+              // Evitar max == 0 nas reference areas para o gráfico não quebrar
+              const maxX = Math.max(...scatterData.map(d => d.x), 10) * 1.1;
+              const maxY = Math.max(...scatterData.map(d => d.y), 5) + 1;
+
+              const gridLn = dark ? '#2a2a2e' : '#e5e7eb';
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 280px', gap: '16px', marginTop: '24px' }}>
+                  {/* Gráfico à esquerda */}
+                  <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '24px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>
+                        Matriz de Eficiência
+                      </h3>
+                      <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>
+                        Campanhas eficientes (mais revs, menor CPR) ficam no topo esquerdo.
+                      </p>
                     </div>
 
-                    <div style={{ position: 'absolute', left: 40, right: 30, top: 30, bottom: 40 }}>
-                      {validRevs.map(c => {
-                        let xPos = 0;
-                        let yPos = (c.cR / maxRevs) * 100;
+                    <ResponsiveContainer width="100%" height={360}>
+                      <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 20 }}>
+                        {/* Zonas */}
+                        <ReferenceArea x1={0} x2={mediaCPR} y1={mediaRevs} y2={maxY} fill="#10b981" fillOpacity={0.06} stroke="none" />
+                        <ReferenceArea x1={mediaCPR} x2={maxX} y1={0} y2={mediaRevs} fill="#ef4444" fillOpacity={0.06} stroke="none" />
+                        <ReferenceArea x1={mediaCPR} x2={maxX} y1={mediaRevs} y2={maxY} fill="#f59e0b" fillOpacity={0.06} stroke="none" />
+                        <ReferenceArea x1={0} x2={mediaCPR} y1={0} y2={mediaRevs} fill="#f59e0b" fillOpacity={0.04} stroke="none" />
+
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridLn} />
                         
-                        if (c.cR > 0) {
-                          xPos = (c.cpr / maxCPR) * 100;
-                        } else {
-                          // Penalidade para gasto sem revs (cai na direita)
-                          xPos = Math.min((c.spend / Math.max(totalSpend, 1)) * 100, 100);
-                        }
+                        <ReferenceLine x={mediaCPR} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="4 4" label={{ value: `Média CPR`, position: 'top', fontSize: 10, fill: txtMid }} />
+                        <ReferenceLine y={mediaRevs} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="4 4" label={{ value: `Média Revs`, position: 'right', fontSize: 10, fill: txtMid }} />
 
-                        // Limita para não estourar a caixa
-                        xPos = Math.max(0, Math.min(100, xPos));
-                        yPos = Math.max(0, Math.min(100, yPos));
+                        <XAxis type="number" dataKey="x" name="CPR" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} tickFormatter={v => v > 0 ? `R$${Math.round(v)}` : '—'} label={{ value: '← menor CPR = melhor', position: 'insideBottom', offset: -10, fontSize: 11, fill: txtMid }} />
+                        <YAxis type="number" dataKey="y" name="Revs" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} label={{ value: 'Revendedoras ↑', angle: -90, position: 'insideLeft', fontSize: 11, fill: txtMid }} />
+                        <ZAxis type="number" dataKey="z" range={[400, 2000]} />
 
-                        // Posições com margem interna para as bolhas não encostarem muito na borda
-                        const plotLeft = xPos * 0.9;
-                        const plotBottom = yPos * 0.9;
+                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload;
+                          return (
+                            <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px' }}>
+                              <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 8px', wordBreak: 'break-word' }}>{d.fullName}</p>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={{ fontSize: '12px', color: '#a855f7' }}>🏆 {d.y} revendedoras</span>
+                                <span style={{ fontSize: '12px', color: '#10b981' }}>👥 {d.leads} leads</span>
+                                <span style={{ fontSize: '12px', color: txtMid }}>💰 CPR: {d.x > 0 ? `R$ ${fmt(d.x)}` : '—'}</span>
+                                <span style={{ fontSize: '12px', color: txtMid }}>📊 CPL: {d.cpl > 0 ? `R$ ${d.cpl}` : '—'}</span>
+                              </div>
+                            </div>
+                          );
+                        }} />
 
-                        const isGood = c.cR > 0 && c.cpr <= (maxCPR * 0.5);
-                        const isBad = c.cR === 0 || c.cpr > (maxCPR * 0.8);
-                        const bubbleColor = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
-                        const bubbleSize = isMobile ? 14 : 18;
+                        <Scatter data={scatterData} shape={(props: any) => {
+                          const { cx, cy, payload } = props;
+                          const isGood = payload.x <= mediaCPR && payload.y >= mediaRevs;
+                          const isBad = payload.x > mediaCPR && payload.y < mediaRevs;
+                          const color = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
+                          const r = Math.max(18, Math.min(36, Math.sqrt(payload.z) * 0.8));
+                          return (
+                            <g>
+                              <circle cx={cx} cy={cy} r={r} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={2} />
+                              <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={700} fill={color}>{payload.name.slice(0, 8)}</text>
+                              <text x={cx} y={cy + r + 10} textAnchor="middle" fontSize={9} fill={txtMid}>{payload.y} rev</text>
+                            </g>
+                          );
+                        }} />
+                      </ScatterChart>
+                    </ResponsiveContainer>
 
+                    {/* Legenda dos quadrantes */}
+                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '8px', flexWrap: 'wrap' }}>
+                      {[
+                        { color: '#10b981', label: 'Estrela — escalar' },
+                        { color: '#f59e0b', label: 'Analisar' },
+                        { color: '#ef4444', label: 'Pausar ou otimizar' },
+                      ].map(({ color, label }) => (
+                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: color }} />
+                          <span style={{ fontSize: '11px', color: txtMid }}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Lista compacta à direita */}
+                  <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '500px', overflowY: 'auto' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 8px' }}>Top Campanhas</h3>
+                    {chartRows
+                      .sort((a, b) => b.rev - a.rev || a.cpr - b.cpr)
+                      .map((r, i) => {
+                        const isGood = r.cpr <= mediaCPR && r.rev >= mediaRevs;
+                        const isBad = r.cpr > mediaCPR && r.rev < mediaRevs;
+                        const color = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
                         return (
-                          <div key={c.id} style={{ 
-                            position: 'absolute', 
-                            left: `${plotLeft}%`, 
-                            bottom: `${plotBottom}%`, 
-                            transform: 'translate(-50%, 50%)',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            zIndex: c.cR > 0 ? 10 : 1
-                          }}>
-                            <div style={{ 
-                              width: `${bubbleSize}px`, height: `${bubbleSize}px`, borderRadius: '50%', 
-                              background: bubbleColor, border: `2px solid ${cardBg}`, 
-                              boxShadow: `0 0 12px ${bubbleColor}50`,
-                              transition: 'all 0.3s ease', cursor: 'pointer'
-                            }} 
-                            title={`${c.name}\nRevs: ${c.cR}\nCPR: R$ ${fmt(c.cpr)}\nGasto: R$ ${fmt(c.spend)}`}
-                            />
-                            <div style={{ 
-                              background: dark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
-                              backdropFilter: 'blur(4px)',
-                              border: `1px solid ${border}`, borderRadius: '6px', 
-                              padding: '2px 6px', fontSize: '9px', marginTop: '4px', 
-                              whiteSpace: 'nowrap', color: txtHi, fontWeight: 500,
-                              pointerEvents: 'none',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                            }}>
-                              {c.name.length > 18 ? c.name.substring(0, 18) + '...' : c.name}
-                              {c.cR > 0 && <span style={{display:'block', color: bubbleColor, fontWeight: 700}}>CPR R$ {fmt(c.cpr)}</span>}
+                          <div key={r.id} style={{ padding: '10px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color, background: `${color}15`, padding: '2px 6px', borderRadius: '99px' }}>
+                                #{i + 1}
+                              </span>
+                              <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                {r.fullName}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
+                              <span style={{ color: '#a855f7', fontWeight: 600 }}>{r.rev} rev</span>
+                              <span style={{ color: txtMid }}>·</span>
+                              <span style={{ color: '#10b981' }}>{r.leads} leads</span>
+                              <span style={{ color: txtMid }}>·</span>
+                              <span style={{ color: txtMid }}>CPR {r.cpr > 0 ? `R$${Math.round(r.cpr)}` : '—'}</span>
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
+                      })
+                    }
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
