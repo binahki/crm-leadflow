@@ -80,7 +80,8 @@ function subDaysCamp(s:string,n:number): string {
 function filterLeadsByPreset(leads: any[], preset: string) {
   const today = todayBRCamp();
   const ok = (l: any, a: string, b: string) => {
-    const ref = l.ultimo_status_change || l.created_at;
+    // Leads: usa created_at — quando o lead ENTROU via tráfego
+    const ref = l.created_at;
     const d = leadDateBRCamp(ref);
     return !!d && d >= a && d <= b;
   };
