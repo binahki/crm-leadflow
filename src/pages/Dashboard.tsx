@@ -306,8 +306,8 @@ export default function Dashboard() {
       .from('leads')
       .select('*')
       .eq('org_id', orgId)
-      .order('created_at', { ascending: false })
-      .limit(5000);
+      .order('ultimo_status_change', { ascending: false })
+      .limit(6000);
 
     if (error) { 
       console.error('[Dashboard]', error.message);

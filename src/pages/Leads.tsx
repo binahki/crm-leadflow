@@ -101,12 +101,17 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
   // Usa o timestamp específico do status quando filtro de status está ativo
   const getDateRef = (l: Lead): string | null | undefined => {
     const la = l as any;
-    if (statusFilter === '3') return la.status_aprovado_at || l.created_at;
-    if (statusFilter === '2') return la.status_reuniao_at || l.created_at;
-    if (statusFilter === '5') return la.status_contrato_at || l.created_at;
-    if (statusFilter === '1' || statusFilter === '0') return la.status_atendimento_at || l.created_at;
-    return l.created_at;
+    // Sempre usa o timestamp de mudança de status como referência
+    // para mostrar "o que aconteceu neste período"
+    if (statusFilter === '3') return la.status_aprovado_at || la.ultimo_status_change || l.created_at;
+    if (statusFilter === '2') return la.status_reuniao_at || la.ultimo_status_change || l.created_at;
+    if (statusFilter === '5') return la.status_contrato_at || la.ultimo_status_change || l.created_at;
+    if (statusFilter === '1' || statusFilter === '0') return la.status_atendimento_at || la.ultimo_status_change || l.created_at;
+    // Sem filtro de status: usa ultimo_status_change para mostrar
+    // qualquer movimentação no período, com fallback para created_at
+    return la.ultimo_status_change || l.created_at;
   };
+
   const ok = (l: Lead, from: string, to: string) => {
     const d = leadDateBR(getDateRef(l));
     return !!d && d >= from && d <= to;
@@ -438,13 +443,13 @@ function LeadsPage() {
       const { data } = await supabase
         .from('leads')
         .select(`
-          id, nome, whatsapp, cidade, status, created_at,
-          utm_source, utm_campaign, score, faixa,
-          observacoes, motivo_reprovacao, ultimo_status_change,
+        id, nome, whatsapp, cidade, status, created_at,
+        utm_source, utm_campaign, score, faixa,
+        observacoes, motivo_reprovacao, ultimo_status_change,
           status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
           org_id, wa_sent
         `)
-        .order('created_at', { ascending: false })
+        .order('ultimo_status_change', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
       if (bgCancelRef.current) break;
@@ -477,7 +482,7 @@ function LeadsPage() {
         status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
         org_id, wa_sent
       `)
-      .order('created_at', { ascending: false })
+      .order('ultimo_status_change', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
 

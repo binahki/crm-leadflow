@@ -13,7 +13,8 @@
       "Bash(find:*)",
       "Bash(cat /c/Users/Murilo/leadflow-dashboard/supabase/migrations/*.sql)",
       "Bash(npx supabase:*)",
-      "Bash(wc -l /c/Users/Murilo/leadflow-dashboard/src/pages/*.tsx)"
+      "Bash(wc -l /c/Users/Murilo/leadflow-dashboard/src/pages/*.tsx)",
+      "Bash(supabase:*)"
     ]
   }
 }

@@ -78,14 +78,19 @@ function subDaysCamp(s:string,n:number): string {
   try { const d=new Date(s+'T12:00:00Z'); if(isNaN(d.getTime()))return s; d.setUTCDate(d.getUTCDate()-n); return d.toISOString().slice(0,10); } catch { return s; }
 }
 function filterLeadsByPreset(leads: any[], preset: string) {
-  const today=todayBRCamp();
-  const ok=(l:any,a:string,b:string)=>{const d=leadDateBRCamp(l.created_at);return !!d&&d>=a&&d<=b;};
+  const today = todayBRCamp();
+  const ok = (l: any, a: string, b: string) => {
+    // Usa ultimo_status_change para capturar movimentações no período
+    const ref = l.ultimo_status_change || l.created_at;
+    const d = leadDateBRCamp(ref);
+    return !!d && d >= a && d <= b;
+  };
   switch(preset){
-    case 'today':      return leads.filter(l=>ok(l,today,today));
-    case 'yesterday':  {const y=subDaysCamp(today,1);return leads.filter(l=>ok(l,y,y));}
-    case 'last_7d':    return leads.filter(l=>ok(l,subDaysCamp(today,6),today));
-    case 'last_30d':   return leads.filter(l=>ok(l,subDaysCamp(today,29),today));
-    case 'this_month': return leads.filter(l=>ok(l,today.slice(0,7)+'-01',today));
+    case 'today':      return leads.filter(l => ok(l, today, today));
+    case 'yesterday':  { const y = subDaysCamp(today, 1); return leads.filter(l => ok(l, y, y)); }
+    case 'last_7d':    return leads.filter(l => ok(l, subDaysCamp(today, 6), today));
+    case 'last_30d':   return leads.filter(l => ok(l, subDaysCamp(today, 29), today));
+    case 'this_month': return leads.filter(l => ok(l, today.slice(0,7)+'-01', today));
     default: return leads;
   }
 }
@@ -195,11 +200,9 @@ export default function CampanhasPage() {
       case 'last_30d':  since=subDaysCamp(today,29)+'T00:00:00-03:00'; break;
       case 'this_month':since=today.slice(0,7)+'-01T00:00:00-03:00'; break;
     }
-    // Busca sem filtro de created_at para capturar revendedoras aprovadas no período mas criadas antes
-    void since; // since calculado mas não usado no query — filtro acontece em memória
     supabase.from('leads')
-      .select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at')
-      .eq('org_id',orgId).order('created_at',{ascending:false}).limit(2000)
+      .select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
+      .eq('org_id',orgId).order('ultimo_status_change',{ascending:false}).limit(3000)
       .then(({data}:any)=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
 
@@ -251,7 +254,7 @@ export default function CampanhasPage() {
     const ok=(ref:string|null|undefined,a:string,b:string)=>{const d=leadDateBRCamp(ref);return !!d&&d>=a&&d<=b;};
     return allLeads.filter(l=>{
       if(Number((l as any).status)!==3) return false;
-      const ref=(l as any).status_aprovado_at||(l as any).created_at;
+      const ref=(l as any).status_aprovado_at||(l as any).ultimo_status_change||(l as any).created_at;
       switch(datePreset){
         case 'today':      return ok(ref,today,today);
         case 'yesterday':  {const y=subDaysCamp(today,1);return ok(ref,y,y);}
@@ -512,54 +515,122 @@ export default function CampanhasPage() {
           </div>
         )}
 
-        {/* Barras horizontais: Revendedoras (ou Leads) por campanha */}
-        {!isMobile&&!loading&&chartRows.length>0&&(()=>{
-          const hasRevs=chartRows.some(r=>r.rev>0);
-          const valKey=hasRevs?'rev':'leads';
-          const barColor=hasRevs?'#a855f7':'#10b981';
-          const periodLabel=PERIOD_OPTIONS.find(p=>p.value===datePreset)?.label||datePreset;
-          const topRows=chartRows.slice(0,6);
-          return(
-            <div style={{background:cardBg,borderRadius:'16px',padding:'16px 20px 20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
-                <div>
-                  <h3 style={{fontSize:'13px',fontWeight:600,color:txtHi,margin:0}}>
-                    {hasRevs?'Revendedoras por Campanha':'Leads por Campanha'}
-                  </h3>
-                  <p style={{fontSize:'11px',color:txtMid,margin:'2px 0 0'}}>{periodLabel}</p>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={topRows} layout="vertical" barCategoryGap="20%" margin={{top:0,right:32,bottom:0,left:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)'} horizontal={false}/>
-                  <XAxis type="number" allowDecimals={false} tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false}/>
-                  <YAxis type="category" dataKey="name" tick={{fill:txtHi,fontSize:10}} tickLine={false} axisLine={false} width={90}/>
-                  <Tooltip
-                    cursor={{fill:dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'}}
-                    content={({active,payload})=>{
-                      if(!active||!payload?.length)return null;
-                      const d=payload[0]?.payload;
-                      if(!d)return null;
-                      return(
-                        <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',padding:'10px 14px',fontSize:'12px',color:txtHi,lineHeight:1.7,boxShadow:'0 4px 16px rgba(0,0,0,0.12)'}}>
-                          <p style={{margin:'0 0 4px',fontWeight:700,fontSize:'13px'}}>{d.fullName}</p>
-                          <p style={{margin:0,color:txtMid}}>Leads: <b style={{color:'#10b981'}}>{d.leads}</b>{d.rev>0&&<> · Rev: <b style={{color:'#a855f7'}}>{d.rev}</b></>}</p>
-                          {d.cpl>0&&<p style={{margin:0,color:txtMid}}>CPL: <b style={{color:txtHi}}>R$ {fmt(d.cpl)}</b></p>}
-                          {d.cpr>0&&<p style={{margin:0,color:txtMid}}>CPR: <b style={{color:'#a855f7'}}>R$ {fmt(d.cpr)}</b></p>}
-                          <p style={{margin:0,color:txtMid}}>Gasto: <b style={{color:txtHi}}>R$ {fmt(d.spend)}</b></p>
+        {/* Ranking de Performance (Substitui Gráficos e Lista Antiga) */}
+        {!loading && campaigns.length > 0 && (
+          <div style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              Ranking de Performance
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {(()=>{
+                // Calcula média de CPR da conta para balizar o score
+                const totalRevsGeral = campaigns.reduce((s,c) => s + getCampRevs(c.name, c.id).length, 0);
+                const avgCPR = totalRevsGeral > 0 ? totalSpend / totalRevsGeral : 0;
+                
+                const rankedCampaigns = campaigns.map(c => {
+                  const campCRMLeads = getCampLeads(c.name, c.id);
+                  const campRevsList = getCampRevs(c.name, c.id);
+                  // Leads CRM primeiro, fallback API
+                  const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
+                  const cR = campRevsList.length;
+                  const cpl = cL > 0 && c.spend > 0 ? c.spend / cL : 0;
+                  const cpr = cR > 0 && c.spend > 0 ? c.spend / cR : 0;
+                  
+                  // Score logic
+                  let score = 50;
+                  if (cR > 0) {
+                    score += 20; // Ter revendedora já é um grande ponto positivo
+                    score += Math.min(cR * 2, 15);
+                    if (avgCPR > 0) {
+                      if (cpr <= avgCPR * 0.7) score += 15;
+                      else if (cpr <= avgCPR) score += 5;
+                      else if (cpr > avgCPR * 1.5) score -= 10;
+                    } else {
+                      if (cpr < 50) score += 15;
+                      else if (cpr < 100) score += 5;
+                    }
+                    const cvr = cL > 0 ? cR / cL : 0;
+                    if (cvr >= 0.1) score += 10;
+                    else if (cvr >= 0.05) score += 5;
+                  } else {
+                    if (c.spend > 50) score -= 10;
+                    if (cL >= 10) score -= 10;
+                    if (cL >= 20) score -= 10;
+                  }
+                  
+                  if (cpl > 0) {
+                    if (avgCPL > 0 && cpl < avgCPL * 0.8) score += 5;
+                    else if (avgCPL > 0 && cpl > avgCPL * 1.3) score -= 5;
+                  }
+                  
+                  if (c.ctr >= 2) score += 5;
+                  else if (c.ctr < 1 && c.impressions > 1000) score -= 5;
+                  
+                  // Leads em atendimento (sinal de potencial)
+                  const leadsAtendimento = campCRMLeads.filter(l => Number((l as any).status) === 1).length;
+                  if (leadsAtendimento > 0 && cR === 0) score += Math.min(leadsAtendimento, 10);
+                  
+                  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
+                  
+                  return { ...c, cL, cR, cpl, cpr, score: finalScore };
+                }).sort((a,b) => b.score - a.score || b.cR - a.cR || a.cpr - b.cpr || a.cpl - b.cpl);
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
+                    {rankedCampaigns.map((c, i) => {
+                      let st = { color: '#ef4444', dot: '🔴' };
+                      if (c.score >= 90) st = { color: '#10b981', dot: '🟢' };
+                      else if (c.score >= 75) st = { color: '#10b981', dot: '🟢' };
+                      else if (c.score >= 55) st = { color: '#eab308', dot: '🟡' };
+                      else if (c.score >= 35) st = { color: '#f97316', dot: '🟠' };
+
+                      if (gestorMode && c.score >= 75) return null;
+
+                      return (
+                        <div key={c.id} style={{
+                          background: cardBg,
+                          borderRadius: '12px',
+                          padding: '14px 16px',
+                          border: `1px solid ${border}`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '11px' }}>{st.dot}</span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: txtHi, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {c.name}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '11px', color: txtMid, fontWeight: 500 }}>
+                              {c.cL} leads • {c.cR > 0 ? `CPR R$ ${fmt(c.cpr)}` : `CPL R$ ${fmt(c.cpl)}`}
+                            </span>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: txtHi }}>
+                              {c.score}%
+                            </span>
+                          </div>
+
+                          <div style={{ height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', width: `${c.score}%`,
+                              background: st.color, borderRadius: '4px',
+                              transition: 'width 1s cubic-bezier(0.16, 1, 0.3, 1)'
+                            }} />
+                          </div>
                         </div>
                       );
-                    }}
-                  />
-                  <Bar dataKey={valKey} fill={barColor} radius={[0,4,4,0]} maxBarSize={14}/>
-                </BarChart>
-              </ResponsiveContainer>
+                    })}
+                  </div>
+                );
+              })()}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Tabs */}
-        <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden'}}>
+        <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden', marginTop:'24px'}}>
           <div style={{display:'flex',borderBottom:`1px solid ${border}`,overflowX:'auto'}}>
             {[{key:'campanhas',label:'Campanhas',icon:TrendingUp},{key:'insights',label:'Insights',icon:Lightbulb}].map(tab=>(
               <button key={tab.key} onClick={()=>setActiveTab(tab.key as any)} style={{display:'flex',alignItems:'center',gap:'7px',padding:'14px 16px',border:'none',cursor:'pointer',background:activeTab===tab.key?cardBg:'transparent',color:activeTab===tab.key?txtHi:txtMid,fontSize:'13px',fontWeight:activeTab===tab.key?600:400,borderBottom:activeTab===tab.key?'2px solid #2563eb':'2px solid transparent',transition:'all 0.15s',fontFamily:'inherit',marginBottom:'-1px',whiteSpace:'nowrap'}}>
@@ -716,58 +787,39 @@ export default function CampanhasPage() {
             </div>
           )}
 
-          {/* Tab Insights */}
-          {activeTab==='insights'&&(
-            <div style={{padding:isMobile?'16px':'24px'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'20px'}}>
-                <div style={{width:'36px',height:'36px',borderRadius:'10px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <Lightbulb style={{width:'16px',height:'16px',color:'#8b5cf6'}}/>
-                </div>
-                <div>
-                  <h3 style={{margin:0,fontSize:'15px',fontWeight:600,color:txtHi}}>⚡ Análise de hoje</h3>
-                  <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Gerado pela Ravena com base nos dados reais</p>
-                </div>
+        {/* Tab Insights continua embaixo, e remove o chartMobile. Mobile já mostra as cards responsivas */}
+        {activeTab==='insights'&&(
+          <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,padding:isMobile?'16px':'24px', marginTop:'24px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'20px'}}>
+              <div style={{width:'36px',height:'36px',borderRadius:'10px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <Lightbulb style={{width:'16px',height:'16px',color:'#8b5cf6'}}/>
               </div>
-              {loading
-                ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Carregando…</div>
-                :aiLog?.insights?.length>0
-                  ?<div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                    {aiLog.insights.map((insight:any,i:number)=>(
-                      <div key={i} style={{padding:'13px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
-                        <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
-                        <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{typeof insight==='string'?insight:insight.mensagem}</p>
-                      </div>
-                    ))}
-                  </div>
-                  :<div style={{padding:'40px 0',textAlign:'center'}}>
-                    <p style={{margin:0,fontSize:'13px',color:txtMid,lineHeight:1.6}}>Nenhum insight gerado hoje.<br/>A Ravena só gera insights quando identifica algo realmente importante.</p>
-                  </div>
-              }
+              <div>
+                <h3 style={{margin:0,fontSize:'15px',fontWeight:600,color:txtHi}}>⚡ Análise de hoje</h3>
+                <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Gerado pela Ravena com base nos dados reais</p>
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* Mobile: gráfico simples de barras */}
-        {isMobile&&!loading&&chartRows.length>0&&(
-          <div style={{background:cardBg,borderRadius:'16px',padding:'16px',border:`1px solid ${border}`,marginTop:'14px'}}>
-            <h3 style={{fontSize:'13px',fontWeight:600,color:txtHi,margin:'0 0 12px'}}>Leads por Campanha</h3>
-            <div style={{height:'140px'}}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartRows} barGap={2} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
-                  <XAxis dataKey="name" tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false}/>
-                  <YAxis allowDecimals={false} tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false} width={20}/>
-                  <Tooltip contentStyle={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',fontSize:'11px',color:txtHi}}/>
-                  <Bar dataKey="leads" fill="#10b981" radius={[4,4,0,0]} name="Leads" maxBarSize={24}/>
-                  <Bar dataKey="rev"   fill="#a855f7" radius={[4,4,0,0]} name="Rev"   maxBarSize={24}/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {loading
+              ?<div style={{color:txtMid,fontSize:'13px',textAlign:'center',padding:'32px'}}>Carregando…</div>
+              :aiLog?.insights?.length>0
+                ?<div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                  {aiLog.insights.map((insight:any,i:number)=>(
+                    <div key={i} style={{padding:'13px 16px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.03)':'#fafafa',border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`,display:'flex',gap:'12px',alignItems:'flex-start'}}>
+                      <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#8b5cf6',flexShrink:0,marginTop:'6px'}}/>
+                      <p style={{margin:0,fontSize:'13px',color:dark?'#d4d4d8':'#374151',lineHeight:1.65}}>{typeof insight==='string'?insight:insight.mensagem}</p>
+                    </div>
+                  ))}
+                </div>
+                :<div style={{padding:'40px 0',textAlign:'center'}}>
+                  <p style={{margin:0,fontSize:'13px',color:txtMid,lineHeight:1.6}}>Nenhum insight gerado hoje.<br/>A Ravena só gera insights quando identifica algo realmente importante.</p>
+                </div>
+            }
           </div>
         )}
       </div>
-      {/* Painel IA - Refactor Premium */}
-      {showAiPanel && aiLog && (
+    </div>
+    {/* Painel IA - Refactor Premium */}
+    {showAiPanel && aiLog && (
         <AIOptimizationPanel 
           log={aiLog} 
           dark={dark} 
@@ -855,7 +907,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
                 <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>Ravena otimizou suas campanhas</h2>
                 <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>
                   Hoje às {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  {log.campanhas_analisadas?.length > 0 && ` · ${log.campanhas_analisadas.length} campanhas analisadas`}
                 </p>
               </div>
             </div>
@@ -867,11 +918,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
           {/* Resumo operacional */}
           <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.15)', marginBottom: '12px' }}>
             <p style={{ margin: 0, fontSize: '12.5px', color: dark ? '#c4b5fd' : '#6d28d9', fontWeight: 500 }}>
-              {log.campanhas_analisadas?.length > 0
-                ? log.acoes_executadas?.length > 0
-                  ? `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} — ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''} executada${log.acoes_executadas.length !== 1 ? 's' : ''}`
-                  : `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} — nenhuma ação necessária hoje`
-                : 'Ravena analisou as campanhas — nenhuma ação necessária hoje'
+              {log.acoes_executadas?.length > 0
+                ? `Ravena aplicou ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''} executada${log.acoes_executadas.length !== 1 ? 's' : ''}`
+                : 'Nenhuma ação de otimização necessária no momento'
               }
             </p>
           </div>
@@ -879,14 +928,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(16,185,129,0.2)' }}>
               {log.acoes_executadas?.length || 0} ações executadas
-            </span>
-            {kpis[2].value !== '—' && (
-              <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(59,130,246,0.2)' }}>
-                {kpis[2].value} CPL médio
-              </span>
-            )}
-            <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(245,158,11,0.2)' }}>
-              {leadsEmAtendimento} leads em atendimento
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}` }} />
