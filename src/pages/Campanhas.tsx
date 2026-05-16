@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, Cell, LabelList, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
@@ -500,144 +500,118 @@ export default function CampanhasPage() {
 
 
 
-        {/* Performance por Campanha — Scatter */}
-        {!loading && chartRows.length > 0 && (() => {
-          const comCPR = chartRows.filter(r => r.cpr > 0);
-          const mediaCPRLocal = comCPR.length > 0
-            ? comCPR.reduce((s, r) => s + r.cpr, 0) / comCPR.length : 0;
-          const mediaRevs = chartRows.reduce((s, r) => s + r.rev, 0) / Math.max(chartRows.length, 1);
-          const maxY = Math.max(...chartRows.map(r => r.rev), 1);
-          const maxX = Math.max(...comCPR.map(r => r.cpr), 1);
+        {/* Leads × Revendedoras por Campanha — Bar Chart */}
+        {!loading && chartRows.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap: '16px', marginTop: '24px' }}>
 
-          const scatterData = chartRows.map(r => {
-            const campLeadsList = campLeadsMap.get(r.id) || [];
-            const oldest = campLeadsList.length > 0
-              ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
-              : null;
-            const ageHours = oldest ? (Date.now() - oldest) / (1000 * 60 * 60) : null;
-            const isNew = ageHours !== null && ageHours < 168;
-            const isGood = !isNew && r.rev >= 2 && r.cpr > 0 && r.cpr <= mediaCPRLocal * 1.2;
-            const isBad  = !isNew && r.rev === 0 && r.leads >= 15;
-            const color  = isNew ? '#3b82f6' : isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
-            return {
-              x: r.cpr || 0, y: r.rev, z: Math.max(r.spend, 80),
-              name: r.name, fullName: r.fullName, leads: r.leads,
-              cpl: r.cpl, cpr: r.cpr, spend: r.spend, id: r.id,
-              color, isNew, ageHours,
-            };
-          });
-
-          return (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap: '16px', marginTop: '24px' }}>
-              {/* Gráfico */}
-              <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '24px' }}>
-                <div style={{ marginBottom: '4px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Performance por Campanha</h3>
-                  <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>Quanto mais alto e mais à esquerda, melhor. Tamanho = investimento.</p>
-                </div>
-
-                <ResponsiveContainer width="100%" height={380}>
-                  <ScatterChart margin={{ top: 30, right: 30, bottom: 50, left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={gridLn} />
-                    {mediaCPRLocal > 0 && (
-                      <ReferenceLine x={mediaCPRLocal} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="5 4" label={{ value: `média R$${Math.round(mediaCPRLocal)}`, position: 'top', fontSize: 10, fill: txtMid }} />
-                    )}
-                    {mediaRevs > 0 && (
-                      <ReferenceLine y={mediaRevs} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="5 4" label={{ value: `média ${mediaRevs.toFixed(1)} rev`, position: 'right', fontSize: 10, fill: txtMid }} />
-                    )}
-                    <XAxis type="number" dataKey="x" name="CPR" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} domain={[0, maxX * 1.2]} tickFormatter={v => v > 0 ? `R$${Math.round(v)}` : ''} label={{ value: '← CPR menor = mais eficiente', position: 'insideBottom', offset: -15, fontSize: 11, fill: txtMid }} />
-                    <YAxis type="number" dataKey="y" name="Revendedoras" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} domain={[0, maxY + 1]} label={{ value: 'Revendedoras ↑', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: txtMid }} />
-                    <ZAxis type="number" dataKey="z" range={[600, 2400]} />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const d = payload[0].payload;
-                      return (
-                        <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '210px' }}>
-                          <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 10px', lineHeight: 1.4 }}>{d.fullName}</p>
-                          {d.isNew && (
-                            <p style={{ fontSize: '11px', color: '#3b82f6', margin: '0 0 8px', fontWeight: 600 }}>
-                              🕐 {d.ageHours < 48 ? 'Nova — menos de 48h' : `${Math.floor(d.ageHours / 24)}d de dados`}
-                            </p>
-                          )}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            {[
-                              { label: 'Revendedoras', val: d.y, color: '#a855f7' },
-                              { label: 'Leads', val: d.leads, color: '#3b82f6' },
-                              { label: 'CPR', val: d.x > 0 ? `R$ ${fmt(d.x)}` : '—', color: d.color },
-                              { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981' },
-                              { label: 'Gasto', val: `R$ ${fmt(d.spend)}`, color: txtHi },
-                            ].map(({ label, val, color }) => (
-                              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-                                <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color }}>{val}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    }} />
-                    <Scatter data={scatterData} shape={(props: any) => {
-                      const { cx, cy, payload } = props;
-                      const r = Math.max(22, Math.min(42, Math.sqrt(payload.z) * 0.7));
-                      return (
-                        <g style={{ cursor: 'pointer' }}>
-                          <circle cx={cx} cy={cy} r={r + 4} fill={payload.color} fillOpacity={0.08} />
-                          <circle cx={cx} cy={cy} r={r} fill={payload.color} fillOpacity={0.18} stroke={payload.color} strokeWidth={2.5} />
-                          <text x={cx} y={cy - 3} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={800} fill={payload.color}>
-                            {payload.name.replace(/\s*-\s*\[.*\]/g, '').slice(0, 10)}
-                          </text>
-                          <text x={cx} y={cy + 9} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={payload.color} opacity={0.8}>
-                            {payload.y} rev
-                          </text>
-                          <text x={cx} y={cy + r + 13} textAnchor="middle" fontSize={9} fill={txtMid}>
-                            {payload.isNew ? '🕐 nova' : payload.x > 0 ? `R$${Math.round(payload.x)}` : '—'}
-                          </text>
-                        </g>
-                      );
-                    }} />
-                  </ScatterChart>
-                </ResponsiveContainer>
-
-                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
-                  {[
-                    { color: '#10b981', label: 'Escalar' },
-                    { color: '#f59e0b', label: 'Monitorar' },
-                    { color: '#ef4444', label: 'Otimizar' },
-                    { color: '#3b82f6', label: 'Nova — aguardar' },
-                  ].map(({ color, label }) => (
-                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: color }} />
-                      <span style={{ fontSize: '11px', color: txtMid }}>{label}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* GRÁFICO */}
+            <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Leads × Revendedoras por Campanha</h3>
+                <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>Comparativo de captação e conversão no período selecionado</p>
               </div>
 
-              {/* Lista compacta */}
-              <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '520px', overflowY: 'auto' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 4px' }}>Top Campanhas</h3>
-                {[...scatterData]
-                  .sort((a, b) => b.y - a.y || a.x - b.x)
-                  .map((r, i) => (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={chartRows.map(r => ({
+                    name: r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim().slice(0,18),
+                    fullName: r.fullName,
+                    leads: r.leads,
+                    revs: r.rev,
+                    cpl: r.cpl,
+                    cpr: r.cpr > 0 ? Math.round(r.cpr) : 0,
+                    spend: r.spend,
+                    id: r.id,
+                  }))}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 40 }}
+                  barCategoryGap="30%"
+                  barGap={4}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: txtMid, fontWeight: 500 }} axisLine={false} tickLine={false} angle={-20} textAnchor="end" interval={0} height={60} />
+                  <YAxis tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                  <Tooltip
+                    cursor={{ fill: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', radius: 8 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]?.payload;
+                      const isLeads = payload[0]?.dataKey === 'leads';
+                      return (
+                        <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px' }}>
+                          <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 10px', lineHeight: 1.4 }}>{d.fullName}</p>
+                          {isLeads ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                              {[{ label: 'Leads', val: d.leads, color: '#3b82f6', bold: true }, { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
+                                  <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
+                                  <span style={{ fontSize: bold ? '13px' : '12px', fontWeight: bold ? 700 : 600, color }}>{val}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                              {[{ label: 'Revendedoras', val: d.revs, color: '#a855f7', bold: true }, { label: 'CPR', val: d.cpr > 0 ? `R$ ${d.cpr}` : '—', color: '#a855f7', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
+                                  <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
+                                  <span style={{ fontSize: bold ? '13px' : '12px', fontWeight: bold ? 700 : 600, color }}>{val}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
+                    <LabelList dataKey="leads" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#3b82f6' }} />
+                  </Bar>
+                  <Bar dataKey="revs" name="Revendedoras" fill="#a855f7" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
+                    <LabelList dataKey="revs" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#a855f7' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginTop: '8px' }}>
+                {[{ color: '#3b82f6', label: 'Leads' }, { color: '#a855f7', label: 'Revendedoras' }].map(({ color, label }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color }} />
+                    <span style={{ fontSize: '12px', color: txtMid, fontWeight: 500 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* RANKING LATERAL */}
+            <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '520px', overflowY: 'auto' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 4px' }}>Top Campanhas</h3>
+              {chartRows
+                .sort((a, b) => b.rev - a.rev || b.leads - a.leads)
+                .map((r, i) => {
+                  const comCPR2 = chartRows.filter(x => x.cpr > 0);
+                  const med = comCPR2.length > 0 ? comCPR2.reduce((s, x) => s + x.cpr, 0) / comCPR2.length : 0;
+                  const isGood = r.rev >= 2 && r.cpr > 0 && r.cpr <= med * 1.2;
+                  const isBad  = r.rev === 0 && r.leads >= 15;
+                  const color  = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
+                  return (
                     <div key={r.id} style={{ padding: '10px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: r.color, background: `${r.color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>#{i + 1}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color, background: `${color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>#{i + 1}</span>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.name}</span>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
-                        <span style={{ color: '#a855f7', fontWeight: 600 }}>{r.y} rev</span>
+                        <span style={{ color: '#a855f7', fontWeight: 600 }}>{r.rev} rev</span>
                         <span style={{ color: txtMid }}>·</span>
                         <span style={{ color: '#3b82f6' }}>{r.leads} leads</span>
                         <span style={{ color: txtMid }}>·</span>
-                        <span style={{ color: r.color, fontWeight: 600 }}>{r.isNew ? '🕐 nova' : r.x > 0 ? `CPR R$${Math.round(r.x)}` : 'sem rev'}</span>
+                        <span style={{ color, fontWeight: 600 }}>{r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : 'sem rev'}</span>
                       </div>
                     </div>
-                  ))
-                }
-              </div>
+                  );
+                })
+              }
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden', marginTop:'24px'}}>
