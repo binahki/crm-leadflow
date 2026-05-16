@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, Cell, LabelList, ReferenceLine } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
@@ -500,113 +500,144 @@ export default function CampanhasPage() {
 
 
 
-        {/* Funil de Conversão por Campanha */}
-        {!loading && chartRows.length > 0 && (
-          <div style={{ marginTop: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Funil por Campanha</h3>
-                <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>De lead a revendedora — classificação requer mínimo 7 dias de dados</p>
+        {/* Performance por Campanha — Scatter */}
+        {!loading && chartRows.length > 0 && (() => {
+          const comCPR = chartRows.filter(r => r.cpr > 0);
+          const mediaCPRLocal = comCPR.length > 0
+            ? comCPR.reduce((s, r) => s + r.cpr, 0) / comCPR.length : 0;
+          const mediaRevs = chartRows.reduce((s, r) => s + r.rev, 0) / Math.max(chartRows.length, 1);
+          const maxY = Math.max(...chartRows.map(r => r.rev), 1);
+          const maxX = Math.max(...comCPR.map(r => r.cpr), 1);
+
+          const scatterData = chartRows.map(r => {
+            const campLeadsList = campLeadsMap.get(r.id) || [];
+            const oldest = campLeadsList.length > 0
+              ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
+              : null;
+            const ageHours = oldest ? (Date.now() - oldest) / (1000 * 60 * 60) : null;
+            const isNew = ageHours !== null && ageHours < 168;
+            const isGood = !isNew && r.rev >= 2 && r.cpr > 0 && r.cpr <= mediaCPRLocal * 1.2;
+            const isBad  = !isNew && r.rev === 0 && r.leads >= 15;
+            const color  = isNew ? '#3b82f6' : isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
+            return {
+              x: r.cpr || 0, y: r.rev, z: Math.max(r.spend, 80),
+              name: r.name, fullName: r.fullName, leads: r.leads,
+              cpl: r.cpl, cpr: r.cpr, spend: r.spend, id: r.id,
+              color, isNew, ageHours,
+            };
+          });
+
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap: '16px', marginTop: '24px' }}>
+              {/* Gráfico */}
+              <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '24px' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Performance por Campanha</h3>
+                  <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>Quanto mais alto e mais à esquerda, melhor. Tamanho = investimento.</p>
+                </div>
+
+                <ResponsiveContainer width="100%" height={380}>
+                  <ScatterChart margin={{ top: 30, right: 30, bottom: 50, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridLn} />
+                    {mediaCPRLocal > 0 && (
+                      <ReferenceLine x={mediaCPRLocal} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="5 4" label={{ value: `média R$${Math.round(mediaCPRLocal)}`, position: 'top', fontSize: 10, fill: txtMid }} />
+                    )}
+                    {mediaRevs > 0 && (
+                      <ReferenceLine y={mediaRevs} stroke={dark ? '#3f3f46' : '#d1d5db'} strokeDasharray="5 4" label={{ value: `média ${mediaRevs.toFixed(1)} rev`, position: 'right', fontSize: 10, fill: txtMid }} />
+                    )}
+                    <XAxis type="number" dataKey="x" name="CPR" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} domain={[0, maxX * 1.2]} tickFormatter={v => v > 0 ? `R$${Math.round(v)}` : ''} label={{ value: '← CPR menor = mais eficiente', position: 'insideBottom', offset: -15, fontSize: 11, fill: txtMid }} />
+                    <YAxis type="number" dataKey="y" name="Revendedoras" tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} domain={[0, maxY + 1]} label={{ value: 'Revendedoras ↑', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: txtMid }} />
+                    <ZAxis type="number" dataKey="z" range={[600, 2400]} />
+                    <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      return (
+                        <div style={{ background: dark ? '#1a1a1e' : '#fff', border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '210px' }}>
+                          <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 10px', lineHeight: 1.4 }}>{d.fullName}</p>
+                          {d.isNew && (
+                            <p style={{ fontSize: '11px', color: '#3b82f6', margin: '0 0 8px', fontWeight: 600 }}>
+                              🕐 {d.ageHours < 48 ? 'Nova — menos de 48h' : `${Math.floor(d.ageHours / 24)}d de dados`}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            {[
+                              { label: 'Revendedoras', val: d.y, color: '#a855f7' },
+                              { label: 'Leads', val: d.leads, color: '#3b82f6' },
+                              { label: 'CPR', val: d.x > 0 ? `R$ ${fmt(d.x)}` : '—', color: d.color },
+                              { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981' },
+                              { label: 'Gasto', val: `R$ ${fmt(d.spend)}`, color: txtHi },
+                            ].map(({ label, val, color }) => (
+                              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+                                <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color }}>{val}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }} />
+                    <Scatter data={scatterData} shape={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      const r = Math.max(22, Math.min(42, Math.sqrt(payload.z) * 0.7));
+                      return (
+                        <g style={{ cursor: 'pointer' }}>
+                          <circle cx={cx} cy={cy} r={r + 4} fill={payload.color} fillOpacity={0.08} />
+                          <circle cx={cx} cy={cy} r={r} fill={payload.color} fillOpacity={0.18} stroke={payload.color} strokeWidth={2.5} />
+                          <text x={cx} y={cy - 3} textAnchor="middle" dominantBaseline="middle" fontSize={9} fontWeight={800} fill={payload.color}>
+                            {payload.name.replace(/\s*-\s*\[.*\]/g, '').slice(0, 10)}
+                          </text>
+                          <text x={cx} y={cy + 9} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={payload.color} opacity={0.8}>
+                            {payload.y} rev
+                          </text>
+                          <text x={cx} y={cy + r + 13} textAnchor="middle" fontSize={9} fill={txtMid}>
+                            {payload.isNew ? '🕐 nova' : payload.x > 0 ? `R$${Math.round(payload.x)}` : '—'}
+                          </text>
+                        </g>
+                      );
+                    }} />
+                  </ScatterChart>
+                </ResponsiveContainer>
+
+                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
+                  {[
+                    { color: '#10b981', label: 'Escalar' },
+                    { color: '#f59e0b', label: 'Monitorar' },
+                    { color: '#ef4444', label: 'Otimizar' },
+                    { color: '#3b82f6', label: 'Nova — aguardar' },
+                  ].map(({ color, label }) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: color }} />
+                      <span style={{ fontSize: '11px', color: txtMid }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {chartRows
-                .sort((a, b) => b.rev - a.rev || b.leads - a.leads)
-                .map((r) => {
-                  const campOriginal = campaigns.find(c => c.id === r.id);
-                  const campLeadsList = campLeadsMap.get(r.id) || [];
-                  const oldestLead = campLeadsList.length > 0
-                    ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
-                    : null;
-                  const campAgeHours = oldestLead ? (Date.now() - oldestLead) / (1000 * 60 * 60) : null;
-                  const isNew = campAgeHours !== null && campAgeHours < 168;
-
-                  const maxLeads = Math.max(...chartRows.map(x => x.leads), 1);
-                  const convRate = r.leads > 0 ? ((r.rev / r.leads) * 100).toFixed(1) : '0';
-
-                  let badge: { label: string; color: string; bg: string } | null = null;
-                  if (!isNew && r.leads >= 10) {
-                    const isGood = r.rev >= 2 && r.cpr > 0 && r.cpr <= mediaCPR * 1.2;
-                    const isBad = r.rev === 0 && r.leads >= 15;
-                    badge = isGood
-                      ? { label: '⭐ Escalar', color: '#10b981', bg: dark ? 'rgba(16,185,129,0.12)' : '#dcfce7' }
-                      : isBad
-                      ? { label: '⚠️ Otimizar', color: '#ef4444', bg: dark ? 'rgba(239,68,68,0.12)' : '#fee2e2' }
-                      : { label: '👀 Monitorar', color: '#f59e0b', bg: dark ? 'rgba(245,158,11,0.12)' : '#fef9c3' };
-                  }
-
-                  return (
-                    <div key={r.id} style={{ background: cardBg, borderRadius: '14px', border: `1px solid ${border}`, padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                        {campOriginal?.status === 'ACTIVE' && (
-                          <div style={{ position: 'relative', width: '8px', height: '8px', flexShrink: 0 }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#10b981', animation: 'ping 1.5s cubic-bezier(0,0,0.2,1) infinite', opacity: 0.5 }} />
-                          </div>
-                        )}
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: txtHi, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.fullName}
-                        </span>
-                        {isNew && (
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#3b82f6', background: dark ? 'rgba(59,130,246,0.12)' : '#eff6ff', padding: '3px 8px', borderRadius: '99px', flexShrink: 0 }}>
-                            🕐 {campAgeHours && campAgeHours < 48 ? 'Nova — menos de 48h' : `${Math.floor((campAgeHours || 0) / 24)}d de dados`}
-                          </span>
-                        )}
-                        {badge && (
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '3px 10px', borderRadius: '99px', flexShrink: 0 }}>
-                            {badge.label}
-                          </span>
-                        )}
+              {/* Lista compacta */}
+              <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '520px', overflowY: 'auto' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 4px' }}>Top Campanhas</h3>
+                {[...scatterData]
+                  .sort((a, b) => b.y - a.y || a.x - b.x)
+                  .map((r, i) => (
+                    <div key={r.id} style={{ padding: '10px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: r.color, background: `${r.color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>#{i + 1}</span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.name}</span>
                       </div>
-
-                      <div style={{ marginBottom: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '11px', color: txtMid, width: '70px', flexShrink: 0 }}>Leads</span>
-                          <div style={{ flex: 1, height: '8px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${(r.leads / maxLeads) * 100}%`, background: '#3b82f6', borderRadius: '99px', transition: 'width 1s ease' }} />
-                          </div>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6', width: '32px', textAlign: 'right', flexShrink: 0 }}>{r.leads}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '11px', color: txtMid, width: '70px', flexShrink: 0 }}>Revendedoras</span>
-                          <div style={{ flex: 1, height: '8px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${(r.rev / maxLeads) * 100}%`, background: '#a855f7', borderRadius: '99px', transition: 'width 1s ease' }} />
-                          </div>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#a855f7', width: '32px', textAlign: 'right', flexShrink: 0 }}>{r.rev}</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', paddingTop: '10px', borderTop: `1px solid ${border}` }}>
-                        <div>
-                          <span style={{ fontSize: '10px', color: txtMid, display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gasto</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi }}>R$ {fmt(r.spend)}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '10px', color: txtMid, display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CPL</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>{r.cpl > 0 ? `R$ ${r.cpl}` : '—'}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '10px', color: txtMid, display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CPR</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#a855f7' }}>{r.cpr > 0 ? `R$ ${Math.round(r.cpr)}` : '—'}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '10px', color: txtMid, display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Conversão</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: Number(convRate) >= 5 ? '#10b981' : txtHi }}>{convRate}%</span>
-                        </div>
-                        {isNew && (
-                          <div style={{ marginLeft: 'auto' }}>
-                            <span style={{ fontSize: '11px', color: txtMid, fontStyle: 'italic' }}>Classificação disponível após 7 dias</span>
-                          </div>
-                        )}
+                      <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+                        <span style={{ color: '#a855f7', fontWeight: 600 }}>{r.y} rev</span>
+                        <span style={{ color: txtMid }}>·</span>
+                        <span style={{ color: '#3b82f6' }}>{r.leads} leads</span>
+                        <span style={{ color: txtMid }}>·</span>
+                        <span style={{ color: r.color, fontWeight: 600 }}>{r.isNew ? '🕐 nova' : r.x > 0 ? `CPR R$${Math.round(r.x)}` : 'sem rev'}</span>
                       </div>
                     </div>
-                  );
-                })
-              }
+                  ))
+                }
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Tabs */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden', marginTop:'24px'}}>
