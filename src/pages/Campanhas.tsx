@@ -463,9 +463,6 @@ export default function CampanhasPage() {
           <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
             <FilterDropdown value={statusFilter} options={[{label:'Todas',value:'all'},{label:'Ativas',value:'ACTIVE'},{label:'Pausadas',value:'PAUSED'}]} onChange={setStatusFilter} dark={dark}/>
-            <button onClick={()=>setGestorMode(v=>!v)} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${gestorMode?'#f97316':'transparent'}`,background:gestorMode?(dark?'rgba(249,115,22,0.15)':'#fff7ed'):(dark?'rgba(255,255,255,0.06)':'#f3f4f6'),color:gestorMode?'#f97316':txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit',fontWeight:gestorMode?600:400}}>
-                🎯 Gestor
-              </button>
             <button onClick={()=>{ const key=`meta_camp_${orgId}_${datePreset}`; sessionStorage.removeItem(key); load(); }} disabled={loading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
               <RefreshCw style={{width:'14px',height:'14px',animation:loading?'spin 1s linear infinite':''}}/>
               {loading?'Carregando…':'Atualizar'}
@@ -496,135 +493,105 @@ export default function CampanhasPage() {
 
 
 
-        {/* Card de alertas automáticos */}
-        {!loading&&alerts.length>0&&(
-          <div style={{background:cardBg,borderRadius:'16px',padding:'16px 20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
-            <p style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 10px',display:'flex',alignItems:'center',gap:'6px'}}>
-              <span>⚡</span> O que precisa atenção agora
-            </p>
-            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-              {alerts.map((a,i)=>{
-                const col=a.type==='red'?'#ef4444':a.type==='yellow'?'#f59e0b':'#10b981';
-                const bg=a.type==='red'?(dark?'rgba(239,68,68,0.08)':'#fef2f2'):a.type==='yellow'?(dark?'rgba(245,158,11,0.08)':'#fffbeb'):(dark?'rgba(16,185,129,0.08)':'#f0fdf4');
-                return(
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 12px',borderRadius:'10px',background:bg,border:`1px solid ${col}22`}}>
-                    <div style={{width:'6px',height:'6px',borderRadius:'50%',background:col,flexShrink:0}}/>
-                    <span style={{fontSize:'12.5px',color:a.type==='red'?(dark?'#fca5a5':'#dc2626'):a.type==='yellow'?(dark?'#fcd34d':'#b45309'):(dark?'#6ee7b7':'#059669'),lineHeight:1.4}}>{a.msg}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Ranking de Performance (Substitui Gráficos e Lista Antiga) */}
+        {/* Gráfico de Eficiência (Substitui Ranking Antigo e Alertas) */}
         {!loading && campaigns.length > 0 && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              Ranking de Performance
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Matriz de Eficiência
+                </h3>
+                <p style={{ fontSize: '12px', color: txtMid, margin: 0 }}>
+                  Campanhas eficientes e lucrativas (mais revendedoras, menor CPR) ficam no topo esquerdo.
+                </p>
+              </div>
+            </div>
+            
+            <div style={{ 
+              position: 'relative', width: '100%', height: isMobile ? '320px' : '420px', 
+              background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, 
+              overflow: 'hidden', padding: '24px'
+            }}>
               {(()=>{
-                // Calcula média de CPR da conta para balizar o score
-                const totalRevsGeral = campaigns.reduce((s,c) => s + getCampRevs(c.name, c.id).length, 0);
-                const avgCPR = totalRevsGeral > 0 ? totalSpend / totalRevsGeral : 0;
-                
-                const rankedCampaigns = campaigns.map(c => {
-                  const campCRMLeads = getCampLeads(c.name, c.id);
+                const validRevs = campaigns.map(c => {
                   const campRevsList = getCampRevs(c.name, c.id);
-                  // Leads CRM primeiro, fallback API
-                  const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
                   const cR = campRevsList.length;
-                  const cpl = cL > 0 && c.spend > 0 ? c.spend / cL : 0;
                   const cpr = cR > 0 && c.spend > 0 ? c.spend / cR : 0;
-                  
-                  // Score logic
-                  let score = 50;
-                  if (cR > 0) {
-                    score += 20; // Ter revendedora já é um grande ponto positivo
-                    score += Math.min(cR * 2, 15);
-                    if (avgCPR > 0) {
-                      if (cpr <= avgCPR * 0.7) score += 15;
-                      else if (cpr <= avgCPR) score += 5;
-                      else if (cpr > avgCPR * 1.5) score -= 10;
-                    } else {
-                      if (cpr < 50) score += 15;
-                      else if (cpr < 100) score += 5;
-                    }
-                    const cvr = cL > 0 ? cR / cL : 0;
-                    if (cvr >= 0.1) score += 10;
-                    else if (cvr >= 0.05) score += 5;
-                  } else {
-                    if (c.spend > 50) score -= 10;
-                    if (cL >= 10) score -= 10;
-                    if (cL >= 20) score -= 10;
-                  }
-                  
-                  if (cpl > 0) {
-                    if (avgCPL > 0 && cpl < avgCPL * 0.8) score += 5;
-                    else if (avgCPL > 0 && cpl > avgCPL * 1.3) score -= 5;
-                  }
-                  
-                  if (c.ctr >= 2) score += 5;
-                  else if (c.ctr < 1 && c.impressions > 1000) score -= 5;
-                  
-                  // Leads em atendimento (sinal de potencial)
-                  const leadsAtendimento = campCRMLeads.filter(l => Number((l as any).status) === 1).length;
-                  if (leadsAtendimento > 0 && cR === 0) score += Math.min(leadsAtendimento, 10);
-                  
-                  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
-                  
-                  return { ...c, cL, cR, cpl, cpr, score: finalScore };
-                }).sort((a,b) => b.score - a.score || b.cR - a.cR || a.cpr - b.cpr || a.cpl - b.cpl);
+                  return { ...c, cR, cpr };
+                });
+                
+                const maxRevs = Math.max(...validRevs.map(c => c.cR), 1);
+                const validCPRs = validRevs.filter(c => c.cR > 0).map(c => c.cpr);
+                const maxCPR = validCPRs.length > 0 ? Math.max(...validCPRs) : 100;
 
                 return (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
-                    {rankedCampaigns.map((c, i) => {
-                      let st = { color: '#ef4444', dot: '🔴' };
-                      if (c.score >= 90) st = { color: '#10b981', dot: '🟢' };
-                      else if (c.score >= 75) st = { color: '#10b981', dot: '🟢' };
-                      else if (c.score >= 55) st = { color: '#eab308', dot: '🟡' };
-                      else if (c.score >= 35) st = { color: '#f97316', dot: '🟠' };
+                  <>
+                    {/* Eixos */}
+                    <div style={{ position: 'absolute', left: 40, right: 30, top: 30, bottom: 40, borderLeft: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
+                      <span style={{ position: 'absolute', top: -20, left: -10, fontSize: '10px', color: txtLow, fontWeight: 600 }}>+ REVS</span>
+                      <span style={{ position: 'absolute', bottom: -5, left: -25, fontSize: '10px', color: txtLow }}>0</span>
+                      <span style={{ position: 'absolute', right: -15, bottom: -22, fontSize: '10px', color: txtLow, fontWeight: 600 }}>+ CPR</span>
+                    </div>
 
-                      if (gestorMode && c.score >= 75) return null;
+                    <div style={{ position: 'absolute', left: 40, right: 30, top: 30, bottom: 40 }}>
+                      {validRevs.map(c => {
+                        let xPos = 0;
+                        let yPos = (c.cR / maxRevs) * 100;
+                        
+                        if (c.cR > 0) {
+                          xPos = (c.cpr / maxCPR) * 100;
+                        } else {
+                          // Penalidade para gasto sem revs (cai na direita)
+                          xPos = Math.min((c.spend / Math.max(totalSpend, 1)) * 100, 100);
+                        }
 
-                      return (
-                        <div key={c.id} style={{
-                          background: cardBg,
-                          borderRadius: '12px',
-                          padding: '14px 16px',
-                          border: `1px solid ${border}`,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '11px' }}>{st.dot}</span>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: txtHi, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {c.name}
-                            </span>
-                          </div>
-                          
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', color: txtMid, fontWeight: 500 }}>
-                              {c.cL} leads • {c.cR > 0 ? `CPR R$ ${fmt(c.cpr)}` : `CPL R$ ${fmt(c.cpl)}`}
-                            </span>
-                            <span style={{ fontSize: '12px', fontWeight: 700, color: txtHi }}>
-                              {c.score}%
-                            </span>
-                          </div>
+                        // Limita para não estourar a caixa
+                        xPos = Math.max(0, Math.min(100, xPos));
+                        yPos = Math.max(0, Math.min(100, yPos));
 
-                          <div style={{ height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{
-                              height: '100%', width: `${c.score}%`,
-                              background: st.color, borderRadius: '4px',
-                              transition: 'width 1s cubic-bezier(0.16, 1, 0.3, 1)'
-                            }} />
+                        // Posições com margem interna para as bolhas não encostarem muito na borda
+                        const plotLeft = xPos * 0.9;
+                        const plotBottom = yPos * 0.9;
+
+                        const isGood = c.cR > 0 && c.cpr <= (maxCPR * 0.5);
+                        const isBad = c.cR === 0 || c.cpr > (maxCPR * 0.8);
+                        const bubbleColor = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
+                        const bubbleSize = isMobile ? 14 : 18;
+
+                        return (
+                          <div key={c.id} style={{ 
+                            position: 'absolute', 
+                            left: `${plotLeft}%`, 
+                            bottom: `${plotBottom}%`, 
+                            transform: 'translate(-50%, 50%)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            zIndex: c.cR > 0 ? 10 : 1
+                          }}>
+                            <div style={{ 
+                              width: `${bubbleSize}px`, height: `${bubbleSize}px`, borderRadius: '50%', 
+                              background: bubbleColor, border: `2px solid ${cardBg}`, 
+                              boxShadow: `0 0 12px ${bubbleColor}50`,
+                              transition: 'all 0.3s ease', cursor: 'pointer'
+                            }} 
+                            title={`${c.name}\nRevs: ${c.cR}\nCPR: R$ ${fmt(c.cpr)}\nGasto: R$ ${fmt(c.spend)}`}
+                            />
+                            <div style={{ 
+                              background: dark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
+                              backdropFilter: 'blur(4px)',
+                              border: `1px solid ${border}`, borderRadius: '6px', 
+                              padding: '2px 6px', fontSize: '9px', marginTop: '4px', 
+                              whiteSpace: 'nowrap', color: txtHi, fontWeight: 500,
+                              pointerEvents: 'none',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }}>
+                              {c.name.length > 18 ? c.name.substring(0, 18) + '...' : c.name}
+                              {c.cR > 0 && <span style={{display:'block', color: bubbleColor, fontWeight: 700}}>CPR R$ {fmt(c.cpr)}</span>}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 );
               })()}
             </div>
@@ -658,12 +625,7 @@ export default function CampanhasPage() {
                   </div>
                 );
                 if(mostrarVazio) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>;
-                return <>{gestorMode&&displayedCampaigns.length<filtered.length&&(
-                  <div style={{padding:'10px 16px',background:dark?'rgba(249,115,22,0.1)':'#fff7ed',borderBottom:`1px solid rgba(249,115,22,0.2)`,display:'flex',alignItems:'center',gap:'8px'}}>
-                    <span style={{fontSize:'13px',color:'#f97316',fontWeight:600}}>🎯 Mostrando {displayedCampaigns.length} campanha{displayedCampaigns.length!==1?'s':''} que precisam de atenção</span>
-                    <button onClick={()=>setGestorMode(false)} style={{marginLeft:'auto',fontSize:'11px',color:'#f97316',background:'none',border:'1px solid rgba(249,115,22,0.3)',borderRadius:'6px',padding:'3px 8px',cursor:'pointer',fontFamily:'inherit'}}>Ver todas</button>
-                  </div>
-                )}{displayedCampaigns.map(c=>{
+                return <>{displayedCampaigns.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);
                     const periodo=PERIOD_MAP[datePreset]||'all';
