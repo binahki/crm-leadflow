@@ -462,8 +462,8 @@ export default function Dashboard() {
     };
     return allLeads.filter(l => {
       if (toNum(l.status) !== 3) return false;
-      // Usa status_aprovado_at como fonte primária; fallback para created_at
-      const changeDate = (l as any).status_aprovado_at || l.created_at;
+      // Usa status_aprovado_at como fonte primária; fallback para ultimo_status_change e created_at
+      const changeDate = (l as any).status_aprovado_at || (l as any).ultimo_status_change || l.created_at;
       switch (selectedPeriod) {
         case 'today':     { const t = today; return ok(changeDate, t, t); }
         case 'yesterday': { const y = subDays(today,1); return ok(changeDate, y, y); }
@@ -490,9 +490,9 @@ export default function Dashboard() {
       const value = allLeads.filter(l => {
         let s = toNum(l.status); if(s===0) s=1;
         if (s !== f.statusId) return false;
-        // Usa o campo específico do status; fallback para created_at
+        // Usa o campo específico do status; fallback para ultimo_status_change e created_at
         const tsField = tsFields[f.statusId];
-        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : l.created_at;
+        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : ((l as any).ultimo_status_change || l.created_at);
         switch(selectedPeriod) {
           case 'today':     { const t=today; return ok(changeDate,t,t); }
           case 'yesterday': { const y=subDays(today,1); return ok(changeDate,y,y); }
