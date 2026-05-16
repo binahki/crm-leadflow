@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
@@ -178,17 +178,28 @@ export default function CampanhasPage() {
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const [aiLog, setAiLog] = useState<any>(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [gestorMode, setGestorMode] = useState(false);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
-  // Busca leads com select('*') — garante utm_campaign, utm_source, status
+  // Busca leads filtrados pelo período selecionado — garante cruzamento correto
   useEffect(()=>{
     if (!orgReady || !orgId) return;
     setAllLeads([]);
-    supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at')
-      .order('created_at',{ascending:false}).eq('org_id', orgId).limit(500)
-      .then(({data})=>{ if(data) setAllLeads(data); });
-  },[orgId, orgReady]);
+    const today=todayBRCamp();
+    let since:string|null=null;
+    switch(datePreset){
+      case 'today':     since=today+'T00:00:00-03:00'; break;
+      case 'yesterday': since=subDaysCamp(today,1)+'T00:00:00-03:00'; break;
+      case 'last_7d':   since=subDaysCamp(today,6)+'T00:00:00-03:00'; break;
+      case 'last_30d':  since=subDaysCamp(today,29)+'T00:00:00-03:00'; break;
+      case 'this_month':since=today.slice(0,7)+'-01T00:00:00-03:00'; break;
+    }
+    const base=supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,updated_at')
+      .eq('org_id',orgId).order('created_at',{ascending:false}).limit(2000);
+    (since ? base.gte('created_at',since) : base)
+      .then(({data}:any)=>{ if(data) setAllLeads(data); });
+  },[orgId, orgReady, datePreset]); // eslint-disable-line
 
   // Realtime: atualiza allLeads ao receber novos leads (filtrado por org)
   useEffect(()=>{
@@ -228,9 +239,27 @@ export default function CampanhasPage() {
 
   const filtered=useMemo(()=>{const base=statusFilter==='all'?campaigns:campaigns.filter(c=>c.status===statusFilter);return[...base].sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);},[campaigns,statusFilter]);
 
-  // Leads do CRM filtrados pelo período
-  // usa allLeads (select * direto) para ter utm_campaign garantido
+  // Leads do CRM filtrados pelo created_at dentro do período
   const filteredLeads = useMemo(()=>filterLeadsByPreset(allLeads,datePreset),[allLeads,datePreset]);
+
+  // Revendedoras do CRM filtradas pelo status_aprovado_at dentro do período
+  // Usa todos os allLeads (não só os criados no período) para capturar aprovações de leads mais antigos
+  const filteredRevs = useMemo(()=>{
+    const today=todayBRCamp();
+    const ok=(ref:string|null|undefined,a:string,b:string)=>{const d=leadDateBRCamp(ref);return !!d&&d>=a&&d<=b;};
+    return allLeads.filter(l=>{
+      if(Number((l as any).status)!==3) return false;
+      const ref=(l as any).status_aprovado_at||(l as any).updated_at||(l as any).created_at;
+      switch(datePreset){
+        case 'today':      return ok(ref,today,today);
+        case 'yesterday':  {const y=subDaysCamp(today,1);return ok(ref,y,y);}
+        case 'last_7d':    return ok(ref,subDaysCamp(today,6),today);
+        case 'last_30d':   return ok(ref,subDaysCamp(today,29),today);
+        case 'this_month': return ok(ref,today.slice(0,7)+'-01',today);
+        default: return Number((l as any).status)===3;
+      }
+    });
+  },[allLeads,datePreset]);
 
   // ── Mapeamento Único: Garante que um lead pertença a apenas 1 campanha
   const campLeadsMap = useMemo(() => {
@@ -271,47 +300,128 @@ export default function CampanhasPage() {
     return map;
   }, [filteredLeads, campaigns]);
 
+  // Mapeamento de revendedoras por campanha (usa filteredRevs → status_aprovado_at)
+  const campRevsMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    campaigns.forEach(c => map.set(c.id, []));
+    for (const l of filteredRevs) {
+      const la = l as any;
+      const utmRaw = (la.utm_campaign || '').trim();
+      if (!utmRaw) continue;
+      const utm = utmRaw.toLowerCase().split('|')[0].trim();
+      let bestMatch: string | null = null;
+      let maxMatchLen = 0;
+      for (const c of campaigns) {
+        if (utm === c.id) { bestMatch = c.id; break; }
+        const cn = c.name.toLowerCase().split('|')[0].trim();
+        if (!cn || cn.length < 3) continue;
+        if (utm === cn) { bestMatch = c.id; break; }
+        if (utm.includes(cn.slice(0, 20))) {
+          if (cn.length > maxMatchLen) { maxMatchLen = cn.length; bestMatch = c.id; }
+        }
+      }
+      if (bestMatch) {
+        const arr = map.get(bestMatch) || [];
+        arr.push(l);
+        map.set(bestMatch, arr);
+      }
+    }
+    return map;
+  }, [filteredRevs, campaigns]);
+
   const getCampLeads = useCallback((campName: string, campId: string) => {
     return campLeadsMap.get(campId) || [];
   }, [campLeadsMap]);
+
+  const getCampRevs = useCallback((_campName: string, campId: string) => {
+    return campRevsMap.get(campId) || [];
+  }, [campRevsMap]);
 
   const totalSpend = campaigns.reduce((s,c)=>s+c.spend,0);
   const totalLeads = campaigns.reduce((s,c)=>s+c.leads_api,0);
   const avgCPL = totalLeads>0?totalSpend/totalLeads:0;
   const maxSpend = Math.max(...campaigns.map(c=>c.spend),1);
 
-  // Cards: filtrando leads CRM do FB
+  // ── Performance badge por campanha ───────────────────────────
+  function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
+    const cl=getCampLeads(c.name,c.id);
+    const cL=cl.length>0?cl.length:c.leads_api;
+    const cR=cl.filter((x:any)=>Number(x.status)===3).length;
+    const cpl=cL>0&&c.spend>0?c.spend/cL:0;
+    if(avgCPL>0&&cpl>0&&cpl>avgCPL*1.5) return 'red';
+    if(cpl>0&&avgCPL>0&&cpl<=avgCPL&&cR>0) return 'green';
+    return 'yellow';
+  }
+
+  // ── Modo Gestor: exibe só campanhas que precisam atenção ──────
+  const displayedCampaigns = useMemo(()=>{
+    if(!gestorMode) return filtered;
+    return filtered.filter(c=>getCampPerf(c)!=='green');
+  },[filtered,gestorMode,getCampLeads,avgCPL]); // eslint-disable-line
+
+  // ── Alertas automáticos ───────────────────────────────────────
+  const alerts = useMemo(()=>{
+    if(!filtered.length||loading) return [];
+    const items:{type:'red'|'yellow'|'green';msg:string}[]=[];
+    const trunc=(s:string)=>s.length>35?s.slice(0,35)+'…':s;
+    for(const c of filtered){
+      const cl=getCampLeads(c.name,c.id);
+      const cL=cl.length>0?cl.length:c.leads_api;
+      const cR=cl.filter((x:any)=>Number(x.status)===3).length;
+      const cpl=cL>0&&c.spend>0?c.spend/cL:0;
+      const cpr=cR>0&&c.spend>0?c.spend/cR:0;
+      if(avgCPL>0&&cpl>avgCPL*1.3&&c.spend>20&&items.length<5)
+        items.push({type:'red',msg:`${trunc(c.name)} — CPL R$ ${fmt(cpl)} está ${Math.round((cpl/avgCPL-1)*100)}% acima da média`});
+      else if(cL>5&&cR===0&&items.length<5)
+        items.push({type:'red',msg:`${trunc(c.name)} — ${cL} leads sem nenhuma revendedora`});
+      if(c.ctr<1.5&&c.impressions>1000&&items.length<5)
+        items.push({type:'yellow',msg:`${trunc(c.name)} — CTR ${c.ctr.toFixed(2)}% abaixo de 1.5%`});
+      if(cR>0&&cpr>200&&items.length<5)
+        items.push({type:'yellow',msg:`${trunc(c.name)} — CPR R$ ${fmt(cpr)} acima de R$ 200`});
+      if(avgCPL>0&&cpl>0&&cpl<avgCPL&&c.spend>20&&items.length<5)
+        items.push({type:'green',msg:`${trunc(c.name)} — CPL R$ ${fmt(cpl)} abaixo da média da conta`});
+      if(cL>=5&&cR/cL>0.1&&items.length<5)
+        items.push({type:'green',msg:`${trunc(c.name)} — ${Math.round(cR/cL*100)}% de aprovação (${cR} rev de ${cL} leads)`});
+    }
+    return items.sort((a,b)=>{const o={red:0,yellow:1,green:2};return o[a.type]-o[b.type];}).slice(0,5);
+  },[filtered,getCampLeads,avgCPL,loading]); // eslint-disable-line
+
+  // Cards: leads criados no período (created_at) via Meta Ads
   const leadsCRMTotal = useMemo(()=>
     filteredLeads.filter(l=>{
       const la=l as any;
       return (la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0;
     }).length
   ,[filteredLeads]);
+  // Revendedoras aprovadas no período (status_aprovado_at) via Meta Ads
   const revsCRMTotal = useMemo(()=>
-    filteredLeads.filter(l=>{
+    filteredRevs.filter(l=>{
       const la=l as any;
-      return ((la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0)
-        && Number(la.status)===3;
+      return (la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0;
     }).length
-  ,[filteredLeads]);
+  ,[filteredRevs]);
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
-  // Gráfico: barras horizontais com dados CRM por campanha
+  // Dados por campanha para scatter plot (leads CRM + revendedoras por status_aprovado_at)
   const chartRows = useMemo(()=>{
-    return filtered.slice(0,8).map(c=>{
+    return filtered.slice(0,10).map(c=>{
       const campLeads = getCampLeads(c.name, c.id);
+      const campRevs  = getCampRevs(c.name, c.id);
       const l = campLeads.length > 0 ? campLeads.length : c.leads_api;
-      const r = campLeads.filter(x => Number((x as any).status) === 3).length;
+      const r = campRevs.length;
       return {
         name: c.name.length>16?c.name.slice(0,16)+'…':c.name,
+        fullName: c.name,
         leads: l,
         rev:   r,
         cpl:   l>0&&c.spend>0 ? Math.round(c.spend/l) : 0,
         cpr:   r>0&&c.spend>0 ? Math.round(c.spend/r) : 0,
+        spend: c.spend,
+        id: c.id,
       };
     });
-  },[filtered, getCampLeads]); // eslint-disable-line
+  },[filtered, getCampLeads, getCampRevs]); // eslint-disable-line
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
@@ -334,7 +444,7 @@ export default function CampanhasPage() {
             {aiLog&&(
               <button onClick={()=>setShowAiPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'6px',marginTop:'7px',padding:'6px 12px',borderRadius:'99px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',border:'1px solid rgba(139,92,246,0.3)',color:'#8b5cf6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
                 <Zap style={{width:'12px',height:'12px'}}/>
-                IA otimizou hoje
+                Ravena otimizou hoje
                 {aiLog.acoes_executadas?.length>0&&(
                   <span style={{background:'#8b5cf6',color:'#fff',borderRadius:'99px',padding:'1px 6px',fontSize:'11px'}}>
                     {aiLog.acoes_executadas.length}
@@ -346,6 +456,9 @@ export default function CampanhasPage() {
           <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
             <FilterDropdown value={statusFilter} options={[{label:'Todas',value:'all'},{label:'Ativas',value:'ACTIVE'},{label:'Pausadas',value:'PAUSED'}]} onChange={setStatusFilter} dark={dark}/>
+            <button onClick={()=>setGestorMode(v=>!v)} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${gestorMode?'#f97316':'transparent'}`,background:gestorMode?(dark?'rgba(249,115,22,0.15)':'#fff7ed'):(dark?'rgba(255,255,255,0.06)':'#f3f4f6'),color:gestorMode?'#f97316':txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit',fontWeight:gestorMode?600:400}}>
+                🎯 Gestor
+              </button>
             <button onClick={()=>{ const key=`meta_camp_${orgId}_${datePreset}`; sessionStorage.removeItem(key); load(); }} disabled={loading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
               <RefreshCw style={{width:'14px',height:'14px',animation:loading?'spin 1s linear infinite':''}}/>
               {loading?'Carregando…':'Atualizar'}
@@ -357,9 +470,9 @@ export default function CampanhasPage() {
         <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
           {[
             {label:'Gasto Total',    value:loading?'…':`R$ ${fmt(totalSpend)}`,             icon:DollarSign, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5', sub:null},
-            {label:'Leads',         value:loading?'…':String(leadsCRMTotal),                icon:Users,      color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff',  sub:`período · CRM`},
+            {label:'Leads',         value:loading?'…':String(leadsCRMTotal),                icon:Users,      color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff',  sub:`Tráfego pago · CRM`},
             {label:'Custo por Lead',value:loading?'…':(cplCard>0?`R$ ${fmt(cplCard)}`:'—'), icon:TrendingUp, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5',  sub:`${leadsCRMTotal} leads`},
-            {label:'Custo por Rev', value:loading?'…':(cprCard>0?`R$ ${fmt(cprCard)}`:'—'),icon:Zap,        color:'#a855f7', bgC:dark?'rgba(168,85,247,0.12)':'#faf5ff',  sub:`${revsCRMTotal} aprovadas`},
+            {label:'Custo por Rev', value:loading?'…':(cprCard>0?`R$ ${fmt(cprCard)}`:'—'),icon:Zap,        color:'#a855f7', bgC:dark?'rgba(168,85,247,0.12)':'#faf5ff',  sub:`${revsCRMTotal} revendedoras via tráfego`},
           ].map((c,i)=>(
             <div key={i} style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
@@ -376,70 +489,87 @@ export default function CampanhasPage() {
 
 
 
-        {/* Gráfico horizontal — barras por campanha */}
-        {!isMobile&&(
-          <div style={{background:cardBg,borderRadius:'16px',padding:'20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px',flexWrap:'wrap',gap:'8px'}}>
-              <h3 style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0}}>Desempenho por Campanha</h3>
-              <div style={{display:'flex',gap:'14px',alignItems:'center'}}>
-                {[{color:'#10b981',label:'Leads'},{color:'#a855f7',label:'Rev'},{color:'#3b82f6',label:'CPL (R$)'},{color:'#f97316',label:'CPR (R$)'}].map(({color,label})=>(
-                  <div key={label} style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                    <div style={{width:'8px',height:'8px',borderRadius:'2px',background:color}}/>
-                    <span style={{fontSize:'11px',color:txtMid}}>{label}</span>
+        {/* Card de alertas automáticos */}
+        {!loading&&alerts.length>0&&(
+          <div style={{background:cardBg,borderRadius:'16px',padding:'16px 20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
+            <p style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 10px',display:'flex',alignItems:'center',gap:'6px'}}>
+              <span>⚡</span> O que precisa atenção agora
+            </p>
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {alerts.map((a,i)=>{
+                const col=a.type==='red'?'#ef4444':a.type==='yellow'?'#f59e0b':'#10b981';
+                const bg=a.type==='red'?(dark?'rgba(239,68,68,0.08)':'#fef2f2'):a.type==='yellow'?(dark?'rgba(245,158,11,0.08)':'#fffbeb'):(dark?'rgba(16,185,129,0.08)':'#f0fdf4');
+                return(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 12px',borderRadius:'10px',background:bg,border:`1px solid ${col}22`}}>
+                    <div style={{width:'6px',height:'6px',borderRadius:'50%',background:col,flexShrink:0}}/>
+                    <span style={{fontSize:'12.5px',color:a.type==='red'?(dark?'#fca5a5':'#dc2626'):a.type==='yellow'?(dark?'#fcd34d':'#b45309'):(dark?'#6ee7b7':'#059669'),lineHeight:1.4}}>{a.msg}</span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-            {loading
-              ?<div style={{height:'60px',display:'flex',alignItems:'center',justifyContent:'center',color:txtMid,fontSize:'13px'}}>Carregando…</div>
-              :chartRows.length===0
-                ?<div style={{height:'60px',display:'flex',alignItems:'center',justifyContent:'center',color:txtMid,fontSize:'13px'}}>Nenhum dado</div>
-                :(()=>{
-                  const maxLeads=Math.max(...chartRows.map(r=>r.leads),1);
-                  const maxCpl=Math.max(...chartRows.map(r=>r.cpl),1);
-                  const maxCpr=Math.max(...chartRows.map(r=>r.cpr),1);
-                  return(
-                    <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
-                      {chartRows.map((row,i)=>(
-                        <div key={i} style={{
-                          display:'grid',
-                          gridTemplateColumns:'130px 1fr',
-                          gap:'12px',
-                          alignItems:'center',
-                          paddingBottom:'16px',
-                          borderBottom:i<chartRows.length-1?`1px solid ${divCls}`:'none',
-                        }}>
-                          {/* Nome da campanha */}
-                          <span style={{
-                            fontSize:'12px',fontWeight:600,color:txtHi,
-                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                            textAlign:'right',paddingRight:'12px',lineHeight:1.3,
-                          }}>{row.name}</span>
-                          {/* 4 barras com labels */}
-                          <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                            {[
-                              {val:row.leads, max:maxLeads, color:'#10b981', label:'Leads', valFmt:(v:number)=>String(v)},
-                              {val:row.rev,   max:maxLeads, color:'#a855f7', label:'Rev',   valFmt:(v:number)=>String(v)},
-                              {val:row.cpl,   max:maxCpl,   color:'#3b82f6', label:'CPL',   valFmt:(v:number)=>v>0?`R$${v}`:'-'},
-                              {val:row.cpr,   max:maxCpr,   color:'#f97316', label:'CPR',   valFmt:(v:number)=>v>0?`R$${v}`:'-'},
-                            ].map(({val,max,color,label,valFmt},j)=>(
-                              <div key={j} style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                                <span style={{fontSize:'10px',color:txtLow,width:'28px',textAlign:'right',flexShrink:0}}>{label}</span>
-                                <div style={{flex:1,height:'10px',background:dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)',borderRadius:'99px',overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:max>0?`${(val/max)*100}%`:'0%',background:color,borderRadius:'99px',transition:'width 0.7s ease'}}/>
-                                </div>
-                                <span style={{fontSize:'11px',color,fontWeight:700,width:'52px',textAlign:'right',flexShrink:0}}>{valFmt(val)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()
-            }
           </div>
         )}
+
+        {/* Scatter plot: Campanhas · Revendedoras vs Custo */}
+        {!isMobile&&!loading&&chartRows.length>0&&(()=>{
+          const hasRevs=chartRows.some(r=>r.rev>0);
+          const yKey=hasRevs?'cpr':'cpl';
+          const xKey=hasRevs?'rev':'leads';
+          const avgY=chartRows.filter(r=>r[yKey]>0).reduce((s,r)=>s+r[yKey],0)/Math.max(chartRows.filter(r=>r[yKey]>0).length,1);
+          const periodLabel=PERIOD_OPTIONS.find(p=>p.value===datePreset)?.label||datePreset;
+          const getColor=(r:any)=>{const y=r[yKey];if(!y||!avgY)return '#94a3b8';if(y<avgY*0.85)return '#10b981';if(y>avgY*1.4)return '#ef4444';return '#f59e0b';};
+          const scatterData=chartRows.filter(r=>r[xKey]>0||r.spend>0).map(r=>({...r,x:r[xKey],y:r[yKey]||0,z:Math.max(r.spend,50)}));
+          const CustomDot=(props:any)=>{const{cx,cy,payload}=props;const r=Math.min(Math.max(Math.sqrt(payload.z/Math.PI)*1.2,6),28);const col=getColor(payload);return<g><circle cx={cx} cy={cy} r={r} fill={col} fillOpacity={0.8} stroke={col} strokeWidth={1.5}/><text x={cx} y={cy+r+10} textAnchor="middle" fontSize={9} fill={dark?'#a1a1aa':'#6b7280'} fontWeight={600}>{payload.name.slice(0,10)}</text></g>;};
+          return(
+            <div style={{background:cardBg,borderRadius:'16px',padding:'16px 20px 20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+                <div>
+                  <h3 style={{fontSize:'13px',fontWeight:600,color:txtHi,margin:0}}>
+                    Campanhas · {hasRevs?'Revendedoras vs Custo':'Leads vs CPL'}
+                  </h3>
+                  <p style={{fontSize:'11px',color:txtMid,margin:'2px 0 0'}}>{periodLabel} · bolha proporcional ao gasto</p>
+                </div>
+                <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+                  {[{c:'#10b981',l:'Abaixo da média'},{c:'#f59e0b',l:'Na média'},{c:'#ef4444',l:'Acima da média'}].map(({c,l})=>(
+                    <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                      <div style={{width:'7px',height:'7px',borderRadius:'50%',background:c}}/>
+                      <span style={{fontSize:'10px',color:txtMid}}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <ScatterChart margin={{top:20,right:20,bottom:20,left:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)'} vertical={false}/>
+                  <XAxis type="number" dataKey="x" name={hasRevs?'Revendedoras':'Leads'} tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false} label={{value:hasRevs?'Revendedoras':'Leads',position:'insideBottom',offset:-10,fill:txtMid,fontSize:10}}/>
+                  <YAxis type="number" dataKey="y" name={hasRevs?'CPR (R$)':'CPL (R$)'} tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>`R$${Math.round(v)}`} width={52}/>
+                  <ZAxis type="number" dataKey="z" range={[100,2000]}/>
+                  <Tooltip
+                    cursor={{strokeDasharray:'3 3',stroke:dark?'#374151':'#d1d5db'}}
+                    content={({active,payload})=>{
+                      if(!active||!payload?.length)return null;
+                      const d=payload[0]?.payload;
+                      if(!d)return null;
+                      return(
+                        <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',padding:'10px 14px',fontSize:'12px',color:txtHi,lineHeight:1.7,boxShadow:'0 4px 16px rgba(0,0,0,0.12)'}}>
+                          <p style={{margin:'0 0 4px',fontWeight:700,fontSize:'13px'}}>{d.fullName}</p>
+                          <p style={{margin:0,color:txtMid}}>Leads: <b style={{color:txtHi}}>{d.leads}</b> · Rev: <b style={{color:'#a855f7'}}>{d.rev}</b></p>
+                          <p style={{margin:0,color:txtMid}}>CPL: <b style={{color:txtHi}}>R$ {fmt(d.cpl)}</b> · CPR: <b style={{color:d.cpr>0?'#a855f7':txtMid}}>{d.cpr>0?`R$ ${fmt(d.cpr)}`:'—'}</b></p>
+                          <p style={{margin:0,color:txtMid}}>Gasto: <b style={{color:txtHi}}>R$ {fmt(d.spend)}</b></p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Scatter data={scatterData} shape={<CustomDot/>}>
+                    {scatterData.map((entry,i)=>(
+                      <Cell key={i} fill={getColor(entry)}/>
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
 
         {/* Tabs */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden'}}>
@@ -468,13 +598,19 @@ export default function CampanhasPage() {
                   </div>
                 );
                 if(mostrarVazio) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>;
-                return <>{filtered.map(c=>{
+                return <>{gestorMode&&displayedCampaigns.length<filtered.length&&(
+                  <div style={{padding:'10px 16px',background:dark?'rgba(249,115,22,0.1)':'#fff7ed',borderBottom:`1px solid rgba(249,115,22,0.2)`,display:'flex',alignItems:'center',gap:'8px'}}>
+                    <span style={{fontSize:'13px',color:'#f97316',fontWeight:600}}>🎯 Mostrando {displayedCampaigns.length} campanha{displayedCampaigns.length!==1?'s':''} que precisam de atenção</span>
+                    <button onClick={()=>setGestorMode(false)} style={{marginLeft:'auto',fontSize:'11px',color:'#f97316',background:'none',border:'1px solid rgba(249,115,22,0.3)',borderRadius:'6px',padding:'3px 8px',cursor:'pointer',fontFamily:'inherit'}}>Ver todas</button>
+                  </div>
+                )}{displayedCampaigns.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
                     const perf=Math.round((c.spend/maxSpend)*100);
                     const periodo=PERIOD_MAP[datePreset]||'all';
                     const campCRMLeads = getCampLeads(c.name, c.id);
+                    const campRevsList = getCampRevs(c.name, c.id);
                     const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
-                    const cR = campCRMLeads.filter(x => Number((x as any).status) === 3).length;
+                    const cR = campRevsList.length;
                     const leadsDisplay = cL;
                     const cplVal = leadsDisplay>0&&c.spend>0 ? c.spend/leadsDisplay : null;
                     const cprVal = cR>0&&c.spend>0 ? c.spend/cR : null;
@@ -602,7 +738,7 @@ export default function CampanhasPage() {
                 </div>
                 <div>
                   <h3 style={{margin:0,fontSize:'15px',fontWeight:600,color:txtHi}}>⚡ Análise de hoje</h3>
-                  <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Gerado pela IA com base nos dados reais</p>
+                  <p style={{margin:0,fontSize:'12px',color:txtMid,marginTop:'2px'}}>Gerado pela Ravena com base nos dados reais</p>
                 </div>
               </div>
               {loading
@@ -617,7 +753,7 @@ export default function CampanhasPage() {
                     ))}
                   </div>
                   :<div style={{padding:'40px 0',textAlign:'center'}}>
-                    <p style={{margin:0,fontSize:'13px',color:txtMid,lineHeight:1.6}}>Nenhum insight gerado hoje.<br/>A IA só gera insights quando identifica algo realmente importante.</p>
+                    <p style={{margin:0,fontSize:'13px',color:txtMid,lineHeight:1.6}}>Nenhum insight gerado hoje.<br/>A Ravena só gera insights quando identifica algo realmente importante.</p>
                   </div>
               }
             </div>
@@ -675,7 +811,10 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
 
   const leadsEmAtendimento = allLeads.filter(l => Number(l.status) === 1).length;
 
-  // Parser simples para extrair métricas do resumo se estiver no formato texto
+  // Formata valor monetário para exibição
+  const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+
+  // Parser fallback para extrair métricas do campo resumo (texto legado)
   const parseMetric = (label: string) => {
     const regex = new RegExp(`${label}:?\\s*([^|\\n\\.]+)(\\.|\\||\\n|$)`, 'i');
     const match = log.resumo?.match(regex);
@@ -683,10 +822,10 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
   };
 
   const kpis = [
-    { label: 'Investimento', value: parseMetric('Investimento') || '—', icon: DollarSign, color: '#10b981' },
-    { label: 'Leads', value: parseMetric('Leads') || '—', icon: Users, color: '#3b82f6' },
-    { label: 'CPL médio', value: parseMetric('CPL médio') || '—', icon: TrendingUp, color: '#10b981' },
-    { label: 'Projeção', value: parseMetric('Projeção mensal') || '—', icon: BarChart, color: '#a855f7' },
+    { label: 'Investimento', value: log.total_gasto > 0 ? fmtMoeda(log.total_gasto) : (parseMetric('Investimento') || '—'), icon: DollarSign, color: '#10b981' },
+    { label: 'Leads', value: log.total_leads > 0 ? String(log.total_leads) : (parseMetric('Leads') || '—'), icon: Users, color: '#3b82f6' },
+    { label: 'CPL médio', value: log.cpl_medio > 0 ? fmtMoeda(log.cpl_medio) : (parseMetric('CPL médio') || '—'), icon: TrendingUp, color: '#10b981' },
+    { label: 'Projeção', value: log.ritmo_mensal > 0 ? fmtMoeda(log.ritmo_mensal) : (parseMetric('Projeção mensal') || '—'), icon: BarChart, color: '#a855f7' },
   ];
 
   const statusBudget = parseMetric('Status do budget');
@@ -694,7 +833,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
   const isCritical = hasAlert && (log.alerta.toLowerCase().includes('crítico') || log.alerta.toLowerCase().includes('meta'));
   
   const statusColor = isCritical ? '#ef4444' : (hasAlert || (statusBudget?.includes('Acima'))) ? '#f59e0b' : '#10b981';
-  const statusLabel = isCritical ? 'CPL fora da meta' : (hasAlert || (statusBudget?.includes('Acima'))) ? 'Atenção ao budget' : 'IA estável';
+  const statusLabel = isCritical ? 'CPL fora da meta' : (hasAlert || (statusBudget?.includes('Acima'))) ? 'Atenção ao budget' : 'Ravena estável';
 
   return (
     <>
@@ -720,15 +859,34 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
         {/* Header Section */}
         <div style={{ padding: '24px', borderBottom: `1px solid ${border}`, background: cardBg }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>IA Otimizou suas campanhas</h2>
-              <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>
-                Hoje às {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {/* Avatar Ravena */}
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 16px rgba(139,92,246,0.4)' }}>
+                <span style={{ fontSize: '18px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>R</span>
+              </div>
+              <div>
+                <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>Ravena otimizou suas campanhas</h2>
+                <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>
+                  Hoje às {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {log.campanhas_analisadas?.length > 0 && ` · ${log.campanhas_analisadas.length} campanhas analisadas`}
+                </p>
+              </div>
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: txtMid, borderRadius: '8px' }}>
               <X size={20} />
             </button>
+          </div>
+
+          {/* Resumo operacional */}
+          <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.15)', marginBottom: '12px' }}>
+            <p style={{ margin: 0, fontSize: '12.5px', color: dark ? '#c4b5fd' : '#6d28d9', fontWeight: 500 }}>
+              {log.campanhas_analisadas?.length > 0
+                ? `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} e tomou ${log.acoes_executadas?.length || 0} decisão${(log.acoes_executadas?.length || 0) !== 1 ? 'ões' : ''}`
+                : log.acoes_executadas?.length > 0
+                  ? `Ravena analisou as campanhas e executou ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''}`
+                  : 'Ravena analisou as campanhas — nenhuma ação necessária hoje'
+              }
+            </p>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -820,14 +978,55 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
             </div>
           )}
 
-          {/* Executed Actions Cards */}
+          {/* Campanhas avaliadas (sem ação necessária) */}
+          {(!log.acoes_executadas?.length) && log.acoes_sugeridas?.length > 0 && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Campanhas avaliadas hoje</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {log.acoes_sugeridas.slice(0, 5).map((s: any, i: number) => {
+                  const conf = s.leads_crm_7d >= 20 ? { label: 'Alta confiança', color: '#10b981', bg: 'rgba(16,185,129,0.1)' }
+                    : s.leads_crm_7d >= 10 ? { label: 'Média confiança', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
+                    : { label: 'Baixa confiança', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
+                  return (
+                    <div key={i} style={{ padding: '11px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '13px', color: '#10b981', flexShrink: 0 }}>✓</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.campanha_nome || s.nome || '—'}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: txtMid }}>{s.motivo || 'Manter — sem ajuste necessário'}</p>
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: conf.color, background: conf.bg, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>{conf.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Ações executadas com nível de confiança */}
           {log.acoes_executadas?.length > 0 && (
             <div>
               <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>Ações Executadas</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {log.acoes_executadas.map((acao: any, i: number) => (
-                  <ActionCard key={i} acao={acao} dark={dark} />
-                ))}
+                {log.acoes_executadas.map((acao: any, i: number) => {
+                  // Busca dados de confiança da campanha em campanhas_analisadas
+                  const campData = log.campanhas_analisadas?.find((c: any) => c.id === acao.campanha_id || c.nome === acao.campanha_nome);
+                  const conf = campData?.leads_crm_7d >= 20 ? { label: 'Alta confiança', color: '#10b981', bg: 'rgba(16,185,129,0.1)' }
+                    : campData?.leads_crm_7d >= 10 ? { label: 'Média confiança', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
+                    : campData ? { label: 'Baixa confiança', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' }
+                    : null;
+                  return (
+                    <div key={i}>
+                      <ActionCard acao={acao} dark={dark} />
+                      {conf && (
+                        <div style={{ marginTop: '4px', paddingLeft: '14px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: conf.color, background: conf.bg, padding: '2px 7px', borderRadius: '99px' }}>{conf.label}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -35,6 +35,10 @@ export interface Lead {
   quiz_data?: Record<string, unknown>;
   ultimo_status_change?: string;
   motivo_reprovacao?: string;
+  status_atendimento_at?: string;
+  status_reuniao_at?: string;
+  status_contrato_at?: string;
+  status_aprovado_at?: string;
   score?: number | null;
   faixa?: 'verde' | 'amarelo' | 'vermelho' | null;
   [key: string]: unknown;

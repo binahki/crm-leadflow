@@ -65,7 +65,7 @@ async function fetchCreatives(datePreset: string, metaToken: string, metaAccount
 }
 
 function generateAnalysis(top5: Creative[], avgCPL: number, avgCTR: number): string[] {
-  if (!top5.length) return ['Nenhum dado disponível para análise no período selecionado.'];
+  if (!top5.length) return ['📊 Aguardando dados suficientes para gerar insights automáticos. A análise fica disponível após 3+ dias de campanha ativa.'];
   const insights: string[] = [];
   const best = top5[0];
   if (best.leads > 0) insights.push(`🏆 "${best.name.slice(0, 40)}" é o criativo mais eficiente com ${best.leads} leads e CPL de R$ ${fmt(best.cpl)}. Priorize mais verba neste criativo.`);
@@ -80,6 +80,32 @@ function generateAnalysis(top5: Creative[], avgCPL: number, avgCTR: number): str
   if (avgCTR > 2) insights.push(`🎯 CTR médio de ${avgCTR.toFixed(2)}% acima da média do mercado (1-2%). Os criativos estão chamando atenção — foco agora é otimizar a landing page.`);
   if (insights.length === 0) insights.push('📊 Criativos dentro do esperado para o período. Continue testando novos ângulos e monitore a frequência.');
   return insights;
+}
+
+function getPerformanceTags(c: Creative, avgCPL: number): {label:string;color:string;bg:string}[] {
+  const tags:{label:string;color:string;bg:string}[]=[];
+  if(c.ctr>4) tags.push({label:'🎯 Alto CTR',color:'#2563eb',bg:'rgba(37,99,235,0.1)'});
+  else if(c.ctr<2&&c.impressions>500) tags.push({label:'⚠️ CTR baixo',color:'#d97706',bg:'rgba(245,158,11,0.1)'});
+  if(avgCPL>0&&c.cpl>0&&c.cpl<avgCPL) tags.push({label:'💰 CPL eficiente',color:'#10b981',bg:'rgba(16,185,129,0.1)'});
+  else if(avgCPL>0&&c.cpl>0&&c.cpl>avgCPL*1.5) tags.push({label:'📈 CPL alto',color:'#ef4444',bg:'rgba(239,68,68,0.1)'});
+  if(c.frequency>2.5) tags.push({label:'🔄 Saturando',color:'#f97316',bg:'rgba(249,115,22,0.1)'});
+  else if(c.frequency>0&&c.frequency<1.5) tags.push({label:'✨ Fresco',color:'#8b5cf6',bg:'rgba(139,92,246,0.1)'});
+  if(c.leads>50) tags.push({label:'🔥 Alto volume',color:'#dc2626',bg:'rgba(220,38,38,0.1)'});
+  return tags.slice(0,3);
+}
+
+function getCreativeRevs(c: Creative, leads: any[]): {count:number;cpr:number} {
+  const campLow=c.campaign_name.toLowerCase();
+  const matched=leads.filter(l=>{
+    const utmC=(l.utm_content||'').toLowerCase();
+    const utmCamp=(l.utm_campaign||'').toLowerCase();
+    const adNameLow=c.name.toLowerCase();
+    if(utmC&&(utmC.includes(adNameLow.slice(0,20))||adNameLow.includes(utmC.slice(0,20)))) return true;
+    if(campLow.length>3&&utmCamp.includes(campLow.slice(0,20))) return true;
+    return false;
+  });
+  const revs=matched.filter(l=>Number(l.status)===3).length;
+  return {count:revs, cpr:revs>0&&c.spend>0?c.spend/revs:0};
 }
 
 function FilterDropdown({ value, options, onChange, dark }: {
@@ -221,7 +247,6 @@ export default function CriativosPage() {
                 <p style={{ margin: 0, fontSize: '11.5px', color: txtMid }}>Ordenar por:</p>
               </div>
             </div>
-            {/* Sort buttons */}
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
               {[{ key: 'leads', label: 'Leads' }, { key: 'cpl', label: 'CPL' }, { key: 'ctr', label: 'CTR' }, { key: 'spend', label: 'Gasto' }].map(s => (
                 <button key={s.key} onClick={() => setSortBy(s.key as any)} style={{ padding: '5px 10px', borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: sortBy === s.key ? 600 : 400, background: sortBy === s.key ? '#2563eb' : (dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6'), color: sortBy === s.key ? '#fff' : txtMid, cursor: 'pointer', fontFamily: 'inherit' }}>{s.label}</button>
@@ -234,43 +259,129 @@ export default function CriativosPage() {
               {[...Array(5)].map((_, i) => <div key={i} style={{ height: '72px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', animation: 'pulse 1.5s ease-in-out infinite' }} />)}
             </div>
           ) : sorted.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: txtMid, fontSize: '13px' }}>Nenhum criativo com dados no período</div>
+            <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+              <p style={{ fontSize: '28px', margin: '0 0 10px' }}>📊</p>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '0 0 6px' }}>Aguardando dados suficientes</p>
+              <p style={{ fontSize: '12px', color: txtMid, margin: 0, lineHeight: 1.6 }}>A análise fica disponível após 3+ dias de campanha ativa.</p>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {sorted.map((c, i) => (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '12px', background: i === 0 ? (dark ? 'rgba(251,191,36,0.08)' : '#fffbeb') : (dark ? 'rgba(255,255,255,0.02)' : '#fafafa'), border: `1px solid ${i === 0 ? (dark ? 'rgba(251,191,36,0.2)' : '#fde68a') : (dark ? '#1e1e22' : '#f3f4f6')}` }}>
-                  <ScoreBadge rank={i + 1} />
-                  <Thumbnail url={c.thumbnail_url} name={c.name} size={isMobile ? 40 : 48} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</p>
-                    <p style={{ margin: '1px 0 0', fontSize: '11px', color: txtMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.campaign_name}</p>
-                    {/* Mobile: métricas empilhadas */}
-                    {isMobile ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '5px' }}>
-                        <span style={{ fontSize: '11.5px', color: c.leads > 0 ? '#10b981' : txtLow, fontWeight: 600 }}>{c.leads} leads</span>
-                        <span style={{ fontSize: '11px', color: txtLow }}>R$ {fmt(c.spend)} · CPL: {c.cpl > 0 ? `R$ ${fmt(c.cpl)}` : '—'}</span>
-                        <span style={{ fontSize: '11px', color: txtLow }}>CTR: {c.ctr.toFixed(2)}% · Freq: {c.frequency > 0 ? c.frequency.toFixed(1) : '—'}</span>
+              {/* Criativo Campeão */}
+              {sorted[0] && (()=>{
+                const champion = sorted[0];
+                const champRevs = getCreativeRevs(champion, leads as any[]);
+                return (
+                  <div style={{ padding: '16px', borderRadius: '14px', background: dark ? 'rgba(251,191,36,0.1)' : '#fffbeb', border: `1px solid ${dark?'rgba(251,191,36,0.3)':'#fde68a'}`, marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.08em' }}>🏆 Criativo Campeão do Período</span>
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: champion.status==='ACTIVE'?'rgba(16,185,129,0.15)':'rgba(107,114,128,0.15)', color: champion.status==='ACTIVE'?'#10b981':txtMid, fontWeight: 600 }}>
+                        {champion.status==='ACTIVE'?'● Ativo':'○ Pausado'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                      <Thumbnail url={champion.thumbnail_url} name={champion.name} size={80} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{champion.name}</p>
+                        <p style={{ margin: '0 0 8px', fontSize: '11px', color: txtMid }}>{champion.campaign_name}</p>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981' }}>{champion.leads} leads</span>
+                          <span style={{ fontSize: '12px', color: txtMid }}>CPL R$ {fmt(champion.cpl)}</span>
+                          <span style={{ fontSize: '12px', color: txtMid }}>CTR {champion.ctr.toFixed(2)}%</span>
+                          <span style={{ fontSize: '12px', color: txtMid }}>R$ {fmt(champion.spend)} gasto</span>
+                          {champRevs.count > 0 && <span style={{ fontSize: '12px', fontWeight: 700, color: '#a855f7' }}>{champRevs.count} rev · R$ {fmt(champRevs.cpr)}/rev</span>}
+                        </div>
+                        {getPerformanceTags(champion, avgCPL).length > 0 && (
+                          <div style={{ display: 'flex', gap: '5px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            {getPerformanceTags(champion, avgCPL).map((t,ti) => (
+                              <span key={ti} style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '10px', fontWeight: 600, color: t.color, background: t.bg }}>{t.label}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '5px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '11.5px', color: c.leads > 0 ? '#10b981' : txtLow, fontWeight: c.leads > 0 ? 600 : 400 }}>{c.leads} leads</span>
-                        <span style={{ fontSize: '11px', color: txtLow }}>R$ {fmt(c.spend)}</span>
-                        {c.cpl > 0 && <span style={{ fontSize: '11px', color: txtLow }}>CPL: R$ {fmt(c.cpl)}</span>}
-                        <span style={{ fontSize: '11px', color: txtLow }}>CTR: {c.ctr.toFixed(2)}%</span>
-                        {c.frequency > 0 && <span style={{ fontSize: '11px', color: c.frequency > 3 ? '#f97316' : txtLow }}>Freq: {c.frequency.toFixed(1)}</span>}
-                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Demais criativos */}
+              {sorted.map((c, i) => {
+                const revs = getCreativeRevs(c, leads as any[]);
+                const tags = getPerformanceTags(c, avgCPL);
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${dark?'#1e1e22':'#f3f4f6'}` }}>
+                    <ScoreBadge rank={i + 1} />
+                    <Thumbnail url={c.thumbnail_url} name={c.name} size={64} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</p>
+                      <p style={{ margin: '1px 0 0', fontSize: '11px', color: txtMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.campaign_name}</p>
+                      {isMobile ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '5px' }}>
+                          <span style={{ fontSize: '11.5px', color: c.leads > 0 ? '#10b981' : txtLow, fontWeight: 600 }}>{c.leads} leads</span>
+                          <span style={{ fontSize: '11px', color: txtLow }}>R$ {fmt(c.spend)} · CPL: {c.cpl > 0 ? `R$ ${fmt(c.cpl)}` : '—'}</span>
+                          {revs.count > 0 && <span style={{ fontSize: '11px', color: '#a855f7', fontWeight: 600 }}>{revs.count} rev · R$ {fmt(revs.cpr)}/rev</span>}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11.5px', color: c.leads > 0 ? '#10b981' : txtLow, fontWeight: c.leads > 0 ? 600 : 400 }}>{c.leads} leads</span>
+                          <span style={{ fontSize: '11px', color: txtLow }}>R$ {fmt(c.spend)}</span>
+                          {c.cpl > 0 && <span style={{ fontSize: '11px', color: txtLow }}>CPL: R$ {fmt(c.cpl)}</span>}
+                          <span style={{ fontSize: '11px', color: txtLow }}>CTR: {c.ctr.toFixed(2)}%</span>
+                          {c.frequency > 0 && <span style={{ fontSize: '11px', color: c.frequency > 3 ? '#f97316' : txtLow }}>Freq: {c.frequency.toFixed(1)}</span>}
+                          {revs.count > 0 && <span style={{ fontSize: '11px', fontWeight: 600, color: '#a855f7' }}>{revs.count} rev · R$ {fmt(revs.cpr)}/rev</span>}
+                        </div>
+                      )}
+                      {tags.length > 0 && (
+                        <div style={{ display: 'flex', gap: '5px', marginTop: '6px', flexWrap: 'wrap' }}>
+                          {tags.map((t, ti) => (
+                            <span key={ti} style={{ padding: '2px 7px', borderRadius: '99px', fontSize: '10px', fontWeight: 600, color: t.color, background: t.bg }}>{t.label}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {!isMobile && (
+                      <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 500, flexShrink: 0, background: c.status === 'ACTIVE' ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : (dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6'), color: c.status === 'ACTIVE' ? '#10b981' : txtMid }}>
+                        {c.status === 'ACTIVE' ? '● Ativo' : '○ Pausado'}
+                      </span>
                     )}
                   </div>
-                  {!isMobile && (
-                    <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: 500, flexShrink: 0, background: c.status === 'ACTIVE' ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : (dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6'), color: c.status === 'ACTIVE' ? '#10b981' : txtMid }}>
-                      {c.status === 'ACTIVE' ? '● Ativo' : '○ Pausado'}
-                    </span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
+
+        {/* Insights por Revendedoras */}
+        {(()=>{
+          const withRevs = sorted.map(c=>({c, revs:getCreativeRevs(c, leads as any[])})).filter(x=>x.revs.count>0).sort((a,b)=>a.revs.cpr-b.revs.cpr);
+          if(!withRevs.length) return null;
+          return (
+            <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: isMobile?'16px':'24px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                <span style={{ fontSize: '18px' }}>🛍️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: txtHi }}>Insights por Revendedoras</h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: txtMid }}>Ordenado por menor custo</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {withRevs.map(({c, revs}, i) => (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px', background: dark?'rgba(168,85,247,0.06)':'#faf5ff', border: `1px solid ${dark?'rgba(168,85,247,0.15)':'rgba(168,85,247,0.2)'}` }}>
+                    <Thumbnail url={c.thumbnail_url} name={c.name} size={36} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.name.length>40?c.name.slice(0,40)+'…':c.name}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: txtMid }}>
+                        Gerou <span style={{ fontWeight: 700, color: '#a855f7' }}>{revs.count} revendedora{revs.count!==1?'s':''}</span> a <span style={{ fontWeight: 700, color: '#a855f7' }}>R$ {fmt(revs.cpr)}</span> cada
+                      </p>
+                    </div>
+                    {i === 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#a855f7', background: 'rgba(168,85,247,0.15)', padding: '2px 8px', borderRadius: '99px', flexShrink: 0 }}>Melhor CPR</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Análise + Sugestões */}
         <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: isMobile ? '16px' : '24px' }}>

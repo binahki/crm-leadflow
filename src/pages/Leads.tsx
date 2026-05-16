@@ -619,8 +619,20 @@ function LeadsPage() {
   };
 
   const handleEditLead = async () => {
-    if(!editingLead)return; const cidadeNorm=normalizeCity(editingLead.cidade||''); const updates={nome:editingLead.nome,whatsapp:editingLead.whatsapp,cidade:cidadeNorm,status:editingLead.status??0};
-    const{error}=await supabase.from('leads').update(updates).eq('id',editingLead.id); if(error){toast.error(`Erro: ${error.message}`);return;}
+    if(!editingLead)return;
+    const cidadeNorm=normalizeCity(editingLead.cidade||'');
+    const originalLead=allLeads.find(l=>l.id===editingLead.id);
+    const newStatus=editingLead.status??0;
+    const updates:any={nome:editingLead.nome,whatsapp:editingLead.whatsapp,cidade:cidadeNorm,status:newStatus};
+    // Adiciona timestamp do status se ele mudou
+    if(originalLead&&Number(originalLead.status)!==Number(newStatus)){
+      const now=new Date().toISOString();
+      const tsField:Record<number,string>={0:'status_atendimento_at',1:'status_atendimento_at',2:'status_reuniao_at',5:'status_contrato_at',3:'status_aprovado_at'};
+      updates.ultimo_status_change=now;
+      if(tsField[Number(newStatus)]) updates[tsField[Number(newStatus)]]=now;
+    }
+    const{error}=await supabase.from('leads').update(updates).eq('id',editingLead.id);
+    if(error){toast.error(`Erro: ${error.message}`);return;}
     setAllLeads(prev=>prev.map(l=>l.id===editingLead.id?{...l,...updates}:l)); updateLead(editingLead.id,updates); setIsEditOpen(false); setEditingLead(null); toast.success('Lead atualizado!');
   };
 
@@ -665,7 +677,7 @@ function LeadsPage() {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
-          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({totalCount})</span></h1>
+          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>

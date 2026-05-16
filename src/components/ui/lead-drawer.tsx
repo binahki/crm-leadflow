@@ -264,7 +264,10 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     if (!lead) return;
     const prev = status;
     setStatus(newStatus);
-    const updates: any = { status: String(newStatus), ultimo_status_change: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const updates: any = { status: String(newStatus), ultimo_status_change: now };
+    if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); toast.error('Erro ao atualizar status'); }

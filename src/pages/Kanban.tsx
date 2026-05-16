@@ -340,7 +340,10 @@ export default function KanbanPage() {
   }
 
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
-    const patch: any = { status: newStatus, ultimo_status_change: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const patch: any = { status: newStatus, ultimo_status_change: now };
+    if (tsField[newStatus]) patch[tsField[newStatus]] = now;
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;
     updateLead(lead.id, patch);
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);

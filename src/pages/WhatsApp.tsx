@@ -829,7 +829,11 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
   const dark = theme === 'dark';
 
   const handleStatusUpdate = async (leadId: string, status: number, orgId: string) => {
-    const { error } = await supabase.from('leads').update({ status }).eq('id', leadId).eq('org_id', orgId);
+    const now = new Date().toISOString();
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const patch: any = { status, ultimo_status_change: now };
+    if (tsField[status]) patch[tsField[status]] = now;
+    const { error } = await supabase.from('leads').update(patch).eq('id', leadId).eq('org_id', orgId);
     if (error) toast.error('Erro ao atualizar status');
     else {
       toast.success('Status atualizado');
@@ -1689,12 +1693,13 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
                           setStatusDropOpen(false);
                           if (!lead) return;
                           setUpdating(true);
+                          const _now = new Date().toISOString();
+                          const _tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+                          const _patch: any = { status: opt.value, ultimo_status_change: _now };
+                          if (_tsField[opt.value]) _patch[_tsField[opt.value]] = _now;
                           const { error } = await supabase
                             .from('leads')
-                            .update({
-                              status: opt.value,
-                              ultimo_status_change: new Date().toISOString(),
-                            })
+                            .update(_patch)
                             .eq('id', lead.id);
                           if (error) toast.error('Erro ao atualizar status');
                           else {
