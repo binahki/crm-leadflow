@@ -29,6 +29,95 @@ interface Campaign {
 const LEAD_ACTIONS = ['lead','offsite_conversion.fb_pixel_lead','onsite_conversion.lead_grouped'];
 const BECKER_ORG_ID = '81b1ba7b-5c03-45c5-a74a-6ea8eb3432ae';
 
+// ── Score inteligente por campanha (0-100) ────────────────────
+function calcScore(
+  r: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number },
+  allRows: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number }[],
+  campLeadsMap: Map<string, any[]>,
+  campRevsMap: Map<string, any[]>,
+  _datePreset: string
+): number {
+  const campLeads = campLeadsMap.get(r.id) || [];
+  const oldest = campLeads.length > 0
+    ? Math.min(...campLeads.map(l => new Date((l as any).created_at || Date.now()).getTime()))
+    : Date.now();
+  const ageDays = (Date.now() - oldest) / (1000 * 60 * 60 * 24);
+  const isNew = ageDays < 7;
+  const potenciais = campLeads.filter(l => [2, 5].includes(Number((l as any).status))).length;
+
+  const comCPR = allRows.filter(x => x.cpr > 0);
+  const mediaCPR = comCPR.length > 0 ? comCPR.reduce((s, x) => s + x.cpr, 0) / comCPR.length : 0;
+  const comCPL = allRows.filter(x => x.cpl > 0);
+  const mediaCPL = comCPL.length > 0 ? comCPL.reduce((s, x) => s + x.cpl, 0) / comCPL.length : 0;
+
+  let score = 50;
+
+  // 1. CPR — peso 40
+  if (r.cpr > 0 && mediaCPR > 0) {
+    const ratio = r.cpr / mediaCPR;
+    if (ratio <= 0.6)      score += 40;
+    else if (ratio <= 0.8) score += 30;
+    else if (ratio <= 1.0) score += 20;
+    else if (ratio <= 1.3) score += 5;
+    else if (ratio <= 1.6) score -= 10;
+    else                   score -= 20;
+  } else if (r.rev === 0 && !isNew) {
+    score -= 20;
+  }
+
+  // 2. Revendedoras — peso 15
+  score += Math.min(r.rev * 3, 15);
+
+  // 3. Potenciais — peso 15
+  if (isNew || r.rev === 0) {
+    score += Math.min(potenciais * 5, 15);
+  } else {
+    score += Math.min(potenciais * 2, 8);
+  }
+
+  // 4. CPL — peso 10
+  if (mediaCPL > 0 && r.cpl > 0) {
+    const ratio = r.cpl / mediaCPL;
+    if (ratio <= 0.7)      score += 10;
+    else if (ratio <= 1.0) score += 5;
+    else if (ratio > 1.5)  score -= 5;
+  }
+
+  // 5. Volume de leads — peso 5
+  const maxLeads = Math.max(...allRows.map(x => x.leads), 1);
+  score += Math.round((r.leads / maxLeads) * 5);
+
+  // 6. Bônus campanha nova
+  if (isNew) {
+    score += 10;
+    if (r.leads >= 10)   score += 5;
+    if (potenciais >= 1) score += 10;
+  }
+
+  // 7. Dias ativos
+  if (ageDays >= 14)     score += 3;
+  else if (ageDays >= 7) score += 1;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function scoreColor(score: number): string {
+  if (score >= 88) return '#059669';
+  if (score >= 75) return '#10b981';
+  if (score >= 62) return '#34d399';
+  if (score >= 50) return '#fbbf24';
+  if (score >= 38) return '#f97316';
+  if (score >= 25) return '#ef4444';
+  return '#b91c1c';
+}
+
+function scoreLabel(score: number): string {
+  if (score >= 75) return 'Escalar';
+  if (score >= 50) return 'Monitorar';
+  if (score >= 38) return 'Otimizar';
+  return 'Atenção';
+}
+
 const PERIOD_OPTIONS = [
   { label:'Hoje',      value:'today' },
   { label:'Ontem',     value:'yesterday' },
@@ -362,9 +451,13 @@ export default function CampanhasPage() {
 
   // ── Modo Gestor: exibe só campanhas que precisam atenção ──────
   const displayedCampaigns = useMemo(()=>{
-    if(!gestorMode) return filtered;
-    return filtered.filter(c=>getCampPerf(c)!=='green');
-  },[filtered,gestorMode,getCampLeads,avgCPL]); // eslint-disable-line
+    const base = gestorMode ? filtered.filter(c=>getCampPerf(c)!=='green') : filtered;
+    return [...base].sort((a, b) => {
+      const sA = campScores.get(a.id) ?? 0;
+      const sB = campScores.get(b.id) ?? 0;
+      return sB - sA;
+    });
+  },[filtered, gestorMode, campScores, getCampLeads, avgCPL]); // eslint-disable-line
 
   // ── Alertas automáticos ───────────────────────────────────────
   const alerts = useMemo(()=>{
@@ -436,6 +529,23 @@ export default function CampanhasPage() {
       ? comCPR.reduce((s, r) => s + r.cpr, 0) / comCPR.length
       : 0;
   }, [chartRows]);
+
+  // Scores por campanha
+  const campScores = useMemo(() => {
+    const map = new Map<string, number>();
+    chartRows.forEach(r => {
+      map.set(r.id, calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset));
+    });
+    return map;
+  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
+
+  // Top 5 por score para o ranking lateral
+  const rankedRows = useMemo(() => {
+    return [...chartRows]
+      .map(r => ({ ...r, score: calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
@@ -513,22 +623,33 @@ export default function CampanhasPage() {
 
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart
-                  data={chartRows.map(r => ({
-                    name: r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim().slice(0,18),
-                    fullName: r.fullName,
-                    leads: r.leads,
-                    revs: r.rev,
-                    cpl: r.cpl,
-                    cpr: r.cpr > 0 ? Math.round(r.cpr) : 0,
-                    spend: r.spend,
-                    id: r.id,
-                  }))}
-                  margin={{ top: 10, right: 10, left: -10, bottom: 40 }}
+                  data={[...chartRows]
+                    .map(r => ({
+                      name: r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim(),
+                      fullName: r.fullName,
+                      leads: r.leads,
+                      revs: r.rev,
+                      cpl: r.cpl,
+                      cpr: r.cpr > 0 ? Math.round(r.cpr) : 0,
+                      spend: r.spend,
+                      id: r.id,
+                      score: campScores.get(r.id) ?? 50,
+                    }))
+                    .sort((a, b) => b.score - a.score)}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 20 }}
                   barCategoryGap="30%"
                   barGap={4}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: txtMid, fontWeight: 500 }} axisLine={false} tickLine={false} angle={-20} textAnchor="end" interval={0} height={60} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: txtMid }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    height={40}
+                    tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 12) + '…' : v}
+                  />
                   <YAxis tick={{ fontSize: 11, fill: txtMid }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                   <Tooltip
                     cursor={{ fill: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', radius: 8 }}
@@ -541,7 +662,7 @@ export default function CampanhasPage() {
                           <p style={{ fontWeight: 700, fontSize: '13px', color: txtHi, margin: '0 0 10px', lineHeight: 1.4 }}>{d.fullName}</p>
                           {isLeads ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                              {[{ label: 'Leads', val: d.leads, color: '#3b82f6', bold: true }, { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
+                              {[{ label: 'Leads', val: d.leads, color: '#10b981', bold: true }, { label: 'CPL', val: d.cpl > 0 ? `R$ ${d.cpl}` : '—', color: '#10b981', bold: false }, { label: 'Investido', val: `R$ ${fmt(d.spend)}`, color: txtHi, bold: false }].map(({ label, val, color, bold }) => (
                                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
                                   <span style={{ fontSize: '12px', color: txtMid }}>{label}</span>
                                   <span style={{ fontSize: bold ? '13px' : '12px', fontWeight: bold ? 700 : 600, color }}>{val}</span>
@@ -562,8 +683,8 @@ export default function CampanhasPage() {
                       );
                     }}
                   />
-                  <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
-                    <LabelList dataKey="leads" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#3b82f6' }} />
+                  <Bar dataKey="leads" name="Leads" fill="#10b981" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
+                    <LabelList dataKey="leads" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#10b981' }} />
                   </Bar>
                   <Bar dataKey="revs" name="Revendedoras" fill="#a855f7" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
                     <LabelList dataKey="revs" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#a855f7' }} />
@@ -572,7 +693,7 @@ export default function CampanhasPage() {
               </ResponsiveContainer>
 
               <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginTop: '8px' }}>
-                {[{ color: '#3b82f6', label: 'Leads' }, { color: '#a855f7', label: 'Revendedoras' }].map(({ color, label }) => (
+                {[{ color: '#10b981', label: 'Leads' }, { color: '#a855f7', label: 'Revendedoras' }].map(({ color, label }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color }} />
                     <span style={{ fontSize: '12px', color: txtMid, fontWeight: 500 }}>{label}</span>
@@ -581,34 +702,63 @@ export default function CampanhasPage() {
               </div>
             </div>
 
-            {/* RANKING LATERAL */}
-            <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '520px', overflowY: 'auto' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 4px' }}>Top Campanhas</h3>
-              {chartRows
-                .sort((a, b) => b.rev - a.rev || b.leads - a.leads)
-                .map((r, i) => {
-                  const comCPR2 = chartRows.filter(x => x.cpr > 0);
-                  const med = comCPR2.length > 0 ? comCPR2.reduce((s, x) => s + x.cpr, 0) / comCPR2.length : 0;
-                  const isGood = r.rev >= 2 && r.cpr > 0 && r.cpr <= med * 1.2;
-                  const isBad  = r.rev === 0 && r.leads >= 15;
-                  const color  = isGood ? '#10b981' : isBad ? '#ef4444' : '#f59e0b';
-                  return (
-                    <div key={r.id} style={{ padding: '10px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color, background: `${color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>#{i + 1}</span>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.name}</span>
+            {/* RANKING LATERAL — Top 5 por Score */}
+            <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '520px', overflowY: 'auto' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 2px' }}>Top Campanhas</h3>
+              {rankedRows.map((r, i) => {
+                const color = scoreColor(r.score);
+                const campLeadsList = campLeadsMap.get(r.id) || [];
+                const oldest = campLeadsList.length > 0
+                  ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
+                  : Date.now();
+                const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
+                const isNew = ageDays < 7;
+                const potenciais = campLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;
+                return (
+                  <div key={r.id} style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                    {/* Posição + nome */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 800, color, background: `${color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>
+                        #{i + 1}
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {r.name}
+                      </span>
+                      {isNew && (
+                        <span style={{ fontSize: '9px', color: '#3b82f6', fontWeight: 700, flexShrink: 0 }}>nova</span>
+                      )}
+                    </div>
+                    {/* Métricas */}
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#a855f7' }}>{r.rev} rev</span>
+                      {potenciais > 0 && (
+                        <span style={{ fontSize: '11px', color: txtMid }}>+{potenciais} potencial</span>
+                      )}
+                      <span style={{ fontSize: '11px', color: txtMid, marginLeft: 'auto' }}>
+                        {r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : r.leads > 0 ? `${r.leads} leads` : '—'}
+                      </span>
+                    </div>
+                    {/* Barra de score gradiente */}
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ height: '6px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${r.score}%`,
+                          borderRadius: '99px',
+                          background: 'linear-gradient(90deg, #b91c1c 0%, #ef4444 20%, #f97316 35%, #fbbf24 50%, #34d399 65%, #10b981 80%, #059669 100%)',
+                          backgroundSize: '200% 100%',
+                          backgroundPosition: `${100 - r.score}% 0`,
+                          transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+                        }} />
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
-                        <span style={{ color: '#a855f7', fontWeight: 600 }}>{r.rev} rev</span>
-                        <span style={{ color: txtMid }}>·</span>
-                        <span style={{ color: '#3b82f6' }}>{r.leads} leads</span>
-                        <span style={{ color: txtMid }}>·</span>
-                        <span style={{ color, fontWeight: 600 }}>{r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : 'sem rev'}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: txtMid }}>{scoreLabel(r.score)}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color }}>{r.score}%</span>
                       </div>
                     </div>
-                  );
-                })
-              }
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -642,7 +792,8 @@ export default function CampanhasPage() {
                 if(mostrarVazio) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>;
                 return <>{displayedCampaigns.map(c=>{
                     const isExpanded=expandedIds.has(c.id);
-                    const perf=Math.round((c.spend/maxSpend)*100);
+                    const campScore = campScores.get(c.id) ?? 50;
+                    const scoreCol = scoreColor(campScore);
                     const periodo=PERIOD_MAP[datePreset]||'all';
                     const campCRMLeads = getCampLeads(c.name, c.id);
                     const campRevsList = getCampRevs(c.name, c.id);
@@ -692,9 +843,9 @@ export default function CampanhasPage() {
                           {!isMobile&&(
                             <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
                               <div style={{height:'4px',width:'60px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                                <div style={{height:'100%',width:`${perf}%`,background:perf>60?'#10b981':perf>30?'#f97316':'#3b82f6',borderRadius:'99px'}}/>
+                                <div style={{height:'100%',width:`${campScore}%`,background:'linear-gradient(90deg, #b91c1c 0%, #ef4444 20%, #f97316 35%, #fbbf24 50%, #34d399 65%, #10b981 80%, #059669 100%)',backgroundSize:'200% 100%',backgroundPosition:`${100-campScore}% 0`,borderRadius:'99px'}}/>
                               </div>
-                              <span style={{fontSize:'11px',color:txtLow}}>{perf}%</span>
+                              <span style={{fontSize:'11px',color:scoreCol,fontWeight:700}}>{campScore}%</span>
                             </div>
                           )}
                         </div>
