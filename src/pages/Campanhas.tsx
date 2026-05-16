@@ -33,11 +33,12 @@ const BECKER_ORG_ID = '81b1ba7b-5c03-45c5-a74a-6ea8eb3432ae';
 function calcScore(
   r: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number },
   allRows: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number }[],
-  campLeadsMap: Map<string, any[]>,
-  campRevsMap: Map<string, any[]>,
+  allCampLeadsMap: Map<string, any[]>,
+  _campRevsMap: Map<string, any[]>,
   _datePreset: string
 ): number {
-  const campLeads = campLeadsMap.get(r.id) || [];
+  // Usa allCampLeadsMap (todos os leads, sem filtro de período) para calcular idade real
+  const campLeads = allCampLeadsMap.get(r.id) || [];
   const oldest = campLeads.length > 0
     ? Math.min(...campLeads.map(l => new Date((l as any).created_at || Date.now()).getTime()))
     : Date.now();
@@ -45,57 +46,52 @@ function calcScore(
   const isNew = ageDays < 3;
   const potenciais = campLeads.filter(l => [2, 5].includes(Number((l as any).status))).length;
 
+  const maxRevs = Math.max(...allRows.map(x => x.rev), 1);
   const comCPR = allRows.filter(x => x.cpr > 0);
   const mediaCPR = comCPR.length > 0 ? comCPR.reduce((s, x) => s + x.cpr, 0) / comCPR.length : 0;
   const comCPL = allRows.filter(x => x.cpl > 0);
   const mediaCPL = comCPL.length > 0 ? comCPL.reduce((s, x) => s + x.cpl, 0) / comCPL.length : 0;
 
-  let score = 50;
+  let score = 0;
 
-  // 1. CPR — peso 40
+  // BLOCO 1: Revendedoras — peso 45
+  score += Math.round((r.rev / maxRevs) * 45);
+
+  // BLOCO 2: CPR — peso 35
   if (r.cpr > 0 && mediaCPR > 0) {
     const ratio = r.cpr / mediaCPR;
-    if (ratio <= 0.6)      score += 40;
-    else if (ratio <= 0.8) score += 30;
-    else if (ratio <= 1.0) score += 20;
-    else if (ratio <= 1.3) score += 5;
-    else if (ratio <= 1.6) score -= 10;
-    else                   score -= 20;
+    if (ratio <= 0.5)       score += 35;
+    else if (ratio <= 0.7)  score += 28;
+    else if (ratio <= 0.9)  score += 21;
+    else if (ratio <= 1.1)  score += 14;
+    else if (ratio <= 1.4)  score += 5;
+    else if (ratio <= 1.8)  score -= 4;
+    else                    score -= 10;
   } else if (r.rev === 0 && !isNew) {
-    score -= 20;
+    score -= 10; // penalidade campanha antiga sem revendedoras
   }
 
-  // 2. Revendedoras — peso 15
-  score += Math.min(r.rev * 3, 15);
-
-  // 3. Potenciais — peso 15
-  if (isNew || r.rev === 0) {
-    score += Math.min(potenciais * 5, 15);
-  } else {
-    score += Math.min(potenciais * 2, 8);
-  }
-
-  // 4. CPL — peso 10
+  // BLOCO 3: CPL — peso 10
   if (mediaCPL > 0 && r.cpl > 0) {
     const ratio = r.cpl / mediaCPL;
     if (ratio <= 0.7)      score += 10;
-    else if (ratio <= 1.0) score += 5;
-    else if (ratio > 1.5)  score -= 5;
+    else if (ratio <= 1.0) score += 6;
+    else if (ratio <= 1.3) score += 2;
+    else if (ratio > 1.5)  score -= 2;
   }
 
-  // 5. Volume de leads — peso 5
+  // BLOCO 4: Potenciais — peso 8
+  score += Math.min(potenciais * 2, 8);
+
+  // BLOCO 5: Volume de leads — peso 5
   const maxLeads = Math.max(...allRows.map(x => x.leads), 1);
   score += Math.round((r.leads / maxLeads) * 5);
 
-  // 6. Bônus campanha nova (sem bônus fixo — aguarda dados mínimos)
+  // Campanha nova: congela score entre 35-50
   if (isNew) {
-    if (r.leads >= 5 && potenciais >= 1) score += 10;
-    else if (r.leads >= 10) score += 5;
+    const newBase = 35 + Math.min(potenciais * 3, 10) + (r.leads >= 5 ? 5 : 0);
+    return Math.min(50, Math.max(35, newBase));
   }
-
-  // 7. Dias ativos
-  if (ageDays >= 14)     score += 3;
-  else if (ageDays >= 7) score += 1;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -126,6 +122,69 @@ function scoreLabel(score: number, isNew?: boolean): string {
   if (score >= 50) return 'Monitorar';
   if (score >= 38) return 'Otimizar';
   return 'Atenção';
+}
+
+type ScoreCriterio = { icon: string; label: string; detalhe: string; pts: number };
+
+function gerarCriterios(
+  r: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number },
+  allRows: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number }[],
+  mediaCPR: number,
+  mediaCPL: number,
+  isNew: boolean,
+  potenciais: number
+): ScoreCriterio[] {
+  const crit: ScoreCriterio[] = [];
+  const maxRevs = Math.max(...allRows.map(x => x.rev), 1);
+
+  // Revendedoras
+  const revsScore = Math.round((r.rev / maxRevs) * 45);
+  const revsLabel = revsScore < 15 ? 'Baixo' : revsScore < 32 ? 'Médio' : 'Excelente';
+  crit.push({ icon: '👑', label: 'Revendedoras', detalhe: `${r.rev} rev — ${revsLabel}`, pts: revsScore });
+
+  // CPR
+  let cprScore = 0; let cprDetalhe = '—';
+  if (r.cpr > 0 && mediaCPR > 0) {
+    const ratio = r.cpr / mediaCPR;
+    if (ratio <= 0.5)      { cprScore = 35; cprDetalhe = `R$ ${Math.round(r.cpr)} — 50%+ abaixo da média`; }
+    else if (ratio <= 0.7) { cprScore = 28; cprDetalhe = `R$ ${Math.round(r.cpr)} — muito abaixo da média`; }
+    else if (ratio <= 0.9) { cprScore = 21; cprDetalhe = `R$ ${Math.round(r.cpr)} — abaixo da média`; }
+    else if (ratio <= 1.1) { cprScore = 14; cprDetalhe = `R$ ${Math.round(r.cpr)} — na média (R$ ${Math.round(mediaCPR)})`; }
+    else if (ratio <= 1.4) { cprScore = 5;  cprDetalhe = `R$ ${Math.round(r.cpr)} — acima da média`; }
+    else if (ratio <= 1.8) { cprScore = -4; cprDetalhe = `R$ ${Math.round(r.cpr)} — 40%+ acima da média`; }
+    else                   { cprScore = -10; cprDetalhe = `R$ ${Math.round(r.cpr)} — muito acima da média`; }
+  } else if (r.rev === 0 && !isNew) {
+    cprScore = -10; cprDetalhe = 'Sem revendedoras no período';
+  } else {
+    cprDetalhe = isNew ? 'Aguardando dados' : 'Sem conversões';
+  }
+  crit.push({ icon: '💰', label: 'Custo por Rev (CPR)', detalhe: cprDetalhe, pts: cprScore });
+
+  // CPL
+  let cplScore = 0; let cplDetalhe = '—';
+  if (mediaCPL > 0 && r.cpl > 0) {
+    const ratio = r.cpl / mediaCPL;
+    if (ratio <= 0.7)      { cplScore = 10; cplDetalhe = `R$ ${Math.round(r.cpl)} — ótimo`; }
+    else if (ratio <= 1.0) { cplScore = 6;  cplDetalhe = `R$ ${Math.round(r.cpl)} — bom`; }
+    else if (ratio <= 1.3) { cplScore = 2;  cplDetalhe = `R$ ${Math.round(r.cpl)} — acima da média`; }
+    else                   { cplScore = -2; cplDetalhe = `R$ ${Math.round(r.cpl)} — alto`; }
+  }
+  crit.push({ icon: '📊', label: 'Custo por Lead (CPL)', detalhe: cplDetalhe, pts: cplScore });
+
+  // Potenciais
+  const potScore = Math.min(potenciais * 2, 8);
+  crit.push({ icon: '⭐', label: 'Leads potenciais', detalhe: `${potenciais} lead${potenciais !== 1 ? 's' : ''} em triagem/reunião`, pts: potScore });
+
+  // Volume
+  const maxLeads = Math.max(...allRows.map(x => x.leads), 1);
+  const volScore = Math.round((r.leads / maxLeads) * 5);
+  crit.push({ icon: '📈', label: 'Volume de leads', detalhe: `${r.leads} leads no período`, pts: volScore });
+
+  if (isNew) {
+    crit.push({ icon: '🆕', label: 'Campanha nova', detalhe: 'Score congelado — menos de 3 dias de dados', pts: 0 });
+  }
+
+  return crit;
 }
 
 const PERIOD_OPTIONS = [
@@ -283,6 +342,11 @@ export default function CampanhasPage() {
   const [aiLog, setAiLog] = useState<any>(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [gestorMode, setGestorMode] = useState(false);
+  const [selectedCamp, setSelectedCamp] = useState<{
+    r: { id: string; name: string; fullName: string; leads: number; rev: number; cpl: number; cpr: number; spend: number; score: number };
+    isNew: boolean; potenciais: number; ageDays: number;
+    criteria: ScoreCriterio[];
+  } | null>(null);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -435,6 +499,35 @@ export default function CampanhasPage() {
     return map;
   }, [filteredRevs, campaigns]);
 
+  // Todos os leads (sem filtro de período) mapeados por campanha — para calcular idade real (isNew)
+  const allCampLeadsMap = useMemo(() => {
+    const map = new Map<string, any[]>();
+    campaigns.forEach(c => map.set(c.id, []));
+    for (const l of allLeads) {
+      const la = l as any;
+      const utmRaw = (la.utm_campaign || '').trim();
+      if (!utmRaw) continue;
+      const utm = utmRaw.toLowerCase().split('|')[0].trim();
+      let bestMatch: string | null = null;
+      let maxMatchLen = 0;
+      for (const c of campaigns) {
+        if (utm === c.id) { bestMatch = c.id; break; }
+        const cn = c.name.toLowerCase().split('|')[0].trim();
+        if (!cn || cn.length < 3) continue;
+        if (utm === cn) { bestMatch = c.id; break; }
+        if (utm.includes(cn.slice(0, 20))) {
+          if (cn.length > maxMatchLen) { maxMatchLen = cn.length; bestMatch = c.id; }
+        }
+      }
+      if (bestMatch) {
+        const arr = map.get(bestMatch) || [];
+        arr.push(l);
+        map.set(bestMatch, arr);
+      }
+    }
+    return map;
+  }, [allLeads, campaigns]);
+
   const getCampLeads = useCallback((campName: string, campId: string) => {
     return campLeadsMap.get(campId) || [];
   }, [campLeadsMap]);
@@ -475,22 +568,22 @@ export default function CampanhasPage() {
       : 0;
   }, [chartRows]);
 
-  // Scores por campanha
+  // Scores por campanha — usa allCampLeadsMap para idade real
   const campScores = useMemo(() => {
     const map = new Map<string, number>();
     chartRows.forEach(r => {
-      map.set(r.id, calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset));
+      map.set(r.id, calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset));
     });
     return map;
-  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
+  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset]);
 
   // Top 5 por score para o ranking lateral
   const rankedRows = useMemo(() => {
     return [...chartRows]
-      .map(r => ({ ...r, score: calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset) }))
+      .map(r => ({ ...r, score: calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
-  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
+  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset]);
 
   // ── Performance badge por campanha ───────────────────────────
   function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
@@ -719,21 +812,38 @@ export default function CampanhasPage() {
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 2px' }}>Top Campanhas</h3>
               {rankedRows.map((r, i) => {
                 const color = scoreColor(r.score);
-                const campLeadsList = campLeadsMap.get(r.id) || [];
-                const oldest = campLeadsList.length > 0
-                  ? Math.min(...campLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
+                // usa allCampLeadsMap para idade real (não filtrada por período)
+                const allLeadsList = allCampLeadsMap.get(r.id) || [];
+                const oldest = allLeadsList.length > 0
+                  ? Math.min(...allLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
                   : Date.now();
                 const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
                 const isNew = ageDays < 3;
-                const potenciais = campLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;
+                // potenciais: usa campLeadsMap (filtrado por período) para exibição
+                const periodLeadsList = campLeadsMap.get(r.id) || [];
+                const potenciais = periodLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;
+                const comCPR = chartRows.filter(x => x.cpr > 0);
+                const mCPR = comCPR.length > 0 ? comCPR.reduce((s, x) => s + x.cpr, 0) / comCPR.length : 0;
+                const comCPL = chartRows.filter(x => x.cpl > 0);
+                const mCPL = comCPL.length > 0 ? comCPL.reduce((s, x) => s + x.cpl, 0) / comCPL.length : 0;
                 return (
-                  <div key={r.id} style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
+                  <div
+                    key={r.id}
+                    onClick={() => setSelectedCamp({
+                      r,
+                      isNew,
+                      potenciais,
+                      ageDays,
+                      criteria: gerarCriterios(r, chartRows, mCPR, mCPL, isNew, potenciais),
+                    })}
+                    style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', cursor: 'pointer', overflow: 'hidden', maxWidth: '100%' }}
+                  >
                     {/* Posição + nome */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', fontWeight: 800, color, background: `${color}18`, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>
                         #{i + 1}
                       </span>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, maxWidth: '160px' }}>
                         {r.name}
                       </span>
                       {isNew && (
@@ -741,10 +851,10 @@ export default function CampanhasPage() {
                       )}
                     </div>
                     {/* Métricas */}
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: '13px', fontWeight: 800, color: '#a855f7' }}>{r.rev} rev</span>
                       {potenciais > 0 && (
-                        <span style={{ fontSize: '11px', color: txtMid }}>+{potenciais} potencial</span>
+                        <span style={{ fontSize: '11px', color: txtMid }}>+{potenciais} pot</span>
                       )}
                       <span style={{ fontSize: '11px', color: txtMid, marginLeft: 'auto' }}>
                         {r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : r.leads > 0 ? `${r.leads} leads` : '—'}
@@ -960,14 +1070,98 @@ export default function CampanhasPage() {
     </div>
     {/* Painel IA - Refactor Premium */}
     {showAiPanel && aiLog && (
-        <AIOptimizationPanel 
-          log={aiLog} 
-          dark={dark} 
-          isMobile={isMobile} 
+        <AIOptimizationPanel
+          log={aiLog}
+          dark={dark}
+          isMobile={isMobile}
           allLeads={allLeads}
-          onClose={() => setShowAiPanel(false)} 
+          onClose={() => setShowAiPanel(false)}
         />
       )}
+
+    {/* Modal de detalhes de campanha */}
+    {selectedCamp && (
+      <div
+        onClick={() => setSelectedCamp(null)}
+        style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ background: dark ? '#161619' : '#fff', borderRadius: '20px', border: `1px solid ${border}`, width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}
+        >
+          {/* Header do modal */}
+          <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtLow, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 4px' }}>Análise de campanha</p>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3, wordBreak: 'break-word' }}>{selectedCamp.r.fullName}</h2>
+            </div>
+            <button
+              onClick={() => setSelectedCamp(null)}
+              style={{ flexShrink: 0, width: '30px', height: '30px', borderRadius: '99px', border: 'none', background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: txtMid, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X style={{ width: '14px', height: '14px' }} />
+            </button>
+          </div>
+
+          {/* Score visual */}
+          <div style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: `${scoreColorSolid(selectedCamp.r.score)}18`, border: `3px solid ${scoreColorSolid(selectedCamp.r.score)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: '18px', fontWeight: 800, color: scoreColorSolid(selectedCamp.r.score) }}>{selectedCamp.r.score}</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: 700, color: txtHi }}>{scoreLabel(selectedCamp.r.score, selectedCamp.isNew)}</p>
+                <div style={{ height: '8px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${selectedCamp.r.score}%`, background: scoreColorSolid(selectedCamp.r.score), borderRadius: '99px', transition: 'width 0.8s ease' }} />
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '11px', color: txtLow }}>
+                  {selectedCamp.isNew ? `Nova campanha — ${selectedCamp.ageDays}d de dados` : `${selectedCamp.ageDays} dias ativo`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Critérios */}
+          <div style={{ padding: '0 20px 16px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: txtLow, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>Critérios de avaliação</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {selectedCamp.criteria.map((c, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+                  <span style={{ fontSize: '16px', flexShrink: 0 }}>{c.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: txtHi }}>{c.label}</p>
+                    <p style={{ margin: '1px 0 0', fontSize: '11px', color: txtMid }}>{c.detalhe}</p>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: c.pts > 0 ? '#10b981' : c.pts < 0 ? '#ef4444' : txtLow, flexShrink: 0 }}>
+                    {c.pts > 0 ? `+${c.pts}` : c.pts === 0 ? '—' : c.pts}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Métricas 2 colunas */}
+          <div style={{ padding: '0 20px 20px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: txtLow, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>Métricas do período</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { label: 'Leads', value: String(selectedCamp.r.leads), color: '#10b981' },
+                { label: 'Revendedoras', value: String(selectedCamp.r.rev), color: '#a855f7' },
+                { label: 'CPL', value: selectedCamp.r.cpl > 0 ? `R$ ${Math.round(selectedCamp.r.cpl)}` : '—', color: txtHi },
+                { label: 'CPR', value: selectedCamp.r.cpr > 0 ? `R$ ${Math.round(selectedCamp.r.cpr)}` : '—', color: txtHi },
+                { label: 'Investido', value: `R$ ${fmt(selectedCamp.r.spend)}`, color: txtHi },
+                { label: 'Em potencial', value: String(selectedCamp.potenciais), color: '#f59e0b' },
+              ].map((m, i) => (
+                <div key={i} style={{ padding: '10px 12px', borderRadius: '10px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+                  <p style={{ margin: '0 0 2px', fontSize: '10px', color: txtLow }}>{m.label}</p>
+                  <p style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: m.color }}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
