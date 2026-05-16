@@ -438,6 +438,50 @@ export default function CampanhasPage() {
   const avgCPL = totalLeads>0?totalSpend/totalLeads:0;
   const maxSpend = Math.max(...campaigns.map(c=>c.spend),1);
 
+  // Dados por campanha (leads CRM + revendedoras)
+  const chartRows = useMemo(()=>{
+    return filtered.slice(0,10).map(c=>{
+      const campLeads = getCampLeads(c.name, c.id);
+      const campRevs  = getCampRevs(c.name, c.id);
+      const l = campLeads.length > 0 ? campLeads.length : c.leads_api;
+      const r = campRevs.length;
+      return {
+        name: c.name.length>16?c.name.slice(0,16)+'…':c.name,
+        fullName: c.name,
+        leads: l,
+        rev:   r,
+        cpl:   l>0&&c.spend>0 ? Math.round(c.spend/l) : 0,
+        cpr:   r>0&&c.spend>0 ? Math.round(c.spend/r) : 0,
+        spend: c.spend,
+        id: c.id,
+      };
+    });
+  },[filtered, getCampLeads, getCampRevs]); // eslint-disable-line
+
+  const mediaCPR = useMemo(() => {
+    const comCPR = chartRows.filter(r => r.cpr > 0);
+    return comCPR.length > 0
+      ? comCPR.reduce((s, r) => s + r.cpr, 0) / comCPR.length
+      : 0;
+  }, [chartRows]);
+
+  // Scores por campanha
+  const campScores = useMemo(() => {
+    const map = new Map<string, number>();
+    chartRows.forEach(r => {
+      map.set(r.id, calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset));
+    });
+    return map;
+  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
+
+  // Top 5 por score para o ranking lateral
+  const rankedRows = useMemo(() => {
+    return [...chartRows]
+      .map(r => ({ ...r, score: calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
+
   // ── Performance badge por campanha ───────────────────────────
   function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
     const cl=getCampLeads(c.name,c.id);
@@ -502,50 +546,6 @@ export default function CampanhasPage() {
   ,[filteredRevs]);
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
-
-  // Dados por campanha para scatter plot (leads CRM + revendedoras por status_aprovado_at)
-  const chartRows = useMemo(()=>{
-    return filtered.slice(0,10).map(c=>{
-      const campLeads = getCampLeads(c.name, c.id);
-      const campRevs  = getCampRevs(c.name, c.id);
-      const l = campLeads.length > 0 ? campLeads.length : c.leads_api;
-      const r = campRevs.length;
-      return {
-        name: c.name.length>16?c.name.slice(0,16)+'…':c.name,
-        fullName: c.name,
-        leads: l,
-        rev:   r,
-        cpl:   l>0&&c.spend>0 ? Math.round(c.spend/l) : 0,
-        cpr:   r>0&&c.spend>0 ? Math.round(c.spend/r) : 0,
-        spend: c.spend,
-        id: c.id,
-      };
-    });
-  },[filtered, getCampLeads, getCampRevs]); // eslint-disable-line
-
-  const mediaCPR = useMemo(() => {
-    const comCPR = chartRows.filter(r => r.cpr > 0);
-    return comCPR.length > 0
-      ? comCPR.reduce((s, r) => s + r.cpr, 0) / comCPR.length
-      : 0;
-  }, [chartRows]);
-
-  // Scores por campanha
-  const campScores = useMemo(() => {
-    const map = new Map<string, number>();
-    chartRows.forEach(r => {
-      map.set(r.id, calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset));
-    });
-    return map;
-  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
-
-  // Top 5 por score para o ranking lateral
-  const rankedRows = useMemo(() => {
-    return [...chartRows]
-      .map(r => ({ ...r, score: calcScore(r, chartRows, campLeadsMap, campRevsMap, datePreset) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, [chartRows, campLeadsMap, campRevsMap, datePreset]);
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
