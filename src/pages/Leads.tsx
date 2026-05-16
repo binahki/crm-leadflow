@@ -95,11 +95,20 @@ function subDays(dateStr: string, n: number): string {
   } catch { return dateStr; }
 }
 
-function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string): Lead[] {
+function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string, statusFilter?: string): Lead[] {
   if (period === 'all') return leads;
   const today = todayBR();
+  // Usa o timestamp específico do status quando filtro de status está ativo
+  const getDateRef = (l: Lead): string | null | undefined => {
+    const la = l as any;
+    if (statusFilter === '3') return la.status_aprovado_at || l.created_at;
+    if (statusFilter === '2') return la.status_reuniao_at || l.created_at;
+    if (statusFilter === '5') return la.status_contrato_at || l.created_at;
+    if (statusFilter === '1' || statusFilter === '0') return la.status_atendimento_at || l.created_at;
+    return l.created_at;
+  };
   const ok = (l: Lead, from: string, to: string) => {
-    const d = leadDateBR(l.created_at);
+    const d = leadDateBR(getDateRef(l));
     return !!d && d >= from && d <= to;
   };
   switch (period) {
@@ -432,6 +441,7 @@ function LeadsPage() {
           id, nome, whatsapp, cidade, status, created_at,
           utm_source, utm_campaign, score, faixa,
           observacoes, motivo_reprovacao, ultimo_status_change,
+          status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
           org_id, wa_sent
         `)
         .order('created_at', { ascending: false })
@@ -464,6 +474,7 @@ function LeadsPage() {
         id, nome, whatsapp, cidade, status, created_at,
         utm_source, utm_campaign, score, faixa,
         observacoes, motivo_reprovacao, ultimo_status_change,
+        status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
         org_id, wa_sent
       `)
       .order('created_at', { ascending: false })
@@ -520,7 +531,7 @@ function LeadsPage() {
 
   const filtered = useMemo(() => {
     let r=[...allLeads];
-    r=filterByPeriod(r,periodFilter,customFrom,customTo);
+    r=filterByPeriod(r,periodFilter,customFrom,customTo,statusFilter!=='all'?statusFilter:undefined);
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
     if(campanhaFiltro.trim()){
       r=r.filter(l=>{

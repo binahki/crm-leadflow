@@ -462,8 +462,8 @@ export default function Dashboard() {
     };
     return allLeads.filter(l => {
       if (toNum(l.status) !== 3) return false;
-      // Usa status_aprovado_at como fonte primária; fallback para ultimo_status_change e created_at
-      const changeDate = (l as any).status_aprovado_at || (l as any).ultimo_status_change || l.created_at;
+      // Usa status_aprovado_at como fonte primária; fallback para created_at
+      const changeDate = (l as any).status_aprovado_at || l.created_at;
       switch (selectedPeriod) {
         case 'today':     { const t = today; return ok(changeDate, t, t); }
         case 'yesterday': { const y = subDays(today,1); return ok(changeDate, y, y); }
@@ -490,9 +490,9 @@ export default function Dashboard() {
       const value = allLeads.filter(l => {
         let s = toNum(l.status); if(s===0) s=1;
         if (s !== f.statusId) return false;
-        // Usa o campo específico do status; fallback para ultimo_status_change e created_at
+        // Usa o campo específico do status; fallback para created_at
         const tsField = tsFields[f.statusId];
-        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : ((l as any).ultimo_status_change || l.created_at);
+        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : l.created_at;
         switch(selectedPeriod) {
           case 'today':     { const t=today; return ok(changeDate,t,t); }
           case 'yesterday': { const y=subDays(today,1); return ok(changeDate,y,y); }
@@ -615,7 +615,7 @@ export default function Dashboard() {
           {[
             { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
             { label:'Leads', value:loading?'…':String(totalLeads), trend:'+', up:true, sub:'Total período' },
-            { label:'CPL Ads', value:metaLoading?'…':(()=>{const fb=filtered.filter(l=>l.utm_source?.toUpperCase()==='FB').length;return fb>0?`R$ ${safe(spend/fb).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'R$ —';})(), trend:'Real Time', up:true, sub:'Base Sistema' },
+            { label:'CPL', value:metaLoading?'…':(spend>0&&totalLeads>0?`R$ ${safe(spend/totalLeads).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—'), trend:totalLeads>0?`${totalLeads} leads`:'', up:true, sub:'Gasto ÷ Leads' },
             { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?(isMobile?'↑':`R$ ${safe(spend/approved).toFixed(2)}`):`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?(isMobile?`R$${safe(spend/approved).toLocaleString('pt-BR',{maximumFractionDigits:0})}/rev`:`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`):'conversão' },
           ].map((c,i)=>(
             <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, overflow:'hidden', minWidth:0 }}>

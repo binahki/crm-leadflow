@@ -195,9 +195,11 @@ export default function CampanhasPage() {
       case 'last_30d':  since=subDaysCamp(today,29)+'T00:00:00-03:00'; break;
       case 'this_month':since=today.slice(0,7)+'-01T00:00:00-03:00'; break;
     }
-    const base=supabase.from('leads').select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,updated_at')
-      .eq('org_id',orgId).order('created_at',{ascending:false}).limit(2000);
-    (since ? base.gte('created_at',since) : base)
+    // Busca sem filtro de created_at para capturar revendedoras aprovadas no período mas criadas antes
+    void since; // since calculado mas não usado no query — filtro acontece em memória
+    supabase.from('leads')
+      .select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at')
+      .eq('org_id',orgId).order('created_at',{ascending:false}).limit(2000)
       .then(({data}:any)=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
 
@@ -249,7 +251,7 @@ export default function CampanhasPage() {
     const ok=(ref:string|null|undefined,a:string,b:string)=>{const d=leadDateBRCamp(ref);return !!d&&d>=a&&d<=b;};
     return allLeads.filter(l=>{
       if(Number((l as any).status)!==3) return false;
-      const ref=(l as any).status_aprovado_at||(l as any).updated_at||(l as any).created_at;
+      const ref=(l as any).status_aprovado_at||(l as any).created_at;
       switch(datePreset){
         case 'today':      return ok(ref,today,today);
         case 'yesterday':  {const y=subDaysCamp(today,1);return ok(ref,y,y);}
@@ -346,7 +348,7 @@ export default function CampanhasPage() {
   function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
     const cl=getCampLeads(c.name,c.id);
     const cL=cl.length>0?cl.length:c.leads_api;
-    const cR=cl.filter((x:any)=>Number(x.status)===3).length;
+    const cR=getCampRevs(c.name,c.id).length;
     const cpl=cL>0&&c.spend>0?c.spend/cL:0;
     if(avgCPL>0&&cpl>0&&cpl>avgCPL*1.5) return 'red';
     if(cpl>0&&avgCPL>0&&cpl<=avgCPL&&cR>0) return 'green';
@@ -367,7 +369,7 @@ export default function CampanhasPage() {
     for(const c of filtered){
       const cl=getCampLeads(c.name,c.id);
       const cL=cl.length>0?cl.length:c.leads_api;
-      const cR=cl.filter((x:any)=>Number(x.status)===3).length;
+      const cR=getCampRevs(c.name,c.id).length;
       const cpl=cL>0&&c.spend>0?c.spend/cL:0;
       const cpr=cR>0&&c.spend>0?c.spend/cR:0;
       if(avgCPL>0&&cpl>avgCPL*1.3&&c.spend>20&&items.length<5)
@@ -510,42 +512,30 @@ export default function CampanhasPage() {
           </div>
         )}
 
-        {/* Scatter plot: Campanhas · Revendedoras vs Custo */}
+        {/* Barras horizontais: Revendedoras (ou Leads) por campanha */}
         {!isMobile&&!loading&&chartRows.length>0&&(()=>{
           const hasRevs=chartRows.some(r=>r.rev>0);
-          const yKey=hasRevs?'cpr':'cpl';
-          const xKey=hasRevs?'rev':'leads';
-          const avgY=chartRows.filter(r=>r[yKey]>0).reduce((s,r)=>s+r[yKey],0)/Math.max(chartRows.filter(r=>r[yKey]>0).length,1);
+          const valKey=hasRevs?'rev':'leads';
+          const barColor=hasRevs?'#a855f7':'#10b981';
           const periodLabel=PERIOD_OPTIONS.find(p=>p.value===datePreset)?.label||datePreset;
-          const getColor=(r:any)=>{const y=r[yKey];if(!y||!avgY)return '#94a3b8';if(y<avgY*0.85)return '#10b981';if(y>avgY*1.4)return '#ef4444';return '#f59e0b';};
-          const scatterData=chartRows.filter(r=>r[xKey]>0||r.spend>0).map(r=>({...r,x:r[xKey],y:r[yKey]||0,z:Math.max(r.spend,50)}));
-          const CustomDot=(props:any)=>{const{cx,cy,payload}=props;const r=Math.min(Math.max(Math.sqrt(payload.z/Math.PI)*1.2,6),28);const col=getColor(payload);return<g><circle cx={cx} cy={cy} r={r} fill={col} fillOpacity={0.8} stroke={col} strokeWidth={1.5}/><text x={cx} y={cy+r+10} textAnchor="middle" fontSize={9} fill={dark?'#a1a1aa':'#6b7280'} fontWeight={600}>{payload.name.slice(0,10)}</text></g>;};
+          const topRows=chartRows.slice(0,6);
           return(
             <div style={{background:cardBg,borderRadius:'16px',padding:'16px 20px 20px',border:`1px solid ${border}`,marginBottom:'16px'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
                 <div>
                   <h3 style={{fontSize:'13px',fontWeight:600,color:txtHi,margin:0}}>
-                    Campanhas · {hasRevs?'Revendedoras vs Custo':'Leads vs CPL'}
+                    {hasRevs?'Revendedoras por Campanha':'Leads por Campanha'}
                   </h3>
-                  <p style={{fontSize:'11px',color:txtMid,margin:'2px 0 0'}}>{periodLabel} · bolha proporcional ao gasto</p>
-                </div>
-                <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
-                  {[{c:'#10b981',l:'Abaixo da média'},{c:'#f59e0b',l:'Na média'},{c:'#ef4444',l:'Acima da média'}].map(({c,l})=>(
-                    <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                      <div style={{width:'7px',height:'7px',borderRadius:'50%',background:c}}/>
-                      <span style={{fontSize:'10px',color:txtMid}}>{l}</span>
-                    </div>
-                  ))}
+                  <p style={{fontSize:'11px',color:txtMid,margin:'2px 0 0'}}>{periodLabel}</p>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <ScatterChart margin={{top:20,right:20,bottom:20,left:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)'} vertical={false}/>
-                  <XAxis type="number" dataKey="x" name={hasRevs?'Revendedoras':'Leads'} tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false} label={{value:hasRevs?'Revendedoras':'Leads',position:'insideBottom',offset:-10,fill:txtMid,fontSize:10}}/>
-                  <YAxis type="number" dataKey="y" name={hasRevs?'CPR (R$)':'CPL (R$)'} tick={{fill:txtMid,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>`R$${Math.round(v)}`} width={52}/>
-                  <ZAxis type="number" dataKey="z" range={[100,2000]}/>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={topRows} layout="vertical" barCategoryGap="20%" margin={{top:0,right:32,bottom:0,left:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)'} horizontal={false}/>
+                  <XAxis type="number" allowDecimals={false} tick={{fill:txtMid,fontSize:9}} tickLine={false} axisLine={false}/>
+                  <YAxis type="category" dataKey="name" tick={{fill:txtHi,fontSize:10}} tickLine={false} axisLine={false} width={90}/>
                   <Tooltip
-                    cursor={{strokeDasharray:'3 3',stroke:dark?'#374151':'#d1d5db'}}
+                    cursor={{fill:dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'}}
                     content={({active,payload})=>{
                       if(!active||!payload?.length)return null;
                       const d=payload[0]?.payload;
@@ -553,19 +543,16 @@ export default function CampanhasPage() {
                       return(
                         <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:'10px',padding:'10px 14px',fontSize:'12px',color:txtHi,lineHeight:1.7,boxShadow:'0 4px 16px rgba(0,0,0,0.12)'}}>
                           <p style={{margin:'0 0 4px',fontWeight:700,fontSize:'13px'}}>{d.fullName}</p>
-                          <p style={{margin:0,color:txtMid}}>Leads: <b style={{color:txtHi}}>{d.leads}</b> · Rev: <b style={{color:'#a855f7'}}>{d.rev}</b></p>
-                          <p style={{margin:0,color:txtMid}}>CPL: <b style={{color:txtHi}}>R$ {fmt(d.cpl)}</b> · CPR: <b style={{color:d.cpr>0?'#a855f7':txtMid}}>{d.cpr>0?`R$ ${fmt(d.cpr)}`:'—'}</b></p>
+                          <p style={{margin:0,color:txtMid}}>Leads: <b style={{color:'#10b981'}}>{d.leads}</b>{d.rev>0&&<> · Rev: <b style={{color:'#a855f7'}}>{d.rev}</b></>}</p>
+                          {d.cpl>0&&<p style={{margin:0,color:txtMid}}>CPL: <b style={{color:txtHi}}>R$ {fmt(d.cpl)}</b></p>}
+                          {d.cpr>0&&<p style={{margin:0,color:txtMid}}>CPR: <b style={{color:'#a855f7'}}>R$ {fmt(d.cpr)}</b></p>}
                           <p style={{margin:0,color:txtMid}}>Gasto: <b style={{color:txtHi}}>R$ {fmt(d.spend)}</b></p>
                         </div>
                       );
                     }}
                   />
-                  <Scatter data={scatterData} shape={<CustomDot/>}>
-                    {scatterData.map((entry,i)=>(
-                      <Cell key={i} fill={getColor(entry)}/>
-                    ))}
-                  </Scatter>
-                </ScatterChart>
+                  <Bar dataKey={valKey} fill={barColor} radius={[0,4,4,0]} maxBarSize={14}/>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           );
@@ -822,10 +809,10 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
   };
 
   const kpis = [
-    { label: 'Investimento', value: log.total_gasto > 0 ? fmtMoeda(log.total_gasto) : (parseMetric('Investimento') || '—'), icon: DollarSign, color: '#10b981' },
-    { label: 'Leads', value: log.total_leads > 0 ? String(log.total_leads) : (parseMetric('Leads') || '—'), icon: Users, color: '#3b82f6' },
-    { label: 'CPL médio', value: log.cpl_medio > 0 ? fmtMoeda(log.cpl_medio) : (parseMetric('CPL médio') || '—'), icon: TrendingUp, color: '#10b981' },
-    { label: 'Projeção', value: log.ritmo_mensal > 0 ? fmtMoeda(log.ritmo_mensal) : (parseMetric('Projeção mensal') || '—'), icon: BarChart, color: '#a855f7' },
+    { label: 'Investimento', value: (log.total_gasto != null && log.total_gasto > 0) ? fmtMoeda(log.total_gasto) : '—', icon: DollarSign, color: '#10b981' },
+    { label: 'Leads', value: (log.total_leads != null && log.total_leads > 0) ? String(log.total_leads) : '—', icon: Users, color: '#3b82f6' },
+    { label: 'CPL médio', value: (log.cpl_medio != null && log.cpl_medio > 0) ? fmtMoeda(log.cpl_medio) : '—', icon: TrendingUp, color: '#10b981' },
+    { label: 'Projeção', value: (log.ritmo_mensal != null && log.ritmo_mensal > 0) ? fmtMoeda(log.ritmo_mensal) : '—', icon: BarChart, color: '#a855f7' },
   ];
 
   const statusBudget = parseMetric('Status do budget');
@@ -881,10 +868,10 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
           <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.15)', marginBottom: '12px' }}>
             <p style={{ margin: 0, fontSize: '12.5px', color: dark ? '#c4b5fd' : '#6d28d9', fontWeight: 500 }}>
               {log.campanhas_analisadas?.length > 0
-                ? `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} e tomou ${log.acoes_executadas?.length || 0} decisão${(log.acoes_executadas?.length || 0) !== 1 ? 'ões' : ''}`
-                : log.acoes_executadas?.length > 0
-                  ? `Ravena analisou as campanhas e executou ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''}`
-                  : 'Ravena analisou as campanhas — nenhuma ação necessária hoje'
+                ? log.acoes_executadas?.length > 0
+                  ? `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} — ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''} executada${log.acoes_executadas.length !== 1 ? 's' : ''}`
+                  : `Ravena analisou ${log.campanhas_analisadas.length} campanha${log.campanhas_analisadas.length !== 1 ? 's' : ''} — nenhuma ação necessária hoje`
+                : 'Ravena analisou as campanhas — nenhuma ação necessária hoje'
               }
             </p>
           </div>
