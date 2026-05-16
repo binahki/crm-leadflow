@@ -80,12 +80,11 @@ function subDaysCamp(s:string,n:number): string {
 function filterLeadsByPreset(leads: any[], preset: string) {
   const today = todayBRCamp();
   const ok = (l: any, a: string, b: string) => {
-    // Usa ultimo_status_change para capturar movimentações no período
     const ref = l.ultimo_status_change || l.created_at;
     const d = leadDateBRCamp(ref);
     return !!d && d >= a && d <= b;
   };
-  switch(preset){
+  switch(preset) {
     case 'today':      return leads.filter(l => ok(l, today, today));
     case 'yesterday':  { const y = subDaysCamp(today, 1); return leads.filter(l => ok(l, y, y)); }
     case 'last_7d':    return leads.filter(l => ok(l, subDaysCamp(today, 6), today));
@@ -247,24 +246,26 @@ export default function CampanhasPage() {
   // Leads do CRM filtrados pelo created_at dentro do período
   const filteredLeads = useMemo(()=>filterLeadsByPreset(allLeads,datePreset),[allLeads,datePreset]);
 
-  // Revendedoras do CRM filtradas pelo status_aprovado_at dentro do período
-  // Usa todos os allLeads (não só os criados no período) para capturar aprovações de leads mais antigos
-  const filteredRevs = useMemo(()=>{
-    const today=todayBRCamp();
-    const ok=(ref:string|null|undefined,a:string,b:string)=>{const d=leadDateBRCamp(ref);return !!d&&d>=a&&d<=b;};
-    return allLeads.filter(l=>{
-      if(Number((l as any).status)!==3) return false;
-      const ref=(l as any).status_aprovado_at||(l as any).ultimo_status_change||(l as any).created_at;
-      switch(datePreset){
-        case 'today':      return ok(ref,today,today);
-        case 'yesterday':  {const y=subDaysCamp(today,1);return ok(ref,y,y);}
-        case 'last_7d':    return ok(ref,subDaysCamp(today,6),today);
-        case 'last_30d':   return ok(ref,subDaysCamp(today,29),today);
-        case 'this_month': return ok(ref,today.slice(0,7)+'-01',today);
-        default: return Number((l as any).status)===3;
+  const filteredRevs = useMemo(() => {
+    const today = todayBRCamp();
+    const ok = (ref: string | null | undefined, a: string, b: string) => {
+      const d = leadDateBRCamp(ref);
+      return !!d && d >= a && d <= b;
+    };
+    return allLeads.filter(l => {
+      if (Number((l as any).status) !== 3) return false;
+      // usa ultimo_status_change como fonte principal
+      const ref = (l as any).ultimo_status_change || (l as any).created_at;
+      switch(datePreset) {
+        case 'today':      return ok(ref, today, today);
+        case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(ref, y, y); }
+        case 'last_7d':    return ok(ref, subDaysCamp(today, 6), today);
+        case 'last_30d':   return ok(ref, subDaysCamp(today, 29), today);
+        case 'this_month': return ok(ref, today.slice(0,7)+'-01', today);
+        default: return Number((l as any).status) === 3;
       }
     });
-  },[allLeads,datePreset]);
+  }, [allLeads, datePreset]);
 
   // ── Mapeamento Único: Garante que um lead pertença a apenas 1 campanha
   const campLeadsMap = useMemo(() => {

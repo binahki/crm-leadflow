@@ -98,17 +98,11 @@ function subDays(dateStr: string, n: number): string {
 function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string, statusFilter?: string): Lead[] {
   if (period === 'all') return leads;
   const today = todayBR();
-  // Usa o timestamp específico do status quando filtro de status está ativo
+  
+  // Sempre usa ultimo_status_change como referência de "quando algo aconteceu"
+  // Fallback para created_at se ultimo_status_change for nulo
   const getDateRef = (l: Lead): string | null | undefined => {
     const la = l as any;
-    // Sempre usa o timestamp de mudança de status como referência
-    // para mostrar "o que aconteceu neste período"
-    if (statusFilter === '3') return la.status_aprovado_at || la.ultimo_status_change || l.created_at;
-    if (statusFilter === '2') return la.status_reuniao_at || la.ultimo_status_change || l.created_at;
-    if (statusFilter === '5') return la.status_contrato_at || la.ultimo_status_change || l.created_at;
-    if (statusFilter === '1' || statusFilter === '0') return la.status_atendimento_at || la.ultimo_status_change || l.created_at;
-    // Sem filtro de status: usa ultimo_status_change para mostrar
-    // qualquer movimentação no período, com fallback para created_at
     return la.ultimo_status_change || l.created_at;
   };
 
@@ -116,12 +110,13 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
     const d = leadDateBR(getDateRef(l));
     return !!d && d >= from && d <= to;
   };
+
   switch (period) {
     case 'today':     return leads.filter(l => ok(l, today, today));
     case 'yesterday': { const y = subDays(today, 1); return leads.filter(l => ok(l, y, y)); }
-    case '7days':     { const f = subDays(today, 6);  return leads.filter(l => ok(l, f, today)); }
-    case '30days':    { const f = subDays(today, 29); return leads.filter(l => ok(l, f, today)); }
-    case 'month':     { const f = today.slice(0, 7) + '-01'; return leads.filter(l => ok(l, f, today)); }
+    case '7days':     return leads.filter(l => ok(l, subDays(today, 6), today));
+    case '30days':    return leads.filter(l => ok(l, subDays(today, 29), today));
+    case 'month':     return leads.filter(l => ok(l, today.slice(0, 7) + '-01', today));
     case 'custom':    { if (!customFrom || !customTo) return leads; return leads.filter(l => ok(l, customFrom, customTo)); }
     default: return leads;
   }

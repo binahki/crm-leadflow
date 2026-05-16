@@ -462,14 +462,13 @@ export default function Dashboard() {
     };
     return allLeads.filter(l => {
       if (toNum(l.status) !== 3) return false;
-      // Usa status_aprovado_at como fonte primária; fallback para ultimo_status_change e created_at
-      const changeDate = (l as any).status_aprovado_at || (l as any).ultimo_status_change || l.created_at;
+      const changeDate = (l as any).ultimo_status_change || l.created_at;
       switch (selectedPeriod) {
         case 'today':     { const t = today; return ok(changeDate, t, t); }
         case 'yesterday': { const y = subDays(today,1); return ok(changeDate, y, y); }
-        case '7days':     { return ok(changeDate, subDays(today,6), today); }
-        case '30days':    { return ok(changeDate, subDays(today,29), today); }
-        case 'month':     { return ok(changeDate, today.slice(0,7)+'-01', today); }
+        case '7days':     return ok(changeDate, subDays(today,6), today);
+        case '30days':    return ok(changeDate, subDays(today,29), today);
+        case 'month':     return ok(changeDate, today.slice(0,7)+'-01', today);
         case 'custom':    { if(!customFrom||!customTo) return true; return ok(changeDate, customFrom, customTo); }
         default: return true;
       }
@@ -480,8 +479,6 @@ export default function Dashboard() {
   const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
   // Funil: cada status conta pelo timestamp específico daquele status
   const funnelData = useMemo(() => {
-    // Mapa de campo de timestamp por statusId
-    const tsFields: Record<number, string> = { 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
     return FUNNEL_CONFIG.map(f => {
       const today = todayBR();
       const ok = (dateStr: string|null|undefined, from: string, to: string) => {
@@ -490,9 +487,7 @@ export default function Dashboard() {
       const value = allLeads.filter(l => {
         let s = toNum(l.status); if(s===0) s=1;
         if (s !== f.statusId) return false;
-        // Usa o campo específico do status; fallback para ultimo_status_change e created_at
-        const tsField = tsFields[f.statusId];
-        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : ((l as any).ultimo_status_change || l.created_at);
+        const changeDate = (l as any).ultimo_status_change || l.created_at;
         switch(selectedPeriod) {
           case 'today':     { const t=today; return ok(changeDate,t,t); }
           case 'yesterday': { const y=subDays(today,1); return ok(changeDate,y,y); }
