@@ -19,6 +19,11 @@ export default function MetaAdsPage() {
   const [token, setToken]             = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving]           = useState(false);
+  const [ravenaAtiva, setRavenaAtiva] = useState(false);
+  const [budgetMensal, setBudgetMensal] = useState(5000);
+  const [metaRevs, setMetaRevs] = useState(50);
+  const [modo, setModo] = useState<'conservador'|'equilibrado'|'agressivo'>('equilibrado');
+  const [savingRavena, setSavingRavena] = useState(false);
 
   useEffect(() => {
     if (!orgReady) return;
@@ -33,10 +38,31 @@ export default function MetaAdsPage() {
       if (org) {
         setAccountId((org as any).meta_account_id || '');
         setToken((org as any).meta_token || '');
+        setRavenaAtiva((org as any).ravena_ativa || false);
+        setBudgetMensal((org as any).ravena_budget_mensal || 5000);
+        setMetaRevs((org as any).ravena_meta_revendedoras || 50);
+        setModo((org as any).ravena_modo || 'equilibrado');
       }
       setLoadingData(false);
     })();
   }, [orgId, orgReady]);
+
+  async function handleSaveRavena() {
+    if (!orgId) return;
+    setSavingRavena(true);
+    const { error } = await supabase
+      .from('organizations')
+      .update({
+        ravena_ativa: ravenaAtiva,
+        ravena_budget_mensal: budgetMensal,
+        ravena_meta_revendedoras: metaRevs,
+        ravena_modo: modo,
+      })
+      .eq('id', orgId);
+    setSavingRavena(false);
+    if (error) toast.error('Erro ao salvar');
+    else toast.success('Ravena configurada!');
+  }
 
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }
@@ -74,6 +100,12 @@ export default function MetaAdsPage() {
   };
   const txt    = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
+
+  const MODOS = [
+    { value: 'conservador', icon: '🛡️', label: 'Conservador', desc: 'Mexe pouco. Age só com certeza absoluta.' },
+    { value: 'equilibrado', icon: '⚖️', label: 'Equilibrado', desc: 'Recomendado. Otimiza com base em dados sólidos.' },
+    { value: 'agressivo',   icon: '🔥', label: 'Agressivo',   desc: 'Escala rápido e pausa o que não converte.' },
+  ];
 
   return (
     <AppLayout leadCount={leads.length}>
@@ -144,6 +176,95 @@ export default function MetaAdsPage() {
                 </button>
               </>
             )}
+          </div>
+        </div>
+
+        {/* Ravena — IA de Tráfego */}
+        <div style={{ ...card, marginTop: '20px' }}>
+          {/* Header */}
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>🤖</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Ravena — IA de Tráfego</span>
+            </div>
+            {/* Toggle ativa/inativa */}
+            <div onClick={() => setRavenaAtiva(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <span style={{ fontSize: '12px', color: ravenaAtiva ? '#10b981' : txtMid, fontWeight: 600 }}>
+                {ravenaAtiva ? 'Ativa' : 'Inativa'}
+              </span>
+              <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: ravenaAtiva ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s' }}>
+                <div style={{ position: 'absolute', top: '2px', left: ravenaAtiva ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva ? 1 : 0.5, pointerEvents: ravenaAtiva ? 'auto' : 'none' }}>
+            {/* Metas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={lbl}>Investimento mensal</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: txtMid, pointerEvents: 'none' }}>R$</span>
+                  <input
+                    type="number"
+                    value={budgetMensal}
+                    onChange={e => setBudgetMensal(Number(e.target.value))}
+                    style={{ ...inp, paddingLeft: '32px' }}
+                    onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>Meta de revendedoras</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="number"
+                    value={metaRevs}
+                    onChange={e => setMetaRevs(Number(e.target.value))}
+                    style={{ ...inp, paddingRight: '44px' }}
+                    onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                    onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
+                  />
+                  <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: txtMid, pointerEvents: 'none' }}>/mês</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modo de operação */}
+            <div>
+              <label style={lbl}>Modo de operação</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {MODOS.map(m => (
+                  <div
+                    key={m.value}
+                    onClick={() => setModo(m.value as any)}
+                    style={{ flex: 1, padding: '12px 10px', borderRadius: '12px', cursor: 'pointer', border: `2px solid ${modo === m.value ? '#3b82f6' : (dark ? '#27272a' : '#e5e7eb')}`, background: modo === m.value ? (dark ? 'rgba(59,130,246,0.1)' : '#eff6ff') : 'transparent', textAlign: 'center', transition: 'all 150ms ease' }}
+                  >
+                    <div style={{ fontSize: '20px', marginBottom: '5px' }}>{m.icon}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: modo === m.value ? '#3b82f6' : txt }}>{m.label}</div>
+                    <div style={{ fontSize: '10px', color: txtMid, marginTop: '3px', lineHeight: 1.4 }}>{m.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Aviso agressivo */}
+            {modo === 'agressivo' && (
+              <div style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)', fontSize: '12px', color: '#f97316' }}>
+                ⚠️ Modo agressivo pode pausar campanhas e escalar budgets rapidamente. Monitore diariamente.
+              </div>
+            )}
+
+            {/* Salvar */}
+            <button
+              onClick={handleSaveRavena}
+              disabled={savingRavena}
+              style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: savingRavena ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: savingRavena ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: savingRavena ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}
+            >
+              <Save style={{ width: '14px', height: '14px' }} />
+              {savingRavena ? 'Salvando…' : 'Salvar configuração da Ravena'}
+            </button>
           </div>
         </div>
 
