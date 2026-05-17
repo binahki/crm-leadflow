@@ -1270,138 +1270,93 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Quick KPIs Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {kpis.map((kpi, i) => (
-              <div key={i} style={{ 
-                padding: '16px', borderRadius: '16px', background: cardBg, 
-                border: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px',
-                transition: 'transform 0.2s ease', cursor: 'default'
-              }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: `${kpi.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <kpi.icon size={14} color={kpi.color} />
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</span>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+          {/* Frase do dia */}
+          {log.frase_do_dia && (
+            <p style={{ fontSize: '15px', fontWeight: 500, color: txtHi, lineHeight: 1.6, margin: 0, padding: '20px 24px', borderBottom: `1px solid ${border}` }}>
+              "{log.frase_do_dia}"
+            </p>
+          )}
+
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+            {/* O que eu fiz hoje */}
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que eu fiz hoje</p>
+              {log.acoes_executadas?.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {log.acoes_executadas.map((acao: any, i: number) => (
+                    <ActionCard key={i} acao={acao} dark={dark} />
+                  ))}
                 </div>
-                <span style={{ fontSize: '18px', fontWeight: 800, color: txtHi }}>{kpi.value}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Budget Status Alert if relevant */}
-          {statusBudget && (
-            <div style={{ 
-              padding: '12px 16px', borderRadius: '12px', 
-              background: statusBudget.includes('Acima') ? 'rgba(245,158,11,0.05)' : 'rgba(16,185,129,0.05)',
-              border: `1px solid ${statusBudget.includes('Acima') ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
-              display: 'flex', alignItems: 'center', gap: '10px'
-            }}>
-              <AlertTriangle size={16} color={statusBudget.includes('Acima') ? '#f59e0b' : '#10b981'} />
-              <span style={{ fontSize: '12px', fontWeight: 500, color: statusBudget.includes('Acima') ? '#d97706' : '#059669' }}>
-                Budget: {statusBudget}
-              </span>
+              ) : (
+                <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+                  <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
+                    ✋ {log.resumo || 'Nenhuma ação necessária hoje.'}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Critical Alert */}
-          {log.alerta && (
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: '#ef4444' }}>⚠️</span> Ponto de atenção
-              </p>
-              <div style={{ 
-                padding: '14px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', 
-                border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '13px', lineHeight: 1.5, fontWeight: 500
-              }}>
-                {log.alerta}
+            {/* Insight do dia */}
+            {log.insight_do_dia && (
+              <div style={{ padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
+                  💡 Observação do dia
+                </p>
+                <p style={{ fontSize: '13px', color: dark ? '#c4b5fd' : '#6d28d9', margin: 0, lineHeight: 1.6 }}>
+                  {log.insight_do_dia}
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Top Performance (Insight fallback) */}
-          {log.insights?.length > 0 && (
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: '#f59e0b' }}>🏆</span> Top Performance
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {log.insights.slice(0, 2).map((insight: any, i: number) => (
-                  <div key={i} style={{ 
-                    padding: '12px 14px', borderRadius: '12px', background: cardBg, 
-                    border: `1px solid ${border}`, fontSize: '12.5px', color: txtHi, lineHeight: 1.5
-                  }}>
-                    {typeof insight === 'string' ? insight : insight.mensagem}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Campanhas avaliadas (sem ação necessária) */}
-          {(!log.acoes_executadas?.length) && log.acoes_sugeridas?.length > 0 && (
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Campanhas avaliadas hoje</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {log.acoes_sugeridas.slice(0, 5).map((s: any, i: number) => {
-                  const conf = s.leads_crm_7d >= 20 ? { label: 'Alta confiança', color: '#10b981', bg: 'rgba(16,185,129,0.1)' }
-                    : s.leads_crm_7d >= 10 ? { label: 'Média confiança', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
-                    : { label: 'Baixa confiança', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
-                  return (
-                    <div key={i} style={{ padding: '11px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '13px', color: '#10b981', flexShrink: 0 }}>✓</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {s.campanha_nome || s.nome || '—'}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: txtMid }}>{s.motivo || 'Manter — sem ajuste necessário'}</p>
+            {/* Campanhas analisadas */}
+            {log.insights?.length > 0 && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que analisei hoje</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {log.insights.map((item: any, i: number) => (
+                    <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <span style={{
+                          fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px',
+                          color: item.decisao === 'escalar' ? '#10b981' : item.decisao === 'pausar' ? '#ef4444' : item.decisao === 'aguardar' ? '#3b82f6' : '#f59e0b',
+                          background: item.decisao === 'escalar' ? 'rgba(16,185,129,0.1)' : item.decisao === 'pausar' ? 'rgba(239,68,68,0.1)' : item.decisao === 'aguardar' ? 'rgba(59,130,246,0.1)' : 'rgba(245,158,11,0.1)',
+                        }}>
+                          {item.decisao === 'escalar' ? '⭐ Escalar' : item.decisao === 'pausar' ? '⏸ Pausar' : item.decisao === 'aguardar' ? '⏳ Aguardar' : '👀 Manter'}
+                        </span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {item.campanha_nome}
+                        </span>
                       </div>
-                      <span style={{ fontSize: '10px', fontWeight: 700, color: conf.color, background: conf.bg, padding: '2px 7px', borderRadius: '99px', flexShrink: 0 }}>{conf.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Ações executadas com nível de confiança */}
-          {log.acoes_executadas?.length > 0 && (
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>Ações Executadas</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {log.acoes_executadas.map((acao: any, i: number) => {
-                  // Busca dados de confiança da campanha em campanhas_analisadas
-                  const campData = log.campanhas_analisadas?.find((c: any) => c.id === acao.campanha_id || c.nome === acao.campanha_nome);
-                  const conf = campData?.leads_crm_7d >= 20 ? { label: 'Alta confiança', color: '#10b981', bg: 'rgba(16,185,129,0.1)' }
-                    : campData?.leads_crm_7d >= 10 ? { label: 'Média confiança', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
-                    : campData ? { label: 'Baixa confiança', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' }
-                    : null;
-                  return (
-                    <div key={i}>
-                      <ActionCard acao={acao} dark={dark} />
-                      {conf && (
-                        <div style={{ marginTop: '4px', paddingLeft: '14px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, color: conf.color, background: conf.bg, padding: '2px 7px', borderRadius: '99px' }}>{conf.label}</span>
-                        </div>
+                      <p style={{ fontSize: '12px', color: txtMid, margin: '0 0 4px', lineHeight: 1.5 }}>
+                        {item.porque}
+                      </p>
+                      {item.proximo_passo && (
+                        <p style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontStyle: 'italic' }}>
+                          → {item.proximo_passo}
+                        </p>
                       )}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Detailed Summary (Secondary) */}
-          {log.resumo && (
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Observações</p>
-              <div style={{ padding: '16px', borderRadius: '16px', border: `1px dashed ${border}`, background: 'transparent' }}>
-                <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.6 }}>{log.resumo}</p>
+            {/* Alerta */}
+            {log.alerta && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#ef4444' }}>⚠️</span> Ponto de atenção
+                </p>
+                <div style={{ padding: '14px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '13px', lineHeight: 1.5, fontWeight: 500 }}>
+                  {log.alerta}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+          </div>
         </div>
 
         {/* Footer info */}
