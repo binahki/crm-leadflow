@@ -51,14 +51,15 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Gestor ativo — redireciona para /gestor (exceto se já estiver lá)
-  if (gestorAtivo && location.pathname !== '/gestor') {
+  const adminViewingOrg = !!localStorage.getItem('admin_viewing_org');
+
+  // Gestor ativo — redireciona para /gestor, mas não se estiver visualizando uma org
+  if (gestorAtivo && !adminViewingOrg && location.pathname !== '/gestor') {
     return <Navigate to="/gestor" replace />;
   }
 
   // Admin sem impersonation só acessa /admin
-  const isImpersonating = !!localStorage.getItem('admin_viewing_org');
-  if (isAdmin && !isImpersonating && !isExempt) {
+  if (isAdmin && !adminViewingOrg && !isExempt) {
     return <Navigate to="/admin" replace />;
   }
 

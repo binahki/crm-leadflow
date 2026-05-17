@@ -29,8 +29,8 @@ export function useOrgId() {
   // Tenta pegar do cache imediatamente para evitar flash
   const getCached = (): { orgId: string | null; ready: boolean } => {
     if (!user) return { orgId: null, ready: false };
-    if (user.email === ADMIN_EMAIL) {
-      const adminViewing = localStorage.getItem('admin_viewing_org');
+    const adminViewing = localStorage.getItem('admin_viewing_org');
+    if (user.email === ADMIN_EMAIL || adminViewing) {
       return { orgId: adminViewing, ready: true };
     }
     if (orgIdCache[user.id] !== undefined) {
@@ -46,9 +46,9 @@ export function useOrgId() {
   useEffect(() => {
     if (!user) { setReady(true); return; }
 
-    // Admin
-    if (user.email === ADMIN_EMAIL) {
-      const adminViewing = localStorage.getItem('admin_viewing_org');
+    // Admin ou gestor visualizando uma org
+    const adminViewing = localStorage.getItem('admin_viewing_org');
+    if (user.email === ADMIN_EMAIL || adminViewing) {
       setOrgId(adminViewing);
       setReady(true);
       return;

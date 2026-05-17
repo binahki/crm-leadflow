@@ -20,6 +20,12 @@ export default function GestorPage() {
     if (!authLoading && !user) navigate('/login');
   }, [user, authLoading]);
 
+  // Limpa org que estava sendo visualizada ao voltar para /gestor
+  useEffect(() => {
+    localStorage.removeItem('admin_viewing_org');
+    localStorage.removeItem('admin_viewing_org_nome');
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     fetchDados();
