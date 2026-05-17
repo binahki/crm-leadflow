@@ -19,7 +19,7 @@ export default function MetaAdsPage() {
   const [token, setToken]             = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving]           = useState(false);
-  const [ravenaAtiva, setRavenaAtiva] = useState(false);
+  const [ravenaAtiva, setRavenaAtiva] = useState<boolean | null>(null);
   const [budgetMensal, setBudgetMensal] = useState(5000);
   const [metaRevs, setMetaRevs] = useState(50);
   const [modo, setModo] = useState<'conservador'|'equilibrado'|'agressivo'>('equilibrado');
@@ -38,7 +38,7 @@ export default function MetaAdsPage() {
       if (org) {
         setAccountId((org as any).meta_account_id || '');
         setToken((org as any).meta_token || '');
-        setRavenaAtiva((org as any).ravena_ativa || false);
+        setRavenaAtiva((org as any).ravena_ativa === true);
         setBudgetMensal((org as any).ravena_budget_mensal || 5000);
         setMetaRevs((org as any).ravena_meta_revendedoras || 50);
         setModo((org as any).ravena_modo || 'equilibrado');
@@ -53,7 +53,7 @@ export default function MetaAdsPage() {
     const { error } = await supabase
       .from('organizations')
       .update({
-        ravena_ativa: ravenaAtiva,
+        ravena_ativa: ravenaAtiva ?? false,
         ravena_budget_mensal: budgetMensal,
         ravena_meta_revendedoras: metaRevs,
         ravena_modo: modo,
@@ -188,17 +188,21 @@ export default function MetaAdsPage() {
               <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Ravena — IA de Tráfego</span>
             </div>
             {/* Toggle ativa/inativa */}
-            <div onClick={() => setRavenaAtiva(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <span style={{ fontSize: '12px', color: ravenaAtiva ? '#10b981' : txtMid, fontWeight: 600 }}>
-                {ravenaAtiva ? 'Ativa' : 'Inativa'}
-              </span>
-              <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: ravenaAtiva ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s' }}>
-                <div style={{ position: 'absolute', top: '2px', left: ravenaAtiva ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            {ravenaAtiva === null ? (
+              <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: dark ? '#3f3f46' : '#d1d5db' }} />
+            ) : (
+              <div onClick={() => setRavenaAtiva(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '12px', color: ravenaAtiva ? '#10b981' : txtMid, fontWeight: 600 }}>
+                  {ravenaAtiva ? 'Ativa' : 'Inativa'}
+                </span>
+                <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: ravenaAtiva ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s' }}>
+                  <div style={{ position: 'absolute', top: '2px', left: ravenaAtiva ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva ? 1 : 0.5, pointerEvents: ravenaAtiva ? 'auto' : 'none' }}>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva === true ? 1 : 0.5, pointerEvents: ravenaAtiva === true ? 'auto' : 'none' }}>
             {/* Metas */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
