@@ -66,7 +66,7 @@ export default function AdminPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ── Abas ──────────────────────────────────────────────────────
-  const [aba, setAba] = useState<'clientes'|'gestores'>('clientes');
+  const [aba, setAba] = useState<'dashboard'|'empresas'|'gestores'|'contabilidade'>('dashboard');
 
   // ── Gestor state ──────────────────────────────────────────────
   const [gestores, setGestores] = useState<any[]>([]);
@@ -79,6 +79,22 @@ export default function AdminPage() {
   const [gestorOrgsIds, setGestorOrgsIds] = useState<string[]>([]);
   const [savingDesignar, setSavingDesignar] = useState(false);
 
+  // ── Dashboard state ───────────────────────────────────────────
+  const [dashPeriodo, setDashPeriodo] = useState<'mes'|'trimestre'|'ano'>('mes');
+  const [dashData, setDashData] = useState<any>(null);
+  const [dashLoading, setDashLoading] = useState(false);
+
+  // ── Contabilidade state ───────────────────────────────────────
+  const [contas, setContas] = useState<any[]>([]);
+  const [contaLoading, setContaLoading] = useState(false);
+  const [showModalConta, setShowModalConta] = useState(false);
+  const [contaTipo, setContaTipo] = useState<'custo'|'receita'>('custo');
+  const [contaDescricao, setContaDescricao] = useState('');
+  const [contaValor, setContaValor] = useState('');
+  const [contaCategoria, setContaCategoria] = useState('');
+  const [contaData, setContaData] = useState(new Date().toISOString().split('T')[0]);
+  const [savingConta, setSavingConta] = useState(false);
+
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && (!user || user.email !== ADMIN_EMAIL)) navigate('/');
@@ -89,7 +105,13 @@ export default function AdminPage() {
     if (!user || user.email !== ADMIN_EMAIL) return;
     fetchOrgs();
     fetchGestores();
+    fetchContabilidade();
   }, [user]);
+
+  useEffect(() => {
+    if (!user || user.email !== ADMIN_EMAIL) return;
+    fetchDashboard();
+  }, [user, dashPeriodo]);
 
   async function fetchOrgs() {
     setLoading(true);
@@ -182,6 +204,104 @@ export default function AdminPage() {
   async function toggleGestorAtivo(g: any) {
     await supabase.from('gestores').update({ ativo: !g.ativo }).eq('id', g.id);
     fetchGestores();
+  }
+
+  // ── Dashboard ─────────────────────────────────────────────────
+  async function fetchDashboard() {
+    setDashLoading(true);
+    const now = new Date();
+    let start: Date;
+    if (dashPeriodo === 'mes') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (dashPeriodo === 'trimestre') {
+      const q = Math.floor(now.getMonth() / 3);
+      start = new Date(now.getFullYear(), q * 3, 1);
+    } else {
+      start = new Date(now.getFullYear(), 0, 1);
+    }
+    const startStr = start.toISOString().split('T')[0];
+
+    const TICKETS: Record<string, number> = { basic: 497, pro: 997 };
+
+    const { data: orgsData } = await supabase
+      .from('organizations')
+      .select('id, plano, created_at, ravena_ativa, subscriptions(status, trial_ends_at)');
+    const { count: totalLeads } = await supabase
+      .from('leads').select('*', { count: 'exact', head: true });
+    const { count: ravenaCount } = await supabase
+      .from('organizations').select('*', { count: 'exact', head: true }).eq('ravena_ativa', true);
+    const { data: custosPeriodo } = await supabase
+      .from('contabilidade' as any).select('valor').eq('tipo', 'custo').gte('data', startStr);
+
+    const all = orgsData || [];
+    const ativas = all.filter((o: any) => o.subscriptions?.[0]?.status === 'active');
+    const canceladas = all.filter((o: any) => o.subscriptions?.[0]?.status === 'canceled');
+    const novos = all.filter((o: any) => new Date(o.created_at) >= start);
+
+    const mrr = ativas.reduce((s: number, o: any) => s + (TICKETS[o.plano] || 497), 0);
+    const totalCustos = ((custosPeriodo as any[]) || []).reduce((s: number, c: any) => s + Number(c.valor), 0);
+    const lucro = mrr - totalCustos;
+    const churn = ativas.length + canceladas.length > 0
+      ? Math.round((canceladas.length / (ativas.length + canceladas.length)) * 100) : 0;
+
+    const in7days = new Date(Date.now() + 7 * 86400000);
+    const trialsExpirando = all.filter((o: any) => {
+      const sub = o.subscriptions?.[0];
+      if (sub?.status !== 'trialing' || !sub?.trial_ends_at) return false;
+      const ends = new Date(sub.trial_ends_at);
+      return ends <= in7days && ends > new Date();
+    });
+
+    setDashData({
+      mrr, lucro, ativas: ativas.length, churn,
+      novos: novos.length, totalLeads: totalLeads || 0,
+      ravenaAtiva: ravenaCount || 0, trialsExpirando,
+    });
+    setDashLoading(false);
+  }
+
+  // ── Contabilidade ─────────────────────────────────────────────
+  async function fetchContabilidade() {
+    setContaLoading(true);
+    const { data } = await supabase
+      .from('contabilidade' as any)
+      .select('*')
+      .order('data', { ascending: false });
+    setContas((data as any[]) || []);
+    setContaLoading(false);
+  }
+
+  async function handleSaveConta() {
+    if (!contaDescricao || !contaValor || !contaCategoria) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
+    setSavingConta(true);
+    const { error } = await supabase.from('contabilidade' as any).insert({
+      descricao: contaDescricao,
+      categoria: contaCategoria,
+      tipo: contaTipo,
+      valor: Number(contaValor),
+      data: contaData,
+    });
+    if (error) {
+      toast.error('Erro ao salvar: ' + error.message);
+    } else {
+      toast.success('Lançamento salvo!');
+      setShowModalConta(false);
+      setContaDescricao(''); setContaValor(''); setContaCategoria('');
+      setContaTipo('custo'); setContaData(new Date().toISOString().split('T')[0]);
+      fetchContabilidade();
+      fetchDashboard();
+    }
+    setSavingConta(false);
+  }
+
+  async function handleDeleteConta(id: string) {
+    await supabase.from('contabilidade' as any).delete().eq('id', id);
+    toast.success('Lançamento excluído');
+    fetchContabilidade();
+    fetchDashboard();
   }
 
   // ── Create org ────────────────────────────────────────────────
@@ -488,29 +608,40 @@ export default function AdminPage() {
               <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Painel Admin</h1>
               <p style={{ fontSize: '13px', color: txtMid, margin: '3px 0 0' }}>Gerenciamento de clientes do Floow CRM</p>
             </div>
-            {aba === 'clientes' && (
+            {aba === 'empresas' && (
               <button onClick={() => setShowModal(true)}
                 style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
                 + Novo cliente
               </button>
             )}
+            {aba === 'contabilidade' && (
+              <button onClick={() => setShowModalConta(true)}
+                style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                + Novo lançamento
+              </button>
+            )}
           </div>
 
           {/* Abas */}
-          <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}` }}>
-            {([{ key: 'clientes', label: 'Clientes' }, { key: 'gestores', label: 'Gestores' }] as const).map(a => (
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, overflowX: 'auto' }}>
+            {([
+              { key: 'dashboard',      label: '📊 Dashboard' },
+              { key: 'empresas',       label: '🏢 Empresas' },
+              { key: 'gestores',       label: '👥 Gestores' },
+              { key: 'contabilidade',  label: '💰 Contabilidade' },
+            ] as const).map(a => (
               <button key={a.key} onClick={() => setAba(a.key)} style={{
                 padding: '8px 16px', border: 'none', background: 'transparent',
                 color: aba === a.key ? '#2563eb' : txtMid,
                 borderBottom: `2px solid ${aba === a.key ? '#2563eb' : 'transparent'}`,
                 fontSize: '13px', fontWeight: aba === a.key ? 600 : 400,
                 cursor: 'pointer', fontFamily: FONT, marginBottom: '-1px',
-                transition: 'all 0.15s',
+                transition: 'all 0.15s', whiteSpace: 'nowrap',
               }}>{a.label}</button>
             ))}
           </div>
 
-          {aba === 'clientes' && (<>
+          {aba === 'empresas' && (<>
           {/* Cards métricas */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
             {[
@@ -582,6 +713,142 @@ export default function AdminPage() {
             )}
           </div>
           </>)}
+
+          {/* ── Aba Dashboard ── */}
+          {aba === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              {/* Filtro de período */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {([
+                  { key: 'mes',        label: 'Este mês' },
+                  { key: 'trimestre',  label: 'Trimestre' },
+                  { key: 'ano',        label: 'Este ano' },
+                ] as const).map(p => (
+                  <button key={p.key} onClick={() => setDashPeriodo(p.key)} style={{
+                    padding: '7px 14px', borderRadius: '8px', border: `1px solid ${dashPeriodo === p.key ? '#2563eb' : (dark ? '#27272a' : '#e5e7eb')}`,
+                    background: dashPeriodo === p.key ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : 'transparent',
+                    color: dashPeriodo === p.key ? '#2563eb' : txtMid,
+                    fontSize: '12.5px', fontWeight: dashPeriodo === p.key ? 600 : 400,
+                    cursor: 'pointer', fontFamily: FONT, transition: 'all 0.15s',
+                  }}>{p.label}</button>
+                ))}
+              </div>
+
+              {/* Alerta trials expirando */}
+              {dashData?.trialsExpirando?.length > 0 && (
+                <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '16px' }}>⚠️</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: dark ? '#fcd34d' : '#92400e' }}>
+                      {dashData.trialsExpirando.length} trial{dashData.trialsExpirando.length !== 1 ? 's' : ''} expira{dashData.trialsExpirando.length !== 1 ? 'm' : ''} em 7 dias
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: dark ? '#fbbf24' : '#b45309' }}>
+                      Considere entrar em contato para converter em plano pago.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {dashLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Carregando métricas…</div>
+              ) : dashData ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                  {[
+                    { label: 'MRR Estimado',     value: `R$ ${(dashData.mrr).toLocaleString('pt-BR')}`,    color: '#10b981', desc: 'Receita mensal recorrente' },
+                    { label: 'Lucro Estimado',   value: `R$ ${(dashData.lucro).toLocaleString('pt-BR')}`,  color: dashData.lucro >= 0 ? '#10b981' : '#ef4444', desc: 'MRR - custos do período' },
+                    { label: 'Clientes Ativos',  value: String(dashData.ativas),                            color: '#3b82f6', desc: 'Assinatura ativa' },
+                    { label: 'Churn Rate',        value: `${dashData.churn}%`,                              color: dashData.churn > 5 ? '#ef4444' : '#10b981', desc: 'Cancelados / (ativos + cancelados)' },
+                    { label: 'Novos no Período', value: String(dashData.novos),                             color: '#a855f7', desc: 'Orgs criadas no período' },
+                    { label: 'Total de Leads',   value: String(dashData.totalLeads),                        color: '#f59e0b', desc: 'Leads em todas as orgs' },
+                    { label: 'Ravena Ativa',     value: String(dashData.ravenaAtiva),                       color: '#8b5cf6', desc: 'Orgs com IA de tráfego ativa' },
+                  ].map(m => (
+                    <div key={m.label} style={{ ...card, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <p style={{ fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>{m.label}</p>
+                      <p style={{ fontSize: '24px', fontWeight: 700, color: m.color, margin: 0, letterSpacing: '-0.03em' }}>{m.value}</p>
+                      <p style={{ fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db', margin: 0 }}>{m.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* ── Aba Contabilidade ── */}
+          {aba === 'contabilidade' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* Cards resumo */}
+              {(() => {
+                const receitas = contas.filter(c => c.tipo === 'receita').reduce((s, c) => s + Number(c.valor), 0);
+                const custos   = contas.filter(c => c.tipo === 'custo').reduce((s, c) => s + Number(c.valor), 0);
+                const saldo    = receitas - custos;
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                    {[
+                      { label: 'Total Receitas', value: `R$ ${receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: '#10b981' },
+                      { label: 'Total Custos',   value: `R$ ${custos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,   color: '#ef4444' },
+                      { label: 'Saldo',          value: `R$ ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,    color: saldo >= 0 ? '#10b981' : '#ef4444' },
+                    ].map(m => (
+                      <div key={m.label} style={card}>
+                        <p style={{ fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>{m.label}</p>
+                        <p style={{ fontSize: '22px', fontWeight: 700, color: m.color, margin: 0, letterSpacing: '-0.03em' }}>{m.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Tabela lançamentos */}
+              <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Lançamentos</span>
+                </div>
+                {contaLoading ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Carregando…</div>
+                ) : contas.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Nenhum lançamento ainda</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ background: dark ? '#18181b' : '#f8fafc' }}>
+                          {['Descrição', 'Categoria', 'Tipo', 'Valor', 'Data', ''].map(h => (
+                            <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contas.map((c: any, i: number) => (
+                          <tr key={c.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
+                            <td style={{ padding: '12px 16px', color: txt, fontWeight: 500 }}>{c.descricao}</td>
+                            <td style={{ padding: '12px 16px', color: txtMid, textTransform: 'capitalize' }}>{c.categoria}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '99px', color: c.tipo === 'receita' ? '#10b981' : '#ef4444', background: c.tipo === 'receita' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' }}>
+                                {c.tipo === 'receita' ? 'Receita' : 'Custo'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', fontWeight: 600, color: c.tipo === 'receita' ? '#10b981' : '#ef4444' }}>
+                              {c.tipo === 'custo' ? '−' : '+'}R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '12px 16px', color: txtMid, fontSize: '12px' }}>
+                              {new Date(c.data + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <button onClick={() => handleDeleteConta(c.id)}
+                                style={{ padding: '4px 10px', borderRadius: '6px', border: 'none', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>
+                                Excluir
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {aba === 'gestores' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -820,6 +1087,68 @@ export default function AdminPage() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setDesignarGestor(null)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
               <button onClick={salvarDesignarOrgs} disabled={savingDesignar} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: savingDesignar ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: savingDesignar ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: savingDesignar ? 'default' : 'pointer', fontFamily: FONT }}>{savingDesignar ? 'Salvando…' : `Salvar (${gestorOrgsIds.length} empresa${gestorOrgsIds.length !== 1 ? 's' : ''})`}</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal: Novo lançamento ── */}
+      {showModalConta && (
+        <>
+          <div onClick={() => setShowModalConta(false)} style={overlay} />
+          <div style={{ ...modalBox, maxWidth: '420px' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: txt }}>Novo lançamento</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              {/* Toggle tipo */}
+              <div>
+                <label style={lbl}>Tipo</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {(['custo', 'receita'] as const).map(t => (
+                    <button key={t} onClick={() => { setContaTipo(t); setContaCategoria(''); }}
+                      style={{ flex: 1, padding: '9px', borderRadius: '10px', border: `2px solid ${contaTipo === t ? (t === 'receita' ? '#10b981' : '#ef4444') : (dark ? '#27272a' : '#e5e7eb')}`, background: contaTipo === t ? (t === 'receita' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)') : 'transparent', color: contaTipo === t ? (t === 'receita' ? '#10b981' : '#ef4444') : txtMid, fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                      {t === 'custo' ? '− Custo' : '+ Receita'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={lbl}>Descrição</label>
+                <input style={inp} value={contaDescricao} onChange={e => setContaDescricao(e.target.value)} placeholder="Ex: Servidor AWS, Mensalidade cliente…" />
+              </div>
+
+              <div>
+                <label style={lbl}>Valor (R$)</label>
+                <input style={inp} type="number" step="0.01" min="0" value={contaValor} onChange={e => setContaValor(e.target.value)} placeholder="0,00" />
+              </div>
+
+              <div>
+                <label style={lbl}>Categoria</label>
+                <select style={inp} value={contaCategoria} onChange={e => setContaCategoria(e.target.value)}>
+                  <option value="">Selecione…</option>
+                  {contaTipo === 'custo'
+                    ? ['Infraestrutura', 'APIs', 'Marketing', 'Salários', 'Ferramentas', 'Outros'].map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)
+                    : ['Mensalidade', 'Setup', 'Consultoria', 'Outros'].map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)
+                  }
+                </select>
+              </div>
+
+              <div>
+                <label style={lbl}>Data</label>
+                <input style={inp} type="date" value={contaData} onChange={e => setContaData(e.target.value)} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button onClick={() => setShowModalConta(false)}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>
+                  Cancelar
+                </button>
+                <button onClick={handleSaveConta} disabled={savingConta}
+                  style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: savingConta ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: savingConta ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: savingConta ? 'default' : 'pointer', fontFamily: FONT }}>
+                  {savingConta ? 'Salvando…' : 'Salvar lançamento'}
+                </button>
+              </div>
             </div>
           </div>
         </>
