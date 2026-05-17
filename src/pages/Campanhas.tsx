@@ -681,17 +681,6 @@ export default function CampanhasPage() {
           <div>
             <h1 style={{fontSize:isMobile?'20px':'24px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:0}}>Campanhas Meta Ads</h1>
             <p style={{fontSize:'13px',color:txtMid,marginTop:'4px'}}>Dados em tempo real via API do Facebook</p>
-            {aiLog&&(
-              <button onClick={()=>setShowAiPanel(true)} style={{display:'inline-flex',alignItems:'center',gap:'6px',marginTop:'7px',padding:'6px 12px',borderRadius:'99px',background:dark?'rgba(139,92,246,0.15)':'#f5f3ff',border:'1px solid rgba(139,92,246,0.3)',color:'#8b5cf6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
-                <Zap style={{width:'12px',height:'12px'}}/>
-                Ravena otimizou hoje
-                {aiLog.acoes_executadas?.length>0&&(
-                  <span style={{background:'#8b5cf6',color:'#fff',borderRadius:'99px',padding:'1px 6px',fontSize:'11px'}}>
-                    {aiLog.acoes_executadas.length}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
             <FilterDropdown value={datePreset} options={PERIOD_OPTIONS} onChange={setDatePreset} dark={dark}/>
@@ -724,7 +713,71 @@ export default function CampanhasPage() {
           ))}
         </div>
 
-
+        {/* Banner Ravena */}
+        {aiLog && (
+          <div
+            onClick={() => setShowAiPanel(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              padding: '14px 20px', borderRadius: '14px',
+              background: dark
+                ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))'
+                : 'linear-gradient(135deg, #faf5ff, #eff6ff)',
+              border: `1px solid ${dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)'}`,
+              cursor: 'pointer', marginTop: '12px', marginBottom: '4px',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
+            {/* Avatar Ravena */}
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 12px rgba(139,92,246,0.4)',
+            }}>
+              <span style={{ fontSize: '16px', fontWeight: 900, color: '#fff' }}>R</span>
+            </div>
+            {/* Texto */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: dark ? '#c4b5fd' : '#6d28d9' }}>
+                Ravena analisou suas campanhas hoje
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {aiLog.frase_do_dia || aiLog.resumo || 'Clique para ver a análise completa'}
+              </p>
+            </div>
+            {/* Seta + badge ações */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {aiLog.acoes_executadas?.length > 0 && (
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: '#8b5cf6', padding: '2px 8px', borderRadius: '99px' }}>
+                  {aiLog.acoes_executadas.length} ação{aiLog.acoes_executadas.length !== 1 ? 'ões' : ''}
+                </span>
+              )}
+              <span style={{ fontSize: '18px', color: dark ? '#8b5cf6' : '#7c3aed' }}>→</span>
+            </div>
+          </div>
+        )}
+        {!aiLog && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 14px', borderRadius: '10px', marginTop: '12px', marginBottom: '4px',
+            background: dark ? 'rgba(139,92,246,0.06)' : '#faf5ff',
+            border: `1px solid ${dark ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.15)'}`,
+          }}>
+            <div style={{
+              width: '28px', height: '28px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <span style={{ fontSize: '12px', fontWeight: 900, color: '#fff' }}>R</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed' }}>
+              Ravena ainda não analisou hoje — próxima análise automática às 08h
+            </p>
+          </div>
+        )}
 
         {/* Leads × Revendedoras por Campanha — Bar Chart */}
         {!loading && chartRows.length > 0 && (

@@ -26,6 +26,14 @@ export default function MetaAdsPage() {
   const [savingRavena, setSavingRavena] = useState(false);
   const [notifAtiva, setNotifAtiva] = useState(false);
   const [notifNumero, setNotifNumero] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (!orgReady) return;
@@ -103,7 +111,6 @@ export default function MetaAdsPage() {
     borderRadius: '18px',
     overflow: 'hidden',
     boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.06)',
-    maxWidth: '520px',
   };
   const inp: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: '10px',
@@ -136,6 +143,8 @@ export default function MetaAdsPage() {
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Meta Ads</h1>
           <p style={{ fontSize: '13px', color: txtMid, marginTop: '3px' }}>Configure a integração com a API do Meta Ads</p>
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px', alignItems: 'start' }}>
 
         <div style={card}>
           <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, display: 'flex', alignItems: 'center', gap: '8px', background: dark ? '#18181b' : '#fafafa' }}>
@@ -201,7 +210,7 @@ export default function MetaAdsPage() {
         </div>
 
         {/* Ravena — IA de Tráfego */}
-        <div style={{ ...card, marginTop: '20px' }}>
+        <div style={card}>
           {/* Header */}
           <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -353,6 +362,8 @@ export default function MetaAdsPage() {
             </button>
           </div>
         </div>
+
+        </div>{/* end grid */}
 
       </div>
     </AppLayout>
