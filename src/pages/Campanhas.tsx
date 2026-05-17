@@ -1249,25 +1249,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
             </button>
           </div>
 
-          {/* Resumo operacional */}
-          <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.15)', marginBottom: '12px' }}>
-            <p style={{ margin: 0, fontSize: '12.5px', color: dark ? '#c4b5fd' : '#6d28d9', fontWeight: 500 }}>
-              {log.acoes_executadas?.length > 0
-                ? `Ravena aplicou ${log.acoes_executadas.length} ação${log.acoes_executadas.length !== 1 ? 'ões' : ''} executada${log.acoes_executadas.length !== 1 ? 's' : ''}`
-                : 'Nenhuma ação de otimização necessária no momento'
-              }
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '11px', fontWeight: 700, border: '1px solid rgba(16,185,129,0.2)' }}>
-              {log.acoes_executadas?.length || 0} ações executadas
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}` }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: statusColor }}>{statusLabel}</span>
-            </div>
-          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1278,6 +1259,47 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
               "{log.frase_do_dia}"
             </p>
           )}
+
+          {/* Barra de progresso do mês */}
+          {(() => {
+            const revsAtual = log.revendedoras_mes || 0;
+            const metaRevs = log.meta_revendedoras || 0;
+            const progressoPct = metaRevs > 0 ? Math.min(Math.round((revsAtual / metaRevs) * 100), 100) : 0;
+            const diasRestantes = log.dias_restantes || 0;
+            const gastoTotal = log.total_gasto || 0;
+            const progressoCor = progressoPct >= 80 ? '#10b981' : progressoPct >= 50 ? '#f59e0b' : '#ef4444';
+            return (
+              <div style={{ padding: '16px 24px', borderBottom: `1px solid ${border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+                  <div>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 2px' }}>
+                      Meta do mês
+                    </p>
+                    <p style={{ fontSize: '22px', fontWeight: 800, color: txtHi, margin: 0 }}>
+                      {revsAtual}
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: txtMid }}>
+                        {metaRevs > 0 ? ` / ${metaRevs} revendedoras` : ' revendedoras'}
+                      </span>
+                    </p>
+                  </div>
+                  {metaRevs > 0 && (
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '20px', fontWeight: 700, color: progressoCor, margin: 0 }}>{progressoPct}%</p>
+                      <p style={{ fontSize: '11px', color: txtMid, margin: 0 }}>{diasRestantes}d restantes</p>
+                    </div>
+                  )}
+                </div>
+                {metaRevs > 0 && (
+                  <div style={{ height: '6px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${progressoPct}%`, borderRadius: '99px', background: progressoCor, transition: 'width 1s cubic-bezier(0.16,1,0.3,1)' }} />
+                  </div>
+                )}
+                <p style={{ fontSize: '11px', color: txtMid, margin: '6px 0 0' }}>
+                  R$ {gastoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} investidos no período
+                </p>
+              </div>
+            );
+          })()}
 
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
