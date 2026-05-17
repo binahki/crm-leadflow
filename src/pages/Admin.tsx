@@ -64,6 +64,20 @@ export default function AdminPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // ── Abas ──────────────────────────────────────────────────────
+  const [aba, setAba] = useState<'clientes'|'gestores'>('clientes');
+
+  // ── Gestor state ──────────────────────────────────────────────
+  const [gestores, setGestores] = useState<any[]>([]);
+  const [showModalGestor, setShowModalGestor] = useState(false);
+  const [modalGestorNome, setModalGestorNome] = useState('');
+  const [modalGestorEmail, setModalGestorEmail] = useState('');
+  const [modalGestorSenha, setModalGestorSenha] = useState('');
+  const [creatingGestor, setCreatingGestor] = useState(false);
+  const [designarGestor, setDesignarGestor] = useState<any|null>(null);
+  const [gestorOrgsIds, setGestorOrgsIds] = useState<string[]>([]);
+  const [savingDesignar, setSavingDesignar] = useState(false);
+
   // ── Guard ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && (!user || user.email !== ADMIN_EMAIL)) navigate('/');
@@ -73,6 +87,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!user || user.email !== ADMIN_EMAIL) return;
     fetchOrgs();
+    fetchGestores();
   }, [user]);
 
   async function fetchOrgs() {
@@ -101,6 +116,58 @@ export default function AdminPage() {
       toast.error('Erro ao carregar dados');
     }
     setLoading(false);
+  }
+
+  // ── Gestores ──────────────────────────────────────────────────
+  async function fetchGestores() {
+    const { data } = await supabase.from('gestores').select('*').order('created_at', { ascending: false });
+    if (!data) return;
+    const comOrgs = await Promise.all(data.map(async (g: any) => {
+      const { count } = await supabase.from('gestor_orgs').select('*', { count: 'exact', head: true }).eq('gestor_user_id', g.user_id);
+      return { ...g, total_orgs: count || 0 };
+    }));
+    setGestores(comOrgs);
+  }
+
+  async function handleCreateGestor() {
+    if (!modalGestorNome || !modalGestorEmail || !modalGestorSenha) { toast.error('Preencha todos os campos'); return; }
+    setCreatingGestor(true);
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome_empresa: `Gestor: ${modalGestorNome}`, email: modalGestorEmail, senha: modalGestorSenha, tipo: 'gestor' }),
+      });
+      const data = await res.json();
+      if (!data.ok) { toast.error(data.erro || 'Erro ao criar gestor'); setCreatingGestor(false); return; }
+      const { data: membership } = await supabase.from('memberships').select('user_id').eq('org_id', data.org_id || '').maybeSingle();
+      await supabase.from('gestores').insert({ user_id: (membership as any)?.user_id || data.user_id, nome: modalGestorNome, email: modalGestorEmail, ativo: true });
+      toast.success(`Gestor ${modalGestorNome} criado!`);
+      setShowModalGestor(false); setModalGestorNome(''); setModalGestorEmail(''); setModalGestorSenha('');
+      fetchGestores();
+    } catch { toast.error('Erro ao criar gestor'); }
+    setCreatingGestor(false);
+  }
+
+  async function abrirDesignarOrgs(g: any) {
+    setDesignarGestor(g);
+    const { data } = await supabase.from('gestor_orgs').select('org_id').eq('gestor_user_id', g.user_id);
+    setGestorOrgsIds((data || []).map((x: any) => x.org_id));
+  }
+
+  async function salvarDesignarOrgs() {
+    if (!designarGestor) return;
+    setSavingDesignar(true);
+    await supabase.from('gestor_orgs').delete().eq('gestor_user_id', designarGestor.user_id);
+    if (gestorOrgsIds.length > 0) {
+      await supabase.from('gestor_orgs').insert(gestorOrgsIds.map(org_id => ({ gestor_user_id: designarGestor.user_id, org_id })));
+    }
+    toast.success('Empresas designadas!');
+    setSavingDesignar(false); setDesignarGestor(null); fetchGestores();
+  }
+
+  async function toggleGestorAtivo(g: any) {
+    await supabase.from('gestores').update({ ativo: !g.ativo }).eq('id', g.id);
+    fetchGestores();
   }
 
   // ── Create org ────────────────────────────────────────────────
@@ -402,17 +469,34 @@ export default function AdminPage() {
         <div style={{ padding: '32px' }}>
 
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <h1 style={{ fontSize: '22px', fontWeight: 700, color: txt, margin: 0, letterSpacing: '-0.03em' }}>Painel Admin</h1>
               <p style={{ fontSize: '13px', color: txtMid, margin: '3px 0 0' }}>Gerenciamento de clientes do Floow CRM</p>
             </div>
-            <button onClick={() => setShowModal(true)}
-              style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
-              + Novo cliente
-            </button>
+            {aba === 'clientes' && (
+              <button onClick={() => setShowModal(true)}
+                style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#10b981', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                + Novo cliente
+              </button>
+            )}
           </div>
 
+          {/* Abas */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}` }}>
+            {([{ key: 'clientes', label: 'Clientes' }, { key: 'gestores', label: 'Gestores' }] as const).map(a => (
+              <button key={a.key} onClick={() => setAba(a.key)} style={{
+                padding: '8px 16px', border: 'none', background: 'transparent',
+                color: aba === a.key ? '#2563eb' : txtMid,
+                borderBottom: `2px solid ${aba === a.key ? '#2563eb' : 'transparent'}`,
+                fontSize: '13px', fontWeight: aba === a.key ? 600 : 400,
+                cursor: 'pointer', fontFamily: FONT, marginBottom: '-1px',
+                transition: 'all 0.15s',
+              }}>{a.label}</button>
+            ))}
+          </div>
+
+          {aba === 'clientes' && (<>
           {/* Cards métricas */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
             {[
@@ -483,6 +567,55 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+          </>)}
+
+          {aba === 'gestores' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowModalGestor(true)} style={{ padding: '9px 18px', borderRadius: '10px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>+ Novo gestor</button>
+              </div>
+              <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Gestores ativos</span>
+                </div>
+                {gestores.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Nenhum gestor cadastrado ainda</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: dark ? '#18181b' : '#f8fafc' }}>
+                        {['Nome', 'Email', 'Empresas', 'Status', ''].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gestores.map((g, i) => (
+                        <tr key={g.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
+                          <td style={{ padding: '12px 16px', color: txt, fontWeight: 500 }}>{g.nome}</td>
+                          <td style={{ padding: '12px 16px', color: txtMid }}>{g.email}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{g.total_orgs || 0} empresa{g.total_orgs !== 1 ? 's' : ''}</span>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '99px', color: g.ativo ? '#10b981' : '#71717a', background: g.ativo ? 'rgba(16,185,129,0.1)' : 'rgba(113,113,122,0.1)' }}>
+                              {g.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 16px' }}>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => abrirDesignarOrgs(g)} style={{ padding: '5px 10px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>Designar empresas</button>
+                              <button onClick={() => toggleGestorAtivo(g)} style={{ padding: '5px 10px', borderRadius: '7px', border: 'none', background: g.ativo ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: g.ativo ? '#ef4444' : '#10b981', fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>{g.ativo ? 'Desativar' : 'Ativar'}</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -619,6 +752,60 @@ export default function AdminPage() {
               >
                 {deleteLoading ? 'Excluindo…' : 'Excluir definitivamente'}
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal: Criar gestor ── */}
+      {showModalGestor && (
+        <>
+          <div onClick={() => setShowModalGestor(false)} style={overlay} />
+          <div style={modalBox}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: txt }}>Novo gestor</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div><label style={lbl}>Nome</label><input style={inp} value={modalGestorNome} onChange={e => setModalGestorNome(e.target.value)} placeholder="Nome do gestor" /></div>
+              <div><label style={lbl}>Email</label><input style={inp} type="email" value={modalGestorEmail} onChange={e => setModalGestorEmail(e.target.value)} placeholder="gestor@email.com" /></div>
+              <div><label style={lbl}>Senha</label><input style={inp} type="password" value={modalGestorSenha} onChange={e => setModalGestorSenha(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="new-password" /></div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button onClick={() => setShowModalGestor(false)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+                <button onClick={handleCreateGestor} disabled={creatingGestor} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: creatingGestor ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: creatingGestor ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: creatingGestor ? 'default' : 'pointer', fontFamily: FONT }}>{creatingGestor ? 'Criando…' : 'Criar gestor'}</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Modal: Designar empresas ── */}
+      {designarGestor && (
+        <>
+          <div onClick={() => setDesignarGestor(null)} style={overlay} />
+          <div style={{ ...modalBox, maxWidth: '480px', maxHeight: '80vh' }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 600, color: txt }}>Designar empresas</h3>
+            <p style={{ fontSize: '12px', color: txtMid, margin: '0 0 16px' }}>{designarGestor.nome} — selecione as empresas sob responsabilidade dele</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '50vh', overflowY: 'auto', marginBottom: '16px' }}>
+              {orgs.map(org => {
+                const selecionada = gestorOrgsIds.includes(org.id);
+                return (
+                  <div key={org.id} onClick={() => setGestorOrgsIds(prev => selecionada ? prev.filter(id => id !== org.id) : [...prev, org.id])}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', border: `1px solid ${selecionada ? '#2563eb' : (dark ? '#27272a' : '#e5e7eb')}`, background: selecionada ? (dark ? 'rgba(37,99,235,0.1)' : '#eff6ff') : 'transparent', transition: 'all 0.12s' }}>
+                    <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, border: `2px solid ${selecionada ? '#2563eb' : (dark ? '#3f3f46' : '#d1d5db')}`, background: selecionada ? '#2563eb' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {selecionada && <span style={{ color: '#fff', fontSize: '10px', fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.nome}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: txtMid }}>{org.email_admin}</p>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '99px', color: org.status === 'active' ? '#10b981' : '#f59e0b', background: org.status === 'active' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)' }}>
+                      {org.status === 'active' ? 'Ativo' : 'Trial'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setDesignarGestor(null)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+              <button onClick={salvarDesignarOrgs} disabled={savingDesignar} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: savingDesignar ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: savingDesignar ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: savingDesignar ? 'default' : 'pointer', fontFamily: FONT }}>{savingDesignar ? 'Salvando…' : `Salvar (${gestorOrgsIds.length} empresa${gestorOrgsIds.length !== 1 ? 's' : ''})`}</button>
             </div>
           </div>
         </>
