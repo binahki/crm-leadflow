@@ -731,14 +731,7 @@ export default function CampanhasPage() {
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
             {/* Avatar Ravena */}
-            <div style={{
-              width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 12px rgba(139,92,246,0.4)',
-            }}>
-              <span style={{ fontSize: '16px', fontWeight: 900, color: '#fff' }}>R</span>
-            </div>
+            <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 12px rgba(139,92,246,0.4)' }} />
             {/* Texto */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: dark ? '#c4b5fd' : '#6d28d9' }}>
@@ -766,13 +759,7 @@ export default function CampanhasPage() {
             background: dark ? 'rgba(139,92,246,0.06)' : '#faf5ff',
             border: `1px solid ${dark ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.15)'}`,
           }}>
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <span style={{ fontSize: '12px', fontWeight: 900, color: '#fff' }}>R</span>
-            </div>
+            <img src="/ravena.png" alt="Ravena" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed' }}>
               Ravena ainda não analisou hoje — próxima análise automática às 08h
             </p>
@@ -1301,9 +1288,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               {/* Avatar Ravena */}
-              <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 16px rgba(139,92,246,0.4)' }}>
-                <span style={{ fontSize: '18px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>R</span>
-              </div>
+              <img src="/ravena.png" alt="Ravena" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 16px rgba(139,92,246,0.4)' }} />
               <div>
                 <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>Ravena otimizou suas campanhas</h2>
                 <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>
