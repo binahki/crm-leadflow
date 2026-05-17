@@ -24,6 +24,8 @@ export default function MetaAdsPage() {
   const [metaRevs, setMetaRevs] = useState(50);
   const [modo, setModo] = useState<'conservador'|'equilibrado'|'agressivo'>('equilibrado');
   const [savingRavena, setSavingRavena] = useState(false);
+  const [notifAtiva, setNotifAtiva] = useState(false);
+  const [notifNumero, setNotifNumero] = useState('');
 
   useEffect(() => {
     if (!orgReady) return;
@@ -32,7 +34,7 @@ export default function MetaAdsPage() {
       setLoadingData(true);
       const { data: org } = await supabase
         .from('organizations')
-        .select('meta_account_id, meta_token, ravena_ativa, ravena_budget_mensal, ravena_meta_revendedoras, ravena_modo')
+        .select('meta_account_id, meta_token, ravena_ativa, ravena_budget_mensal, ravena_meta_revendedoras, ravena_modo, ravena_notif_ativa, ravena_notif_numero')
         .eq('id', orgId)
         .single();
       if (org) {
@@ -42,6 +44,8 @@ export default function MetaAdsPage() {
         setBudgetMensal((org as any).ravena_budget_mensal || 5000);
         setMetaRevs((org as any).ravena_meta_revendedoras || 50);
         setModo((org as any).ravena_modo || 'equilibrado');
+        setNotifAtiva(Boolean((org as any).ravena_notif_ativa));
+        setNotifNumero((org as any).ravena_notif_numero || '');
       }
       setLoadingData(false);
     })();
@@ -58,6 +62,8 @@ export default function MetaAdsPage() {
         ravena_budget_mensal: budgetMensal,
         ravena_meta_revendedoras: metaRevs,
         ravena_modo: modo,
+        ravena_notif_ativa: notifAtiva,
+        ravena_notif_numero: notifNumero.replace(/\D/g, ''),
       })
       .eq('id', orgId);
     if (error) {
@@ -266,6 +272,67 @@ export default function MetaAdsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Relatórios e Avisos */}
+            <div style={{ paddingTop: '16px', borderTop: `1px solid ${dark ? '#1e1e22' : '#f3f4f6'}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: txt, margin: 0 }}>Relatórios e Avisos</p>
+                  <p style={{ fontSize: '11px', color: txtMid, margin: '2px 0 0' }}>Receba alertas importantes no WhatsApp</p>
+                </div>
+                <div onClick={() => setNotifAtiva(v => !v)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: notifAtiva ? '#10b981' : txtMid, fontWeight: 600 }}>
+                    {notifAtiva ? 'Ativo' : 'Inativo'}
+                  </span>
+                  <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: notifAtiva ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s' }}>
+                    <div style={{ position: 'absolute', top: '2px', left: notifAtiva ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+              </div>
+
+              {notifAtiva && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <label style={lbl}>WhatsApp para receber avisos</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: txtMid, pointerEvents: 'none' }}>🇧🇷 +55</span>
+                      <input
+                        type="tel"
+                        value={notifNumero}
+                        onChange={e => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                          setNotifNumero(digits);
+                        }}
+                        placeholder="(11) 99999-9999"
+                        style={{ ...inp, paddingLeft: '72px' }}
+                        onFocus={e => (e.target.style.borderColor = '#3b82f6')}
+                        onBlur={e => (e.target.style.borderColor = dark ? '#27272a' : '#e5e7eb')}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(251,191,36,0.08)' : '#fffbeb', border: '1px solid rgba(251,191,36,0.25)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '14px', flexShrink: 0 }}>⏳</span>
+                    <p style={{ fontSize: '11px', color: dark ? '#fcd34d' : '#92400e', margin: 0, lineHeight: 1.5 }}>
+                      Número salvo. Os avisos serão ativados assim que o WhatsApp da Ravena estiver disponível.
+                    </p>
+                  </div>
+                  <div style={{ padding: '10px 14px', borderRadius: '10px', background: dark ? 'rgba(255,255,255,0.02)' : '#f9fafb', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}` }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>O que você vai receber</p>
+                    {[
+                      'Quando a Ravena aumentar ou pausar uma campanha',
+                      'Quando uma campanha tiver queda brusca de performance',
+                      'Relatório semanal com resumo das otimizações',
+                      'Alertas de meta em risco',
+                    ].map((item, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '11px', color: '#10b981', flexShrink: 0, marginTop: '1px' }}>✓</span>
+                        <span style={{ fontSize: '11px', color: txtMid, lineHeight: 1.4 }}>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Aviso agressivo */}
