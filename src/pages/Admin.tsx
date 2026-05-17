@@ -279,10 +279,10 @@ export default function AdminPage() {
     setSavingConta(true);
     const { error } = await supabase.from('contabilidade' as any).insert({
       descricao: contaDescricao,
-      categoria: contaCategoria,
+      categoria: contaCategoria || 'Outros',
       tipo: contaTipo,
-      valor: Number(contaValor),
-      data: contaData,
+      valor: parseFloat(contaValor.replace(',', '.')),
+      data: contaData || new Date().toISOString().slice(0, 10),
     });
     if (error) {
       toast.error('Erro ao salvar: ' + error.message);
