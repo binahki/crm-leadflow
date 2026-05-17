@@ -12,6 +12,7 @@ const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
 const WEBHOOK_BASE = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
 const ATUALIZAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/atualizar-usuario';
 const DELETAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/deletar-usuario';
+const CRIAR_GESTOR_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-gestor';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 const PLANOS = ['basic', 'pro'];
@@ -130,21 +131,34 @@ export default function AdminPage() {
   }
 
   async function handleCreateGestor() {
-    if (!modalGestorNome || !modalGestorEmail || !modalGestorSenha) { toast.error('Preencha todos os campos'); return; }
+    if (!modalGestorNome || !modalGestorEmail || !modalGestorSenha) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
+    if (modalGestorSenha.length < 8) {
+      toast.error('Senha deve ter no mínimo 8 caracteres');
+      return;
+    }
     setCreatingGestor(true);
     try {
-      const res = await fetch(EDGE_URL, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome_empresa: `Gestor: ${modalGestorNome}`, email: modalGestorEmail, senha: modalGestorSenha, tipo: 'gestor' }),
+      const res = await fetch(CRIAR_GESTOR_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: modalGestorNome, email: modalGestorEmail, senha: modalGestorSenha }),
       });
       const data = await res.json();
-      if (!data.ok) { toast.error(data.erro || 'Erro ao criar gestor'); setCreatingGestor(false); return; }
-      const { data: membership } = await supabase.from('memberships').select('user_id').eq('org_id', data.org_id || '').maybeSingle();
-      await supabase.from('gestores').insert({ user_id: (membership as any)?.user_id || data.user_id, nome: modalGestorNome, email: modalGestorEmail, ativo: true });
+      if (!data.ok) {
+        toast.error(data.erro || 'Erro ao criar gestor');
+        setCreatingGestor(false);
+        return;
+      }
       toast.success(`Gestor ${modalGestorNome} criado!`);
-      setShowModalGestor(false); setModalGestorNome(''); setModalGestorEmail(''); setModalGestorSenha('');
+      setShowModalGestor(false);
+      setModalGestorNome(''); setModalGestorEmail(''); setModalGestorSenha('');
       fetchGestores();
-    } catch { toast.error('Erro ao criar gestor'); }
+    } catch {
+      toast.error('Erro de conexão');
+    }
     setCreatingGestor(false);
   }
 
