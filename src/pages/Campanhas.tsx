@@ -1307,9 +1307,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                     <div style={{ height: '100%', width: `${progressoPct}%`, borderRadius: '99px', background: progressoCor, transition: 'width 1s cubic-bezier(0.16,1,0.3,1)' }} />
                   </div>
                 )}
-                <p style={{ fontSize: '11px', color: txtMid, margin: '6px 0 0' }}>
-                  R$ {gastoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} investidos no período
-                </p>
+
               </div>
             );
           })()}
