@@ -32,7 +32,7 @@ export default function MetaAdsPage() {
       setLoadingData(true);
       const { data: org } = await supabase
         .from('organizations')
-        .select('meta_account_id, meta_token')
+        .select('meta_account_id, meta_token, ravena_ativa, ravena_budget_mensal, ravena_meta_revendedoras, ravena_modo')
         .eq('id', orgId)
         .single();
       if (org) {
@@ -50,18 +50,33 @@ export default function MetaAdsPage() {
   async function handleSaveRavena() {
     if (!orgId) return;
     setSavingRavena(true);
+    const novoValor = ravenaAtiva === true;
     const { error } = await supabase
       .from('organizations')
       .update({
-        ravena_ativa: ravenaAtiva ?? false,
+        ravena_ativa: novoValor,
         ravena_budget_mensal: budgetMensal,
         ravena_meta_revendedoras: metaRevs,
         ravena_modo: modo,
       })
       .eq('id', orgId);
+    if (error) {
+      toast.error('Erro ao salvar: ' + error.message);
+    } else {
+      toast.success('Ravena configurada!');
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('ravena_ativa, ravena_budget_mensal, ravena_meta_revendedoras, ravena_modo')
+        .eq('id', orgId)
+        .single();
+      if (org) {
+        setRavenaAtiva(Boolean((org as any).ravena_ativa));
+        setBudgetMensal(Number((org as any).ravena_budget_mensal) || 5000);
+        setMetaRevs(Number((org as any).ravena_meta_revendedoras) || 50);
+        setModo((org as any).ravena_modo || 'equilibrado');
+      }
+    }
     setSavingRavena(false);
-    if (error) toast.error('Erro ao salvar');
-    else toast.success('Ravena configurada!');
   }
 
   async function handleSave() {

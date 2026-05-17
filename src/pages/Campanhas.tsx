@@ -341,6 +341,7 @@ export default function CampanhasPage() {
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const [aiLog, setAiLog] = useState<any>(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [metaRevsOrg, setMetaRevsOrg] = useState(0);
   const [gestorMode, setGestorMode] = useState(false);
   const [selectedCamp, setSelectedCamp] = useState<{
     r: { id: string; name: string; fullName: string; leads: number; rev: number; cpl: number; cpr: number; spend: number; score: number };
@@ -396,6 +397,18 @@ export default function CampanhasPage() {
           const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
           if(horas<=24) setAiLog(log);
         }
+      });
+  },[orgId, orgReady]); // eslint-disable-line
+
+  // Busca meta de revendedoras da org para barra de progresso do painel Ravena
+  useEffect(()=>{
+    if (!orgReady || !orgId) return;
+    supabase.from('organizations')
+      .select('ravena_meta_revendedoras')
+      .eq('id', orgId)
+      .single()
+      .then(({ data }) => {
+        if (data) setMetaRevsOrg(Number((data as any).ravena_meta_revendedoras) || 0);
       });
   },[orgId, orgReady]); // eslint-disable-line
 
@@ -1076,6 +1089,7 @@ export default function CampanhasPage() {
           isMobile={isMobile}
           allLeads={allLeads}
           onClose={() => setShowAiPanel(false)}
+          metaRevs={metaRevsOrg}
         />
       )}
 
@@ -1173,7 +1187,7 @@ export default function CampanhasPage() {
 
 // ── Componentes do Painel de Otimização IA ───────────────────────────────────
 
-function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void }) {
+function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0 }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -1263,7 +1277,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose }: { log: 
           {/* Barra de progresso do mês */}
           {(() => {
             const revsAtual = log.revendedoras_mes || 0;
-            const metaRevs = log.meta_revendedoras || 0;
             const progressoPct = metaRevs > 0 ? Math.min(Math.round((revsAtual / metaRevs) * 100), 100) : 0;
             const diasRestantes = log.dias_restantes || 0;
             const gastoTotal = log.total_gasto || 0;
