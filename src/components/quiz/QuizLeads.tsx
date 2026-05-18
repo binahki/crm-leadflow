@@ -4,7 +4,7 @@ import {
   Users, TrendingUp, Search,
   CheckCircle2, RefreshCw, Zap,
   Smartphone, Monitor, Tablet, ArrowUpRight,
-  ExternalLink,
+  ExternalLink, Filter, X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,6 +26,8 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   const [period, setPeriod] = useState('7d');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deviceFilter, setDeviceFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const textMain = isDark ? '#f4f4f5' : '#111827';
@@ -168,50 +170,82 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         <KPICard label="Conversão"   value={`${stats.taxaConv}%`}  icon={<TrendingUp size={14} />}   color="#6366f1" isDark={isDark} />
       </div>
 
-      {/* Filters */}
-      <div style={{ padding: '0 24px 20px', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <FilterPill label="Hoje"   active={period === 'today'} onClick={() => setPeriod('today')} isDark={isDark} />
-            <FilterPill label="7 dias" active={period === '7d'}    onClick={() => setPeriod('7d')}    isDark={isDark} />
-            <FilterPill label="30 dias" active={period === '30d'}  onClick={() => setPeriod('30d')}   isDark={isDark} />
-            <div style={{ width: '1px', background: border, margin: '0 8px' }} />
-            <FilterPill label="Todos"    active={statusFilter === 'all'}      onClick={() => setStatusFilter('all')}      isDark={isDark} />
-            <FilterPill label="Abandonou" active={statusFilter === 'abandon'} onClick={() => setStatusFilter('abandon')} color="#ef4444" isDark={isDark} />
-            <FilterPill label="Reprovada" active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
-            <FilterPill label="Virou Lead" active={statusFilter === 'lead'}   onClick={() => setStatusFilter('lead')}    color="#10b981" isDark={isDark} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ fontSize: '11px', color: textMut, fontWeight: 600 }}>
-              Atualizado em: {lastUpdated.toLocaleTimeString()}
-            </div>
-            <button
-              onClick={fetchData}
-              style={{ padding: '8px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: textMain, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
+      {/* Filtros — linha principal sempre visível */}
+      <div style={{ padding: '0 24px 16px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flexShrink: 0 }}>
+        <FilterPill label="Hoje"    active={period === 'today'} onClick={() => setPeriod('today')} isDark={isDark} />
+        <FilterPill label="7 dias"  active={period === '7d'}    onClick={() => setPeriod('7d')}    isDark={isDark} />
+        <FilterPill label="30 dias" active={period === '30d'}   onClick={() => setPeriod('30d')}   isDark={isDark} />
+        <div style={{ width: '1px', height: '20px', background: border, margin: '0 4px' }} />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <FilterPill icon={<Monitor size={14} />}    label="Desktop" active={deviceFilter === 'desktop'} onClick={() => setDeviceFilter('desktop')} isDark={isDark} />
-            <FilterPill icon={<Smartphone size={14} />} label="Mobile"  active={deviceFilter === 'mobile'}  onClick={() => setDeviceFilter('mobile')}  isDark={isDark} />
-            <FilterPill icon={<Tablet size={14} />}     label="Tablet"  active={deviceFilter === 'tablet'}  onClick={() => setDeviceFilter('tablet')}  isDark={isDark} />
-            <FilterPill label="Todos os disp." active={deviceFilter === 'all'} onClick={() => setDeviceFilter('all')} isDark={isDark} />
-          </div>
-          <div style={{ position: 'relative' }}>
+        {/* Botão Filtros */}
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${showFilters ? '#2563eb' : border}`, background: showFilters ? 'rgba(37,99,235,0.08)' : 'transparent', color: showFilters ? '#2563eb' : textMut, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+        >
+          <Filter size={13} />
+          Filtros
+          {(statusFilter !== 'all' || deviceFilter !== 'all') && (
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563eb', marginLeft: '2px', display: 'inline-block' }} />
+          )}
+        </button>
+
+        {/* Botão Busca */}
+        <button
+          onClick={() => setShowSearch(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${showSearch || search ? '#2563eb' : border}`, background: showSearch || search ? 'rgba(37,99,235,0.08)' : 'transparent', color: showSearch || search ? '#2563eb' : textMut, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+        >
+          <Search size={13} />
+          {search ? `"${search.slice(0, 12)}${search.length > 12 ? '…' : ''}"` : 'Buscar'}
+        </button>
+
+        {/* Refresh + timestamp — pushed to right */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '11px', color: textMut, fontWeight: 600 }}>
+            Atualizado: {lastUpdated.toLocaleTimeString()}
+          </span>
+          <button onClick={fetchData} style={{ padding: '7px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: textMain, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Painel colapsável — filtros de status e dispositivo */}
+      {showFilters && (
+        <div style={{ padding: '12px 24px 16px', borderTop: `1px solid ${border}`, display: 'flex', gap: '8px', flexWrap: 'wrap', flexShrink: 0, background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
+          <FilterPill label="Todos"      active={statusFilter === 'all'}       onClick={() => setStatusFilter('all')}       isDark={isDark} />
+          <FilterPill label="Abandonou"  active={statusFilter === 'abandon'}   onClick={() => setStatusFilter('abandon')}   color="#ef4444" isDark={isDark} />
+          <FilterPill label="Reprovada"  active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
+          <FilterPill label="Virou Lead" active={statusFilter === 'lead'}      onClick={() => setStatusFilter('lead')}      color="#10b981" isDark={isDark} />
+          <div style={{ width: '1px', height: '20px', background: border, margin: '0 4px' }} />
+          <FilterPill icon={<Monitor size={13} />}    label="Desktop" active={deviceFilter === 'desktop'} onClick={() => setDeviceFilter(deviceFilter === 'desktop' ? 'all' : 'desktop')} isDark={isDark} />
+          <FilterPill icon={<Smartphone size={13} />} label="Mobile"  active={deviceFilter === 'mobile'}  onClick={() => setDeviceFilter(deviceFilter === 'mobile'  ? 'all' : 'mobile')}  isDark={isDark} />
+          <FilterPill icon={<Tablet size={13} />}     label="Tablet"  active={deviceFilter === 'tablet'}  onClick={() => setDeviceFilter(deviceFilter === 'tablet'  ? 'all' : 'tablet')}  isDark={isDark} />
+        </div>
+      )}
+
+      {/* Busca colapsável */}
+      {showSearch && (
+        <div style={{ padding: '10px 24px 14px', borderTop: `1px solid ${border}`, flexShrink: 0 }}>
+          <div style={{ position: 'relative', maxWidth: '400px' }}>
             <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '14px', color: textMut }} />
             <input
+              autoFocus
               placeholder="Buscar por sessão, UTM ou resposta..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ padding: '8px 12px 8px 32px', borderRadius: '10px', border: `1px solid ${border}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: textMain, fontSize: '13px', width: '320px' }}
+              style={{ width: '100%', padding: '8px 36px 8px 32px', borderRadius: '10px', border: `1px solid ${border}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: textMain, fontSize: '13px', outline: 'none' }}
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex' }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Sessions Table — scroll horizontal, perguntas como colunas */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '0 24px 24px' }}>
@@ -259,15 +293,21 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                   <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '90px', borderLeft: `1px solid ${border}` }}>
                     Source
                   </th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '120px' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
                     Campaign
+                  </th>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
+                    Conjunto
+                  </th>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
+                    Anúncio
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSessoes.length === 0 ? (
                   <tr>
-                    <td colSpan={STICKY.length + perguntasOrdenadas.length + 2} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
+                    <td colSpan={STICKY.length + perguntasOrdenadas.length + 4} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
                       Nenhuma sessão encontrada para os filtros selecionados.
                     </td>
                   </tr>
@@ -374,9 +414,17 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `1px solid ${border}` }}>
                           {sess.utm_source || '—'}
                         </td>
-                        {/* UTM Campaign */}
+                        {/* UTM Campaign — nome sem ID */}
                         <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {sess.utm_campaign || '—'}
+                          {sess.utm_campaign?.split('|')[0] || '—'}
+                        </td>
+                        {/* Conjunto (utm_content parte 0) */}
+                        <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {sess.utm_content?.split('|')[0] || '—'}
+                        </td>
+                        {/* Anúncio (utm_content parte 1) */}
+                        <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {sess.utm_content?.split('|')[1] || '—'}
                         </td>
                       </tr>
                     );
