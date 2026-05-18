@@ -52,7 +52,7 @@ async function fetchCreatives(
   try {
     const adsRes = await fetch(
       `https://graph.facebook.com/v18.0/act_${metaAccount}/ads` +
-        `?fields=id,name,status,adset{name},campaign{name,id},creative{id,thumbnail_url,image_url,video_id,image_hash}` +
+        `?fields=id,name,status,adset{name},campaign{name,id},creative{id,name,title,thumbnail_url,image_url,video_id,image_hash,picture}` +
         `&limit=100&access_token=${metaToken}`,
     );
     const adsData = await adsRes.json();
@@ -90,12 +90,21 @@ async function fetchCreatives(
             ad.creative?.id ||
             ad.id;
 
+          const thumbnail =
+            ad.creative?.picture ||
+            ad.creative?.thumbnail_url ||
+            ad.creative?.image_url ||
+            null;
+
+          const creativeName =
+            ad.creative?.name || ad.creative?.title || ad.name;
+
           if (!groups.has(key)) {
             groups.set(key, {
               video_id: ad.creative?.video_id || null,
               image_hash: ad.creative?.image_hash || null,
               creative_id: ad.creative?.id || ad.id,
-              thumbnail_url: ad.creative?.thumbnail_url || ad.creative?.image_url || null,
+              thumbnail_url: thumbnail,
               ad_ids: [],
               ad_names: [],
               campaigns: [],
@@ -114,7 +123,7 @@ async function fetchCreatives(
 
           const g = groups.get(key)!;
           g.ad_ids.push(ad.id);
-          if (!g.ad_names.includes(ad.name)) g.ad_names.push(ad.name);
+          if (!g.ad_names.includes(creativeName)) g.ad_names.push(creativeName);
           if (ad.campaign?.id && !g.campaign_ids.includes(ad.campaign.id)) {
             g.campaign_ids.push(ad.campaign.id);
             g.campaigns.push(ad.campaign?.name || '—');
@@ -154,17 +163,32 @@ async function fetchCreatives(
 // ─── revendedoras ────────────────────────────────────────────────────────────
 
 function getGroupRevs(g: CreativeGroup, leads: any[]): { count: number; cpr: number } {
-  const campNames = g.campaigns.map((c) => c.toLowerCase().split('|')[0].trim());
   const matched = leads.filter((l: any) => {
-    const utmCamp = (l.utm_campaign || '').toLowerCase().split('|')[0].trim();
-    return campNames.some(
-      (cn) => cn.length > 3 && (utmCamp === cn || utmCamp.includes(cn.slice(0, 20))),
-    );
+    const utmRaw = (l.utm_campaign || '').trim();
+    const utm = utmRaw.toLowerCase().split('|')[0].trim();
+    if (!utm || utm.length < 3) return false;
+
+    return g.campaigns.some((campName) => {
+      const cn = campName.toLowerCase().split('|')[0].trim();
+      if (!cn || cn.length < 3) return false;
+
+      // Match exato
+      if (utm === cn) return true;
+
+      // Match por ID numérico no UTM bruto
+      if (g.campaign_ids.some((id) => utmRaw.includes(id))) return true;
+
+      // Match parcial — primeiros 25 chars
+      const cnSlice = cn.slice(0, 25);
+      if (utm.includes(cnSlice) || cnSlice.includes(utm.slice(0, 25))) return true;
+
+      return false;
+    });
   });
   const revs = matched.filter((l: any) => Number(l.status) === 3);
   return {
     count: revs.length,
-    cpr: revs.length > 0 && g.spend > 0 ? g.spend / revs.length : 0,
+    cpr: revs.length > 0 && g.spend > 0 ? Math.round((g.spend / revs.length) * 100) / 100 : 0,
   };
 }
 
@@ -397,7 +421,7 @@ function CreativeCard({
       <div
         style={{
           position: 'relative',
-          aspectRatio: '16/9',
+          aspectRatio: '9/16',
           background: dark ? '#1a1a1e' : '#f3f4f6',
           overflow: 'hidden',
         }}
@@ -406,7 +430,7 @@ function CreativeCard({
           <img
             src={g.thumbnail_url}
             alt={g.ad_names[0]}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
