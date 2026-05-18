@@ -418,13 +418,13 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {sess.utm_campaign?.split('|')[0] || '—'}
                         </td>
-                        {/* Conjunto (utm_content parte 0) */}
+                        {/* Conjunto (utm_medium = adset name no Meta) */}
                         <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {sess.utm_content?.split('|')[0] || '—'}
+                          {sess.utm_medium || '—'}
                         </td>
-                        {/* Anúncio (utm_content parte 1) */}
+                        {/* Anúncio (utm_content = ad name no Meta) */}
                         <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {sess.utm_content?.split('|')[1] || '—'}
+                          {sess.utm_content || '—'}
                         </td>
                       </tr>
                     );
