@@ -339,6 +339,7 @@ export default function CriativosPage() {
   const [sortBy, setSortBy] = useState<SortKey>('leads');
   const [isMobile, setIsMobile] = useState(false);
   const [allLeads, setAllLeads] = useState<any[]>([]);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -453,8 +454,10 @@ export default function CriativosPage() {
       g2.sort((a, b) => getGroupRevs(b, allLeads, datePreset).count - getGroupRevs(a, allLeads, datePreset).count);
     else if (sortBy === 'fadiga')
       g2.sort((a, b) => getFadigaScore(b).pct - getFadigaScore(a).pct);
-    return g2.slice(0, 10);
+    return g2;
   }, [groups, sortBy, allLeads, datePreset]);
+
+  useEffect(() => { setShowAll(false); }, [datePreset, sortBy]);
 
   // cores
   const bg = dark ? '#090909' : '#f4f4f5';
@@ -561,14 +564,18 @@ export default function CriativosPage() {
         {/* Tabela compacta */}
         {!loading && sorted.length > 0 && (
           <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, overflow: 'hidden', marginBottom: '20px' }}>
-            {sorted.map((g, i) => {
+            {(() => {
+              const visibleGroups = showAll ? sorted : sorted.slice(0, 5);
+              return (
+                <>
+                  {visibleGroups.map((g, i) => {
               const fadiga = getFadigaScore(g);
               const revs = getGroupRevs(g, allLeads, datePreset);
               const isTop = i === 0;
               return (
                 <div
                   key={g.creative_id + i}
-                  style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', borderBottom: i < sorted.length - 1 ? `1px solid ${border}` : 'none', background: isTop ? (dark ? 'rgba(251,191,36,0.05)' : '#fffdf0') : i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'), transition: 'background 0.12s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', borderBottom: `1px solid ${border}`, background: isTop ? (dark ? 'rgba(251,191,36,0.05)' : '#fffdf0') : i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'), transition: 'background 0.12s' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = isTop ? (dark ? 'rgba(251,191,36,0.05)' : '#fffdf0') : i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'))}
                 >
@@ -650,6 +657,17 @@ export default function CriativosPage() {
                 </div>
               );
             })}
+                  {sorted.length > 5 && (
+                    <button
+                      onClick={() => setShowAll((v) => !v)}
+                      style={{ display: 'block', width: '100%', padding: '14px', background: 'transparent', border: 'none', borderTop: `1px solid ${border}`, cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#8b5cf6', textAlign: 'center' }}
+                    >
+                      {showAll ? `Ver menos` : `Ver mais (${sorted.length - 5} criativos)`}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
