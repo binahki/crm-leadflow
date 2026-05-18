@@ -483,6 +483,16 @@ export default function Dashboard() {
       }
     }).length;
   }, [allLeads, selectedPeriod, customFrom, customTo]);
+  const approvedThisMonth = useMemo(() => {
+    const today = todayBR();
+    const firstDay = today.slice(0, 7) + '-01';
+    return allLeads.filter(l => {
+      if (toNum(l.status) !== 3) return false;
+      const changeDate = (l as any).ultimo_status_change || l.created_at;
+      const d = leadDateBR(changeDate);
+      return !!d && d >= firstDay && d <= today;
+    }).length;
+  }, [allLeads]);
   const convRate = totalLeads>0 ? safe((approved/totalLeads)*100).toFixed(1) : '0.0';
   const spend = metaMetrics.spend||0;
   const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
@@ -621,16 +631,16 @@ export default function Dashboard() {
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
             <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 6px' }}>Revendedoras</p>
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 8px' }}>
-              {loading ? '…' : approved}
+              {loading ? '…' : approvedThisMonth}
               {metaOrg.revs > 0 && <span style={{ fontSize:'13px', fontWeight:400, color:txtLow }}>/{metaOrg.revs}</span>}
             </p>
             {metaOrg.revs > 0 ? (
               <>
                 <div style={{ height:'4px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', marginBottom:'4px' }}>
-                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((approved/metaOrg.revs)*100),100)}%`, background: approved/metaOrg.revs >= 0.8 ? '#10b981' : approved/metaOrg.revs >= 0.5 ? '#f59e0b' : '#ef4444', transition:'width 0.8s ease' }}/>
+                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((approvedThisMonth/metaOrg.revs)*100),100)}%`, background: approvedThisMonth/metaOrg.revs >= 0.8 ? '#10b981' : approvedThisMonth/metaOrg.revs >= 0.5 ? '#f59e0b' : '#ef4444', transition:'width 0.8s ease' }}/>
                 </div>
                 <p style={{ fontSize:'11px', color:txtLow, margin:0 }}>
-                  {Math.round((approved/metaOrg.revs)*100)}% da meta · revendedoras
+                  {Math.round((approvedThisMonth/metaOrg.revs)*100)}% da meta · revendedoras
                 </p>
               </>
             ) : (
