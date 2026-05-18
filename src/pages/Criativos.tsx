@@ -381,10 +381,61 @@ export default function CriativosPage() {
   const avgCPL = totalLeads > 0 ? totalSpend / totalLeads : 0;
   const avgFrequency = groups.length > 0 ? groups.reduce((s, g) => s + g.frequency, 0) / groups.length : 0;
 
-  const totalRevs = useMemo(
-    () => groups.reduce((s, g) => s + getGroupRevs(g, allLeads, datePreset).count, 0),
-    [groups, allLeads, datePreset],
-  );
+  const totalRevs = useMemo(() => {
+    const agora = Date.now();
+    const getPeriodStart = () => {
+      switch (datePreset) {
+        case 'today': return new Date().setHours(0, 0, 0, 0);
+        case 'yesterday': {
+          const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0, 0, 0, 0);
+          return y.getTime();
+        }
+        case 'last_7d': return agora - 7 * 24 * 60 * 60 * 1000;
+        case 'last_30d': return agora - 30 * 24 * 60 * 60 * 1000;
+        case 'this_month':
+          return new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+        default: return agora - 7 * 24 * 60 * 60 * 1000;
+      }
+    };
+    const periodStart = getPeriodStart();
+
+    // Agrega todas as campanhas de todos os grupos
+    const allCampNames = new Set<string>();
+    const allCampIds = new Set<string>();
+    groups.forEach((g) => {
+      g.campaigns.forEach((c) => allCampNames.add(c.toLowerCase().split('|')[0].trim()));
+      g.campaign_ids.forEach((id) => allCampIds.add(id));
+    });
+
+    // Set de IDs garante que cada lead aprovado é contado uma única vez
+    const revsIds = new Set<string>();
+    for (const l of allLeads) {
+      if (Number(l.status) !== 3) continue;
+      const changeDate = l.ultimo_status_change || l.created_at;
+      if (!changeDate) continue;
+      const ts = new Date(changeDate).getTime();
+      let noperiodo = false;
+      if (datePreset === 'yesterday') {
+        const endOfYesterday = new Date(); endOfYesterday.setHours(0, 0, 0, 0);
+        noperiodo = ts >= periodStart && ts < endOfYesterday.getTime();
+      } else {
+        noperiodo = ts >= periodStart && ts <= agora;
+      }
+      if (!noperiodo) continue;
+      const utmRaw = (l.utm_campaign || '').trim();
+      const utm = utmRaw.toLowerCase().split('|')[0].trim();
+      if (!utm || utm.length < 3) continue;
+      const bate =
+        Array.from(allCampNames).some((cn) => {
+          if (!cn || cn.length < 3) return false;
+          if (utm === cn) return true;
+          const cnSlice = cn.slice(0, 25);
+          return utm.includes(cnSlice) || cnSlice.includes(utm.slice(0, 25));
+        }) || Array.from(allCampIds).some((id) => utmRaw.includes(id));
+      if (bate) revsIds.add(l.id);
+    }
+    return revsIds.size;
+  }, [groups, allLeads, datePreset]);
 
   const top5 = useMemo(
     () => [...groups].filter((g) => g.leads > 0 || g.spend > 0).slice(0, 5),
