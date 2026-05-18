@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
@@ -802,14 +802,24 @@ export default function Dashboard() {
             {chartData.length > 0 && <>
               <div style={{ width:'100%', height:isMobile ? 160 : 200, minHeight:120 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }} barCategoryGap="35%" barGap={3}>
+                  <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
+                    <defs>
+                      <linearGradient id="leads-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.18}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="revs-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.18}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
                     <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
                     <YAxis allowDecimals={false} tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false} width={24}/>
                     <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }} formatter={(value: any, name: string) => [value, name === 'leads' ? 'Leads' : 'Revendedoras']}/>
-                    <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4,4,0,0]} maxBarSize={24} animationDuration={600}/>
-                    <Bar dataKey="revs" name="Revendedoras" fill="#10b981" radius={[4,4,0,0]} maxBarSize={24} animationDuration={600}/>
-                  </BarChart>
+                    <Area type="monotone" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#leads-gradient)" dot={false} activeDot={{ r:4, strokeWidth:0 }} animationDuration={600}/>
+                    <Area type="monotone" dataKey="revs" name="revs" stroke="#10b981" strokeWidth={2} fill="url(#revs-gradient)" dot={false} activeDot={{ r:4, strokeWidth:0 }} animationDuration={600}/>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
               <div style={{ display:'flex', gap:'20px', justifyContent:'center', marginTop:'10px' }}>
@@ -828,7 +838,7 @@ export default function Dashboard() {
             <p style={{ fontSize:'11px', color:txtLow, marginBottom:'16px' }}>{periodLabel}</p>
             <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
               {funnelData.map(stage=>{
-                const pct=totalLeads>0?Math.round((stage.value/Math.max(totalLeads,1))*100):0;
+                const pct=totalLeads>0?Math.min(Math.round((stage.value/Math.max(totalLeads,1))*100),100):0;
                 return (
                   <div key={stage.stage} style={{ background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.01)', border:`1px solid ${border}`, borderRadius:'10px', padding:'12px 14px 14px', position:'relative', overflow:'hidden' }}>
                     <div style={{ position:'absolute', left:0, top:0, bottom:0, width:'4px', background:stage.color }}/>
