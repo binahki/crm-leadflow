@@ -168,7 +168,10 @@ function getGroupRevs(
   const getPeriodStart = () => {
     switch (datePreset) {
       case 'today': return new Date().setHours(0, 0, 0, 0);
-      case 'yesterday': return agora - 2 * 24 * 60 * 60 * 1000;
+      case 'yesterday': {
+        const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0, 0, 0, 0);
+        return y.getTime();
+      }
       case 'last_7d': return agora - 7 * 24 * 60 * 60 * 1000;
       case 'last_30d': return agora - 30 * 24 * 60 * 60 * 1000;
       case 'this_month':
@@ -178,12 +181,14 @@ function getGroupRevs(
   };
   const periodStart = getPeriodStart();
 
-  const matched = leads.filter((l: any) => {
+  // Set evita que um lead bata com múltiplas campanhas e seja contado mais de uma vez
+  const matchedIds = new Set<string>();
+  for (const l of leads) {
+    if (matchedIds.has(l.id)) continue;
     const utmRaw = (l.utm_campaign || '').trim();
     const utm = utmRaw.toLowerCase().split('|')[0].trim();
-    if (!utm || utm.length < 3) return false;
-
-    return g.campaigns.some((campName) => {
+    if (!utm || utm.length < 3) continue;
+    const bate = g.campaigns.some((campName) => {
       const cn = campName.toLowerCase().split('|')[0].trim();
       if (!cn || cn.length < 3) return false;
       if (utm === cn) return true;
@@ -192,13 +197,19 @@ function getGroupRevs(
       if (utm.includes(cnSlice) || cnSlice.includes(utm.slice(0, 25))) return true;
       return false;
     });
-  });
+    if (bate) matchedIds.add(l.id);
+  }
 
-  const revs = matched.filter((l: any) => {
+  const matchedLeads = leads.filter((l) => matchedIds.has(l.id));
+  const revs = matchedLeads.filter((l: any) => {
     if (Number(l.status) !== 3) return false;
     const changeDate = l.ultimo_status_change || l.created_at;
     if (!changeDate) return false;
     const ts = new Date(changeDate).getTime();
+    if (datePreset === 'yesterday') {
+      const endOfYesterday = new Date(); endOfYesterday.setHours(0, 0, 0, 0);
+      return ts >= periodStart && ts < endOfYesterday.getTime();
+    }
     return ts >= periodStart && ts <= agora;
   });
 
