@@ -1,4 +1,15 @@
 import { useState, useMemo, useEffect } from 'react';
+
+function formatDateBR(dateStr: string): string {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 import { supabase } from '@/integrations/supabase/client';
 import {
   Users, TrendingUp, Search,
@@ -201,7 +212,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         {/* Refresh + timestamp — pushed to right */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: textMut, fontWeight: 600 }}>
-            Atualizado: {lastUpdated.toLocaleTimeString()}
+            Atualizado: {lastUpdated.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
           </span>
           <button onClick={fetchData} style={{ padding: '7px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: textMain, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
@@ -346,7 +357,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         </td>
                         {/* Data */}
                         <td style={{ position: 'sticky', left: STICKY[2].left, zIndex: 1, background: cardBg, width: STICKY[2].width, padding: '12px', color: textMut, whiteSpace: 'nowrap', fontSize: '12px' }}>
-                          {new Date(sess.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {formatDateBR(sess.created_at)}
                         </td>
                         {/* Dispositivo */}
                         <td style={{ position: 'sticky', left: STICKY[3].left, zIndex: 1, background: cardBg, width: STICKY[3].width, padding: '12px 8px', textAlign: 'center', color: textMut }}>
