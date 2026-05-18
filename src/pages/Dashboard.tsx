@@ -805,30 +805,17 @@ export default function Dashboard() {
                   <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
                     <defs>
                       <linearGradient id="leads-gradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.18}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="revs-gradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.18}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.22}/>
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
                     <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
                     <YAxis allowDecimals={false} tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false} width={24}/>
-                    <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }} formatter={(value: any, name: string) => [value, name === 'leads' ? 'Leads' : 'Revendedoras']}/>
-                    <Area type="monotone" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#leads-gradient)" dot={false} activeDot={{ r:4, strokeWidth:0 }} animationDuration={600}/>
-                    <Area type="monotone" dataKey="revs" name="revs" stroke="#10b981" strokeWidth={2} fill="url(#revs-gradient)" dot={false} activeDot={{ r:4, strokeWidth:0 }} animationDuration={600}/>
+                    <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }} formatter={(value: any) => [value, 'Leads']}/>
+                    <Area type="monotoneX" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r:5, strokeWidth:0, fill:'#3b82f6' }} animationDuration={800}/>
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-              <div style={{ display:'flex', gap:'20px', justifyContent:'center', marginTop:'10px' }}>
-                {[{ color:'#3b82f6', label:'Leads' }, { color:'#10b981', label:'Revendedoras' }].map(({ color, label }) => (
-                  <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                    <div style={{ width:'10px', height:'10px', borderRadius:'3px', background:color }}/>
-                    <span style={{ fontSize:'11px', color:txtMid, fontWeight:500 }}>{label}</span>
-                  </div>
-                ))}
               </div>
             </>}
           </div>
