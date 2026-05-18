@@ -278,6 +278,7 @@ export default function Dashboard() {
   const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState(false);
+  const [spendThisMonth, setSpendThisMonth] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
 
@@ -405,6 +406,21 @@ export default function Dashboard() {
     const leads = allLeadsRef.current;
     if (leads.length > 0) loadMeta(leads);
   }, [selectedPeriod, customFrom, customTo]); // eslint-disable-line
+
+  // Gasto do mês corrente (independente do filtro de período)
+  useEffect(() => {
+    if (!metaToken || !metaAccount) return;
+    fetch(
+      `https://graph.facebook.com/v18.0/act_${metaAccount}/insights` +
+      `?fields=spend&date_preset=this_month&access_token=${metaToken}`
+    )
+      .then(r => r.json())
+      .then(data => {
+        const s = parseFloat(data.data?.[0]?.spend || '0');
+        setSpendThisMonth(s);
+      })
+      .catch(() => {});
+  }, [metaToken, metaAccount]);
 
   useEffect(() => { if(!orgReady||!orgId)return; const ch=supabase.channel(`dash-rt-${orgId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>[p.new as Lead,...prev]);}).on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l));}).on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id));}).subscribe(); return()=>{supabase.removeChannel(ch);}; }, [orgId,orgReady]); // eslint-disable-line
 
@@ -646,7 +662,7 @@ export default function Dashboard() {
                 <span style={{ fontSize:'11px', color:txtLow }}>revendedoras</span>
               </div>
               {metaOrg.revs > 0 && (
-                <span style={{ fontSize:'12px', fontWeight:700, color: approvedThisMonth/metaOrg.revs >= 0.8 ? '#10b981' : approvedThisMonth/metaOrg.revs >= 0.5 ? '#f59e0b' : '#ef4444' }}>
+                <span style={{ fontSize:'12px', fontWeight:600, color: txtMid }}>
                   {Math.round((approvedThisMonth/metaOrg.revs)*100)}% da meta
                 </span>
               )}
@@ -665,8 +681,8 @@ export default function Dashboard() {
                 <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
               </div>
               {metaOrg.budget > 0 && (
-                <span style={{ fontSize:'12px', fontWeight:700, color: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981' }}>
-                  {Math.round((spend/metaOrg.budget)*100)}% do orçamento
+                <span style={{ fontSize:'12px', fontWeight:600, color: txtMid }}>
+                  {Math.round((spendThisMonth/metaOrg.budget)*100)}% do orçamento mensal
                 </span>
               )}
             </div>
