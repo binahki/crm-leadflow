@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
@@ -155,6 +155,72 @@ function buildChartData(leads: Lead[], period: string, from?: string, to?: strin
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       return { date: `${day}/${month}`, leads: cnt };
     } catch { return { date: '—', leads: cnt }; }
+  });
+}
+
+function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?: string) {
+  const today = todayBR();
+  let days = 30;
+  let startDate = subDays(today, 29);
+  if (period === 'today')          { days = 1; startDate = today; }
+  else if (period === 'yesterday') { days = 1; startDate = subDays(today, 1); }
+  else if (period === '7days')     { days = 7; startDate = subDays(today, 6); }
+  else if (period === '30days')    { days = 30; startDate = subDays(today, 29); }
+  else if (period === 'month')     { startDate = today.slice(0,7) + '-01'; days = parseInt(today.slice(8,10)); }
+  else if (period === 'custom' && from && to) {
+    startDate = from;
+    const ms = new Date(to+'T12:00:00Z').getTime() - new Date(from+'T12:00:00Z').getTime();
+    days = Math.max(1, Math.round(ms/86400000)+1);
+  }
+  if (days === 1) {
+    const slots: Record<string, { leads: number; revs: number }> = {};
+    for (let h = 0; h < 24; h += 2) slots[`${String(h).padStart(2,'0')}h`] = { leads: 0, revs: 0 };
+    allLeads.forEach(l => {
+      try {
+        if (leadDateBR(l.created_at) !== startDate) return;
+        const d = parseLeadDate(l.created_at);
+        if (!d || isNaN(d.getTime())) return;
+        const sh = Math.floor(d.getHours() / 2) * 2;
+        const k = `${String(sh).padStart(2,'0')}h`;
+        if (k in slots) slots[k].leads++;
+      } catch {}
+    });
+    allLeads.filter(l => toNum(l.status) === 3).forEach(l => {
+      try {
+        const ref = (l as any).ultimo_status_change || l.created_at;
+        if (leadDateBR(ref) !== startDate) return;
+        const d = parseLeadDate(ref);
+        if (!d || isNaN(d.getTime())) return;
+        const sh = Math.floor(d.getHours() / 2) * 2;
+        const k = `${String(sh).padStart(2,'00')}h`;
+        if (k in slots) slots[k].revs++;
+      } catch {}
+    });
+    return Object.entries(slots).map(([date, v]) => ({ date, ...v }));
+  }
+  const dayMap: Record<string, { leads: number; revs: number }> = {};
+  for (let i = 0; i < days; i++) {
+    try {
+      const d = new Date(startDate + 'T12:00:00Z');
+      if (isNaN(d.getTime())) continue;
+      d.setUTCDate(d.getUTCDate() + i);
+      if (isNaN(d.getTime())) continue;
+      dayMap[d.toISOString().slice(0, 10)] = { leads: 0, revs: 0 };
+    } catch {}
+  }
+  allLeads.forEach(l => { const k = leadDateBR(l.created_at); if (k && k in dayMap) dayMap[k].leads++; });
+  allLeads.filter(l => toNum(l.status) === 3).forEach(l => {
+    const ref = (l as any).ultimo_status_change || l.created_at;
+    const k = leadDateBR(ref);
+    if (k && k in dayMap) dayMap[k].revs++;
+  });
+  return Object.entries(dayMap).map(([iso, v]) => {
+    try {
+      const d = new Date(iso + 'T12:00:00Z');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      return { date: `${day}/${month}`, ...v };
+    } catch { return { date: '—', ...v }; }
   });
 }
 
@@ -511,7 +577,7 @@ export default function Dashboard() {
   }, [allLeads]);
   const convRate = totalLeads>0 ? safe((approved/totalLeads)*100).toFixed(1) : '0.0';
   const spend = metaMetrics.spend||0;
-  const chartData = useMemo(() => buildChartData(filtered, selectedPeriod, customFrom, customTo), [filtered, selectedPeriod, customFrom, customTo]);
+  const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo), [allLeads, selectedPeriod, customFrom, customTo]);
   // Funil: cada status conta pelo timestamp específico daquele status
   const funnelData = useMemo(() => {
     return FUNNEL_CONFIG.map(f => {
@@ -675,16 +741,9 @@ export default function Dashboard() {
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
               {metaLoading ? '…' : `R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}
             </p>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
-                <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
-              </div>
-              {metaOrg.budget > 0 && (
-                <span style={{ fontSize:'12px', fontWeight:600, color: txtMid }}>
-                  {Math.round((spendThisMonth/metaOrg.budget)*100)}% do orçamento mensal
-                </span>
-              )}
+            <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+              <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+              <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
             </div>
           </div>
 
@@ -740,18 +799,28 @@ export default function Dashboard() {
                 <MoreHorizontal style={{ width:'14px', height:'14px', color:txtLow }}/>
               </button>
             </div>
-            {chartData.length > 0 && <div style={{ width:'100%', height:isMobile ? 160 : 200, minHeight:120 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }}>
-                  <defs><linearGradient id="glLeads" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
-                  <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
-                  <YAxis allowDecimals={false} tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false} width={24}/>
-                  <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }}/>
-                  <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={2} fill="url(#glLeads)" name="Leads"/>
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>}
+            {chartData.length > 0 && <>
+              <div style={{ width:'100%', height:isMobile ? 160 : 200, minHeight:120 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top:10, right:10, left:-20, bottom:0 }} barCategoryGap="35%" barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false}/>
+                    <XAxis dataKey="date" tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false}/>
+                    <YAxis allowDecimals={false} tick={{ fill:txtLow, fontSize:10 }} axisLine={false} tickLine={false} width={24}/>
+                    <Tooltip contentStyle={{ background:cardBg, border:`1px solid ${border}`, borderRadius:'10px', fontSize:'12px', color:txtHi }} formatter={(value: any, name: string) => [value, name === 'leads' ? 'Leads' : 'Revendedoras']}/>
+                    <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4,4,0,0]} maxBarSize={24} animationDuration={600}/>
+                    <Bar dataKey="revs" name="Revendedoras" fill="#10b981" radius={[4,4,0,0]} maxBarSize={24} animationDuration={600}/>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ display:'flex', gap:'20px', justifyContent:'center', marginTop:'10px' }}>
+                {[{ color:'#3b82f6', label:'Leads' }, { color:'#10b981', label:'Revendedoras' }].map(({ color, label }) => (
+                  <div key={label} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                    <div style={{ width:'10px', height:'10px', borderRadius:'3px', background:color }}/>
+                    <span style={{ fontSize:'11px', color:txtMid, fontWeight:500 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </>}
           </div>
 
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'16px':'24px', border:`1px solid ${border}`, position:'relative', overflow:'hidden' }}>
@@ -767,7 +836,7 @@ export default function Dashboard() {
                       <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>{stage.stage}</span>
                       <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'24px' }}>
                         <span style={{ fontSize:'18px', fontWeight:700, color:txtHi }}>{loading?'…':stage.value}</span>
-                        <div style={{ padding:'4px 10px', borderRadius:'8px', background:stage.color+'10', color:stage.color, fontSize:'11px', fontWeight:800, minWidth:'40px', textAlign:'center' }}>{loading?'…':`${pct}%`}</div>
+                        <div title={`${stage.value} leads neste estágio de ${totalLeads} captados no período`} style={{ padding:'4px 10px', borderRadius:'8px', background:stage.color+'10', color:stage.color, fontSize:'11px', fontWeight:800, minWidth:'40px', textAlign:'center' }}>{loading?'…':`${pct}%`}</div>
                       </div>
                     </div>
                     <div style={{ width:'100%', height:'5px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', borderRadius:'10px' }}>
