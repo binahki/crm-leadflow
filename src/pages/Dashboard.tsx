@@ -617,53 +617,51 @@ export default function Dashboard() {
         {/* Metric Cards */}
         <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
 
-          {/* Card 1: META DO MÊS */}
+          {/* Card 1: REVENDEDORAS + barra de meta */}
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 8px' }}>Meta do mês</p>
-            <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:'6px' }}>
-              <p style={{ fontSize:isMobile?'16px':'22px', fontWeight:700, color:txtHi, margin:0, letterSpacing:'-0.02em' }}>
-                {loading ? '…' : approved}
-                {metaOrg.revs > 0 && <span style={{ fontSize:'13px', fontWeight:400, color:txtLow }}>/{metaOrg.revs}</span>}
-              </p>
-              {metaOrg.revs > 0 && (
-                <span style={{ fontSize:'11px', fontWeight:600, color: approved >= metaOrg.revs ? '#10b981' : approved/metaOrg.revs >= 0.7 ? '#f59e0b' : txtLow }}>
-                  {Math.round((approved/metaOrg.revs)*100)}%
-                </span>
-              )}
-            </div>
-            {metaOrg.revs > 0 && (
-              <div style={{ height:'3px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', marginBottom:'10px' }}>
-                <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((approved/metaOrg.revs)*100),100)}%`, background: approved >= metaOrg.revs ? '#10b981' : approved/metaOrg.revs >= 0.7 ? '#f59e0b' : '#3b82f6' }}/>
-              </div>
-            )}
-            {metaOrg.budget > 0 && spend > 0 && (
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 6px' }}>Revendedoras</p>
+            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 8px' }}>
+              {loading ? '…' : approved}
+              {metaOrg.revs > 0 && <span style={{ fontSize:'13px', fontWeight:400, color:txtLow }}>/{metaOrg.revs}</span>}
+            </p>
+            {metaOrg.revs > 0 ? (
               <>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <span style={{ fontSize:'10px', color:txtLow }}>Investimento</span>
-                  <span style={{ fontSize:'11px', fontWeight:600, color: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981' }}>
-                    {Math.round((spend/metaOrg.budget)*100)}%
-                  </span>
+                <div style={{ height:'4px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', marginBottom:'4px' }}>
+                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((approved/metaOrg.revs)*100),100)}%`, background: approved/metaOrg.revs >= 0.8 ? '#10b981' : approved/metaOrg.revs >= 0.5 ? '#f59e0b' : '#ef4444', transition:'width 0.8s ease' }}/>
                 </div>
-                <div style={{ height:'3px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', margin:'4px 0' }}>
-                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((spend/metaOrg.budget)*100),100)}%`, background: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981' }}/>
-                </div>
-                <p style={{ fontSize:'10px', color:txtLow, margin:'4px 0 0' }}>
-                  R$ {spend.toLocaleString('pt-BR',{minimumFractionDigits:2})} / R$ {metaOrg.budget.toLocaleString('pt-BR')}
+                <p style={{ fontSize:'11px', color:txtLow, margin:0 }}>
+                  {Math.round((approved/metaOrg.revs)*100)}% da meta · revendedoras
                 </p>
               </>
+            ) : (
+              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+                <span style={{ fontSize:'11px', color:txtLow }}>aprovadas</span>
+              </div>
             )}
           </div>
 
-          {/* Card 2: GASTO TOTAL */}
+          {/* Card 2: GASTO TOTAL + barra de investimento */}
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Gasto Total</p>
-            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 6px' }}>Gasto Total</p>
+            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 8px' }}>
               {metaLoading ? '…' : `R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}
             </p>
-            <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-              <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
-              <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
-            </div>
+            {metaOrg.budget > 0 ? (
+              <>
+                <div style={{ height:'4px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', marginBottom:'4px' }}>
+                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((spend/metaOrg.budget)*100),100)}%`, background: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981', transition:'width 0.8s ease' }}/>
+                </div>
+                <p style={{ fontSize:'11px', color:txtLow, margin:0 }}>
+                  {Math.round((spend/metaOrg.budget)*100)}% do budget · R$ {metaOrg.budget.toLocaleString('pt-BR')}
+                </p>
+              </>
+            ) : (
+              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+                <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
+              </div>
+            )}
           </div>
 
           {/* Card 3: LEADS + CPL */}
