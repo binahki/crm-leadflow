@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Users, TrendingUp, Search, Clock, ChevronRight,
-  CheckCircle2, RefreshCw, HelpCircle, Zap,
+import {
+  Users, TrendingUp, Search,
+  CheckCircle2, RefreshCw, Zap,
   Smartphone, Monitor, Tablet, ArrowUpRight,
-  ChevronDown, ExternalLink, Filter, User
+  ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +14,7 @@ interface QuizLeadsProps {
   theme: 'light' | 'dark';
 }
 
-export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
+export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState<any>(null);
@@ -26,7 +26,6 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
   const [period, setPeriod] = useState('7d');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deviceFilter, setDeviceFilter] = useState('all');
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const textMain = isDark ? '#f4f4f5' : '#111827';
@@ -34,6 +33,7 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
   const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   const cardBg = isDark ? '#141416' : '#ffffff';
   const pageBg = isDark ? '#0d0d0f' : '#f8fafc';
+  const headBg = isDark ? 'rgba(255,255,255,0.02)' : '#f9fafb';
 
   const fetchData = async () => {
     setLoading(true);
@@ -49,13 +49,12 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
 
       if (pData.data) {
         setPerguntas(pData.data);
-        const pergIds = pData.data.map(p => p.id);
+        const pergIds = pData.data.map((p: any) => p.id);
         const { data: oData } = await supabase.from('quiz_opcoes').select('*').in('pergunta_id', pergIds);
         if (oData) setOpcoes(oData);
       }
-      
-      if (sData.data) setSessoes(sData.data);
 
+      if (sData.data) setSessoes(sData.data);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -66,24 +65,19 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
 
   useEffect(() => {
     fetchData();
-
     const channel = supabase
       .channel(`quiz-sessoes-full-${quizId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_sessoes' }, () => {
-        fetchData();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_sessoes' }, () => { fetchData(); })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [quizId]);
 
-  // Score Calculation Map
   const scoreMap = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
-    perguntas.forEach(p => {
+    perguntas.forEach((p: any) => {
       const pText = p.texto.trim();
       map[pText] = {};
-      opcoes.filter(o => o.pergunta_id === p.id).forEach(o => {
+      opcoes.filter((o: any) => o.pergunta_id === p.id).forEach((o: any) => {
         map[pText][o.texto.trim()] = o.pontos || 0;
       });
     });
@@ -100,47 +94,34 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
     return total;
   };
 
+  const perguntasOrdenadas = useMemo(() => {
+    return [...perguntas].sort((a: any, b: any) => a.ordem - b.ordem);
+  }, [perguntas]);
+
   const filteredSessoes = useMemo(() => {
     let result = sessoes;
-
-    // Period Filter
     const now = new Date();
     if (period === 'today') {
       result = result.filter(s => new Date(s.created_at).toDateString() === now.toDateString());
     } else if (period === '7d') {
-      const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
-      result = result.filter(s => new Date(s.created_at) >= sevenDaysAgo);
+      const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 7);
+      result = result.filter(s => new Date(s.created_at) >= cutoff);
     } else if (period === '30d') {
-      const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-      result = result.filter(s => new Date(s.created_at) >= thirtyDaysAgo);
+      const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 30);
+      result = result.filter(s => new Date(s.created_at) >= cutoff);
     }
-
-    // Status Filter
-    if (statusFilter === 'abandon') {
-      result = result.filter(s => !s.concluiu);
-    } else if (statusFilter === 'reprovada') {
-      result = result.filter(s => s.concluiu && !s.virou_lead);
-    } else if (statusFilter === 'concluiu') {
-      result = result.filter(s => s.concluiu && !s.virou_lead);
-    } else if (statusFilter === 'lead') {
-      result = result.filter(s => s.virou_lead);
-    }
-
-    // Device Filter
-    if (deviceFilter !== 'all') {
-      result = result.filter(s => s.dispositivo === deviceFilter);
-    }
-
-    // Search
+    if (statusFilter === 'abandon') result = result.filter(s => !s.concluiu);
+    else if (statusFilter === 'reprovada') result = result.filter(s => s.concluiu && !s.virou_lead);
+    else if (statusFilter === 'lead') result = result.filter(s => s.virou_lead);
+    if (deviceFilter !== 'all') result = result.filter(s => s.dispositivo === deviceFilter);
     if (search) {
-      const s = search.toLowerCase();
-      result = result.filter(sess => 
-        sess.session_id.toLowerCase().includes(s) ||
-        (sess.utm_source || '').toLowerCase().includes(s) ||
-        Object.values(sess.respostas || {}).some(v => String(v).toLowerCase().includes(s))
+      const q = search.toLowerCase();
+      result = result.filter(sess =>
+        sess.session_id.toLowerCase().includes(q) ||
+        (sess.utm_source || '').toLowerCase().includes(q) ||
+        Object.values(sess.respostas || {}).some(v => String(v).toLowerCase().includes(q))
       );
     }
-
     return result;
   }, [sessoes, period, statusFilter, deviceFilter, search]);
 
@@ -150,12 +131,22 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
     const convertidos = filteredSessoes.filter(s => s.virou_lead).length;
     const concluidos = filteredSessoes.filter(s => s.concluiu).length;
     const abandonaram = total - concluidos;
-    
     const taxaConv = total > 0 ? Math.round((convertidos / total) * 100) : 0;
     const taxaConclusao = total > 0 ? Math.round((concluidos / total) * 100) : 0;
-    
     return { total, iniciaram, convertidos, abandonaram, taxaConv, taxaConclusao };
   }, [filteredSessoes]);
+
+  // Sticky column layout (cumulative left offsets)
+  const STICKY = [
+    { key: '#',        width: 44,  left: 0   },
+    { key: 'id',       width: 88,  left: 44  },
+    { key: 'data',     width: 100, left: 132 },
+    { key: 'disp',     width: 42,  left: 232 },
+    { key: 'prog',     width: 90,  left: 274 },
+    { key: 'status',   width: 100, left: 364 },
+    { key: 'pts',      width: 52,  left: 464 },
+  ];
+  const LAST_STICKY_RIGHT_SHADOW = '4px 0 8px -2px rgba(0,0,0,0.12)';
 
   if (loading && sessoes.length === 0) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: textMut }}>
@@ -166,36 +157,35 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
 
   return (
     <div style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: pageBg, color: textMain }}>
-      
+
       {/* KPI Cards */}
       <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', flexShrink: 0 }}>
-        <KPICard label="Visitas" value={stats.total} icon={<Users size={14} />} color="#3b82f6" isDark={isDark} />
-        <KPICard label="Iniciaram" value={stats.iniciaram} icon={<Zap size={14} />} color="#f59e0b" isDark={isDark} />
-        <KPICard label="Abandonaram" value={stats.abandonaram} icon={<TrendingDown size={14} />} color="#ef4444" isDark={isDark} />
-        <KPICard label="Concluíram" value={stats.total - stats.abandonaram} icon={<CheckCircle2 size={14} />} color="#10b981" isDark={isDark} />
-        <KPICard label="Convertidos" value={stats.convertidos} icon={<ArrowUpRight size={14} />} color="#8b5cf6" isDark={isDark} />
-        <KPICard label="Conversão" value={`${stats.taxaConv}%`} icon={<TrendingUp size={14} />} color="#6366f1" isDark={isDark} />
+        <KPICard label="Visitas"     value={stats.total}           icon={<Users size={14} />}         color="#3b82f6" isDark={isDark} />
+        <KPICard label="Iniciaram"   value={stats.iniciaram}       icon={<Zap size={14} />}           color="#f59e0b" isDark={isDark} />
+        <KPICard label="Abandonaram" value={stats.abandonaram}     icon={<TrendingDown size={14} />}  color="#ef4444" isDark={isDark} />
+        <KPICard label="Concluíram"  value={stats.total - stats.abandonaram} icon={<CheckCircle2 size={14} />} color="#10b981" isDark={isDark} />
+        <KPICard label="Convertidos" value={stats.convertidos}     icon={<ArrowUpRight size={14} />}  color="#8b5cf6" isDark={isDark} />
+        <KPICard label="Conversão"   value={`${stats.taxaConv}%`}  icon={<TrendingUp size={14} />}   color="#6366f1" isDark={isDark} />
       </div>
 
-      {/* Header & Filters */}
+      {/* Filters */}
       <div style={{ padding: '0 24px 20px', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <FilterPill label="Hoje" active={period === 'today'} onClick={() => setPeriod('today')} isDark={isDark} />
-            <FilterPill label="7 dias" active={period === '7d'} onClick={() => setPeriod('7d')} isDark={isDark} />
-            <FilterPill label="30 dias" active={period === '30d'} onClick={() => setPeriod('30d')} isDark={isDark} />
+            <FilterPill label="Hoje"   active={period === 'today'} onClick={() => setPeriod('today')} isDark={isDark} />
+            <FilterPill label="7 dias" active={period === '7d'}    onClick={() => setPeriod('7d')}    isDark={isDark} />
+            <FilterPill label="30 dias" active={period === '30d'}  onClick={() => setPeriod('30d')}   isDark={isDark} />
             <div style={{ width: '1px', background: border, margin: '0 8px' }} />
-            <FilterPill label="Todos" active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} isDark={isDark} />
+            <FilterPill label="Todos"    active={statusFilter === 'all'}      onClick={() => setStatusFilter('all')}      isDark={isDark} />
             <FilterPill label="Abandonou" active={statusFilter === 'abandon'} onClick={() => setStatusFilter('abandon')} color="#ef4444" isDark={isDark} />
             <FilterPill label="Reprovada" active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
-            <FilterPill label="Virou Lead" active={statusFilter === 'lead'} onClick={() => setStatusFilter('lead')} color="#10b981" isDark={isDark} />
+            <FilterPill label="Virou Lead" active={statusFilter === 'lead'}   onClick={() => setStatusFilter('lead')}    color="#10b981" isDark={isDark} />
           </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ fontSize: '11px', color: textMut, fontWeight: 600 }}>
               Atualizado em: {lastUpdated.toLocaleTimeString()}
             </div>
-            <button 
+            <button
               onClick={fetchData}
               style={{ padding: '8px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: textMain, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
@@ -206,192 +196,198 @@ export function QuizLeads({ quizId, isDark, theme }: QuizLeadsProps) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <FilterPill icon={<Monitor size={14} />} label="Desktop" active={deviceFilter === 'desktop'} onClick={() => setDeviceFilter('desktop')} isDark={isDark} />
-            <FilterPill icon={<Smartphone size={14} />} label="Mobile" active={deviceFilter === 'mobile'} onClick={() => setDeviceFilter('mobile')} isDark={isDark} />
-            <FilterPill icon={<Tablet size={14} />} label="Tablet" active={deviceFilter === 'tablet'} onClick={() => setDeviceFilter('tablet')} isDark={isDark} />
+            <FilterPill icon={<Monitor size={14} />}    label="Desktop" active={deviceFilter === 'desktop'} onClick={() => setDeviceFilter('desktop')} isDark={isDark} />
+            <FilterPill icon={<Smartphone size={14} />} label="Mobile"  active={deviceFilter === 'mobile'}  onClick={() => setDeviceFilter('mobile')}  isDark={isDark} />
+            <FilterPill icon={<Tablet size={14} />}     label="Tablet"  active={deviceFilter === 'tablet'}  onClick={() => setDeviceFilter('tablet')}  isDark={isDark} />
+            <FilterPill label="Todos os disp." active={deviceFilter === 'all'} onClick={() => setDeviceFilter('all')} isDark={isDark} />
           </div>
           <div style={{ position: 'relative' }}>
             <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '14px', color: textMut }} />
-            <input 
-              placeholder="Buscar por sessão, UTM ou resposta..." 
+            <input
+              placeholder="Buscar por sessão, UTM ou resposta..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ padding: '8px 12px 8px 32px', borderRadius: '10px', border: `1px solid ${border}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: textMain, fontSize: '13px', width: '320px' }} 
+              style={{ padding: '8px 12px 8px 32px', borderRadius: '10px', border: `1px solid ${border}`, background: isDark ? '#1a1a1e' : '#f9fafb', color: textMain, fontSize: '13px', width: '320px' }}
             />
           </div>
         </div>
       </div>
 
-      {/* Sessions Table */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
-        <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ background: isDark ? 'rgba(255,255,255,0.02)' : '#f9fafb', borderBottom: `1px solid ${border}` }}>
-                <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut, width: '40px' }}>#</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>Sessão</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>Entrada</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut }}>Disp.</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>Progresso</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', color: textMut }}>Última Resposta</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut }}>Pts</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', color: textMut }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Source</th>
-                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Campaign</th>
-                <th style={{ textAlign: 'left', padding: '12px 10px', color: textMut }}>Medium</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSessoes.length === 0 ? (
-                <tr>
-                  <td colSpan={11} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
-                    Nenhuma sessão encontrada para os filtros selecionados.
-                  </td>
+      {/* Sessions Table — scroll horizontal, perguntas como colunas */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '0 24px 24px' }}>
+        <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, overflow: 'hidden', minWidth: 'max-content' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: 'max-content' }}>
+              <thead>
+                <tr style={{ background: headBg, borderBottom: `1px solid ${border}` }}>
+                  {/* Sticky fixed columns */}
+                  <th style={{ position: 'sticky', left: STICKY[0].left, zIndex: 2, background: headBg, width: STICKY[0].width, minWidth: STICKY[0].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700 }}>
+                    #
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[1].left, zIndex: 2, background: headBg, width: STICKY[1].width, minWidth: STICKY[1].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    Sessão
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[2].left, zIndex: 2, background: headBg, width: STICKY[2].width, minWidth: STICKY[2].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    Data
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[3].left, zIndex: 2, background: headBg, width: STICKY[3].width, minWidth: STICKY[3].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700 }}>
+                    📱
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[4].left, zIndex: 2, background: headBg, width: STICKY[4].width, minWidth: STICKY[4].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    Progresso
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[5].left, zIndex: 2, background: headBg, width: STICKY[5].width, minWidth: STICKY[5].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    Status
+                  </th>
+                  <th style={{ position: 'sticky', left: STICKY[6].left, zIndex: 2, background: headBg, width: STICKY[6].width, minWidth: STICKY[6].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700, boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
+                    Pts
+                  </th>
+
+                  {/* Dynamic question columns */}
+                  {perguntasOrdenadas.map((p: any) => (
+                    <th
+                      key={p.id}
+                      title={p.texto}
+                      style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', borderLeft: `1px solid ${border}` }}
+                    >
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                        {p.texto.length > 22 ? p.texto.slice(0, 22) + '…' : p.texto}
+                      </div>
+                    </th>
+                  ))}
+
+                  {/* UTM columns */}
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '90px', borderLeft: `1px solid ${border}` }}>
+                    Source
+                  </th>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '120px' }}>
+                    Campaign
+                  </th>
                 </tr>
-              ) : (
-                filteredSessoes.map((sess, idx) => (
-                  <SessionRow
-                    key={sess.id}
-                    index={filteredSessoes.length - idx}
-                    session={sess}
-                    isDark={isDark}
-                    isExpanded={expandedSessionId === sess.id}
-                    onToggle={() => setExpandedSessionId(expandedSessionId === sess.id ? null : sess.id)}
-                    onViewLead={(leadId: string | number) => navigate(`/leads?id=${leadId}`)}
-                    calculateScore={calculateSessionScore}
-                    totalPerguntas={perguntas.length}
-                    colSpan={11}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredSessoes.length === 0 ? (
+                  <tr>
+                    <td colSpan={STICKY.length + perguntasOrdenadas.length + 2} style={{ padding: '48px', textAlign: 'center', color: textMut }}>
+                      Nenhuma sessão encontrada para os filtros selecionados.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSessoes.map((sess, idx) => {
+                    const score = calculateSessionScore(sess.respostas);
+                    const effectiveTotal = sess.total_etapas > 0 ? sess.total_etapas : (perguntas.length || 0);
+                    const progressPct = effectiveTotal > 0 ? Math.round((sess.ultima_etapa / effectiveTotal) * 100) : 0;
+                    const statusInfo = sess.virou_lead
+                      ? { label: 'Virou Lead', color: '#10b981', bg: '#10b98115' }
+                      : sess.concluiu
+                      ? { label: 'Reprovada', color: '#f59e0b', bg: '#f59e0b15' }
+                      : { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
+                    const rowBg = idx % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc');
+                    const hoverBg = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc';
+                    const deviceIcon = sess.dispositivo === 'mobile'
+                      ? <Smartphone size={14} />
+                      : sess.dispositivo === 'tablet'
+                      ? <Tablet size={14} />
+                      : <Monitor size={14} />;
+
+                    return (
+                      <tr
+                        key={sess.id}
+                        style={{ borderBottom: `1px solid ${border}`, transition: 'background 0.15s' }}
+                        onMouseEnter={e => { Array.from(e.currentTarget.cells).forEach(td => (td as HTMLElement).style.background = hoverBg); }}
+                        onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach(td => (td as HTMLElement).style.background = ''); }}
+                      >
+                        {/* # */}
+                        <td style={{ position: 'sticky', left: STICKY[0].left, zIndex: 1, background: cardBg, width: STICKY[0].width, padding: '12px 8px', textAlign: 'center', color: textMut, fontSize: '11px' }}>
+                          {filteredSessoes.length - idx}
+                        </td>
+                        {/* Sessão ID */}
+                        <td style={{ position: 'sticky', left: STICKY[1].left, zIndex: 1, background: cardBg, width: STICKY[1].width, padding: '12px', fontWeight: 700, color: textMain, fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {sess.session_id.substring(0, 8)}
+                        </td>
+                        {/* Data */}
+                        <td style={{ position: 'sticky', left: STICKY[2].left, zIndex: 1, background: cardBg, width: STICKY[2].width, padding: '12px', color: textMut, whiteSpace: 'nowrap', fontSize: '12px' }}>
+                          {new Date(sess.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        {/* Dispositivo */}
+                        <td style={{ position: 'sticky', left: STICKY[3].left, zIndex: 1, background: cardBg, width: STICKY[3].width, padding: '12px 8px', textAlign: 'center', color: textMut }}>
+                          {deviceIcon}
+                        </td>
+                        {/* Progresso */}
+                        <td style={{ position: 'sticky', left: STICKY[4].left, zIndex: 1, background: cardBg, width: STICKY[4].width, padding: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: textMain }}>{sess.ultima_etapa}/{effectiveTotal || '?'}</div>
+                            <div style={{ width: '70px', height: '4px', background: border, borderRadius: '2px', overflow: 'hidden' }}>
+                              <div style={{ width: `${progressPct}%`, height: '100%', background: statusInfo.color, borderRadius: '2px' }} />
+                            </div>
+                          </div>
+                        </td>
+                        {/* Status */}
+                        <td style={{ position: 'sticky', left: STICKY[5].left, zIndex: 1, background: cardBg, width: STICKY[5].width, padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ padding: '3px 8px', borderRadius: '6px', background: statusInfo.bg, color: statusInfo.color, fontSize: '10px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                              {statusInfo.label}
+                            </span>
+                            {sess.virou_lead && sess.lead_id && (
+                              <button
+                                onClick={() => navigate(`/leads?id=${sess.lead_id}`)}
+                                style={{ padding: '3px 6px', borderRadius: '6px', border: `1px solid ${statusInfo.color}40`, background: 'transparent', color: statusInfo.color, fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}
+                              >
+                                Lead <ExternalLink size={9} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        {/* Pts */}
+                        <td style={{ position: 'sticky', left: STICKY[6].left, zIndex: 1, background: cardBg, width: STICKY[6].width, padding: '12px 8px', textAlign: 'center', fontWeight: 800, color: score > 0 ? '#8b5cf6' : textMut, boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
+                          {score || '—'}
+                        </td>
+
+                        {/* Dynamic question columns */}
+                        {perguntasOrdenadas.map((p: any) => {
+                          const resposta = sess.respostas?.[p.texto];
+                          return (
+                            <td key={p.id} style={{ padding: '12px', borderLeft: `1px solid ${border}`, maxWidth: '160px' }}>
+                              {resposta != null && String(resposta).trim() !== '' ? (
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  background: sess.virou_lead ? 'rgba(16,185,129,0.1)' : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
+                                  color: sess.virou_lead ? '#10b981' : textMain,
+                                  maxWidth: '140px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {String(resposta)}
+                                </span>
+                              ) : (
+                                <span style={{ color: textMut }}>—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        {/* UTM Source */}
+                        <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', borderLeft: `1px solid ${border}` }}>
+                          {sess.utm_source || '—'}
+                        </td>
+                        {/* UTM Campaign */}
+                        <td style={{ padding: '12px', color: textMut, fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {sess.utm_campaign || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
         </div>
       </div>
 
     </div>
-  );
-}
-
-function SessionRow({ index, session, isDark, isExpanded, onToggle, onViewLead, calculateScore, totalPerguntas }: any) {
-  const textMain = isDark ? '#f4f4f5' : '#111827';
-  const textMut = isDark ? '#71717a' : '#6b7280';
-  const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-
-  const score = calculateScore(session.respostas);
-  // Usa total_etapas da sessão; se for 0, usa totalPerguntas do banco como fallback
-  const effectiveTotal = session.total_etapas > 0 ? session.total_etapas : (totalPerguntas || 0);
-  const progressPct = effectiveTotal > 0 ? Math.round((session.ultima_etapa / effectiveTotal) * 100) : 0;
-  
-  const lastAnswer = useMemo(() => {
-    if (!session.respostas) return '—';
-    const entries = Object.entries(session.respostas);
-    if (entries.length === 0) return '—';
-    return String(entries[entries.length - 1][1]);
-  }, [session.respostas]);
-
-  const statusInfo = useMemo(() => {
-    if (session.virou_lead) return { label: 'Virou Lead', color: '#10b981', bg: '#10b98115' };
-    if (session.concluiu) return { label: 'Reprovada', color: '#f59e0b', bg: '#f59e0b15' };
-    return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
-  }, [session]);
-
-  const deviceIcon = useMemo(() => {
-    if (session.dispositivo === 'mobile') return <Smartphone size={14} />;
-    if (session.dispositivo === 'tablet') return <Tablet size={14} />;
-    return <Monitor size={14} />;
-  }, [session.dispositivo]);
-
-  return (
-    <>
-      <tr 
-        onClick={onToggle}
-        style={{ 
-          background: index % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc'),
-          borderBottom: `1px solid ${border}`,
-          cursor: 'pointer',
-          transition: 'background 0.2s'
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc'}
-        onMouseLeave={e => e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc')}
-      >
-        <td style={{ padding: '14px 16px', textAlign: 'center', color: textMut, fontSize: '11px' }}>{index}</td>
-        <td style={{ padding: '14px 16px', fontWeight: 700, color: textMain, fontFamily: 'monospace' }}>
-          {session.session_id.substring(0, 8)}
-        </td>
-        <td style={{ padding: '14px 16px', color: textMut }}>
-          {new Date(session.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-        </td>
-        <td style={{ padding: '14px 16px', textAlign: 'center', color: textMut }}>
-          {deviceIcon}
-        </td>
-        <td style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600 }}>{session.ultima_etapa}/{effectiveTotal || '?'}</div>
-            <div style={{ width: '80px', height: '4px', background: border, borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ width: `${progressPct}%`, height: '100%', background: statusInfo.color }} />
-            </div>
-          </div>
-        </td>
-        <td style={{ padding: '14px 16px', color: textMain, maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {lastAnswer}
-        </td>
-        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: score > 0 ? '#8b5cf6' : textMut }}>
-          {score || '—'}
-        </td>
-        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-          <div style={{ padding: '4px 8px', borderRadius: '6px', background: statusInfo.bg, color: statusInfo.color, fontSize: '10px', fontWeight: 800, display: 'inline-block' }}>
-            {statusInfo.label}
-          </div>
-        </td>
-        <td style={{ padding: '14px 10px', color: textMut, fontSize: '11px', maxWidth: '100px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {session.utm_source || '—'}
-        </td>
-        <td style={{ padding: '14px 10px', color: textMut, fontSize: '11px', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {session.utm_campaign || '—'}
-        </td>
-        <td style={{ padding: '14px 10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: textMut, fontSize: '11px' }}>{session.utm_medium || '—'}</span>
-            {session.virou_lead && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onViewLead(session.lead_id); }}
-                style={{ padding: '3px 7px', borderRadius: '6px', border: `1px solid ${statusInfo.color}40`, background: 'transparent', color: statusInfo.color, fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                Lead <ExternalLink size={10} />
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-      {isExpanded && (
-        <tr>
-          <td colSpan={11} style={{ padding: '0', background: isDark ? 'rgba(0,0,0,0.2)' : '#f9fafb' }}>
-            <div style={{ padding: '20px 48px', display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: `1px solid ${border}` }}>
-              <div style={{ fontSize: '12px', fontWeight: 800, color: textMain, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <MessageSquare size={14} /> Detalhes das Respostas
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {session.respostas && Object.keys(session.respostas).length > 0 ? (
-                  Object.entries(session.respostas).map(([perg, resp]: any) => (
-                    <div key={perg} style={{ padding: '10px', borderRadius: '8px', background: isDark ? 'rgba(255,255,255,0.03)' : '#fff', border: `1px solid ${border}` }}>
-                      <div style={{ fontSize: '11px', color: textMut, marginBottom: '2px' }}>{perg}</div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: textMain }}>{String(resp)}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ color: textMut, fontSize: '12px' }}>Nenhuma resposta registrada.</div>
-                )}
-              </div>
-              <div style={{ marginTop: '8px', display: 'flex', gap: '20px', fontSize: '11px', color: textMut }}>
-                <span><b>Navegador:</b> {session.user_agent?.substring(0, 50)}...</span>
-                <span><b>Campanha:</b> {session.utm_campaign || 'N/A'}</span>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
   );
 }
 
@@ -415,33 +411,25 @@ function FilterPill({ label, active, onClick, color, icon, isDark }: any) {
   const textMut = isDark ? '#71717a' : '#6b7280';
   const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   return (
-    <button 
+    <button
       onClick={onClick}
       style={{
-        padding: '6px 12px', borderRadius: '8px', border: active ? `1.5px solid ${color || '#2563eb'}` : `1px solid ${border}`,
+        padding: '6px 12px', borderRadius: '8px',
+        border: active ? `1.5px solid ${color || '#2563eb'}` : `1px solid ${border}`,
         background: active ? (color ? `${color}15` : '#2563eb15') : 'transparent',
         color: active ? (color || '#2563eb') : textMut,
         fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '6px'
       }}
     >
-      {icon}
-      {label}
+      {icon}{label}
     </button>
   );
 }
 
-function TrendingDown({ size, color }: any) {
+function TrendingDown({ size }: any) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" />
-    </svg>
-  );
-}
-
-function MessageSquare({ size, color }: any) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
