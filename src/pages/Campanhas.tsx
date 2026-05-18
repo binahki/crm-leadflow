@@ -663,6 +663,14 @@ export default function CampanhasPage() {
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
+  const avgCTR = useMemo(() => {
+    const ativas = campaigns.filter(c => c.impressions > 0);
+    if (!ativas.length) return 0;
+    const totalImpressions = ativas.reduce((s,c) => s + c.impressions, 0);
+    const totalClicks = ativas.reduce((s,c) => s + c.clicks, 0);
+    return totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  }, [campaigns]);
+
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
   const divCls=dark?'#1e1e22':'#f3f4f6'; const gridLn=dark?'#1e1e22':'#f0f0f0';
@@ -692,25 +700,68 @@ export default function CampanhasPage() {
           </div>
         </div>
 
-        {/* Cards: Gasto | Leads | CPL | CPR */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
-          {[
-            {label:'Gasto Total',    value:loading?'…':`R$ ${fmt(totalSpend)}`,             icon:DollarSign, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5', sub:null},
-            {label:'Leads',         value:loading?'…':String(leadsCRMTotal),                icon:Users,      color:'#3b82f6', bgC:dark?'rgba(59,130,246,0.12)':'#eff6ff',  sub:`Tráfego pago · CRM`},
-            {label:'Custo por Lead',value:loading?'…':(cplCard>0?`R$ ${fmt(cplCard)}`:'—'), icon:TrendingUp, color:'#10b981', bgC:dark?'rgba(16,185,129,0.12)':'#ecfdf5',  sub:`${leadsCRMTotal} leads`},
-            {label:'Custo por Rev', value:loading?'…':(cprCard>0?`R$ ${fmt(cprCard)}`:'—'),icon:Zap,        color:'#a855f7', bgC:dark?'rgba(168,85,247,0.12)':'#faf5ff',  sub:`${revsCRMTotal} revendedoras via tráfego`},
-          ].map((c,i)=>(
-            <div key={i} style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
-                <span style={{fontSize:'12px',color:txtMid}}>{c.label}</span>
-                <div style={{width:'30px',height:'30px',borderRadius:'8px',background:c.bgC,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <c.icon style={{width:'14px',height:'14px',color:c.color}}/>
-                </div>
-              </div>
-              <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 2px'}}>{c.value}</p>
-              {c.sub&&<p style={{fontSize:'11px',color:txtLow,margin:0}}>{c.sub}</p>}
+        {/* Cards: Gasto | Leads+CPL | Revs+CPR | CTR */}
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
+
+          {/* Card 1: GASTO */}
+          <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
+            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>Gasto Total</p>
+            <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>
+              {loading ? '…' : `R$ ${fmt(totalSpend)}`}
+            </p>
+            <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
+              <TrendingUp style={{width:'11px',height:'11px',color:'#10b981'}}/>
+              <span style={{fontSize:'11px',color:txtLow}}>Meta Ads</span>
             </div>
-          ))}
+          </div>
+
+          {/* Card 2: LEADS + CPL */}
+          <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
+            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>Leads</p>
+            <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>
+              {loading ? '…' : fmtInt(leadsCRMTotal)}
+            </p>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{fontSize:'11px',color:txtLow}}>Tráfego pago · CRM</span>
+              {cplCard > 0 && (
+                <span style={{fontSize:'12px',fontWeight:700,color:'#3b82f6'}}>
+                  CPL R$ {fmt(cplCard)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: REVENDEDORAS + CPR */}
+          <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
+            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>Revendedoras</p>
+            <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>
+              {loading ? '…' : fmtInt(revsCRMTotal)}
+            </p>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{fontSize:'11px',color:txtLow}}>via tráfego</span>
+              {cprCard > 0 && (
+                <span style={{fontSize:'12px',fontWeight:700,color:'#a855f7'}}>
+                  CPR R$ {fmt(cprCard)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 4: CTR MÉDIO */}
+          <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
+            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>CTR Médio</p>
+            <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,letterSpacing:'-0.03em',margin:'0 0 6px',
+              color: avgCTR >= 3 ? '#10b981' : avgCTR >= 1.5 ? txtHi : '#ef4444'}}>
+              {loading ? '…' : `${avgCTR.toFixed(2)}%`}
+            </p>
+            <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
+              <span style={{fontSize:'11px',color: avgCTR >= 3 ? '#10b981' : avgCTR >= 1.5 ? txtLow : '#ef4444'}}>
+                {avgCTR >= 3 ? '↑ Excelente' : avgCTR >= 1.5 ? '→ Normal' : '↓ Baixo'}
+              </span>
+              <span style={{fontSize:'11px',color:txtLow}}>· média das campanhas</span>
+            </div>
+          </div>
+
         </div>
 
         {/* Banner Ravena */}

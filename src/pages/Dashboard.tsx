@@ -236,10 +236,19 @@ export default function Dashboard() {
   }, [navigate, hasWA]);
 
   const [nomeEmpresa, setNomeEmpresa] = useState('');
+  const [metaOrg, setMetaOrg] = useState({ revs: 0, budget: 0 });
   useEffect(() => {
     if (!orgId) return;
-    supabase.from('organizations').select('nome').eq('id', orgId).single()
-      .then(({ data }) => { if (data) setNomeEmpresa((data as any).nome || ''); });
+    supabase.from('organizations').select('nome, ravena_meta_revendedoras, ravena_budget_mensal').eq('id', orgId).single()
+      .then(({ data }) => {
+        if (data) {
+          setNomeEmpresa((data as any).nome || '');
+          setMetaOrg({
+            revs: Number((data as any).ravena_meta_revendedoras) || 0,
+            budget: Number((data as any).ravena_budget_mensal) || 0,
+          });
+        }
+      });
   }, [orgId]); // eslint-disable-line
   const primeiroNome = nomeEmpresa.split(' ')[0];
 
@@ -606,23 +615,95 @@ export default function Dashboard() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
-          {[
-            { label:'Gasto Total', value:metaLoading?'…':`R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`, trend:'+', up:true, sub:'Meta Ads' },
-            { label:'Leads', value:loading?'…':String(totalLeads), trend:'+', up:true, sub:'Total período' },
-            { label:'CPL', value:metaLoading?'…':(spend>0&&totalLeads>0?`R$ ${safe(spend/totalLeads).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—'), trend:totalLeads>0?`${totalLeads} leads`:'', up:true, sub:'Gasto ÷ Leads' },
-            { label:'Revendedoras', value:loading?'…':String(approved), trend:spend>0&&approved>0?(isMobile?'↑':`R$ ${safe(spend/approved).toFixed(2)}`):`${convRate}%`, up:Number(convRate)>0, sub:spend>0&&approved>0?(isMobile?`R$${safe(spend/approved).toLocaleString('pt-BR',{maximumFractionDigits:0})}/rev`:`R$ ${safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`):'conversão' },
-          ].map((c,i)=>(
-            <div key={i} style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, overflow:'hidden', minWidth:0 }}>
-              <p style={{ fontSize:'11px', color:txtLow, marginBottom:'4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.label}</p>
-              <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</p>
-              <p style={{ fontSize:'10px', display:'flex', alignItems:'center', gap:'2px', margin:0, overflow:'hidden' }}>
-                {c.up?<TrendingUp style={{ width:'10px', height:'10px', color:'#10b981', flexShrink:0 }}/>:<TrendingDown style={{ width:'10px', height:'10px', color:'#ef4444', flexShrink:0 }}/>}
-                <span style={{ fontWeight:500, color:c.up?'#10b981':'#ef4444', flexShrink:0 }}>{c.trend}</span>
-                <span style={{ color:txtLow, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:isMobile?'10px':'11px' }}>{c.sub}</span>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
+
+          {/* Card 1: META DO MÊS */}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 8px' }}>Meta do mês</p>
+            <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:'6px' }}>
+              <p style={{ fontSize:isMobile?'16px':'22px', fontWeight:700, color:txtHi, margin:0, letterSpacing:'-0.02em' }}>
+                {loading ? '…' : approved}
+                {metaOrg.revs > 0 && <span style={{ fontSize:'13px', fontWeight:400, color:txtLow }}>/{metaOrg.revs}</span>}
               </p>
+              {metaOrg.revs > 0 && (
+                <span style={{ fontSize:'11px', fontWeight:600, color: approved >= metaOrg.revs ? '#10b981' : approved/metaOrg.revs >= 0.7 ? '#f59e0b' : txtLow }}>
+                  {Math.round((approved/metaOrg.revs)*100)}%
+                </span>
+              )}
             </div>
-          ))}
+            {metaOrg.revs > 0 && (
+              <div style={{ height:'3px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', marginBottom:'10px' }}>
+                <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((approved/metaOrg.revs)*100),100)}%`, background: approved >= metaOrg.revs ? '#10b981' : approved/metaOrg.revs >= 0.7 ? '#f59e0b' : '#3b82f6' }}/>
+              </div>
+            )}
+            {metaOrg.budget > 0 && spend > 0 && (
+              <>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ fontSize:'10px', color:txtLow }}>Investimento</span>
+                  <span style={{ fontSize:'11px', fontWeight:600, color: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981' }}>
+                    {Math.round((spend/metaOrg.budget)*100)}%
+                  </span>
+                </div>
+                <div style={{ height:'3px', borderRadius:'99px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', overflow:'hidden', margin:'4px 0' }}>
+                  <div style={{ height:'100%', borderRadius:'99px', width:`${Math.min(Math.round((spend/metaOrg.budget)*100),100)}%`, background: spend/metaOrg.budget >= 0.9 ? '#ef4444' : spend/metaOrg.budget >= 0.7 ? '#f59e0b' : '#10b981' }}/>
+                </div>
+                <p style={{ fontSize:'10px', color:txtLow, margin:'4px 0 0' }}>
+                  R$ {spend.toLocaleString('pt-BR',{minimumFractionDigits:2})} / R$ {metaOrg.budget.toLocaleString('pt-BR')}
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Card 2: GASTO TOTAL */}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Gasto Total</p>
+            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
+              {metaLoading ? '…' : `R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}
+            </p>
+            <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+              <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+              <span style={{ fontSize:'11px', color:txtLow }}>Meta Ads</span>
+            </div>
+          </div>
+
+          {/* Card 3: LEADS + CPL */}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Leads</p>
+            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
+              {loading ? '…' : String(totalLeads)}
+            </p>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+                <span style={{ fontSize:'11px', color:txtLow }}>Total período</span>
+              </div>
+              {spend > 0 && totalLeads > 0 && (
+                <span style={{ fontSize:'12px', fontWeight:700, color:'#3b82f6' }}>
+                  CPL R$ {safe(spend/totalLeads).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 4: REVENDEDORAS + CPR */}
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Revendedoras</p>
+            <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
+              {loading ? '…' : String(approved)}
+            </p>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
+                <span style={{ fontSize:'11px', color:txtLow }}>aprovadas</span>
+              </div>
+              {spend > 0 && approved > 0 && (
+                <span style={{ fontSize:'12px', fontWeight:700, color:'#a855f7' }}>
+                  CPR R$ {safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                </span>
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* Charts */}
