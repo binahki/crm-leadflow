@@ -248,7 +248,8 @@ export default function QuizPublico() {
       setScore(totalScore);
       if (!quiz) return;
       
-      const isApproved = totalScore >= quiz.corte_verde || totalScore >= (quiz.corte_amarelo ?? 0);
+      const corteMinimo = quiz.corte_amarelo ?? quiz.corte_verde ?? 25;
+      const isApproved = totalScore >= corteMinimo;
       setFaixa(totalScore >= quiz.corte_verde ? 'verde' : 'amarelo');
       
       setPhase('analise');
