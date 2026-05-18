@@ -52,7 +52,7 @@ async function fetchCreatives(
   try {
     const adsRes = await fetch(
       `https://graph.facebook.com/v18.0/act_${metaAccount}/ads` +
-        `?fields=id,name,status,adset{name},campaign{name,id},creative{id,name,title,thumbnail_url,image_url,video_id,image_hash,picture}` +
+        `?fields=id,name,status,adset{name},campaign{name,id},creative{id,thumbnail_url,image_url,video_id,image_hash}` +
         `&limit=100&access_token=${metaToken}`,
     );
     const adsData = await adsRes.json();
@@ -91,13 +91,9 @@ async function fetchCreatives(
             ad.id;
 
           const thumbnail =
-            ad.creative?.picture ||
             ad.creative?.thumbnail_url ||
             ad.creative?.image_url ||
             null;
-
-          const creativeName =
-            ad.creative?.name || ad.creative?.title || ad.name;
 
           if (!groups.has(key)) {
             groups.set(key, {
@@ -123,7 +119,7 @@ async function fetchCreatives(
 
           const g = groups.get(key)!;
           g.ad_ids.push(ad.id);
-          if (!g.ad_names.includes(creativeName)) g.ad_names.push(creativeName);
+          if (!g.ad_names.includes(ad.name)) g.ad_names.push(ad.name);
           if (ad.campaign?.id && !g.campaign_ids.includes(ad.campaign.id)) {
             g.campaign_ids.push(ad.campaign.id);
             g.campaigns.push(ad.campaign?.name || '—');
@@ -421,7 +417,8 @@ function CreativeCard({
       <div
         style={{
           position: 'relative',
-          aspectRatio: '9/16',
+          aspectRatio: '4/5',
+          minHeight: '220px',
           background: dark ? '#1a1a1e' : '#f3f4f6',
           overflow: 'hidden',
         }}
@@ -430,7 +427,7 @@ function CreativeCard({
           <img
             src={g.thumbnail_url}
             alt={g.ad_names[0]}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -820,7 +817,8 @@ export default function CriativosPage() {
                 }}
               >
                 <div style={{
-                  aspectRatio: '16/9',
+                  aspectRatio: '4/5',
+                  minHeight: '220px',
                   background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
                   animation: 'pulse 1.5s ease-in-out infinite',
                 }} />
