@@ -129,13 +129,8 @@ export default function QuizPublico() {
   useEffect(() => {
     if (phase !== 'quiz') return;
     if (currentIdx < 0) return;
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    db.from('quiz_sessoes').update({
-      ultima_etapa: currentIdx + 1,
-      updated_at: new Date().toISOString(),
-    }).eq('session_id', sid).then(() => {}).catch(() => {});
-  }, [currentIdx, phase]); // eslint-disable-line
+    registrarEtapa(currentIdx + 1);
+  }, [currentIdx, phase, registrarEtapa]);
 
   // ── Confetti on approval ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -170,16 +165,74 @@ export default function QuizPublico() {
     }
   }, [phase, quiz]);
 
+  // ── Helper to evaluate conditional option matching ───────────────────────────
+  const isCondicaoAtendida = useCallback((ans: string, condOpId: string, parentPergId: string) => {
+    if (ans === condOpId) return true;
+    const parentPerg = todasPerguntas.find(q => q.id === parentPergId);
+    if (!parentPerg) return false;
+    
+    const condOp = parentPerg.opcoes.find(o => o.id === condOpId);
+    const selOp = parentPerg.opcoes.find(o => o.id === ans);
+    if (!condOp || !selOp) return false;
+    
+    const cleanText = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const cCond = cleanText(condOp.texto);
+    const cSel = cleanText(selOp.texto);
+    
+    // 1. Exact cleaned match
+    if (cCond === cSel) return true;
+    
+    // 2. Same first word (covers Sim/Não variants like "Sim, ...", "Não, ...", "Tenho ...", "Quero ...")
+    const firstWord = (t: string) => t.split(/\s+/)[0];
+    if (firstWord(cCond) === firstWord(cSel) && firstWord(cCond).length > 2) {
+      return true;
+    }
+    
+    // 3. Positive vs Positive synonyms
+    const isPositive = (t: string) => 
+      t.startsWith('sim') || 
+      t.startsWith('quero') || 
+      t.startsWith('tenho') || 
+      t.startsWith('sou') || 
+      t.startsWith('aceito') || 
+      t.startsWith('gostaria') ||
+      t.startsWith('com certeza') || 
+      t.startsWith('claro');
+      
+    if (isPositive(cCond) && isPositive(cSel)) {
+      return true;
+    }
+    
+    // 4. Negative vs Negative synonyms
+    const isNegative = (t: string) => 
+      t.startsWith('nao') || 
+      t.startsWith('nunca') || 
+      t.startsWith('recuso') || 
+      t.startsWith('nem') || 
+      t.startsWith('sem');
+      
+    if (isNegative(cCond) && isNegative(cSel)) {
+      return true;
+    }
+    
+    // 5. Keyword fallbacks (like "filho" match for family steps)
+    if (cCond.includes('filho') && cSel.includes('filho') && !cSel.startsWith('nao') && !cCond.startsWith('nao')) {
+      return true;
+    }
+    
+    return false;
+  }, [todasPerguntas]);
+
   // ── Visible questions (conditional filtering) ─────────────────────────────────
   const visiblePerguntas = useCallback((): Pergunta[] => {
     return todasPerguntas.filter(p => {
       if (!p.condicao_pergunta_id) return true;
       const answeredOpcaoId = answers[p.condicao_pergunta_id];
       if (!answeredOpcaoId) return false;
-      if (p.condicao_opcao_id) return answeredOpcaoId === p.condicao_opcao_id;
+      if (p.condicao_opcao_id) return isCondicaoAtendida(answeredOpcaoId, p.condicao_opcao_id, p.condicao_pergunta_id);
       return true;
     });
-  }, [todasPerguntas, answers]);
+  }, [todasPerguntas, answers, isCondicaoAtendida]);
 
   function calculateScore(ans: Record<string, string>, multiAns: Record<string, string[]>) {
     let totalScore = 0;
@@ -241,7 +294,7 @@ export default function QuizPublico() {
       if (!p.condicao_pergunta_id) return true;
       const ans = newAnswers[p.condicao_pergunta_id];
       if (!ans) return false;
-      if (p.condicao_opcao_id) return ans === p.condicao_opcao_id;
+      if (p.condicao_opcao_id) return isCondicaoAtendida(ans, p.condicao_opcao_id, p.condicao_pergunta_id);
       return true;
     });
 
