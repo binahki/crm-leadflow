@@ -412,12 +412,24 @@ export default function QuizPublico() {
       }
 
       if (targetUrl) {
-        // Substitute placeholders
+        // Substitute placeholders (support both legacy [NOME]/[CIDADE] and new premium {{variable}} formats)
         let finalUrl = targetUrl
           .replace(/\[NOME\]/g, nome)
           .replace(/\[CIDADE\]/g, cidade)
           .replace(/%5BNOME%5D/gi, encodeURIComponent(nome))
-          .replace(/%5BCIDADE%5D/gi, encodeURIComponent(cidade));
+          .replace(/%5BCIDADE%5D/gi, encodeURIComponent(cidade))
+          // Double curly braces format: {{nome}}, {{whatsapp}}, {{cidade}}, {{instagram}}
+          .replace(/\{\{nome\}\}/g, nome)
+          .replace(/\{\{whatsapp\}\}/g, whatsapp)
+          .replace(/\{\{cidade\}\}/g, cidade)
+          .replace(/\{\{instagram\}\}/g, instagram)
+          .replace(/\{\{intagram\}\}/g, instagram) // Typo protection
+          // URL-encoded versions
+          .replace(/%7B%7Bnome%7D%7D/gi, encodeURIComponent(nome))
+          .replace(/%7B%7Bwhatsapp%7D%7D/gi, encodeURIComponent(whatsapp))
+          .replace(/%7B%7Bcidade%7D%7D/gi, encodeURIComponent(cidade))
+          .replace(/%7B%7Binstagram%7D%7D/gi, encodeURIComponent(instagram))
+          .replace(/%7B%7Bintagram%7D%7D/gi, encodeURIComponent(instagram));
 
         if (!/^https?:\/\//i.test(finalUrl)) {
           finalUrl = 'https://' + finalUrl;

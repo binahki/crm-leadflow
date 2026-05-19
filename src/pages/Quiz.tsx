@@ -1789,7 +1789,7 @@ export default function QuizBuilderPage() {
                       <input
                         value={redirectUrl}
                         onChange={e => setRedirectData(e.target.value, novaAba)}
-                        placeholder="https://wa.me/556194233987?text=Oi!%20Sou%20..."
+                        placeholder="https://wa.me/556194233987?text=Oi!%20Sou%20{{nome}}"
                         style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
@@ -1803,10 +1803,55 @@ export default function QuizBuilderPage() {
                       />
                       <span style={{ fontSize: '13px', color: textMain, userSelect: 'none' }}>Nova aba?</span>
                     </div>
+
+                    <div style={{ marginTop: '6px', padding: '10px', borderRadius: '10px', background: isDark ? '#18181b' : '#f8fafc', border: `1px solid ${border}` }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '4px' }}>
+                        ✨ Parâmetros dinâmicos do formulário:
+                      </span>
+                      <p style={{ fontSize: '11px', color: textMut, margin: '0 0 8px', lineHeight: '1.4' }}>
+                        Adicione no link para personalizar com as respostas do lead. Clique para copiar:
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {['{{nome}}', '{{whatsapp}}', '{{cidade}}', '{{instagram}}'].map(param => (
+                          <span
+                            key={param}
+                            onClick={() => {
+                              navigator.clipboard.writeText(param);
+                              toast.success(`Copiado: ${param}`);
+                            }}
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 700,
+                              fontFamily: 'monospace',
+                              background: isDark ? '#27272a' : '#eff6ff',
+                              color: '#2563eb',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              border: `1px solid ${isDark ? '#3f3f46' : '#bfdbfe'}`,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              transition: 'all 0.15s'
+                            }}
+                            title="Clique para copiar"
+                            onMouseEnter={e => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = isDark ? '#27272a' : '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
+                          >
+                            {param}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
             </div>
+          </div>
+
+          <div style={{ marginTop: '16px', borderTop: `1px solid ${border}`, paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: textMain }}>Rastreamento de Anúncios</span>
+            <p style={{ fontSize: '12px', color: textMut, margin: 0, lineHeight: '1.4' }}>
+              Copie e cole os parâmetros abaixo em seus anúncios para rastreá-los com precisão no seu CRM:
+            </p>
             <button
               onClick={() => {
                 const utm = 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}';
@@ -1818,7 +1863,7 @@ export default function QuizBuilderPage() {
                 border: `1.5px dashed ${isDark ? '#333' : '#cbd5e1'}`, background: 'transparent',
                 color: textMain, fontSize: '12px', fontWeight: 600,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s', marginTop: '4px'
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.background = hexToRgba('#2563eb', 0.05); }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = isDark ? '#333' : '#cbd5e1'; e.currentTarget.style.color = textMain; e.currentTarget.style.background = 'transparent'; }}
