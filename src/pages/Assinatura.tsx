@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -7,18 +8,30 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue"
 
 const WA_CONSULTA = 'https://wa.me/5519993929168?text=Olá!%20Preciso%20de%20um%20plano%20personalizado%20para%20minha%20operação.';
 
-const FEATURES = [
-  { label: 'Leads/mês',              gratuito: '50',   starter: '250',  pro: '600'  },
-  { label: 'Quizzes ativos',         gratuito: '1',    starter: '1',    pro: '3'    },
-  { label: 'Modelo alta conversão',  gratuito: false,  starter: true,   pro: true   },
-  { label: 'CRM completo',           gratuito: true,   starter: true,   pro: true   },
-  { label: 'Dashboard Meta Ads',     gratuito: true,   starter: true,   pro: true   },
-  { label: 'IA Ravena™',             gratuito: false,  starter: true,   pro: true   },
-  { label: 'Gestor de tráfego',      gratuito: false,  starter: true,   pro: true   },
-  { label: 'API WhatsApp oficial',   gratuito: false,  starter: false,  pro: true   },
-  { label: 'Inbox profissional',     gratuito: false,  starter: false,  pro: true   },
-  { label: 'Múltiplos usuários',     gratuito: false,  starter: false,  pro: true   },
-  { label: 'Suporte prioritário',    gratuito: false,  starter: false,  pro: true   },
+const FEATURES: { label: string; tooltip?: string; gratuito: boolean | string; starter: boolean | string; pro: boolean | string }[] = [
+  { label: 'Leads/mês',             gratuito: '50',  starter: '250', pro: '600' },
+  { label: 'Quizzes ativos',        gratuito: '1',   starter: '1',   pro: '3'   },
+  {
+    label: 'Modelo alta conversão',
+    tooltip: 'Perguntas validadas prontas pra copiar e colar',
+    gratuito: false, starter: true, pro: true,
+  },
+  { label: 'CRM completo',          gratuito: true,  starter: true,  pro: true  },
+  { label: 'Dashboard Meta Ads',    gratuito: true,  starter: true,  pro: true  },
+  {
+    label: 'IA Ravena™',
+    tooltip: 'Nossa IA que trabalha enquanto você dorme — otimiza e escala para trazer revendedoras a baixo custo',
+    gratuito: false, starter: true, pro: true,
+  },
+  {
+    label: 'Gestor de tráfego',
+    tooltip: 'Sim, nossa equipe gerenciando seus anúncios por você',
+    gratuito: false, starter: true, pro: true,
+  },
+  { label: 'API WhatsApp oficial',  gratuito: false, starter: false, pro: true  },
+  { label: 'Inbox profissional',    gratuito: false, starter: false, pro: true  },
+  { label: 'Múltiplos usuários',    gratuito: false, starter: false, pro: true  },
+  { label: 'Suporte prioritário',   gratuito: false, starter: false, pro: true  },
 ];
 
 const PLANS = [
@@ -42,7 +55,7 @@ const PLANS = [
     color: '#2563eb',
     cta: 'Assinar Starter',
     current: false,
-    popular: false,
+    popular: true,
   },
   {
     key: 'pro' as const,
@@ -53,9 +66,56 @@ const PLANS = [
     color: '#8b5cf6',
     cta: 'Assinar Pro',
     current: false,
-    popular: true,
+    popular: false,
   },
 ];
+
+function TooltipLabel({ label, tooltip, txt, txtMid, isDark }: {
+  label: string;
+  tooltip?: string;
+  txt: string;
+  txtMid: string;
+  isDark: boolean;
+}) {
+  const [show, setShow] = useState(false);
+
+  if (!tooltip) {
+    return <span style={{ fontSize: '13px', color: txt, fontWeight: 500 }}>{label}</span>;
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
+      <span style={{ fontSize: '13px', color: txt, fontWeight: 500 }}>{label}</span>
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: '15px', height: '15px', borderRadius: '50%',
+          background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+          color: txtMid, fontSize: '10px', fontWeight: 700,
+          cursor: 'default', flexShrink: 0, lineHeight: 1,
+        }}
+      >
+        ?
+      </span>
+      {show && (
+        <div style={{
+          position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)',
+          marginLeft: '10px', zIndex: 10,
+          background: isDark ? '#1e1e22' : '#111827',
+          color: '#fff', fontSize: '12px', fontWeight: 500, lineHeight: 1.5,
+          padding: '8px 12px', borderRadius: '8px',
+          width: '220px', whiteSpace: 'normal',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+          pointerEvents: 'none',
+        }}>
+          {tooltip}
+        </div>
+      )}
+    </span>
+  );
+}
 
 export default function AssinaturaPage() {
   const { leads } = useAppStore();
@@ -103,7 +163,7 @@ export default function AssinaturaPage() {
                   fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
                 }}>
-                  Mais popular
+                  O mais popular
                 </div>
               )}
 
@@ -132,9 +192,9 @@ export default function AssinaturaPage() {
         </div>
 
         {/* Comparison Table */}
-        <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${bdr}`, overflow: 'hidden', marginBottom: '32px' }}>
+        <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${bdr}`, overflow: 'visible', marginBottom: '32px' }}>
           {/* Table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: `1px solid ${bdr}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: `1px solid ${bdr}`, borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px' }} />
             {PLANS.map(plan => (
               <div key={plan.key} style={{ padding: '16px 20px', textAlign: 'center', borderLeft: `1px solid ${bdr}` }}>
@@ -149,9 +209,10 @@ export default function AssinaturaPage() {
               display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
               borderBottom: i < FEATURES.length - 1 ? `1px solid ${bdr}` : 'none',
               background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'),
+              borderRadius: i === FEATURES.length - 1 ? '0 0 16px 16px' : undefined,
             }}>
-              <div style={{ padding: '13px 20px', fontSize: '13px', color: txt, fontWeight: 500 }}>
-                {f.label}
+              <div style={{ padding: '13px 20px', overflow: 'visible' }}>
+                <TooltipLabel label={f.label} tooltip={f.tooltip} txt={txt} txtMid={txtMid} isDark={dark} />
               </div>
               {(['gratuito', 'starter', 'pro'] as const).map(planKey => {
                 const val = f[planKey];
