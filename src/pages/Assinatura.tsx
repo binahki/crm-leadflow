@@ -6,19 +6,30 @@ import { Check } from 'lucide-react';
 const FONT = '"DM Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Inter, sans-serif';
 const WA_CONSULTA = 'https://wa.me/5519993929168?text=Olá!%20Preciso%20de%20um%20plano%20personalizado%20para%20minha%20operação.';
 
-const FEATURES = [
-  { label: 'Leads/mês',            gratuito: '50',   starter: '250',  pro: '600'  },
-  { label: 'Quizzes ativos',        gratuito: '1',    starter: '1',    pro: '3'    },
-  { label: 'Modelo alta conversão', gratuito: false,  starter: true,   pro: true   },
-  { label: 'CRM completo',          gratuito: true,   starter: true,   pro: true   },
-  { label: 'Dashboard Meta Ads',    gratuito: true,   starter: true,   pro: true   },
-  { label: 'IA Ravena™',            gratuito: false,  starter: true,   pro: true   },
-  { label: 'Gestor de tráfego',     gratuito: false,  starter: true,   pro: true   },
-  { label: 'API WhatsApp oficial',  gratuito: false,  starter: false,  pro: true   },
-  { label: 'Inbox profissional',    gratuito: false,  starter: false,  pro: true   },
-  { label: 'Múltiplos usuários',    gratuito: false,  starter: false,  pro: true   },
-  { label: 'Suporte prioritário',   gratuito: false,  starter: false,  pro: true   },
-] as const;
+type Feature = {
+  label: string;
+  desc?: string;
+  gratuito: string | boolean;
+  starter: string | boolean;
+  pro: string | boolean;
+};
+
+const FEATURES: Feature[] = [
+  { label: 'Leads/mês',                   gratuito: '50',                  starter: '250',                   pro: '600'                },
+  { label: 'CRM completo',                 gratuito: true,                  starter: true,                    pro: true                 },
+  { label: 'Dashboard Meta Ads',           gratuito: true,                  starter: true,                    pro: true                 },
+  { label: 'Quizzes ativos',               gratuito: '1 (crie do zero)',    starter: '1 + Modelo validado',   pro: '3 + Modelo validado'},
+  { label: 'Rastreamento do quiz',         gratuito: true,                  starter: true,                    pro: true                 },
+  { label: 'Modelo de alta conversão',     desc: 'Perguntas validadas prontas pra copiar e colar',
+                                           gratuito: false,                 starter: true,                    pro: true                 },
+  { label: 'IA Ravena™',                   desc: 'Nossa IA que otimiza e escala para trazer revendedoras a baixo custo',
+                                           gratuito: false,                 starter: true,                    pro: true                 },
+  { label: 'Gestor de Tráfego',            desc: 'Nossa equipe gerenciando seus anúncios por você',
+                                           gratuito: false,                 starter: true,                    pro: true                 },
+  { label: 'API WhatsApp oficial',         gratuito: false,                 starter: true,                    pro: true                 },
+  { label: 'Múltiplos usuários',           gratuito: false,                 starter: false,                   pro: true                 },
+  { label: 'Suporte prioritário',          gratuito: false,                 starter: false,                   pro: true                 },
+];
 
 const PLANS = [
   {
@@ -37,22 +48,22 @@ const PLANS = [
     name: 'Starter',
     price: 'R$ 497',
     period: '/mês',
-    description: 'CRM completo + IA Ravena + Gestor de tráfego incluído.',
+    description: 'Para quem já tem tráfego rodando e quer escalar com suporte.',
     color: '#2563eb',
     cta: 'Assinar Starter',
     current: false,
-    popular: false,
+    popular: true,
   },
   {
     key: 'pro' as const,
     name: 'Pro',
     price: 'R$ 997',
     period: '/mês',
-    description: 'Para quem escala e precisa de mais volume e recursos.',
+    description: 'Para operações que escalam e precisam de mais volume e recursos.',
     color: '#8b5cf6',
     cta: 'Assinar Pro',
     current: false,
-    popular: true,
+    popular: false,
   },
 ];
 
@@ -167,8 +178,11 @@ export default function AssinaturaPage() {
                 borderBottom: i < FEATURES.length - 1 ? `1px solid ${bdr}` : 'none',
                 background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'),
               }}>
-                <div style={{ padding: '13px 20px', fontSize: '13px', color: txt, fontWeight: 500 }}>
-                  {f.label}
+                <div style={{ padding: '13px 20px' }}>
+                  <div style={{ fontSize: '13px', color: txt, fontWeight: 500 }}>{f.label}</div>
+                  {f.desc && (
+                    <div style={{ fontSize: '11px', color: txtMid, marginTop: '2px', lineHeight: 1.4 }}>{f.desc}</div>
+                  )}
                 </div>
                 {(['gratuito', 'starter', 'pro'] as const).map(planKey => {
                   const val = f[planKey];
