@@ -709,26 +709,26 @@ export default function Dashboard() {
         {/* Metric Cards */}
         <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
 
-          {/* Card 1: META DO MÊS */}
-          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 6px' }}>Meta do mês</p>
-            <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', marginBottom:'6px' }}>
-              <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:0 }}>
+          {/* Card 1: META DO MÊS — hero */}
+          <div style={{ background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius:'16px', padding:isMobile?'16px':'24px', boxShadow:'0 8px 24px rgba(37,99,235,0.25)', border:'none' }}>
+            <p style={{ fontSize:'11px', color:'rgba(255,255,255,0.8)', margin:'0 0 8px', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600 }}>Meta do mês</p>
+            <div style={{ display:'flex', alignItems:'flex-end', gap:'6px', marginBottom:'10px' }}>
+              <p style={{ fontSize:isMobile?'28px':'36px', fontWeight:800, color:'#ffffff', letterSpacing:'-0.02em', margin:0 }}>
                 {loading ? '…' : approvedThisMonth}
               </p>
               {metaOrg.revs > 0 && (
-                <span style={{ fontSize:'14px', fontWeight:400, color:txtLow, paddingBottom:'2px' }}>
+                <span style={{ fontSize:'16px', fontWeight:400, color:'rgba(255,255,255,0.7)', paddingBottom:'4px' }}>
                   /{metaOrg.revs}
                 </span>
               )}
             </div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
-                <span style={{ fontSize:'11px', color:txtLow }}>revendedoras</span>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                <TrendingUp style={{ width:'14px', height:'14px', color:'#ffffff', flexShrink:0 }}/>
+                <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', fontWeight:500 }}>revendedoras</span>
               </div>
               {metaOrg.revs > 0 && (
-                <span style={{ fontSize:'12px', fontWeight:600, color: txtMid }}>
+                <span style={{ fontSize:'13px', fontWeight:700, color:'#ffffff', background:'rgba(255,255,255,0.15)', padding:'4px 10px', borderRadius:'6px' }}>
                   {Math.round((approvedThisMonth/metaOrg.revs)*100)}% da meta
                 </span>
               )}
