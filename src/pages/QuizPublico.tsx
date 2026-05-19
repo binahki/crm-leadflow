@@ -331,17 +331,22 @@ export default function QuizPublico() {
   }
 
   // ── Finaliza quiz: marca sessão, abre WA, vai para sucesso ───────────────────
-  async function finalizarQuiz(leadId?: string) {
+  async function finalizarQuiz(leadId?: string | number) {
     if (leadId) await marcarConcluido(leadId);
     setSubmitting(false);
     const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
     if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
-      const sessionCode = leadId?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
+      const leadIdStr = leadId ? String(leadId) : '';
+      const sessionCode = leadIdStr.length >= 6
+        ? leadIdStr.slice(-6).toUpperCase()
+        : Math.random().toString(36).slice(-6).toUpperCase();
       const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
       const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
       const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
-      window.open(`https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+      const link = `https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`;
+      console.log('Abrindo WhatsApp:', link);
+      window.open(link, '_blank');
     }
     setPhase('sucesso');
   }
