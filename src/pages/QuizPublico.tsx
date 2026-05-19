@@ -395,25 +395,19 @@ export default function QuizPublico() {
 
     if (error) { setSubmitting(false); alert('Erro ao salvar. Tente novamente.'); return; }
 
-    // Marcar sessão como concluída IMEDIATAMENTE após o insert, antes de qualquer redirect
     if (newLead?.id) await marcarConcluido(newLead.id);
     setSubmitting(false);
 
-    const num = quiz.redirect_whatsapp?.replace(/\D/g, '');
-    const msg = `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
-    const redirectUrl = num ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}` : null;
-
-    if ((quiz as any).whatsapp_redirecionar_direto && redirectUrl) {
-      window.location.href = redirectUrl;
-      return;
+    const waNum = quiz.redirect_whatsapp?.replace(/\D/g, '');
+    if (waNum) {
+      const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
+      const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+      const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
+      window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
 
     setPhase('sucesso');
-    if (redirectUrl) {
-      setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 2000);
-    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────────
@@ -435,6 +429,7 @@ export default function QuizPublico() {
       return val.trim().length > 0;
     });
   const primary = quiz?.cor_primaria || '#2563eb';
+  const whatsappEnabled = !!(quiz?.redirect_whatsapp?.replace(/\D/g, ''));
 
   const utms = useRef<Record<string, string>>({});
 
@@ -577,6 +572,7 @@ export default function QuizPublico() {
       onCidadeChange={setCidade}
       onInstagramChange={setInstagram}
       onSubmit={handleSubmitLead}
+      whatsappEnabled={whatsappEnabled}
     />
   );
 }

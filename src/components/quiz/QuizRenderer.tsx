@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Instagram } from 'lucide-react';
+import { Check, X, Instagram, MessageCircle } from 'lucide-react';
 
 // ── Shared types ─────────────────────────────────────────────────────────────
 export interface ColetaCampo {
@@ -82,6 +82,7 @@ export interface QuizRendererProps {
   onSubmit?: (e: React.FormEvent) => void;
   onGoToColeta?: () => void;
   isPreview?: boolean;
+  whatsappEnabled?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ export function QuizRenderer({
   onNomeChange, onWhatsappChange, onCidadeChange, onInstagramChange, onSubmit,
   onGoToColeta,
   isPreview = false,
+  whatsappEnabled = false,
 }: QuizRendererProps) {
   const [cities, setCities] = React.useState<string[]>([]);
   const [citySearch, setCitySearch] = React.useState('');
@@ -484,8 +486,24 @@ export function QuizRenderer({
                   </div>
                 );
               })}
-              <button type="submit" disabled={submitting || !canSubmit} style={{ width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px', border: 'none', background: !canSubmit || submitting ? '#9ca3af' : btnColor, color: '#fff', fontSize: '15px', fontWeight: 700 }}>
-                {submitting ? 'Enviando...' : 'Enviar meus dados →'}
+              <button
+                type="submit"
+                disabled={submitting || !canSubmit}
+                style={{
+                  width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px',
+                  border: 'none',
+                  background: !canSubmit || submitting ? '#9ca3af' : whatsappEnabled ? '#25d366' : btnColor,
+                  color: '#fff', fontSize: '15px', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  cursor: submitting || !canSubmit ? 'not-allowed' : 'pointer',
+                  opacity: submitting ? 0.6 : 1,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { if (!submitting && canSubmit) e.currentTarget.style.background = whatsappEnabled ? '#20c75a' : '#1d4ed8'; }}
+                onMouseLeave={e => { if (!submitting && canSubmit) e.currentTarget.style.background = whatsappEnabled ? '#25d366' : btnColor; }}
+              >
+                {whatsappEnabled && !submitting && <MessageCircle size={20} strokeWidth={2.5} />}
+                {submitting ? 'Enviando...' : whatsappEnabled ? 'Enviar e falar no WhatsApp' : 'Enviar meus dados →'}
               </button>
             </form>
           </div>
@@ -536,7 +554,7 @@ export function QuizRenderer({
             Cadastro realizado!
           </h2>
           <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 24px', lineHeight: 1.5 }}>
-            Estamos te redirecionando para o WhatsApp...
+            Seus dados foram enviados com sucesso! Em breve entraremos em contato.
           </p>
         </div>
       )}
