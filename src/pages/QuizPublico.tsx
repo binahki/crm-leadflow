@@ -118,6 +118,13 @@ export default function QuizPublico() {
     loadQuiz();
   }, [slug, isPreview, iniciarSessao]);
 
+  // ── Salva progresso ao visualizar cada pergunta (mesmo sem responder) ─────────
+  useEffect(() => {
+    if (phase !== 'quiz') return;
+    if (!currentPergunta) return;
+    registrarEtapa(currentIdx + 1);
+  }, [currentIdx, phase]); // eslint-disable-line
+
   // ── Confetti on approval ──────────────────────────────────────────────────────
   useEffect(() => {
     if (phase === 'aprovado_form' && quiz) {

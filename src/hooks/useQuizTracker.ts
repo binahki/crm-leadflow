@@ -56,12 +56,15 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       respostasRef.current[pergunta] = resposta;
     }
 
-    // Garante que total_etapas seja atualizado se ainda estava 0
     const updatePayload: any = {
       ultima_etapa: etapaIndex,
-      respostas: respostasRef.current,
       updated_at: new Date().toISOString(),
     };
+
+    if (Object.keys(respostasRef.current).length > 0) {
+      updatePayload.respostas = respostasRef.current;
+    }
+
     if (totalEtapasRef.current > 0) {
       updatePayload.total_etapas = totalEtapasRef.current;
     }
