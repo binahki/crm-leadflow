@@ -52,6 +52,15 @@ interface FlatPergunta extends Pergunta { blocoTitulo: string; globalIndex: numb
 
 function hexToRgba(hex: string, a: number) { return hexRgba(hex, a); }
 
+function formatWANumber(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 13);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0,2)} (${d.slice(2)}`;
+  if (d.length <= 5) return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4)}`;
+  if (d.length <= 9) return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}`;
+  return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,5)} ${d.slice(5,9)}-${d.slice(9)}`;
+}
+
 // ── Image compression ─────────────────────────────────────────────────────────
 async function compressImage(file: File, maxWidth = 400): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1736,12 +1745,12 @@ export default function QuizBuilderPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
                   <label style={lbl}>Número (DDI + DDD + Número)</label>
-                  <input value={quiz.redirect_whatsapp || ''} onChange={e => updateQuizField('redirect_whatsapp', e.target.value)} placeholder="5511999999999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                  <input value={formatWANumber((quiz as any).whatsapp_number || '')} onChange={e => updateQuizField('whatsapp_number', e.target.value.replace(/\D/g, ''))} placeholder="55 (11) 9 9999-9999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
                   <span style={{ fontSize: '11px', color: textMut, marginTop: '4px', display: 'block' }}>Se preenchido, o botão fica verde e abre o WhatsApp ao clicar</span>
                 </div>
                 <div>
                   <label style={lbl}>Mensagem automática</label>
-                  <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''} onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
+                  <textarea value={(quiz as any).whatsapp_message || ''} onChange={e => updateQuizField('whatsapp_message', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
                 </div>
               </div>
             </div>

@@ -62,7 +62,7 @@ export default function QuizPublico() {
   const [cidade, setCidade] = useState('');
   const [instagram, setInstagram] = useState('');
 
-  const { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas } = useQuizTracker(
+  const { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionIdRef } = useQuizTracker(
     slug || '',
     quiz?.org_id,
     todasPerguntas.length
@@ -129,7 +129,12 @@ export default function QuizPublico() {
   useEffect(() => {
     if (phase !== 'quiz') return;
     if (currentIdx < 0) return;
-    registrarEtapa(currentIdx + 1);
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    db.from('quiz_sessoes').update({
+      ultima_etapa: currentIdx + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('session_id', sid);
   }, [currentIdx, phase]); // eslint-disable-line
 
   // ── Confetti on approval ──────────────────────────────────────────────────────
@@ -358,6 +363,9 @@ export default function QuizPublico() {
 
     setSubmitting(true);
 
+    const finalScore = calculateScore(answers, multipleAnswers);
+    const finalFaixa: 'verde' | 'amarelo' = finalScore >= (quiz.corte_verde ?? 35) ? 'verde' : 'amarelo';
+
     const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
 
     const quizRespostas: Record<string, string> = {};
@@ -385,8 +393,8 @@ export default function QuizPublico() {
         instagram: instagram.trim(),
         status: 1,
         quiz_respostas: quizRespostas,
-        score,
-        faixa,
+        score: finalScore,
+        faixa: finalFaixa,
         created_at: new Date().toISOString(),
         ...utms.current
       };
@@ -398,11 +406,11 @@ export default function QuizPublico() {
     if (newLead?.id) await marcarConcluido(newLead.id);
     setSubmitting(false);
 
-    const waNum = quiz.redirect_whatsapp?.replace(/\D/g, '');
+    const waNum = ((quiz as any).whatsapp_number as string | undefined)?.replace(/\D/g, '');
     if (waNum) {
       const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
       const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+      const baseMsg = (quiz as any).whatsapp_message || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
       const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
       window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
@@ -429,7 +437,7 @@ export default function QuizPublico() {
       return val.trim().length > 0;
     });
   const primary = quiz?.cor_primaria || '#2563eb';
-  const whatsappEnabled = !!(quiz?.redirect_whatsapp?.replace(/\D/g, ''));
+  const whatsappEnabled = !!(((quiz as any)?.whatsapp_number as string | undefined)?.replace(/\D/g, ''));
 
   const utms = useRef<Record<string, string>>({});
 

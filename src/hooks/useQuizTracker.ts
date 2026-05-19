@@ -94,5 +94,5 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     }).eq('session_id', sessionIdRef.current);
   }, []);
 
-  return { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionId: sessionIdRef.current };
+  return { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionId: sessionIdRef.current, sessionIdRef, iniciadoRef, totalEtapasRef };
 }
