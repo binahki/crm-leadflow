@@ -405,22 +405,35 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { data: newLead, error } = await db.from('leads').upsert(leadData, { onConflict: 'org_id,whatsapp' }).select().single();
+      const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
       console.log('Resultado insert:', { newLead, error });
 
       if (error) {
         console.error('ERRO SUPABASE:', error);
-        setSubmitting(false);
-        alert('Erro ao salvar. Tente novamente.');
-        return;
-      }
 
-      console.log('Lead salvo com sucesso:', newLead);
-      if (newLead?.id) {
-        console.log('Marcando sessão como concluída...');
-        await marcarConcluido(newLead.id);
+        if (error.code === '23505') {
+          console.log('Lead já existe, buscando ID existente...');
+          setSubmitting(false);
+          const { data: existingLead } = await db
+            .from('leads')
+            .select('id')
+            .eq('org_id', quiz.org_id)
+            .eq('whatsapp', rawWa)
+            .single();
+          if (existingLead?.id) await marcarConcluido(existingLead.id);
+        } else {
+          setSubmitting(false);
+          alert('Erro ao salvar. Tente novamente.');
+          return;
+        }
+      } else {
+        console.log('Lead salvo com sucesso:', newLead);
+        if (newLead?.id) {
+          console.log('Marcando sessão como concluída...');
+          await marcarConcluido(newLead.id);
+        }
+        setSubmitting(false);
       }
-      setSubmitting(false);
 
       const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
       console.log('WhatsApp config:', {
