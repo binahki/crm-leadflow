@@ -336,10 +336,22 @@ export default function QuizPublico() {
     setSubmitting(false);
     const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
     if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
-      let baseMsg: string = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
-      baseMsg = baseMsg.replace(/\[NOME\]/g, nome).replace(/\[CIDADE\]/g, cidade);
+      let baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+      
+      // Substitui placeholders
+      baseMsg = baseMsg
+        .replace(/\[NOME\]/g, nome)
+        .replace(/\[CIDADE\]/g, cidade);
+
+      // Gera código e timestamp para mensagem única anti-ban
+      const sessionCode = sessionIdRef.current ? sessionIdRef.current.slice(-6).toUpperCase() : Math.random().toString(36).slice(-6).toUpperCase();
+      const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      
+      // COM código (RECOMENDADO para evitar ban):
+      const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
+
       const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
-      const link = `https://wa.me/${waFull}?text=${encodeURIComponent(baseMsg)}`;
+      const link = `https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`;
       console.log('Abrindo WhatsApp:', link);
       window.open(link, '_blank');
     }
