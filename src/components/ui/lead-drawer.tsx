@@ -236,6 +236,32 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     }
   }, [lead, navigate, hasWA]);
 
+  const [fullLead, setFullLead] = useState<any>(null);
+
+  useEffect(() => {
+    if (!lead?.id) {
+      setFullLead(null);
+      return;
+    }
+    setFullLead(lead);
+
+    async function fetchFullLead() {
+      try {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('id', lead.id)
+          .single();
+        if (data) {
+          setFullLead(data);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar lead completo:', err);
+      }
+    }
+    fetchFullLead();
+  }, [lead?.id]);
+
   const [obs, setObs] = useState('');
   const [status, setStatus] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -248,37 +274,59 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<Array<{ ordem: number; texto: string }>>([]);
 
   useEffect(() => {
-    if (!(lead as any)?.quiz_respostas) return;
+    const raw = fullLead?.quiz_respostas || (lead as any)?.quiz_respostas;
+    if (!raw) return;
     
     async function loadQuizOrder() {
-      const raw = (lead as any).quiz_respostas;
       const respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (!respostas || typeof respostas !== 'object') return;
       const perguntasTextos = Object.keys(respostas as Record<string, unknown>);
       if (perguntasTextos.length === 0) return;
 
-      const oId = orgId || lead?.org_id;
+      const oId = orgId || fullLead?.org_id || lead?.org_id;
       if (!oId) {
-        // Fallback: ordem alfabética
         setPerguntasOrdenadas(
-          perguntasTextos.map(texto => ({ ordem: 0, texto })).sort((a, b) => a.texto.localeCompare(b.texto))
+          perguntasTextos.map(texto => ({ ordem: 0, texto }))
         );
         return;
       }
 
       try {
-        // 1. Buscar quizzes da organização
-        const { data: quizzes, error: qErr } = await supabase
-          .from('quizzes')
-          .select('id')
-          .eq('org_id', oId);
+        let quizIds: string[] = [];
 
-        if (qErr || !quizzes || quizzes.length === 0) {
+        const { data: sessao } = await supabase
+          .from('quiz_sessoes')
+          .select('quiz_slug')
+          .eq('lead_id', lead.id)
+          .maybeSingle();
+
+        if (sessao?.quiz_slug) {
+          const { data: quiz } = await supabase
+            .from('quizzes')
+            .select('id')
+            .eq('slug', sessao.quiz_slug)
+            .eq('org_id', oId)
+            .maybeSingle();
+          if (quiz?.id) {
+            quizIds = [quiz.id];
+          }
+        }
+
+        if (quizIds.length === 0) {
+          const { data: quizzes } = await supabase
+            .from('quizzes')
+            .select('id')
+            .eq('org_id', oId)
+            .order('ativo', { ascending: false });
+          if (quizzes && quizzes.length > 0) {
+            quizIds = quizzes.map(q => q.id);
+          }
+        }
+
+        if (quizIds.length === 0) {
           throw new Error('Nenhum quiz encontrado');
         }
 
-        // 2. Buscar blocos desses quizzes
-        const quizIds = quizzes.map(q => q.id);
         const { data: blocos, error: bErr } = await supabase
           .from('quiz_blocos')
           .select('id, ordem')
@@ -288,7 +336,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           throw new Error('Nenhum bloco encontrado');
         }
 
-        // 3. Buscar perguntas desses blocos
         const blocoIds = blocos.map(b => b.id);
         const { data: perguntas, error: pErr } = await supabase
           .from('quiz_perguntas')
@@ -299,10 +346,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           throw new Error('Nenhuma pergunta encontrada');
         }
 
-        // 4. Mapear e ordenar pelas posições reais de bloco e pergunta
         const blocoMap = new Map(blocos.map(b => [b.id, b.ordem]));
         
-        // Mantemos apenas as perguntas que de fato estão nas respostas do lead
         const filtradasEOrdenadas = perguntas
           .filter(p => perguntasTextos.includes(p.texto))
           .map(p => ({
@@ -311,25 +356,21 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
           }))
           .sort((a, b) => a.ordem - b.ordem);
 
-        // Se alguma resposta do lead não foi mapeada (ex: perguntas deletadas ou alteradas),
-        // adicionamos no final em ordem alfabética
         const textosMapeados = new Set(filtradasEOrdenadas.map(f => f.texto));
         const naoMapeadas = perguntasTextos
           .filter(texto => !textosMapeados.has(texto))
-          .map(texto => ({ ordem: 999999, texto }))
-          .sort((a, b) => a.texto.localeCompare(b.texto));
+          .map(texto => ({ ordem: 999999, texto }));
 
         setPerguntasOrdenadas([...filtradasEOrdenadas, ...naoMapeadas]);
       } catch (err) {
         console.error('Erro ao carregar ordenação das perguntas:', err);
-        // Fallback: ordem alfabética
         setPerguntasOrdenadas(
-          perguntasTextos.map(texto => ({ ordem: 0, texto })).sort((a, b) => a.texto.localeCompare(b.texto))
+          perguntasTextos.map(texto => ({ ordem: 0, texto }))
         );
       }
     }
     loadQuizOrder();
-  }, [lead?.id, orgId, lead?.org_id]);
+  }, [lead?.id, orgId, fullLead?.quiz_respostas, lead?.quiz_respostas, fullLead?.org_id, lead?.org_id]);
 
   useEffect(() => {
     if (lead) {
@@ -392,7 +433,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   if (!isOpen || !lead) return null;
 
   const [g1, g2] = getGradient(lead.nome);
-  const l = lead as any;
+  const l = { ...fullLead, ...lead } as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
   const faixa = l.faixa || calcularFaixa(lead, configuracoes!) || null;

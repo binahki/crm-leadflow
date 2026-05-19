@@ -105,8 +105,19 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
     if (!respostas || typeof respostas !== 'object') return 0;
     let total = 0;
     Object.entries(respostas).forEach(([pText, oText]) => {
-      const points = scoreMap[pText.trim()]?.[String(oText).trim()];
-      if (points) total += points;
+      const pTextTrim = pText.trim();
+      const oTextStr = String(oText).trim();
+      
+      const exactPoints = scoreMap[pTextTrim]?.[oTextStr];
+      if (exactPoints !== undefined) {
+        total += exactPoints;
+      } else if (oTextStr.includes(',')) {
+        const parts = oTextStr.split(',').map(s => s.trim());
+        parts.forEach(part => {
+          const points = scoreMap[pTextTrim]?.[part];
+          if (points) total += points;
+        });
+      }
     });
     return total;
   };
