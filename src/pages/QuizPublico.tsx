@@ -330,6 +330,22 @@ export default function QuizPublico() {
     }
   }
 
+  // ── Finaliza quiz: marca sessão, abre WA, vai para sucesso ───────────────────
+  async function finalizarQuiz(leadId?: string) {
+    if (leadId) await marcarConcluido(leadId);
+    setSubmitting(false);
+    const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
+    if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
+      const sessionCode = leadId?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
+      const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+      const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
+      const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
+      window.open(`https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    }
+    setPhase('sucesso');
+  }
+
   // ── Submit lead ───────────────────────────────────────────────────────────────
   async function handleSubmitLead(e: React.FormEvent) {
     e.preventDefault();
@@ -365,9 +381,6 @@ export default function QuizPublico() {
     setSubmitting(true);
     console.log('Passou validações, construindo leadData...');
 
-    const finalScore = calculateScore(answers, multipleAnswers);
-    const finalFaixa: 'verde' | 'amarelo' = finalScore >= (quiz.corte_verde ?? 35) ? 'verde' : 'amarelo';
-
     const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
 
     const quizRespostas: Record<string, string> = {};
@@ -395,8 +408,8 @@ export default function QuizPublico() {
       instagram: instagram.trim(),
       status: 1,
       quiz_respostas: quizRespostas,
-      score: finalScore,
-      faixa: finalFaixa,
+      score: score,
+      faixa: faixa!,
       created_at: new Date().toISOString(),
       ...utms.current
     };
@@ -410,51 +423,21 @@ export default function QuizPublico() {
 
       if (error) {
         console.error('ERRO SUPABASE:', error);
-
         if (error.code === '23505') {
-          console.log('Lead já existe, buscando ID existente...');
-          setSubmitting(false);
+          console.log('Lead já existe, continuando...');
           const { data: existingLead } = await db
-            .from('leads')
-            .select('id')
-            .eq('org_id', quiz.org_id)
-            .eq('whatsapp', rawWa)
-            .single();
-          if (existingLead?.id) await marcarConcluido(existingLead.id);
-        } else {
-          setSubmitting(false);
-          alert('Erro ao salvar. Tente novamente.');
+            .from('leads').select('id')
+            .eq('org_id', quiz.org_id).eq('whatsapp', rawWa).single();
+          await finalizarQuiz(existingLead?.id);
           return;
         }
-      } else {
-        console.log('Lead salvo com sucesso:', newLead);
-        if (newLead?.id) {
-          console.log('Marcando sessão como concluída...');
-          await marcarConcluido(newLead.id);
-        }
         setSubmitting(false);
+        alert('Erro ao salvar. Tente novamente.');
+        return;
       }
 
-      const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
-      console.log('WhatsApp config:', {
-        redirect_direto: (quiz as any).whatsapp_redirecionar_direto,
-        numero: waNum,
-      });
-
-      if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
-        const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
-        const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
-        const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
-        const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
-        const link = `https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`;
-        console.log('Abrindo WhatsApp:', link);
-        window.open(link, '_blank');
-      } else {
-        console.log('WhatsApp não configurado ou toggle desativado');
-      }
-
-      setPhase('sucesso');
+      console.log('Lead salvo:', newLead);
+      await finalizarQuiz(newLead?.id);
     } catch (err) {
       console.error('ERRO CATCH:', err);
       setSubmitting(false);
