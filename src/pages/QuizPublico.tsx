@@ -363,6 +363,7 @@ export default function QuizPublico() {
     }
 
     setSubmitting(true);
+    console.log('Passou validações, construindo leadData...');
 
     const finalScore = calculateScore(answers, multipleAnswers);
     const finalFaixa: 'verde' | 'amarelo' = finalScore >= (quiz.corte_verde ?? 35) ? 'verde' : 'amarelo';
@@ -386,39 +387,66 @@ export default function QuizPublico() {
       }
     }
 
-      const leadData = {
-        org_id: quiz.org_id,
-        nome: nome.trim(),
-        whatsapp: rawWa,
-        cidade: cidade.trim(),
-        instagram: instagram.trim(),
-        status: 1,
-        quiz_respostas: quizRespostas,
-        score: finalScore,
-        faixa: finalFaixa,
-        created_at: new Date().toISOString(),
-        ...utms.current
-      };
-      
+    const leadData = {
+      org_id: quiz.org_id,
+      nome: nome.trim(),
+      whatsapp: rawWa,
+      cidade: cidade.trim(),
+      instagram: instagram.trim(),
+      status: 1,
+      quiz_respostas: quizRespostas,
+      score: finalScore,
+      faixa: finalFaixa,
+      created_at: new Date().toISOString(),
+      ...utms.current
+    };
+
+    console.log('LeadData final:', leadData);
+    console.log('Inserindo no banco...');
+
+    try {
       const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
+      console.log('Resultado insert:', { newLead, error });
 
-    if (error) { setSubmitting(false); alert('Erro ao salvar. Tente novamente.'); return; }
+      if (error) {
+        console.error('ERRO SUPABASE:', error);
+        setSubmitting(false);
+        alert('Erro ao salvar. Tente novamente.');
+        return;
+      }
 
-    if (newLead?.id) await marcarConcluido(newLead.id);
-    setSubmitting(false);
+      console.log('Lead salvo com sucesso:', newLead);
+      if (newLead?.id) {
+        console.log('Marcando sessão como concluída...');
+        await marcarConcluido(newLead.id);
+      }
+      setSubmitting(false);
 
-    if ((quiz as any).whatsapp_redirecionar_direto === true) {
       const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
-      if (waNum) {
+      console.log('WhatsApp config:', {
+        redirect_direto: (quiz as any).whatsapp_redirecionar_direto,
+        numero: waNum,
+      });
+
+      if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
         const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
         const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
         const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
-        window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+        const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
+        const link = `https://wa.me/${waFull}?text=${encodeURIComponent(whatsappMessage)}`;
+        console.log('Abrindo WhatsApp:', link);
+        window.open(link, '_blank');
+      } else {
+        console.log('WhatsApp não configurado ou toggle desativado');
       }
-    }
 
-    setPhase('sucesso');
+      setPhase('sucesso');
+    } catch (err) {
+      console.error('ERRO CATCH:', err);
+      setSubmitting(false);
+      alert('Erro ao salvar. Tente novamente.');
+    }
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────────

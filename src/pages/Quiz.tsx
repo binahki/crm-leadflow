@@ -53,12 +53,12 @@ interface FlatPergunta extends Pergunta { blocoTitulo: string; globalIndex: numb
 function hexToRgba(hex: string, a: number) { return hexRgba(hex, a); }
 
 function formatWANumber(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 13);
+  const nums = v.replace(/\D/g, '');
+  const d = nums.startsWith('55') ? nums.slice(2) : nums;
   if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0,2)} (${d.slice(2)}`;
-  if (d.length <= 5) return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4)}`;
-  if (d.length <= 9) return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}`;
-  return `${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,5)} ${d.slice(5,9)}-${d.slice(9)}`;
+  if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;
 }
 
 // ── Image compression ─────────────────────────────────────────────────────────
