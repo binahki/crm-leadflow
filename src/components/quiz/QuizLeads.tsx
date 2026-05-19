@@ -30,6 +30,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState<any>(null);
   const [sessoes, setSessoes] = useState<any[]>([]);
+  const [blocos, setBlocos] = useState<any[]>([]);
   const [perguntas, setPerguntas] = useState<any[]>([]);
   const [opcoes, setOpcoes] = useState<any[]>([]);
 
@@ -55,10 +56,13 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
       if (!qData) return;
       setQuiz(qData);
 
-      const [pData, sData] = await Promise.all([
+      const [bData, pData, sData] = await Promise.all([
+        supabase.from('quiz_blocos').select('id, ordem').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_sessoes').select('*').eq('quiz_slug', qData.slug).order('updated_at', { ascending: false }),
       ]);
+
+      if (bData.data) setBlocos(bData.data);
 
       if (pData.data) {
         setPerguntas(pData.data);
@@ -108,8 +112,14 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   };
 
   const perguntasOrdenadas = useMemo(() => {
-    return [...perguntas].sort((a: any, b: any) => a.ordem - b.ordem);
-  }, [perguntas]);
+    const blocoOrdem: Record<string, number> = {};
+    blocos.forEach((b: any) => { blocoOrdem[b.id] = b.ordem; });
+    return [...perguntas].sort((a: any, b: any) => {
+      const bA = blocoOrdem[a.bloco_id] ?? 0;
+      const bB = blocoOrdem[b.bloco_id] ?? 0;
+      return bA !== bB ? bA - bB : a.ordem - b.ordem;
+    });
+  }, [perguntas, blocos]);
 
   const filteredSessoes = useMemo(() => {
     let result = sessoes;
