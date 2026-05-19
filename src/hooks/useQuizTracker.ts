@@ -59,7 +59,11 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       await iniciarSessao();
     }
     if (iniciarPromiseRef.current) {
-      await iniciarPromiseRef.current;
+      try {
+        await iniciarPromiseRef.current;
+      } catch (err) {
+        console.error("useQuizTracker: error awaiting iniciarSessao", err);
+      }
     }
 
     if (pergunta && resposta !== undefined) {
@@ -71,6 +75,10 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       updated_at: new Date().toISOString(),
     };
 
+    if (orgId) {
+      updatePayload.org_id = orgId;
+    }
+
     if (Object.keys(respostasRef.current).length > 0) {
       updatePayload.respostas = respostasRef.current;
     }
@@ -79,35 +87,61 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       updatePayload.total_etapas = totalEtapasRef.current;
     }
 
-    await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
-  }, [iniciarSessao]);
+    try {
+      await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
+    } catch (err) {
+      console.error("useQuizTracker: error updating session", err);
+    }
+  }, [iniciarSessao, orgId]);
 
   const atualizarTotalEtapas = useCallback(async (total: number) => {
     if (!iniciadoRef.current || total === 0) return;
     totalEtapasRef.current = total;
     if (iniciarPromiseRef.current) {
-      await iniciarPromiseRef.current;
+      try {
+        await iniciarPromiseRef.current;
+      } catch (err) {}
     }
-    await supabase
-      .from('quiz_sessoes')
-      .update({ total_etapas: total })
-      .eq('session_id', sessionIdRef.current);
-  }, []);
+    const updatePayload: any = {
+      total_etapas: total,
+    };
+    if (orgId) {
+      updatePayload.org_id = orgId;
+    }
+    try {
+      await supabase
+        .from('quiz_sessoes')
+        .update(updatePayload)
+        .eq('session_id', sessionIdRef.current);
+    } catch (err) {
+      console.error("useQuizTracker: error updating total etapas", err);
+    }
+  }, [orgId]);
 
   const marcarConcluido = useCallback(async (leadId?: string | number) => {
     const total = totalEtapasRef.current;
     if (iniciarPromiseRef.current) {
-      await iniciarPromiseRef.current;
+      try {
+        await iniciarPromiseRef.current;
+      } catch (err) {}
     }
-    await supabase.from('quiz_sessoes').update({
+    const updatePayload: any = {
       concluiu: true,
       ultima_etapa: total > 0 ? total : undefined,
       total_etapas: total > 0 ? total : undefined,
       virou_lead: !!leadId,
       lead_id: leadId || null,
       updated_at: new Date().toISOString(),
-    }).eq('session_id', sessionIdRef.current);
-  }, []);
+    };
+    if (orgId) {
+      updatePayload.org_id = orgId;
+    }
+    try {
+      await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
+    } catch (err) {
+      console.error("useQuizTracker: error marking session as concluded", err);
+    }
+  }, [orgId]);
 
   return { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionId: sessionIdRef.current, sessionIdRef, iniciadoRef, totalEtapasRef };
 }
