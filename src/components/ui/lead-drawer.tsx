@@ -245,15 +245,37 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [showMotivo, setShowMotivo] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<string[]>([]);
+  const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<Array<{ ordem: number; texto: string }>>([]);
 
   useEffect(() => {
-    if (!lead) return;
-    const respostas = (lead as any).quiz_respostas;
-    if (!respostas || typeof respostas !== 'object') return;
-    const keys = Object.keys(respostas as Record<string, unknown>).sort();
-    setPerguntasOrdenadas(keys);
-  }, [lead?.id]);
+    if (!(lead as any)?.quiz_respostas || !orgId) return;
+    async function loadQuizOrder() {
+      const raw = (lead as any).quiz_respostas;
+      const respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!respostas || typeof respostas !== 'object') return;
+      const perguntasTextos = Object.keys(respostas as Record<string, unknown>);
+      if (perguntasTextos.length === 0) return;
+      const { data: perguntas } = await supabase
+        .from('quiz_perguntas')
+        .select('texto, ordem, quiz_blocos!inner(ordem)')
+        .in('texto', perguntasTextos)
+        .eq('quiz_blocos.org_id', orgId);
+      if (!perguntas || perguntas.length === 0) {
+        setPerguntasOrdenadas(
+          perguntasTextos.map(texto => ({ ordem: 0, texto })).sort((a, b) => a.texto.localeCompare(b.texto))
+        );
+        return;
+      }
+      const ordenadas = perguntas
+        .map(p => ({
+          texto: p.texto,
+          ordem: ((p as any).quiz_blocos?.ordem || 0) * 1000 + p.ordem,
+        }))
+        .sort((a, b) => a.ordem - b.ordem);
+      setPerguntasOrdenadas(ordenadas);
+    }
+    loadQuizOrder();
+  }, [lead?.id, orgId]);
 
   useEffect(() => {
     if (lead) {
@@ -319,7 +341,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const l = lead as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
-  const faixa = calcularFaixa(lead, configuracoes!) ?? l.faixa;
+  const faixa = l.faixa ?? calcularFaixa(lead, configuracoes!);
   const instagramValue = l.instagram ? String(l.instagram).trim() : '';
 
   return (
@@ -421,7 +443,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                 };
               }
               const orderedKeys = perguntasOrdenadas.length > 0
-                ? perguntasOrdenadas.filter(k => k in respostas!)
+                ? perguntasOrdenadas.map(p => p.texto).filter(texto => texto in respostas!)
                 : Object.keys(respostas).sort();
               const entries = orderedKeys
                 .map(k => [k, respostas![k]] as [string, unknown])
