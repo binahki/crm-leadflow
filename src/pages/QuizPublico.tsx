@@ -568,14 +568,36 @@ export default function QuizPublico() {
   const utms = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    // Capture UTMs on mount
-    const captured: Record<string, string> = {};
+    // Capture UTMs on mount and merge safely (do not overwrite with empty objects)
     const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+    let hasNew = false;
+    const currentCaptured = { ...utms.current };
+    
     utmKeys.forEach(key => {
       const val = searchParams.get(key);
-      if (val) captured[key] = val;
+      if (val) {
+        currentCaptured[key] = val;
+        hasNew = true;
+      }
     });
-    utms.current = captured;
+
+    // Also support fallback parsing from the full window location (in case hash router strips params)
+    const href = window.location.href;
+    if (href.includes('?')) {
+      const searchPart = href.substring(href.indexOf('?'));
+      const p = new URLSearchParams(searchPart);
+      utmKeys.forEach(key => {
+        const val = p.get(key);
+        if (val && !currentCaptured[key]) {
+          currentCaptured[key] = val;
+          hasNew = true;
+        }
+      });
+    }
+
+    if (hasNew || Object.keys(utms.current).length === 0) {
+      utms.current = currentCaptured;
+    }
   }, [searchParams]);
 
   useEffect(() => {

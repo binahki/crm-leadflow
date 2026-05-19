@@ -13,135 +13,152 @@ function getDispositivo(): string {
 }
 
 function getUTMs() {
-  const p = new URLSearchParams(window.location.search);
-  return {
-    utm_source: p.get('utm_source') || undefined,
-    utm_medium: p.get('utm_medium') || undefined,
-    utm_campaign: p.get('utm_campaign') || undefined,
-    utm_content: p.get('utm_content') || undefined,
-    utm_term: p.get('utm_term') || undefined,
-  };
+  const href = window.location.href;
+  const searchPart = href.includes('?') ? href.substring(href.indexOf('?')) : '';
+  const p = new URLSearchParams(searchPart);
+  
+  const captured: Record<string, string> = {};
+  const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+  utmKeys.forEach(key => {
+    const val = p.get(key);
+    if (val) captured[key] = val;
+  });
+  return captured;
 }
 
 export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEtapas?: number) {
   const sessionIdRef = useRef<string>(generateSessionId());
   const iniciadoRef = useRef(false);
   const respostasRef = useRef<Record<string, any>>({});
-  const totalEtapasRef = useRef<number>(totalEtapas || 0);
-  const iniciarPromiseRef = useRef<Promise<any> | null>(null);
+  const queuePromiseRef = useRef<Promise<any>>(Promise.resolve());
 
+  const quizSlugRef = useRef(quizSlug);
+  const orgIdRef = useRef(orgId);
+  const totalEtapasRef = useRef(totalEtapas || 0);
+
+  useEffect(() => { quizSlugRef.current = quizSlug; }, [quizSlug]);
+  useEffect(() => { orgIdRef.current = orgId; }, [orgId]);
   useEffect(() => { totalEtapasRef.current = totalEtapas || 0; }, [totalEtapas]);
 
+  const enqueue = useCallback((op: () => Promise<any>) => {
+    queuePromiseRef.current = queuePromiseRef.current
+      .then(op)
+      .catch(err => {
+        console.error("useQuizTracker: Queue operation failed", err);
+      });
+    return queuePromiseRef.current;
+  }, []);
+
   const iniciarSessao = useCallback(() => {
-    if (iniciadoRef.current && iniciarPromiseRef.current) {
-      return iniciarPromiseRef.current;
-    }
+    if (iniciadoRef.current) return;
     iniciadoRef.current = true;
 
-    iniciarPromiseRef.current = supabase.from('quiz_sessoes').upsert({
-      session_id: sessionIdRef.current,
-      quiz_slug: quizSlug,
-      org_id: orgId || null,
-      total_etapas: totalEtapasRef.current,
-      ultima_etapa: 0,
-      concluiu: false,
-      virou_lead: false,
-      dispositivo: getDispositivo(),
-      user_agent: navigator.userAgent.slice(0, 200),
-      ...getUTMs(),
-    }, { onConflict: 'session_id' });
-
-    return iniciarPromiseRef.current;
-  }, [quizSlug, orgId]);
-
-  const registrarEtapa = useCallback(async (etapaIndex: number, pergunta?: string, resposta?: any) => {
-    if (!iniciadoRef.current || !iniciarPromiseRef.current) {
-      await iniciarSessao();
-    }
-    if (iniciarPromiseRef.current) {
-      try {
-        await iniciarPromiseRef.current;
-      } catch (err) {
-        console.error("useQuizTracker: error awaiting iniciarSessao", err);
+    enqueue(async () => {
+      const payload = {
+        session_id: sessionIdRef.current,
+        quiz_slug: quizSlugRef.current,
+        org_id: orgIdRef.current || null,
+        total_etapas: totalEtapasRef.current,
+        ultima_etapa: 0,
+        concluiu: false,
+        virou_lead: false,
+        dispositivo: getDispositivo(),
+        user_agent: navigator.userAgent.slice(0, 200),
+        ...getUTMs(),
+      };
+      
+      const { error } = await supabase.from('quiz_sessoes').upsert(payload, { onConflict: 'session_id' });
+      if (error) {
+        console.error("useQuizTracker: Error in iniciarSessao upsert", error);
       }
+    });
+  }, [enqueue]);
+
+  const registrarEtapa = useCallback((etapaIndex: number, pergunta?: string, resposta?: any) => {
+    if (!iniciadoRef.current) {
+      iniciarSessao();
     }
 
     if (pergunta && resposta !== undefined) {
       respostasRef.current[pergunta] = resposta;
     }
 
-    const updatePayload: any = {
-      ultima_etapa: etapaIndex,
-      updated_at: new Date().toISOString(),
-    };
+    enqueue(async () => {
+      const updatePayload: any = {
+        ultima_etapa: etapaIndex,
+        updated_at: new Date().toISOString(),
+      };
 
-    if (orgId) {
-      updatePayload.org_id = orgId;
-    }
+      if (orgIdRef.current) {
+        updatePayload.org_id = orgIdRef.current;
+      }
 
-    if (Object.keys(respostasRef.current).length > 0) {
-      updatePayload.respostas = respostasRef.current;
-    }
+      if (Object.keys(respostasRef.current).length > 0) {
+        updatePayload.respostas = { ...respostasRef.current };
+      }
 
-    if (totalEtapasRef.current > 0) {
-      updatePayload.total_etapas = totalEtapasRef.current;
-    }
+      if (totalEtapasRef.current > 0) {
+        updatePayload.total_etapas = totalEtapasRef.current;
+      }
 
-    try {
-      await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
-    } catch (err) {
-      console.error("useQuizTracker: error updating session", err);
-    }
-  }, [iniciarSessao, orgId]);
-
-  const atualizarTotalEtapas = useCallback(async (total: number) => {
-    if (!iniciadoRef.current || total === 0) return;
-    totalEtapasRef.current = total;
-    if (iniciarPromiseRef.current) {
-      try {
-        await iniciarPromiseRef.current;
-      } catch (err) {}
-    }
-    const updatePayload: any = {
-      total_etapas: total,
-    };
-    if (orgId) {
-      updatePayload.org_id = orgId;
-    }
-    try {
-      await supabase
+      const { error } = await supabase
         .from('quiz_sessoes')
         .update(updatePayload)
         .eq('session_id', sessionIdRef.current);
-    } catch (err) {
-      console.error("useQuizTracker: error updating total etapas", err);
-    }
-  }, [orgId]);
 
-  const marcarConcluido = useCallback(async (leadId?: string | number) => {
+      if (error) {
+        console.error("useQuizTracker: Error in registrarEtapa update", error);
+      }
+    });
+  }, [iniciarSessao, enqueue]);
+
+  const atualizarTotalEtapas = useCallback((total: number) => {
+    if (!iniciadoRef.current || total === 0) return;
+    totalEtapasRef.current = total;
+
+    enqueue(async () => {
+      const updatePayload: any = {
+        total_etapas: total,
+      };
+      if (orgIdRef.current) {
+        updatePayload.org_id = orgIdRef.current;
+      }
+      const { error } = await supabase
+        .from('quiz_sessoes')
+        .update(updatePayload)
+        .eq('session_id', sessionIdRef.current);
+
+      if (error) {
+        console.error("useQuizTracker: Error in atualizarTotalEtapas update", error);
+      }
+    });
+  }, [enqueue]);
+
+  const marcarConcluido = useCallback((leadId?: string | number) => {
     const total = totalEtapasRef.current;
-    if (iniciarPromiseRef.current) {
-      try {
-        await iniciarPromiseRef.current;
-      } catch (err) {}
-    }
-    const updatePayload: any = {
-      concluiu: true,
-      ultima_etapa: total > 0 ? total : undefined,
-      total_etapas: total > 0 ? total : undefined,
-      virou_lead: !!leadId,
-      lead_id: leadId || null,
-      updated_at: new Date().toISOString(),
-    };
-    if (orgId) {
-      updatePayload.org_id = orgId;
-    }
-    try {
-      await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
-    } catch (err) {
-      console.error("useQuizTracker: error marking session as concluded", err);
-    }
-  }, [orgId]);
+
+    enqueue(async () => {
+      const updatePayload: any = {
+        concluiu: true,
+        ultima_etapa: total > 0 ? total : undefined,
+        total_etapas: total > 0 ? total : undefined,
+        virou_lead: !!leadId,
+        lead_id: leadId || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (orgIdRef.current) {
+        updatePayload.org_id = orgIdRef.current;
+      }
+      const { error } = await supabase
+        .from('quiz_sessoes')
+        .update(updatePayload)
+        .eq('session_id', sessionIdRef.current);
+
+      if (error) {
+        console.error("useQuizTracker: Error in marcarConcluido update", error);
+      }
+    });
+  }, [enqueue]);
 
   return { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionId: sessionIdRef.current, sessionIdRef, iniciadoRef, totalEtapasRef };
 }
