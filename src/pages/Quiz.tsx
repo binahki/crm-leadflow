@@ -1731,28 +1731,20 @@ export default function QuizBuilderPage() {
             );
           })}
           <div style={{ marginTop: '8px', padding: '14px', borderRadius: '12px', background: hexToRgba('#2563eb', 0.04), border: `1px solid ${hexToRgba('#2563eb', 0.12)}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block' }}>Redirecionar para WhatsApp</span>
-                <span style={{ fontSize: '11px', color: textMut }}>Após envio do formulário</span>
-              </div>
-              <div onClick={() => updateQuizField('whatsapp_redirecionar_direto', !quiz.whatsapp_redirecionar_direto)}
-                style={{ width: '34px', height: '20px', borderRadius: '99px', background: quiz.whatsapp_redirecionar_direto ? '#2563eb' : '#d1d5db', position: 'relative', cursor: 'pointer', transition: 'background 0.2s' }}>
-                <div style={{ position: 'absolute', top: '3px', left: quiz.whatsapp_redirecionar_direto ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
-              </div>
-            </div>
-            {quiz.whatsapp_redirecionar_direto && (
+            <div>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '10px' }}>WhatsApp</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
                   <label style={lbl}>Número (DDI + DDD + Número)</label>
                   <input value={quiz.redirect_whatsapp || ''} onChange={e => updateQuizField('redirect_whatsapp', e.target.value)} placeholder="5511999999999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                  <span style={{ fontSize: '11px', color: textMut, marginTop: '4px', display: 'block' }}>Se preenchido, o botão fica verde e abre o WhatsApp ao clicar</span>
                 </div>
                 <div>
                   <label style={lbl}>Mensagem automática</label>
                   <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''} onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
                 </div>
               </div>
-            )}
+            </div>
             <button
               onClick={() => {
                 const utm = 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}';

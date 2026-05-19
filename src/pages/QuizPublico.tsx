@@ -128,7 +128,7 @@ export default function QuizPublico() {
   // ── Salva progresso ao visualizar cada pergunta (mesmo sem responder) ─────────
   useEffect(() => {
     if (phase !== 'quiz') return;
-    if (!currentPergunta) return;
+    if (currentIdx < 0) return;
     registrarEtapa(currentIdx + 1);
   }, [currentIdx, phase]); // eslint-disable-line
 
