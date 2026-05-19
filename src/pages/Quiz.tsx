@@ -1744,14 +1744,24 @@ export default function QuizBuilderPage() {
               <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '10px' }}>WhatsApp</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
-                  <label style={lbl}>Número (DDI + DDD + Número)</label>
-                  <input value={formatWANumber((quiz as any).whatsapp_number || '')} onChange={e => updateQuizField('whatsapp_number', e.target.value.replace(/\D/g, ''))} placeholder="55 (11) 9 9999-9999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
-                  <span style={{ fontSize: '11px', color: textMut, marginTop: '4px', display: 'block' }}>Se preenchido, o botão fica verde e abre o WhatsApp ao clicar</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => updateQuizField('whatsapp_redirecionar_direto', !(quiz as any).whatsapp_redirecionar_direto)}>
+                    <div style={{ width: '34px', height: '20px', borderRadius: '99px', background: (quiz as any).whatsapp_redirecionar_direto ? '#25d366' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+                      <div style={{ position: 'absolute', top: '3px', left: (quiz as any).whatsapp_redirecionar_direto ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 500, color: textMain, userSelect: 'none' }}>Redirecionar para WhatsApp após formulário</span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: textMut, margin: '4px 0 0 42px' }}>Quando ativado, o botão fica verde e abre o WhatsApp ao enviar</p>
                 </div>
-                <div>
-                  <label style={lbl}>Mensagem automática</label>
-                  <textarea value={(quiz as any).whatsapp_message || ''} onChange={e => updateQuizField('whatsapp_message', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
-                </div>
+                {(quiz as any).whatsapp_redirecionar_direto && (<>
+                  <div>
+                    <label style={lbl}>Número (DDI + DDD + Número)</label>
+                    <input value={formatWANumber((quiz as any).redirect_whatsapp || '')} onChange={e => updateQuizField('redirect_whatsapp', e.target.value.replace(/\D/g, ''))} placeholder="55 (11) 9 9999-9999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Mensagem automática</label>
+                    <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''} onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
+                  </div>
+                </>)}
               </div>
             </div>
             <button

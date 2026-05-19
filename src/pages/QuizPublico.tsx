@@ -187,7 +187,8 @@ export default function QuizPublico() {
       const perg = todasPerguntas.find(p => p.id === pergId);
       if (!perg) continue;
       if (perg.tipo_resposta === 'multipla') {
-        const selectedIds = multiAns[pergId] || [oId];
+        const selectedIds = multiAns[pergId];
+        if (!selectedIds || selectedIds.length === 0) continue;
         for (const opId of selectedIds) {
           const op = perg.opcoes.find(o => o.id === opId);
           if (op) totalScore += op.pontos ?? 0;
@@ -406,13 +407,15 @@ export default function QuizPublico() {
     if (newLead?.id) await marcarConcluido(newLead.id);
     setSubmitting(false);
 
-    const waNum = ((quiz as any).whatsapp_number as string | undefined)?.replace(/\D/g, '');
-    if (waNum) {
-      const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
-      const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const baseMsg = (quiz as any).whatsapp_message || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
-      const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
-      window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    if ((quiz as any).whatsapp_redirecionar_direto === true) {
+      const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
+      if (waNum) {
+        const sessionCode = (newLead?.id as string)?.slice(-6).toUpperCase() || Math.random().toString(36).slice(-6).toUpperCase();
+        const timestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é ${nome}\nSou de ${cidade}`;
+        const whatsappMessage = `${baseMsg}\n\nCódigo: ${sessionCode} • ${timestamp}`;
+        window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+      }
     }
 
     setPhase('sucesso');
@@ -437,7 +440,8 @@ export default function QuizPublico() {
       return val.trim().length > 0;
     });
   const primary = quiz?.cor_primaria || '#2563eb';
-  const whatsappEnabled = !!(((quiz as any)?.whatsapp_number as string | undefined)?.replace(/\D/g, ''));
+  const whatsappEnabled = (quiz as any)?.whatsapp_redirecionar_direto === true
+    && !!(((quiz as any)?.redirect_whatsapp as string | undefined)?.replace(/\D/g, ''));
 
   const utms = useRef<Record<string, string>>({});
 

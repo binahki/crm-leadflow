@@ -411,7 +411,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                   voce_aceita_as_regras_do_consignado: l.aceita_regras,
                 };
               }
-              const entries = Object.entries(respostas).filter(([k, v]) => !deveIgnorar(k, v));
+              const entries = Object.entries(respostas)
+                .filter(([k, v]) => !deveIgnorar(k, v))
+                .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'));
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">
