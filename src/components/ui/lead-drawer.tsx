@@ -245,6 +245,15 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [showMotivo, setShowMotivo] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!lead) return;
+    const respostas = (lead as any).quiz_respostas;
+    if (!respostas || typeof respostas !== 'object') return;
+    const keys = Object.keys(respostas as Record<string, unknown>).sort();
+    setPerguntasOrdenadas(keys);
+  }, [lead?.id]);
 
   useEffect(() => {
     if (lead) {
@@ -411,9 +420,12 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                   voce_aceita_as_regras_do_consignado: l.aceita_regras,
                 };
               }
-              const entries = Object.entries(respostas)
-                .filter(([k, v]) => !deveIgnorar(k, v))
-                .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'));
+              const orderedKeys = perguntasOrdenadas.length > 0
+                ? perguntasOrdenadas.filter(k => k in respostas!)
+                : Object.keys(respostas).sort();
+              const entries = orderedKeys
+                .map(k => [k, respostas![k]] as [string, unknown])
+                .filter(([k, v]) => !deveIgnorar(k, v));
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">
