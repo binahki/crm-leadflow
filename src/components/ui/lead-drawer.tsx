@@ -57,7 +57,7 @@ const CAMPOS_IGNORADOS = new Set([
 ]);
 const STRIP_PREFIXES = ['voce_', 'qual_sua_', 'quanto_gostaria_de_'];
 
-function deveIgnorar(chave: string, valor: unknown): boolean {
+function deveIgnorar(chave: string, valor: unknown, isInternalQuiz: boolean = false): boolean {
   const c = chave.toLowerCase();
   if (CAMPOS_IGNORADOS.has(c)) return true;
   if (/^\d+$/.test(chave)) return true;
@@ -70,12 +70,14 @@ function deveIgnorar(chave: string, valor: unknown): boolean {
   // Valores nulos/vazios
   if (valor === null || valor === undefined || valor === '') return true;
   const str = String(valor);
-  // Letra maiúscula solta (A, B, C, D…) — código de opção
-  if (/^[A-Z]$/.test(str)) return true;
-  // Número solto de um dígito (0–9) — índice de opção
-  if (/^[0-9]$/.test(str)) return true;
-  // Strings de resposta encodada (ex: "1|2|*")
-  if (/^[\d|*\s]+$/.test(str)) return true;
+  if (!isInternalQuiz) {
+    // Letra maiúscula solta (A, B, C, D…) — código de opção
+    if (/^[A-Z]$/.test(str)) return true;
+    // Número solto de um dígito (0–9) — índice de opção
+    if (/^[0-9]$/.test(str)) return true;
+    // Strings de resposta encodada (ex: "1|2|*")
+    if (/^[\d|*\s]+$/.test(str)) return true;
+  }
   if (str.startsWith('http')) return true;
   // Valores muito longos (fbclid, userAgent, etc)
   if (str.length > 200) return true;
@@ -537,12 +539,13 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                   voce_aceita_as_regras_do_consignado: l.aceita_regras,
                 };
               }
-              const orderedKeys = perguntasOrdenadas.length > 0
+              const isInternalQuiz = respostas && Object.keys(respostas).some(k => k.includes(' ') || k.length > 12);
+              const orderedKeys = (isInternalQuiz && perguntasOrdenadas.length > 0)
                 ? perguntasOrdenadas.map(p => p.texto).filter(texto => texto in respostas!)
                 : Object.keys(respostas).sort();
               const entries = orderedKeys
                 .map(k => [k, respostas![k]] as [string, unknown])
-                .filter(([k, v]) => !deveIgnorar(k, v));
+                .filter(([k, v]) => !deveIgnorar(k, v, !!isInternalQuiz));
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">

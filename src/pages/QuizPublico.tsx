@@ -223,6 +223,13 @@ export default function QuizPublico() {
     setSelectedOpcao(null);
     setSelectedOpcoes([]);
 
+    if (isMultipla) {
+      const textos = opcaoIds
+        .map(id => pergunta.opcoes.find(o => o.id === id)?.texto)
+        .filter(Boolean).join(', ');
+      registrarEtapa(currentIdx + 1, pergunta.texto, textos);
+    }
+
     if (hasReprova) {
       registrarEtapa(currentIdx + 1, pergunta.texto, 'Reprovada imediata');
       marcarConcluido(undefined);
