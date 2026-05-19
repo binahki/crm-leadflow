@@ -1698,6 +1698,25 @@ export default function QuizBuilderPage() {
         const missing = DEFAULT_COLETA_CONFIG.filter(d => !storedCampos.has(d.campo));
         return [...stored, ...missing];
       })();
+
+      const redirectValue = (quiz as any).redirect_whatsapp || '';
+      let redirectUrl = redirectValue;
+      let novaAba = false;
+
+      if (redirectValue.startsWith('{') && redirectValue.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(redirectValue);
+          redirectUrl = parsed.url || '';
+          novaAba = !!parsed.nova_aba;
+        } catch (e) {
+          // Fallback
+        }
+      }
+
+      const setRedirectData = (url: string, nAba: boolean) => {
+        updateQuizField('redirect_whatsapp', JSON.stringify({ url, nova_aba: nAba }));
+      };
+
       return (
         <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
           <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>
@@ -1741,27 +1760,51 @@ export default function QuizBuilderPage() {
           })}
           <div style={{ marginTop: '8px', padding: '14px', borderRadius: '12px', background: hexToRgba('#2563eb', 0.04), border: `1px solid ${hexToRgba('#2563eb', 0.12)}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '10px' }}>WhatsApp</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '10px' }}>Configuração do Botão & Destino</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => updateQuizField('whatsapp_redirecionar_direto', !(quiz as any).whatsapp_redirecionar_direto)}>
-                    <div style={{ width: '34px', height: '20px', borderRadius: '99px', background: (quiz as any).whatsapp_redirecionar_direto ? '#25d366' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
-                      <div style={{ position: 'absolute', top: '3px', left: (quiz as any).whatsapp_redirecionar_direto ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: textMain, userSelect: 'none' }}>Redirecionar para WhatsApp após formulário</span>
-                  </div>
-                  <p style={{ fontSize: '11px', color: textMut, margin: '4px 0 0 42px' }}>Quando ativado, o botão fica verde e abre o WhatsApp ao enviar</p>
+                  <label style={lbl}>Texto do botão</label>
+                  <input
+                    value={(quiz as any).whatsapp_mensagem_personalizada || ''}
+                    onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)}
+                    placeholder="Concluir cadastro no whatsapp!"
+                    style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }}
+                  />
                 </div>
-                {(quiz as any).whatsapp_redirecionar_direto && (<>
-                  <div>
-                    <label style={lbl}>Número (DDI + DDD + Número)</label>
-                    <input value={formatWANumber((quiz as any).redirect_whatsapp || '')} onChange={e => updateQuizField('redirect_whatsapp', e.target.value.replace(/\D/g, ''))} placeholder="55 (11) 9 9999-9999" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Mensagem automática</label>
-                    <textarea value={(quiz as any).whatsapp_mensagem_personalizada || ''} onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)} placeholder="Olá, acabei de finalizar o quiz..." style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
-                  </div>
-                </>)}
+                <div>
+                  <label style={lbl}>Tipo de navegação</label>
+                  <select
+                    value={(quiz as any).whatsapp_redirecionar_direto ? 'redirecionar' : 'sucesso'}
+                    onChange={e => updateQuizField('whatsapp_redirecionar_direto', e.target.value === 'redirecionar')}
+                    style={{ ...iStyle, width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 8px' }}
+                  >
+                    <option value="sucesso">Ir para tela de Sucesso</option>
+                    <option value="redirecionar">Redirecionar</option>
+                  </select>
+                </div>
+                {(quiz as any).whatsapp_redirecionar_direto && (
+                  <>
+                    <div>
+                      <label style={lbl}>Destino do redirecionamento</label>
+                      <input
+                        value={redirectUrl}
+                        onChange={e => setRedirectData(e.target.value, novaAba)}
+                        placeholder="https://wa.me/556194233987?text=Oi!%20Sou%20..."
+                        style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '2px' }}
+                      onClick={() => setRedirectData(redirectUrl, !novaAba)}>
+                      <input
+                        type="checkbox"
+                        checked={novaAba}
+                        onChange={() => {}}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '13px', color: textMain, userSelect: 'none' }}>Nova aba?</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <button

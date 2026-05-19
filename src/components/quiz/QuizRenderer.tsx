@@ -170,6 +170,19 @@ export function QuizRenderer({
 
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
+
+  const redirectVal = (quiz as any).redirect_whatsapp || '';
+  let redirectUrl = '';
+  if (redirectVal.startsWith('{') && redirectVal.endsWith('}')) {
+    try {
+      redirectUrl = JSON.parse(redirectVal).url || '';
+    } catch (e) {}
+  } else {
+    redirectUrl = redirectVal;
+  }
+  const isWhatsAppUrl = redirectUrl.toLowerCase().includes('wa.me') || redirectUrl.toLowerCase().includes('whatsapp');
+  const isGreen = whatsappEnabled && isWhatsAppUrl;
+  const buttonText = (quiz as any).whatsapp_mensagem_personalizada || (whatsappEnabled ? 'Enviar e falar no WhatsApp' : 'Enviar meus dados →');
   const rawColetaCampos = coleta || (quiz.coleta_campos as string[] | null);
   const coletaCampos = rawColetaCampos?.length ? rawColetaCampos : ['nome', 'whatsapp', 'cidade', 'instagram'];
   const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
@@ -492,18 +505,18 @@ export function QuizRenderer({
                 style={{
                   width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px',
                   border: 'none',
-                  background: !canSubmit || submitting ? '#9ca3af' : whatsappEnabled ? '#25d366' : btnColor,
+                  background: !canSubmit || submitting ? '#9ca3af' : isGreen ? '#25d366' : btnColor,
                   color: '#fff', fontSize: '15px', fontWeight: 700,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   cursor: submitting || !canSubmit ? 'not-allowed' : 'pointer',
                   opacity: submitting ? 0.6 : 1,
                   transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => { if (!submitting && canSubmit) e.currentTarget.style.background = whatsappEnabled ? '#20c75a' : '#1d4ed8'; }}
-                onMouseLeave={e => { if (!submitting && canSubmit) e.currentTarget.style.background = whatsappEnabled ? '#25d366' : btnColor; }}
+                onMouseEnter={e => { if (!submitting && canSubmit) e.currentTarget.style.background = isGreen ? '#20c75a' : '#1d4ed8'; }}
+                onMouseLeave={e => { if (!submitting && canSubmit) e.currentTarget.style.background = isGreen ? '#25d366' : btnColor; }}
               >
-                {whatsappEnabled && !submitting && <MessageCircle size={20} strokeWidth={2.5} />}
-                {submitting ? 'Enviando...' : whatsappEnabled ? 'Enviar e falar no WhatsApp' : 'Enviar meus dados →'}
+                {isWhatsAppUrl && !submitting && <MessageCircle size={20} strokeWidth={2.5} />}
+                {submitting ? 'Enviando...' : buttonText}
               </button>
             </form>
           </div>

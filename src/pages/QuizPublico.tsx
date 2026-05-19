@@ -341,19 +341,41 @@ export default function QuizPublico() {
   async function finalizarQuiz(leadId?: string | number) {
     if (leadId) await marcarConcluido(leadId);
     setSubmitting(false);
-    const waNum = ((quiz as any).redirect_whatsapp as string | undefined)?.replace(/\D/g, '');
-    if ((quiz as any).whatsapp_redirecionar_direto && waNum && waNum.length >= 10) {
-      let baseMsg = (quiz as any).whatsapp_mensagem_personalizada || `Oi! Acabei de ser aprovada no quiz ✨\nMeu nome é [NOME]\nSou de [CIDADE]`;
-      
-      // Substitui placeholders
-      baseMsg = baseMsg
-        .replace(/\[NOME\]/g, nome)
-        .replace(/\[CIDADE\]/g, cidade);
 
-      const waFull = waNum.startsWith('55') ? waNum : `55${waNum}`;
-      const link = `https://wa.me/${waFull}?text=${encodeURIComponent(baseMsg)}`;
-      console.log('Abrindo WhatsApp:', link);
-      window.open(link, '_blank');
+    const isRedirect = (quiz as any).whatsapp_redirecionar_direto === true;
+    if (isRedirect) {
+      let redirectValue = (quiz as any).redirect_whatsapp || '';
+      let targetUrl = redirectValue;
+      let novaAba = false;
+
+      if (redirectValue.startsWith('{') && redirectValue.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(redirectValue);
+          targetUrl = parsed.url || '';
+          novaAba = !!parsed.nova_aba;
+        } catch (e) {
+          // Fallback
+        }
+      }
+
+      if (targetUrl) {
+        // Substitute placeholders
+        let finalUrl = targetUrl
+          .replace(/\[NOME\]/g, nome)
+          .replace(/\[CIDADE\]/g, cidade)
+          .replace(/%5BNOME%5D/gi, encodeURIComponent(nome))
+          .replace(/%5BCIDADE%5D/gi, encodeURIComponent(cidade));
+
+        if (!/^https?:\/\//i.test(finalUrl)) {
+          finalUrl = 'https://' + finalUrl;
+        }
+
+        if (novaAba) {
+          window.open(finalUrl, '_blank');
+        } else {
+          window.location.href = finalUrl;
+        }
+      }
     }
     setPhase('sucesso');
   }
@@ -476,8 +498,7 @@ export default function QuizPublico() {
       return val.trim().length > 0;
     });
   const primary = quiz?.cor_primaria || '#2563eb';
-  const whatsappEnabled = (quiz as any)?.whatsapp_redirecionar_direto === true
-    && !!(((quiz as any)?.redirect_whatsapp as string | undefined)?.replace(/\D/g, ''));
+  const whatsappEnabled = (quiz as any)?.whatsapp_redirecionar_direto === true;
 
   const utms = useRef<Record<string, string>>({});
 
