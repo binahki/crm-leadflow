@@ -25,7 +25,6 @@ const NAV_MAIN = [
     ]
   },
   { icon: BarChart3, label: 'Funil CRM', href: '/kanban', badge: false },
-  { icon: CreditCard, label: 'Planos', href: '/assinatura', badge: false },
 ];
 
 const NAV_META = [
@@ -45,16 +44,20 @@ const NAV_META = [
 ];
 
 const NAV_INT = [
-  { 
-    icon: Settings, 
-    label: 'Integrações', 
-    href: '/meta-ads', 
+  {
+    icon: Settings,
+    label: 'Integrações',
+    href: '/meta-ads',
     badge: false,
     children: [
       { label: 'Meta Ads', href: '/meta-ads' },
       { label: 'Webhook', href: '/webhook' }
     ]
   },
+];
+
+const NAV_ACCOUNT = [
+  { icon: CreditCard, label: 'Assinatura', href: '/assinatura', badge: false },
 ];
 
 const COLLAPSE_KEY = 'sidebar_collapsed';
@@ -359,6 +362,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
         <NavGroup label="Principal" items={NAV_MAIN} />
         <NavGroup label="Meta Ads" items={NAV_META} />
         <NavGroup label="Integrações" items={NAV_INT} />
+        <NavGroup label="Conta" items={NAV_ACCOUNT} />
       </nav>
 
       {/* Footer */}
