@@ -707,7 +707,7 @@ export default function Dashboard() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)', gap:isMobile?'10px':'16px', marginBottom:'16px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'12px':'16px', marginBottom:'16px' }}>
 
           {/* Card 1: META DO MÊS — hero */}
           <div style={{ background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius:'16px', padding:isMobile?'16px':'24px', boxShadow:'0 8px 24px rgba(37,99,235,0.25)', border:'none' }}>

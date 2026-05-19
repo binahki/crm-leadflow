@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -88,6 +89,14 @@ export default function AssinaturaPage() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   const pageBg = dark ? '#0f0f11' : '#f5f5f7';
   const cardBg = dark ? '#1a1a1e' : '#ffffff';
   const txt    = dark ? '#f4f4f5' : '#111827';
@@ -98,15 +107,15 @@ export default function AssinaturaPage() {
     <AppLayout leadCount={leads.length}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');`}</style>
 
-      <div style={{ minHeight: '100vh', background: pageBg, padding: '44px 24px 64px', fontFamily: FONT }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ minHeight: '100vh', background: pageBg, fontFamily: FONT }}>
+        <div style={{ padding: isMobile ? '16px' : '32px', maxWidth: '1200px', margin: '0 auto' }}>
 
           {/* Header */}
-          <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-            <h1 style={{ fontSize: '32px', fontWeight: 800, color: txt, margin: 0, letterSpacing: '-0.04em' }}>
+          <div style={{ marginBottom: isMobile ? '24px' : '40px', textAlign: 'center', padding: isMobile ? '0 4px' : '0' }}>
+            <h1 style={{ fontSize: isMobile ? '24px' : '32px', fontWeight: 800, color: txt, margin: 0, letterSpacing: '-0.04em' }}>
               Assinatura
             </h1>
-            <p style={{ fontSize: '16px', color: txtMid, marginTop: '8px', margin: '8px 0 0' }}>
+            <p style={{ fontSize: isMobile ? '14px' : '16px', color: txtMid, marginTop: '8px', margin: '8px 0 0' }}>
               Escolha o plano ideal para o seu negócio
             </p>
           </div>
@@ -114,8 +123,8 @@ export default function AssinaturaPage() {
           {/* Plan Cards */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '20px',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: isMobile ? '16px' : '20px',
             marginBottom: '32px',
           }}>
             {PLANS.map(plan => (
@@ -123,7 +132,7 @@ export default function AssinaturaPage() {
                 background: cardBg,
                 border: `2px solid ${plan.popular ? plan.color : bdr}`,
                 borderRadius: '20px',
-                padding: '28px',
+                padding: isMobile ? '20px' : '28px',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',

@@ -701,7 +701,7 @@ export default function CampanhasPage() {
         </div>
 
         {/* Cards: Gasto | Leads+CPL | Revs+CPR | CTR */}
-        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(4,1fr)',gap:isMobile?'10px':'14px',marginBottom:'16px'}}>
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)',gap:isMobile?'12px':'16px',marginBottom:'16px'}}>
 
           {/* Card 1: GASTO */}
           <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
