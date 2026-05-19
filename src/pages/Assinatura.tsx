@@ -1,38 +1,49 @@
-import { useState } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
-import { Check } from 'lucide-react';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
-
 const WA_CONSULTA = 'https://wa.me/5519993929168?text=Olá!%20Preciso%20de%20um%20plano%20personalizado%20para%20minha%20operação.';
 
-const FEATURES: { label: string; tooltip?: string; gratuito: boolean | string; starter: boolean | string; pro: boolean | string }[] = [
-  { label: 'Leads/mês',             gratuito: '50',  starter: '250', pro: '600' },
-  { label: 'Quizzes ativos',        gratuito: '1',   starter: '1',   pro: '3'   },
-  {
-    label: 'Modelo alta conversão',
-    tooltip: 'Perguntas validadas prontas pra copiar e colar',
-    gratuito: false, starter: true, pro: true,
-  },
-  { label: 'CRM completo',          gratuito: true,  starter: true,  pro: true  },
-  { label: 'Dashboard Meta Ads',    gratuito: true,  starter: true,  pro: true  },
-  {
-    label: 'IA Ravena™',
-    tooltip: 'Nossa IA que trabalha enquanto você dorme — otimiza e escala para trazer revendedoras a baixo custo',
-    gratuito: false, starter: true, pro: true,
-  },
-  {
-    label: 'Gestor de tráfego',
-    tooltip: 'Sim, nossa equipe gerenciando seus anúncios por você',
-    gratuito: false, starter: true, pro: true,
-  },
-  { label: 'API WhatsApp oficial',  gratuito: false, starter: false, pro: true  },
-  { label: 'Inbox profissional',    gratuito: false, starter: false, pro: true  },
-  { label: 'Múltiplos usuários',    gratuito: false, starter: false, pro: true  },
-  { label: 'Suporte prioritário',   gratuito: false, starter: false, pro: true  },
-];
+interface Feature { label: string; desc?: string; active: boolean; }
+
+function planFeatures(key: 'gratuito' | 'starter' | 'pro'): Feature[] {
+  const quizLabel =
+    key === 'gratuito' ? '1 Quiz (crie do zero)' :
+    key === 'starter'  ? '1 Quiz + Modelo com perguntas validadas' :
+                         '3 Quizzes + Modelo com perguntas validadas';
+
+  const active = (n: number) =>
+    key === 'gratuito' ? n <= 4 :
+    key === 'starter'  ? n <= 9 :
+    true;
+
+  return [
+    { label: `Leads/mês: ${{ gratuito: '50', starter: '250', pro: '600' }[key]}`, active: active(1) },
+    { label: 'CRM completo',           active: active(2) },
+    { label: 'Dashboard Meta Ads',     active: active(3) },
+    { label: quizLabel,                active: active(4) },
+    { label: 'Rastreamento do quiz',   active: active(5) },
+    {
+      label: 'Modelo de alta conversão',
+      desc: 'Perguntas validadas prontas pra copiar e colar',
+      active: active(6),
+    },
+    {
+      label: 'IA Ravena™',
+      desc: 'Nossa IA que trabalha enquanto você dorme — otimiza e escala para trazer revendedoras a baixo custo',
+      active: active(7),
+    },
+    {
+      label: 'Gestor de Tráfego',
+      desc: 'Sim, nossa equipe gerenciando seus anúncios por você',
+      active: active(8),
+    },
+    { label: 'API WhatsApp oficial',   active: active(9)  },
+    { label: 'Múltiplos usuários',     active: active(10) },
+    { label: 'Suporte prioritário',    active: active(11) },
+  ];
+}
 
 const PLANS = [
   {
@@ -70,53 +81,6 @@ const PLANS = [
   },
 ];
 
-function TooltipLabel({ label, tooltip, txt, txtMid, isDark }: {
-  label: string;
-  tooltip?: string;
-  txt: string;
-  txtMid: string;
-  isDark: boolean;
-}) {
-  const [show, setShow] = useState(false);
-
-  if (!tooltip) {
-    return <span style={{ fontSize: '13px', color: txt, fontWeight: 500 }}>{label}</span>;
-  }
-
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', position: 'relative' }}>
-      <span style={{ fontSize: '13px', color: txt, fontWeight: 500 }}>{label}</span>
-      <span
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: '15px', height: '15px', borderRadius: '50%',
-          background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-          color: txtMid, fontSize: '10px', fontWeight: 700,
-          cursor: 'default', flexShrink: 0, lineHeight: 1,
-        }}
-      >
-        ?
-      </span>
-      {show && (
-        <div style={{
-          position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)',
-          marginLeft: '10px', zIndex: 10,
-          background: isDark ? '#1e1e22' : '#111827',
-          color: '#fff', fontSize: '12px', fontWeight: 500, lineHeight: 1.5,
-          padding: '8px 12px', borderRadius: '8px',
-          width: '220px', whiteSpace: 'normal',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-          pointerEvents: 'none',
-        }}>
-          {tooltip}
-        </div>
-      )}
-    </span>
-  );
-}
-
 export default function AssinaturaPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
@@ -129,7 +93,7 @@ export default function AssinaturaPage() {
 
   return (
     <AppLayout leadCount={leads.length}>
-      <div style={{ padding: '32px', fontFamily: FONT, maxWidth: '960px', margin: '0 auto' }}>
+      <div style={{ padding: '32px', fontFamily: FONT, maxWidth: '1020px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '36px', textAlign: 'center' }}>
@@ -142,113 +106,91 @@ export default function AssinaturaPage() {
         </div>
 
         {/* Plan Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '32px' }}>
-          {PLANS.map(plan => (
-            <div key={plan.key} style={{
-              background: cardBg,
-              border: `2px solid ${plan.popular ? plan.color : bdr}`,
-              borderRadius: '20px',
-              padding: '28px',
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-              boxShadow: plan.popular ? `0 8px 32px ${plan.color}20` : 'none',
-            }}>
-              {plan.popular && (
-                <div style={{
-                  position: 'absolute', top: '-12px', left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: plan.color, color: '#fff',
-                  padding: '4px 14px', borderRadius: '99px',
-                  fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                  whiteSpace: 'nowrap',
-                }}>
-                  O mais popular
-                </div>
-              )}
-
-              <h3 style={{ fontSize: '13px', fontWeight: 700, color: plan.color, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
-                {plan.name}
-              </h3>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '30px', fontWeight: 800, color: txt }}>{plan.price}</span>
-                <span style={{ fontSize: '13px', color: txtMid }}>{plan.period}</span>
-              </div>
-              <p style={{ fontSize: '13px', color: txtMid, lineHeight: 1.5, margin: '0 0 24px', flex: 1 }}>
-                {plan.description}
-              </p>
-              <button style={{
-                width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
-                background: plan.current ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
-                color: plan.current ? txtMid : '#fff',
-                fontSize: '14px', fontWeight: 700,
-                cursor: plan.current ? 'default' : 'pointer',
-                fontFamily: FONT,
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '40px', alignItems: 'start' }}>
+          {PLANS.map(plan => {
+            const features = planFeatures(plan.key);
+            return (
+              <div key={plan.key} style={{
+                background: cardBg,
+                border: `2px solid ${plan.popular ? plan.color : bdr}`,
+                borderRadius: '20px',
+                padding: '28px',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                boxShadow: plan.popular ? `0 8px 32px ${plan.color}20` : 'none',
               }}>
-                {plan.current ? 'Plano atual' : plan.cta}
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* Comparison Table */}
-        <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${bdr}`, overflow: 'visible', marginBottom: '32px' }}>
-          {/* Table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: `1px solid ${bdr}`, borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px' }} />
-            {PLANS.map(plan => (
-              <div key={plan.key} style={{ padding: '16px 20px', textAlign: 'center', borderLeft: `1px solid ${bdr}` }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: plan.color }}>{plan.name}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Feature rows */}
-          {FEATURES.map((f, i) => (
-            <div key={f.label} style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
-              borderBottom: i < FEATURES.length - 1 ? `1px solid ${bdr}` : 'none',
-              background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'),
-              borderRadius: i === FEATURES.length - 1 ? '0 0 16px 16px' : undefined,
-            }}>
-              <div style={{ padding: '13px 20px', overflow: 'visible' }}>
-                <TooltipLabel label={f.label} tooltip={f.tooltip} txt={txt} txtMid={txtMid} isDark={dark} />
-              </div>
-              {(['gratuito', 'starter', 'pro'] as const).map(planKey => {
-                const val = f[planKey];
-                return (
-                  <div key={planKey} style={{
-                    padding: '13px 20px', textAlign: 'center',
-                    borderLeft: `1px solid ${bdr}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                {plan.popular && (
+                  <div style={{
+                    position: 'absolute', top: '-12px', left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: plan.color, color: '#fff',
+                    padding: '4px 14px', borderRadius: '99px',
+                    fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
                   }}>
-                    {typeof val === 'boolean' ? (
-                      val ? (
-                        <div style={{
-                          width: '20px', height: '20px', borderRadius: '50%',
-                          background: 'rgba(16,185,129,0.1)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <Check size={12} color="#10b981" strokeWidth={3} />
-                        </div>
-                      ) : (
-                        <div style={{
-                          width: '16px', height: '2px', borderRadius: '1px',
-                          background: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-                        }} />
-                      )
-                    ) : (
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: txt }}>{val}</span>
-                    )}
+                    O mais popular
                   </div>
-                );
-              })}
-            </div>
-          ))}
+                )}
+
+                {/* Plan name */}
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: plan.color, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
+                  {plan.name}
+                </h3>
+
+                {/* Price */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '30px', fontWeight: 800, color: txt }}>{plan.price}</span>
+                  <span style={{ fontSize: '13px', color: txtMid }}>{plan.period}</span>
+                </div>
+
+                {/* Description */}
+                <p style={{ fontSize: '13px', color: txtMid, lineHeight: 1.5, margin: '0 0 20px' }}>
+                  {plan.description}
+                </p>
+
+                {/* Divider */}
+                <div style={{ height: '1px', background: bdr, marginBottom: '20px' }} />
+
+                {/* Feature list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px', flex: 1 }}>
+                  {features.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', opacity: f.active ? 1 : 0.45 }}>
+                      <span style={{ fontSize: '14px', lineHeight: 1, marginTop: '1px', flexShrink: 0 }}>
+                        {f.active ? '✅' : '🔒'}
+                      </span>
+                      <div>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: txt, lineHeight: 1.4 }}>
+                          {f.label}
+                        </span>
+                        {f.desc && (
+                          <p style={{ fontSize: '11px', color: txtMid, margin: '2px 0 0', lineHeight: 1.4 }}>
+                            {f.desc}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                <button style={{
+                  width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+                  background: plan.current ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
+                  color: plan.current ? txtMid : '#fff',
+                  fontSize: '14px', fontWeight: 700,
+                  cursor: plan.current ? 'default' : 'pointer',
+                  fontFamily: FONT,
+                }}>
+                  {plan.current ? 'Plano atual' : plan.cta}
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Consultation CTA */}
-        <div style={{ textAlign: 'center', padding: '8px 0 32px' }}>
+        <div style={{ textAlign: 'center', padding: '0 0 32px' }}>
           <p style={{ fontSize: '13px', color: txtMid, margin: '0 0 12px' }}>
             Precisa de mais volume ou recursos personalizados?
           </p>
@@ -263,14 +205,8 @@ export default function AssinaturaPage() {
               color: txtMid, fontSize: '13px', fontWeight: 600,
               textDecoration: 'none', transition: 'all 0.15s',
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.borderColor = '#25d366';
-              e.currentTarget.style.color = '#25d366';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = bdr;
-              e.currentTarget.style.color = txtMid;
-            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#25d366'; e.currentTarget.style.color = '#25d366'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = bdr; e.currentTarget.style.color = txtMid; }}
           >
             💬 Falar com especialista → WhatsApp
           </a>

@@ -394,12 +394,6 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             >
               <UserIcon size={16} /> Minha conta
             </button>
-            <button onClick={() => { navigate('/assinatura'); setShowAccountMenu(false); if (isMobileDrawer) onMobileClose?.(); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: isDark ? '#eee' : '#333', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
-              onMouseEnter={e => e.currentTarget.style.background = hovBg}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <CreditCard size={16} /> Minha assinatura
-            </button>
             <div style={{ height: '1px', background: sideBdr, margin: '4px 8px' }} />
             <button onClick={signOut} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}
               onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.05)'}
