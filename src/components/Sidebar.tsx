@@ -25,7 +25,7 @@ const NAV_MAIN = [
     ]
   },
   { icon: BarChart3, label: 'Funil CRM', href: '/kanban', badge: false },
-  { icon: CreditCard, label: 'Assinatura', href: '/assinatura', badge: false },
+  { icon: CreditCard, label: 'Planos', href: '/assinatura', badge: false },
 ];
 
 const NAV_META = [
