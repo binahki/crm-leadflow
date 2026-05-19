@@ -72,6 +72,15 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     await supabase.from('quiz_sessoes').update(updatePayload).eq('session_id', sessionIdRef.current);
   }, [iniciarSessao]);
 
+  const atualizarTotalEtapas = useCallback(async (total: number) => {
+    if (!iniciadoRef.current || total === 0) return;
+    totalEtapasRef.current = total;
+    await supabase
+      .from('quiz_sessoes')
+      .update({ total_etapas: total })
+      .eq('session_id', sessionIdRef.current);
+  }, []);
+
   const marcarConcluido = useCallback(async (leadId?: string | number) => {
     const total = totalEtapasRef.current;
     await supabase.from('quiz_sessoes').update({
@@ -85,5 +94,5 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     }).eq('session_id', sessionIdRef.current);
   }, []);
 
-  return { iniciarSessao, registrarEtapa, marcarConcluido, sessionId: sessionIdRef.current };
+  return { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionId: sessionIdRef.current };
 }

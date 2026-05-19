@@ -62,13 +62,20 @@ export default function QuizPublico() {
   const [cidade, setCidade] = useState('');
   const [instagram, setInstagram] = useState('');
 
-  const { iniciarSessao, registrarEtapa, marcarConcluido } = useQuizTracker(
+  const { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas } = useQuizTracker(
     slug || '',
     quiz?.org_id,
     todasPerguntas.length
   );
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Corrige total_etapas após perguntas carregarem ─────────────────────────────
+  useEffect(() => {
+    if (todasPerguntas.length > 0 && phase !== 'loading') {
+      atualizarTotalEtapas(todasPerguntas.length);
+    }
+  }, [todasPerguntas.length]); // eslint-disable-line
 
   // ── Load quiz ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -557,7 +564,7 @@ export default function QuizPublico() {
       canSubmit={canSubmit}
       onStart={() => {
         setPhase('quiz');
-        registrarEtapa(0, 'Início', 'Iniciou o quiz');
+        registrarEtapa(1);
       }}
       onOpcaoClick={handleOpcaoClick}
       onContinue={handleContinue}
