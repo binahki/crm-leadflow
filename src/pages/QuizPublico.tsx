@@ -134,7 +134,7 @@ export default function QuizPublico() {
     db.from('quiz_sessoes').update({
       ultima_etapa: currentIdx + 1,
       updated_at: new Date().toISOString(),
-    }).eq('session_id', sid);
+    }).eq('session_id', sid).then(() => {}).catch(() => {});
   }, [currentIdx, phase]); // eslint-disable-line
 
   // ── Confetti on approval ──────────────────────────────────────────────────────
@@ -405,7 +405,7 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
+      const { data: newLead, error } = await db.from('leads').upsert(leadData, { onConflict: 'org_id,whatsapp' }).select().single();
       console.log('Resultado insert:', { newLead, error });
 
       if (error) {
