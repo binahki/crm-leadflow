@@ -376,8 +376,11 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   }, [lead?.id, orgId, fullLead?.quiz_respostas, lead?.quiz_respostas, fullLead?.org_id, lead?.org_id]);
 
   useEffect(() => {
+    if (lead) setAvaliado(!!(lead as any).avaliado);
+  }, [lead?.id, (lead as any)?.avaliado]);
+
+  useEffect(() => {
     if (lead) {
-      setAvaliado(!!(lead as any).avaliado);
       setObs(lead.observacoes || '');
       let s = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
       if (s === 0) s = 1;
@@ -495,9 +498,12 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               e.stopPropagation();
               if (!lead) return;
               const novoValor = !avaliado;
-              setAvaliado(novoValor);
               const { error } = await supabase.from('leads').update({ avaliado: novoValor }).eq('id', lead.id);
-              if (error) { setAvaliado(!novoValor); return; }
+              if (error) {
+                toast.error(`Erro ao salvar: ${error.message}`);
+                return;
+              }
+              setAvaliado(novoValor);
               onUpdate({ ...lead, avaliado: novoValor });
             }}
             style={{ padding: '10px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'all 0.15s' }}
