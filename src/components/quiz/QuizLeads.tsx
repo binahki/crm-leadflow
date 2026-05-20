@@ -59,7 +59,11 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
       const [bData, pData, sData] = await Promise.all([
         supabase.from('quiz_blocos').select('id, ordem').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
-        supabase.from('quiz_sessoes').select('*').eq('quiz_slug', qData.slug).order('updated_at', { ascending: false }),
+        supabase.from('quiz_sessoes')
+          .select('*')
+          .eq('quiz_slug', qData.slug)
+          .gt('ultima_etapa', 0)
+          .order('updated_at', { ascending: false }),
       ]);
 
       if (bData.data) setBlocos(bData.data);

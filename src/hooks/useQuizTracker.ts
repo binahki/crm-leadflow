@@ -134,13 +134,13 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     });
   }, [enqueue]);
 
-  const marcarConcluido = useCallback((leadId?: string | number) => {
+  const marcarConcluido = useCallback((leadId?: string | number, etapaAtual?: number) => {
     const total = totalEtapasRef.current;
 
     enqueue(async () => {
       const updatePayload: any = {
         concluiu: true,
-        ultima_etapa: total > 0 ? total : undefined,
+        ultima_etapa: etapaAtual !== undefined ? etapaAtual : (total > 0 ? total : undefined),
         total_etapas: total > 0 ? total : undefined,
         virou_lead: !!leadId,
         lead_id: leadId || null,

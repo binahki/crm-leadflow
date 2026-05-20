@@ -284,8 +284,9 @@ export default function QuizPublico() {
     }
 
     if (hasReprova) {
-      registrarEtapa(currentIdx + 1, pergunta.texto, 'Reprovada imediata');
-      marcarConcluido(undefined);
+      const etapaReprovacao = currentIdx + 1;
+      registrarEtapa(etapaReprovacao, pergunta.texto, 'Reprovada imediata');
+      marcarConcluido(undefined, etapaReprovacao);
       setPhase('reprovado');
       return;
     }
@@ -341,7 +342,7 @@ export default function QuizPublico() {
           setPhase('aprovado_form');
           registrarEtapa(newVisible.length + 1, 'Formulário', 'Viu formulário');
         } else {
-          marcarConcluido(undefined);
+          marcarConcluido(undefined, newVisible.length);
           setPhase('reprovado');
         }
       }, duration);
