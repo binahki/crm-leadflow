@@ -476,7 +476,7 @@ function LeadsPage() {
         utm_source, utm_campaign, score, faixa,
         observacoes, motivo_reprovacao, ultimo_status_change,
         status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
-        org_id, wa_sent
+        org_id, wa_sent, avaliado
       `)
       .order('ultimo_status_change', { ascending: false })
       .eq('org_id', orgId)

@@ -468,7 +468,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${g1}, ${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: '#fff', boxShadow: `0 4px 14px ${g1}60`, fontFamily: FONT }}>
                 {initials(lead.nome)}
               </div>
-              {lead.status === 1 && !avaliado && (
+              {status === 1 && !avaliado && (
                 <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 2px 8px rgba(59,130,246,0.4)', zIndex: 10, whiteSpace: 'nowrap' }}>
                   Novo
                 </div>

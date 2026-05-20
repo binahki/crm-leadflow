@@ -62,7 +62,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         supabase.from('quiz_sessoes')
           .select('*')
           .eq('quiz_slug', qData.slug)
-          .gt('ultima_etapa', 0)
+          .or('ultima_etapa.gt.0,virou_lead.eq.true')
           .order('updated_at', { ascending: false }),
       ]);
 
