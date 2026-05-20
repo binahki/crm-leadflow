@@ -41,6 +41,7 @@ export interface Lead {
   status_aprovado_at?: string;
   score?: number | null;
   faixa?: 'verde' | 'amarelo' | 'vermelho' | null;
+  avaliado?: boolean;
   [key: string]: unknown;
 }
 

@@ -505,6 +505,33 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
+        {/* Avaliação manual */}
+        <div style={{ padding: '12px 22px', flexShrink: 0 }}>
+          <div
+            onClick={async () => {
+              if (!lead) return;
+              const novoValor = !l.avaliado;
+              await supabase.from('leads').update({ avaliado: novoValor }).eq('id', lead.id);
+              onUpdate({ ...lead, avaliado: novoValor });
+            }}
+            style={{ padding: '12px 14px', borderRadius: '12px', background: l.avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.05)'), border: `1.5px solid ${l.avaliado ? '#10b981' : '#3b82f6'}`, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'all 0.2s' }}
+          >
+            <div style={{ width: '20px', height: '20px', borderRadius: '6px', border: `2px solid ${l.avaliado ? '#10b981' : '#3b82f6'}`, background: l.avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+              {l.avaliado && <Check size={14} color="#fff" strokeWidth={3} />}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: l.avaliado ? '#10b981' : '#3b82f6', marginBottom: '2px', fontFamily: FONT }}>
+                {l.avaliado ? '✓ Perfil avaliado' : 'Marcar como avaliado'}
+              </div>
+              <div style={{ fontSize: '11px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}>
+                {l.avaliado ? 'Clique para desmarcar' : 'Marque quando terminar de analisar este lead'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+
         {/* Conteúdo rolável */}
         <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
           <div style={{ padding: '4px 22px 8px' }}>

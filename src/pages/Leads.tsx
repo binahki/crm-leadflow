@@ -404,6 +404,7 @@ function LeadsPage() {
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
   const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
+  const [showOnlyPending, setShowOnlyPending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -442,8 +443,8 @@ function LeadsPage() {
         utm_source, utm_campaign, score, faixa,
         observacoes, motivo_reprovacao, ultimo_status_change,
           status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
-          org_id, wa_sent
-        `)
+          org_id, wa_sent, avaliado
+`)
         .order('ultimo_status_change', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
@@ -531,6 +532,7 @@ function LeadsPage() {
 
   const filtered = useMemo(() => {
     let r=[...allLeads];
+    if(showOnlyPending) r=r.filter(l=>!l.avaliado);
     r=filterByPeriod(r,periodFilter,customFrom,customTo,statusFilter!=='all'?statusFilter:undefined);
     if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
     if(campanhaFiltro.trim()){
@@ -557,7 +559,7 @@ function LeadsPage() {
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate]);
+  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate, showOnlyPending]);
 
   useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search, campanhaFiltro]);
 
@@ -688,7 +690,14 @@ function LeadsPage() {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
-          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
+            {allLeads.filter(l => !l.avaliado).length > 0 && (
+              <span style={{ background: '#f59e0b', color: '#fff', padding: '3px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 800 }}>
+                {allLeads.filter(l => !l.avaliado).length} pendentes
+              </span>
+            )}
+          </div>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
@@ -745,6 +754,10 @@ function LeadsPage() {
                 </div>
                 <FilterDropdown value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
+                <button onClick={()=>setShowOnlyPending(v=>!v)} style={{...btnGhost,border:`1px solid ${showOnlyPending?'#f59e0b':border}`,background:showOnlyPending?'rgba(245,158,11,0.1)':'transparent',color:showOnlyPending?'#f59e0b':(dark?'#a1a1aa':'#374151')}}>
+                  📋 Pendentes
+                  {allLeads.filter(l=>!l.avaliado).length>0&&<span style={{background:'#f59e0b',color:'#fff',padding:'1px 5px',borderRadius:'5px',fontSize:'10px',fontWeight:800,marginLeft:'4px'}}>{allLeads.filter(l=>!l.avaliado).length}</span>}
+                </button>
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={()=>selectedIds.size>0?setShowDeleteConf(true):undefined} style={{...btnGhost,border:`1px solid ${selectedIds.size>0?'#fecaca':border}`,background:selectedIds.size>0?'#fff1f2':(dark?'#111113':'#fff'),color:selectedIds.size>0?'#dc2626':(dark?'#3f3f46':'#d1d5db'),cursor:selectedIds.size>0?'pointer':'default'}}>
@@ -895,6 +908,7 @@ function LeadsPage() {
             <table className="w-full text-sm" style={{tableLayout:'fixed'}}>
               <colgroup>
                 <col style={{width:'40px'}}/>
+                <col style={{width:'36px'}}/>
                 <col style={{width:'23%'}}/>
                 <col style={{width:'88px'}}/>
                 <col style={{width:'14%'}}/>
@@ -908,6 +922,7 @@ function LeadsPage() {
                   <th className="pl-4 pr-2 py-3">
                     <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
                   </th>
+                  <th className={`px-2 py-3 text-center text-xs font-semibold ${muted}`} title="Avaliado">✓</th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
                   <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
                     <button onClick={()=>setSortByScore(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:sortByScore?(dark?'#60a5fa':'#2563eb'):(dark?'#71717a':'#6b7280'),background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
@@ -929,19 +944,25 @@ function LeadsPage() {
                 {isLoading?([...Array(10)].map((_,i)=>(
                   <tr key={i} className={`border-b ${divider}`}>
                     <td className="pl-4 pr-2 py-3"><div style={{width:'15px',height:'15px',borderRadius:'3px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></td>
+                    <td className="px-2 py-3"><div style={{width:'18px',height:'18px',borderRadius:'5px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',margin:'0 auto'}}/></td>
                     <td className="px-3 py-3"><div style={{display:'flex',alignItems:'center',gap:'7px'}}><div style={{width:'28px',height:'28px',borderRadius:'50%',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${90+Math.floor((i*37)%70)}px`}}/></div></td>
                     {[60,90,110,90,80].map((w,j)=>(<td key={j} className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${w}px`}}/></td>))}
                     <td className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:'80px'}}/></td>
                     <td className="px-3 py-3"><div style={{display:'flex',gap:'5px'}}><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></div></td>
                   </tr>
                 )))
-                :paginatedLeads.length===0?(<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
+                :paginatedLeads.length===0?(<tr><td colSpan={9} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
                 :paginatedLeads.map((lead,idx)=>{
                   const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined; const la=lead as any;
                   return(
                     <tr key={lead.id} className={`${sel?(dark?'bg-blue-950/30':'bg-blue-50/60'):idx%2===0?'':(dark?'bg-[#0f0f11]':'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={()=>handleViewLead(lead)}>
                       <td className="pl-4 pr-2 py-3" onClick={e=>e.stopPropagation()}>
                         <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);if(!e.target.checked)setAllSystemSelected(false);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
+                      </td>
+                      <td className="px-2 py-3 text-center" onClick={e=>e.stopPropagation()}>
+                        {la.avaliado
+                          ? <div style={{width:'18px',height:'18px',borderRadius:'5px',background:'#10b981',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}}><Check style={{width:'11px',height:'11px',color:'#fff',strokeWidth:3}}/></div>
+                          : <div style={{width:'18px',height:'18px',borderRadius:'5px',border:`2px solid ${dark?'#3f3f46':'#e5e7eb'}`,margin:'0 auto'}}/>}
                       </td>
                       <td className="px-3 py-3" style={{overflow:'hidden'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
