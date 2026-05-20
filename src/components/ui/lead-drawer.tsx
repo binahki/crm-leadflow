@@ -466,7 +466,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                 {initials(lead.nome)}
               </div>
               {lead.status === 1 && !avaliado && (
-                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 0 0 2px rgba(59,130,246,0.3)' }}>
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 2px 8px rgba(59,130,246,0.4)', zIndex: 10, whiteSpace: 'nowrap' }}>
                   Novo
                 </div>
               )}
@@ -491,7 +491,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         {/* Avaliação manual — discreto, acima do status */}
         <div style={{ padding: '10px 22px', flexShrink: 0 }}>
           <div
-            onClick={async () => {
+            onClick={async (e) => {
+              e.stopPropagation();
               if (!lead) return;
               const novoValor = !avaliado;
               setAvaliado(novoValor);

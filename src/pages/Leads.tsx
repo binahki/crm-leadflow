@@ -949,7 +949,7 @@ function LeadsPage() {
                         <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
                           <div style={{position:'relative',flexShrink:0}}>
                             <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700}}>{getInitials(lead.nome)}</div>
-                            {toStatusNum(lead.status)===1&&!la.avaliado&&<div style={{position:'absolute',top:'-2px',right:'-2px',width:'10px',height:'10px',borderRadius:'50%',background:'#3b82f6',border:`2px solid ${dark?'#111113':'#ffffff'}`,boxShadow:'0 0 0 1px rgba(59,130,246,0.3)'}}/>}
+                            {toStatusNum(lead.status)===1&&!la.avaliado&&<div style={{position:'absolute',top:'-2px',right:'-2px',width:'10px',height:'10px',borderRadius:'50%',background:'#3b82f6',border:`2px solid ${dark?'#111113':'#ffffff'}`,boxShadow:'0 0 0 1px rgba(59,130,246,0.3)',zIndex:10}}/>}
                           </div>
                           <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{safeName(lead.nome)||'Lead'}</span>
                           {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
