@@ -338,6 +338,8 @@ export default function CampanhasPage() {
   const [activeTab, setActiveTab] = useState<'campanhas'|'insights'>('campanhas');
   const [activeLevel, setActiveLevel] = useState<'campanhas'|'conjuntos'|'anuncios'>('campanhas');
   const [selectedCampIds, setSelectedCampIds] = useState<Set<string>>(new Set());
+  const [selectedAdsetIds, setSelectedAdsetIds] = useState<Set<string>>(new Set());
+  const [selectedAdIds, setSelectedAdIds] = useState<Set<string>>(new Set());
   const [editingBudget, setEditingBudget] = useState<{id:string;value:string;level:'campaign'|'adset'}|null>(null);
   const [toast, setToast] = useState<{msg:string;ok:boolean}|null>(null);
   const [lastLoadTime, setLastLoadTime] = useState<Date|null>(null);
@@ -1113,23 +1115,27 @@ export default function CampanhasPage() {
                 const totalLeadsAll=displayedCampaigns.reduce((s,c)=>s+c.leads_api,0);
                 return (
                   <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-                    {/* Abas Meta Ads Manager */}
-                    <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
-                      <button onClick={()=>setActiveLevel('campanhas')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='campanhas'?'#2563eb':border}`,background:activeLevel==='campanhas'?'#2563eb':'transparent',color:activeLevel==='campanhas'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='campanhas'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s',display:'flex',alignItems:'center',gap:'5px'}}>
-                        <TrendingUp size={13}/>Campanhas
-                      </button>
-                      {selectedCampIds.size > 0 && (
-                        <>
-                          <button onClick={()=>setActiveLevel('conjuntos')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='conjuntos'?'#2563eb':border}`,background:activeLevel==='conjuntos'?'#2563eb':'transparent',color:activeLevel==='conjuntos'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='conjuntos'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}>
-                            Conjuntos ({selectedCampIds.size})
-                          </button>
-                          <button onClick={()=>setActiveLevel('anuncios')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='anuncios'?'#2563eb':border}`,background:activeLevel==='anuncios'?'#2563eb':'transparent',color:activeLevel==='anuncios'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='anuncios'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}>
-                            Anúncios ({selectedCampIds.size})
-                          </button>
-                          <div onClick={()=>{setSelectedCampIds(new Set());setActiveLevel('campanhas');}} style={{padding:'5px 10px',borderRadius:'20px',background:dark?'rgba(37,99,235,0.12)':'#eff6ff',border:'1px solid rgba(37,99,235,0.3)',color:'#2563eb',fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:'5px'}}>
-                            {selectedCampIds.size} selecionado{selectedCampIds.size>1?'s':''} <X size={11}/>
-                          </div>
-                        </>
+                    {/* Abas Meta Ads Manager — 3 fixas sempre visíveis */}
+                    <div style={{display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}}>
+                      {/* Segmented control */}
+                      <div style={{display:'flex',gap:'2px',padding:'3px',background:dark?'rgba(255,255,255,0.04)':'#f3f4f6',borderRadius:'8px'}}>
+                        <button onClick={()=>{setActiveLevel('campanhas');setSelectedAdsetIds(new Set());setSelectedAdIds(new Set());}} style={{padding:'6px 14px',borderRadius:'6px',background:activeLevel==='campanhas'?'#2563eb':'transparent',color:activeLevel==='campanhas'?'#fff':txtMid,border:'none',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}>
+                          Campanhas
+                        </button>
+                        <button onClick={()=>{if(selectedCampIds.size>0){setActiveLevel('conjuntos');setSelectedAdIds(new Set());}}} style={{padding:'6px 14px',borderRadius:'6px',background:activeLevel==='conjuntos'?'#2563eb':'transparent',color:activeLevel==='conjuntos'?'#fff':selectedCampIds.size===0?txtLow:txtMid,border:'none',fontSize:'13px',fontWeight:600,cursor:selectedCampIds.size===0?'not-allowed':'pointer',fontFamily:'inherit',transition:'all 0.15s',opacity:selectedCampIds.size===0?0.4:1}}>
+                          Conjuntos{selectedCampIds.size>0?` (${selectedCampIds.size})`:''}
+                        </button>
+                        <button onClick={()=>{if(selectedCampIds.size>0){setActiveLevel('anuncios');setSelectedAdsetIds(new Set());}}} style={{padding:'6px 14px',borderRadius:'6px',background:activeLevel==='anuncios'?'#2563eb':'transparent',color:activeLevel==='anuncios'?'#fff':selectedCampIds.size===0?txtLow:txtMid,border:'none',fontSize:'13px',fontWeight:600,cursor:selectedCampIds.size===0?'not-allowed':'pointer',fontFamily:'inherit',transition:'all 0.15s',opacity:selectedCampIds.size===0?0.4:1}}>
+                          Anúncios{selectedCampIds.size>0?` (${selectedCampIds.size})`:''}
+                        </button>
+                      </div>
+                      {/* Divisor vertical */}
+                      <div style={{width:'1px',height:'24px',background:border}}/>
+                      {/* Pill contextual */}
+                      {((activeLevel==='campanhas'&&selectedCampIds.size>0)||(activeLevel==='conjuntos'&&selectedAdsetIds.size>0)||(activeLevel==='anuncios'&&selectedAdIds.size>0))&&(
+                        <div onClick={()=>{if(activeLevel==='campanhas')setSelectedCampIds(new Set());else if(activeLevel==='conjuntos')setSelectedAdsetIds(new Set());else setSelectedAdIds(new Set());}} style={{padding:'5px 12px',borderRadius:'20px',background:'#2563eb',color:'#fff',fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:'6px'}}>
+                          {(activeLevel==='campanhas'?selectedCampIds.size:activeLevel==='conjuntos'?selectedAdsetIds.size:selectedAdIds.size)} selecionado{(activeLevel==='campanhas'?selectedCampIds.size:activeLevel==='conjuntos'?selectedAdsetIds.size:selectedAdIds.size)>1?'s':''} <X size={12}/>
+                        </div>
                       )}
                     </div>
 
@@ -1162,7 +1168,14 @@ export default function CampanhasPage() {
                       {!isMobile && (
                         <div style={{display:'grid',gridTemplateColumns:cols,padding:'10px 12px',borderBottom:`1px solid ${border}`,background:dark?'#16161a':'#f9fafb',alignItems:'center'}}>
                           <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-                            <input type="checkbox" checked={selectedCampIds.size===displayedCampaigns.length&&displayedCampaigns.length>0} onChange={e=>{if(e.target.checked){setSelectedCampIds(new Set(displayedCampaigns.map(c=>c.id)))}else{setSelectedCampIds(new Set())}}} style={{width:'14px',height:'14px',cursor:'pointer'}}/>
+                            <input type="checkbox"
+                              checked={activeLevel==='campanhas'?selectedCampIds.size===tableData.length&&tableData.length>0:activeLevel==='conjuntos'?selectedAdsetIds.size===tableData.length&&tableData.length>0:selectedAdIds.size===tableData.length&&tableData.length>0}
+                              onChange={e=>{
+                                const ids=new Set(tableData.map(r=>r.id));
+                                if(activeLevel==='campanhas')setSelectedCampIds(e.target.checked?ids:new Set());
+                                else if(activeLevel==='conjuntos')setSelectedAdsetIds(e.target.checked?ids:new Set());
+                                else setSelectedAdIds(e.target.checked?ids:new Set());
+                              }} style={{width:'14px',height:'14px',cursor:'pointer'}}/>
                           </div>
                           <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase'}}>STATUS</div>
                           <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase'}}>NOME</div>
@@ -1178,7 +1191,7 @@ export default function CampanhasPage() {
 
                       {/* Linhas */}
                       {tableData.map(row=>{
-                        const isSelected=row.type==='campaign'&&selectedCampIds.has(row.id);
+                        const isSelected=activeLevel==='campanhas'?selectedCampIds.has(row.id):activeLevel==='conjuntos'?selectedAdsetIds.has(row.id):selectedAdIds.has(row.id);
                         const scoreCor=row.score!=null?scoreColorSolid(row.score):txtMid;
                         return (
                           <div key={row.id} style={{borderBottom:`1px solid ${border}`}}>
@@ -1201,7 +1214,11 @@ export default function CampanhasPage() {
                             ) : (
                               <div style={{display:'grid',gridTemplateColumns:cols,padding:'12px',alignItems:'center',background:isSelected?dark?'rgba(37,99,235,0.06)':'#eff6ff':'transparent',transition:'background 0.15s'}}>
                                 <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-                                  {row.type==='campaign'&&<input type="checkbox" checked={isSelected} onChange={e=>{const n=new Set(selectedCampIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedCampIds(n);}} style={{width:'14px',height:'14px',cursor:'pointer',accentColor:'#2563eb'}}/>}
+                                  <input type="checkbox" checked={isSelected} onChange={e=>{
+                                    if(activeLevel==='campanhas'){const n=new Set(selectedCampIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedCampIds(n);}
+                                    else if(activeLevel==='conjuntos'){const n=new Set(selectedAdsetIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedAdsetIds(n);}
+                                    else{const n=new Set(selectedAdIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedAdIds(n);}
+                                  }} style={{width:'14px',height:'14px',cursor:'pointer',accentColor:'#2563eb'}}/>
                                 </div>
                                 <div onClick={()=>toggleStatus(row.id,row.status,row.type)} style={{width:'44px',height:'24px',borderRadius:'99px',background:row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:'pointer',transition:'background 0.2s'}}>
                                   <div style={{position:'absolute',top:'3px',left:row.status==='ACTIVE'?'23px':'3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
