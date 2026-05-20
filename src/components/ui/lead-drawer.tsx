@@ -394,14 +394,15 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     if (!lead) return;
     const prev = status;
     setStatus(newStatus);
+    setAvaliado(true);
     const now = new Date().toISOString();
     const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
-    const updates: any = { status: String(newStatus), ultimo_status_change: now };
+    const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
-    if (error) { setStatus(prev); toast.error('Erro ao atualizar status'); }
-    else { onUpdate({ ...lead, status: newStatus, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
+    if (error) { setStatus(prev); setAvaliado(avaliado); toast.error('Erro ao atualizar status'); }
+    else { onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
   }
 
   function handleStatus(i: number) {
@@ -464,6 +465,11 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${g1}, ${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: '#fff', boxShadow: `0 4px 14px ${g1}60`, fontFamily: FONT }}>
                 {initials(lead.nome)}
               </div>
+              {lead.status === 1 && !avaliado && (
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 0 0 2px rgba(59,130,246,0.3)' }}>
+                  Novo
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
@@ -477,6 +483,30 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
                 {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+
+        {/* Avaliação manual — discreto, acima do status */}
+        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
+          <div
+            onClick={async () => {
+              if (!lead) return;
+              const novoValor = !avaliado;
+              setAvaliado(novoValor);
+              const { error } = await supabase.from('leads').update({ avaliado: novoValor }).eq('id', lead.id);
+              if (error) { setAvaliado(!novoValor); return; }
+              onUpdate({ ...lead, avaliado: novoValor });
+            }}
+            style={{ padding: '10px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'all 0.15s' }}
+          >
+            <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#52525b' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+              {avaliado && <Check size={10} color="#fff" strokeWidth={3} />}
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#52525b' : '#9ca3af'), fontFamily: FONT }}>
+              {avaliado ? 'Perfil avaliado' : 'Marcar como avaliado'}
+            </span>
           </div>
         </div>
 
@@ -503,30 +533,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               <span style={{ fontSize: '12px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
             </div>
           )}
-        </div>
-
-        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
-
-        {/* Avaliação manual — discreto */}
-        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
-          <div
-            onClick={async () => {
-              if (!lead) return;
-              const novoValor = !avaliado;
-              setAvaliado(novoValor);
-              const { error } = await supabase.from('leads').update({ avaliado: novoValor }).eq('id', lead.id);
-              if (error) { setAvaliado(!novoValor); return; }
-              onUpdate({ ...lead, avaliado: novoValor });
-            }}
-            style={{ padding: '10px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'all 0.15s' }}
-          >
-            <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#52525b' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
-              {avaliado && <Check size={10} color="#fff" strokeWidth={3} />}
-            </div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#52525b' : '#9ca3af'), fontFamily: FONT }}>
-              {avaliado ? 'Perfil avaliado' : 'Marcar como avaliado'}
-            </span>
-          </div>
         </div>
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />

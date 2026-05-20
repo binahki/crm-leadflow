@@ -29,6 +29,7 @@ const PERIOD_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { label: 'Todos os status', value: 'all' },
+  { label: '🆕 Novo',         value: 'novo' },
   { label: 'Em atendimento', value: '1', dot: STATUS_CONFIG[1]?.dot },
   { label: 'Reunião',        value: '2', dot: STATUS_CONFIG[2]?.dot },
   { label: 'Contrato/App',   value: '5', dot: STATUS_CONFIG[5]?.dot },
@@ -404,7 +405,6 @@ function LeadsPage() {
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
   const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
-  const [showOnlyPending, setShowOnlyPending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -532,9 +532,9 @@ function LeadsPage() {
 
   const filtered = useMemo(() => {
     let r=[...allLeads];
-    if(showOnlyPending) r=r.filter(l=>!l.avaliado);
-    r=filterByPeriod(r,periodFilter,customFrom,customTo,statusFilter!=='all'?statusFilter:undefined);
-    if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
+    r=filterByPeriod(r,periodFilter,customFrom,customTo,statusFilter!=='all'&&statusFilter!=='novo'?statusFilter:undefined);
+    if(statusFilter==='novo') r=r.filter(l=>toStatusNum(l.status)===1&&!l.avaliado);
+    else if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
     if(campanhaFiltro.trim()){
       r=r.filter(l=>{
         try {
@@ -559,7 +559,7 @@ function LeadsPage() {
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate, showOnlyPending]);
+  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate]);
 
   useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search, campanhaFiltro]);
 
@@ -690,14 +690,7 @@ function LeadsPage() {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
-            {allLeads.filter(l => !l.avaliado).length > 0 && (
-              <span style={{ background: '#f59e0b', color: '#fff', padding: '3px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 800 }}>
-                {allLeads.filter(l => !l.avaliado).length} pendentes
-              </span>
-            )}
-          </div>
+          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
@@ -754,10 +747,6 @@ function LeadsPage() {
                 </div>
                 <FilterDropdown value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
-                <button onClick={()=>setShowOnlyPending(v=>!v)} style={{...btnGhost,border:`1px solid ${showOnlyPending?'#f59e0b':border}`,background:showOnlyPending?'rgba(245,158,11,0.1)':'transparent',color:showOnlyPending?'#f59e0b':(dark?'#a1a1aa':'#374151')}}>
-                  📋 Pendentes
-                  {allLeads.filter(l=>!l.avaliado).length>0&&<span style={{background:'#f59e0b',color:'#fff',padding:'1px 5px',borderRadius:'5px',fontSize:'10px',fontWeight:800,marginLeft:'4px'}}>{allLeads.filter(l=>!l.avaliado).length}</span>}
-                </button>
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={()=>selectedIds.size>0?setShowDeleteConf(true):undefined} style={{...btnGhost,border:`1px solid ${selectedIds.size>0?'#fecaca':border}`,background:selectedIds.size>0?'#fff1f2':(dark?'#111113':'#fff'),color:selectedIds.size>0?'#dc2626':(dark?'#3f3f46':'#d1d5db'),cursor:selectedIds.size>0?'pointer':'default'}}>
@@ -958,9 +947,11 @@ function LeadsPage() {
                       </td>
                       <td className="px-3 py-3" style={{overflow:'hidden'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
-                          <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700,flexShrink:0}}>{getInitials(lead.nome)}</div>
+                          <div style={{position:'relative',flexShrink:0}}>
+                            <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700}}>{getInitials(lead.nome)}</div>
+                            {toStatusNum(lead.status)===1&&!la.avaliado&&<div style={{position:'absolute',top:'-2px',right:'-2px',width:'10px',height:'10px',borderRadius:'50%',background:'#3b82f6',border:`2px solid ${dark?'#111113':'#ffffff'}`,boxShadow:'0 0 0 1px rgba(59,130,246,0.3)'}}/>}
+                          </div>
                           <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{safeName(lead.nome)||'Lead'}</span>
-                          {!la.avaliado&&<span style={{fontSize:'9px',fontWeight:800,background:'#f59e0b',color:'#fff',padding:'2px 5px',borderRadius:'4px',textTransform:'uppercase',letterSpacing:'0.3px',flexShrink:0}}>Novo</span>}
                           {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
                         </div>
                       </td>
