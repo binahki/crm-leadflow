@@ -908,7 +908,6 @@ function LeadsPage() {
             <table className="w-full text-sm" style={{tableLayout:'fixed'}}>
               <colgroup>
                 <col style={{width:'40px'}}/>
-                <col style={{width:'36px'}}/>
                 <col style={{width:'23%'}}/>
                 <col style={{width:'88px'}}/>
                 <col style={{width:'14%'}}/>
@@ -922,7 +921,6 @@ function LeadsPage() {
                   <th className="pl-4 pr-2 py-3">
                     <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
                   </th>
-                  <th className={`px-2 py-3 text-center text-xs font-semibold ${muted}`} title="Avaliado">✓</th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
                   <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
                     <button onClick={()=>setSortByScore(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:sortByScore?(dark?'#60a5fa':'#2563eb'):(dark?'#71717a':'#6b7280'),background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
@@ -944,14 +942,13 @@ function LeadsPage() {
                 {isLoading?([...Array(10)].map((_,i)=>(
                   <tr key={i} className={`border-b ${divider}`}>
                     <td className="pl-4 pr-2 py-3"><div style={{width:'15px',height:'15px',borderRadius:'3px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></td>
-                    <td className="px-2 py-3"><div style={{width:'18px',height:'18px',borderRadius:'5px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',margin:'0 auto'}}/></td>
                     <td className="px-3 py-3"><div style={{display:'flex',alignItems:'center',gap:'7px'}}><div style={{width:'28px',height:'28px',borderRadius:'50%',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${90+Math.floor((i*37)%70)}px`}}/></div></td>
                     {[60,90,110,90,80].map((w,j)=>(<td key={j} className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${w}px`}}/></td>))}
                     <td className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:'80px'}}/></td>
                     <td className="px-3 py-3"><div style={{display:'flex',gap:'5px'}}><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></div></td>
                   </tr>
                 )))
-                :paginatedLeads.length===0?(<tr><td colSpan={9} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
+                :paginatedLeads.length===0?(<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
                 :paginatedLeads.map((lead,idx)=>{
                   const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined; const la=lead as any;
                   return(
@@ -959,15 +956,11 @@ function LeadsPage() {
                       <td className="pl-4 pr-2 py-3" onClick={e=>e.stopPropagation()}>
                         <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);if(!e.target.checked)setAllSystemSelected(false);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
                       </td>
-                      <td className="px-2 py-3 text-center" onClick={e=>e.stopPropagation()}>
-                        {la.avaliado
-                          ? <div style={{width:'18px',height:'18px',borderRadius:'5px',background:'#10b981',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}}><Check style={{width:'11px',height:'11px',color:'#fff',strokeWidth:3}}/></div>
-                          : <div style={{width:'18px',height:'18px',borderRadius:'5px',border:`2px solid ${dark?'#3f3f46':'#e5e7eb'}`,margin:'0 auto'}}/>}
-                      </td>
                       <td className="px-3 py-3" style={{overflow:'hidden'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
                           <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700,flexShrink:0}}>{getInitials(lead.nome)}</div>
                           <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{safeName(lead.nome)||'Lead'}</span>
+                          {!la.avaliado&&<span style={{fontSize:'9px',fontWeight:800,background:'#f59e0b',color:'#fff',padding:'2px 5px',borderRadius:'4px',textTransform:'uppercase',letterSpacing:'0.3px',flexShrink:0}}>Novo</span>}
                           {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
                         </div>
                       </td>
