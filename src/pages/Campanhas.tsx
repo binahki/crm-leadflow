@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, ChevronRight, Edit2, Copy, ExternalLink, Settings } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +13,7 @@ import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 interface AdSet {
   id: string; name: string; status: string;
   spend: number; impressions: number; clicks: number; ctr: number; leads_api: number; cpl: number;
+  daily_budget?: number; lifetime_budget?: number;
   ads?: Ad[];
 }
 interface Ad {
@@ -22,7 +23,8 @@ interface Ad {
 interface Campaign {
   id: string; name: string; status: string;
   spend: number; impressions: number; clicks: number; ctr: number; cpm: number;
-  leads_api: number; cpl?: number; adsets?: AdSet[]; ads?: Ad[];
+  leads_api: number; cpl?: number; daily_budget?: number; lifetime_budget?: number;
+  adsets?: AdSet[]; ads?: Ad[];
 }
 
 
@@ -260,13 +262,13 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
   function getLeadsFromActions(actions:any[]){return parseInt(actions?.find((a:any)=>LEAD_ACTIONS.includes(a.action_type))?.value||'0');}
   try {
     const campUrl=new URL(`${base}/act_${account}/campaigns`);
-    campUrl.searchParams.set('fields',`id,name,status,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
+    campUrl.searchParams.set('fields',`id,name,status,daily_budget,lifetime_budget,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
     campUrl.searchParams.set('limit','20'); campUrl.searchParams.set('access_token',tok);
     const campData=await(await fetch(campUrl.toString())).json();
     if(!campData.data?.length) return [];
 
     const asUrl=new URL(`${base}/act_${account}/adsets`);
-    asUrl.searchParams.set('fields',`id,name,status,campaign_id,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
+    asUrl.searchParams.set('fields',`id,name,status,campaign_id,daily_budget,lifetime_budget,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
     asUrl.searchParams.set('limit','50'); asUrl.searchParams.set('access_token',tok);
     const asData=await(await fetch(asUrl.toString())).json();
 
@@ -281,7 +283,7 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
       if(!adsetsByCampaign[cid])adsetsByCampaign[cid]=[];
       const ins=as.insights?.data?.[0];
       const spend=parseFloat(ins?.spend||'0'); const leads=getLeadsFromActions(ins?.actions||[]);
-      adsetsByCampaign[cid].push({id:as.id,name:as.name,status:as.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),leads_api:leads,cpl:leads>0?spend/leads:0});
+      adsetsByCampaign[cid].push({id:as.id,name:as.name,status:as.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),leads_api:leads,cpl:leads>0?spend/leads:0,daily_budget:as.daily_budget?parseInt(as.daily_budget)/100:undefined,lifetime_budget:as.lifetime_budget?parseInt(as.lifetime_budget)/100:undefined});
     }
 
     const adsByCampaign:Record<string,Ad[]>={}; const adsByAdset:Record<string,Ad[]>={};
@@ -299,7 +301,7 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
       const ins=c.insights?.data?.[0]; const spend=parseFloat(ins?.spend||'0'); const leads=getLeadsFromActions(ins?.actions||[]);
       const adsets=(adsetsByCampaign[c.id]||[]).map(as=>({...as,ads:(adsByAdset[as.id]||[]).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999))})).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999));
       const ads=(adsByCampaign[c.id]||[]).sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999));
-      results.push({id:c.id,name:c.name,status:c.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),cpm:parseFloat(ins?.cpm||'0'),leads_api:leads,cpl:leads>0?spend/leads:0,adsets,ads});
+      results.push({id:c.id,name:c.name,status:c.status,spend,impressions:parseInt(ins?.impressions||'0'),clicks:parseInt(ins?.clicks||'0'),ctr:parseFloat(ins?.ctr||'0'),cpm:parseFloat(ins?.cpm||'0'),leads_api:leads,cpl:leads>0?spend/leads:0,daily_budget:c.daily_budget?parseInt(c.daily_budget)/100:undefined,lifetime_budget:c.lifetime_budget?parseInt(c.lifetime_budget)/100:undefined,adsets,ads});
     }
     return results.filter(c=>c.spend>0||c.status==='ACTIVE').sort((a,b)=>b.leads_api-a.leads_api||(a.cpl||999)-(b.cpl||999)||b.spend-a.spend);
   } catch(e){console.error('[Campanhas]',e);return [];}
@@ -334,8 +336,11 @@ export default function CampanhasPage() {
   const [datePreset, setDatePreset] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState<'campanhas'|'insights'>('campanhas');
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [expandedAdsetIds, setExpandedAdsetIds] = useState<Set<string>>(new Set());
+  const [activeLevel, setActiveLevel] = useState<'campanhas'|'conjuntos'|'anuncios'>('campanhas');
+  const [selectedCampIds, setSelectedCampIds] = useState<Set<string>>(new Set());
+  const [editingBudget, setEditingBudget] = useState<{id:string;value:string;level:'campaign'|'adset'}|null>(null);
+  const [toast, setToast] = useState<{msg:string;ok:boolean}|null>(null);
+  const [lastLoadTime, setLastLoadTime] = useState<Date|null>(null);
   const [isMobile, setIsMobile] = useState(false);
   // Leads direto do Supabase com select('*') para garantir utm_campaign
   const [allLeads, setAllLeads] = useState<any[]>([]);
@@ -412,7 +417,7 @@ export default function CampanhasPage() {
       });
   },[orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);};
+  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);setLastLoadTime(new Date());return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);setLastLoadTime(new Date());};
   useEffect(()=>{
     if (!metaReady || !orgReady) return;
     load();
@@ -619,6 +624,43 @@ export default function CampanhasPage() {
     });
   },[filtered, gestorMode, campScores, getCampLeads, avgCPL]); // eslint-disable-line
 
+  // Flat rows para a aba ativa (campanhas / conjuntos / anuncios)
+  const tableData = useMemo(() => {
+    if (activeLevel === 'campanhas') {
+      return displayedCampaigns.map(c => {
+        const crmLeads = getCampLeads(c.name, c.id);
+        const leads = crmLeads.length > 0 ? crmLeads.length : c.leads_api;
+        const rev = getCampRevs(c.name, c.id).length;
+        return {
+          id: c.id, name: c.name, status: c.status, type: 'campaign' as const,
+          thumbnail_url: undefined as string|null|undefined,
+          budget: c.daily_budget ?? c.lifetime_budget ?? 0,
+          spend: c.spend, leads, cpl: leads > 0 && c.spend > 0 ? c.spend / leads : 0,
+          rev, cpr: rev > 0 && c.spend > 0 ? c.spend / rev : 0,
+          score: campScores.get(c.id) ?? 50,
+        };
+      });
+    }
+    const src = selectedCampIds.size > 0
+      ? displayedCampaigns.filter(c => selectedCampIds.has(c.id))
+      : displayedCampaigns;
+    if (activeLevel === 'conjuntos') {
+      return src.flatMap(c => (c.adsets || []).map(as => ({
+        id: as.id, name: as.name, status: as.status, type: 'adset' as const,
+        thumbnail_url: undefined as string|null|undefined,
+        budget: as.daily_budget ?? as.lifetime_budget ?? 0,
+        spend: as.spend, leads: as.leads_api, cpl: as.cpl,
+        rev: 0, cpr: 0, score: undefined as number|undefined,
+      })));
+    }
+    return src.flatMap(c => (c.ads || []).map(ad => ({
+      id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
+      thumbnail_url: ad.thumbnail_url,
+      budget: 0, spend: ad.spend, leads: ad.leads_api, cpl: ad.cpl,
+      rev: 0, cpr: 0, score: undefined as number|undefined,
+    })));
+  }, [activeLevel, displayedCampaigns, selectedCampIds, campScores, getCampLeads, getCampRevs]);
+
   // ── Alertas automáticos ───────────────────────────────────────
   const alerts = useMemo(()=>{
     if(!filtered.length||loading) return [];
@@ -674,11 +716,62 @@ export default function CampanhasPage() {
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
   const divCls=dark?'#1e1e22':'#f3f4f6'; const gridLn=dark?'#1e1e22':'#f0f0f0';
+  const inputBg=dark?'#1a1a1e':'#ffffff';
   const pad=isMobile?'16px':'32px';
   const dot=<span style={{fontSize:'11px',color:txtLow,margin:'0 2px'}}>·</span>;
 
-  function toggleExpand(id:string){setExpandedIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});}
-  function toggleExpandAdset(id:string){setExpandedAdsetIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});}
+  async function toggleStatus(id: string, currentStatus: string, type: 'campaign'|'adset'|'ad') {
+    const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    setCampaigns(prev => type === 'campaign'
+      ? prev.map(c => c.id === id ? {...c, status: newStatus} : c)
+      : type === 'adset'
+        ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: newStatus} : as)}))
+        : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad)}))}))
+    );
+    const labels = {campaign:'Campanha', adset:'Conjunto', ad:'Anúncio'};
+    try {
+      const res = await fetch(`https://graph.facebook.com/v18.0/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({status: newStatus, access_token: metaToken})
+      });
+      if (!res.ok) throw new Error();
+      setToast({msg: `${labels[type]} ${newStatus === 'ACTIVE' ? 'ativado' : 'pausado'}`, ok: true});
+    } catch {
+      setCampaigns(prev => type === 'campaign'
+        ? prev.map(c => c.id === id ? {...c, status: currentStatus} : c)
+        : type === 'adset'
+          ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: currentStatus} : as)}))
+          : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: currentStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: currentStatus} : ad)}))}))
+      );
+      setToast({msg: 'Erro ao atualizar — verifique permissão ads_management', ok: false});
+    }
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  async function saveBudget(id: string, value: string, level: 'campaign'|'adset') {
+    const num = parseFloat(value.replace(',', '.'));
+    if (isNaN(num) || num <= 0) { setToast({msg: 'Valor inválido', ok: false}); setTimeout(() => setToast(null), 3000); return; }
+    const cents = Math.round(num * 100);
+    setEditingBudget(null);
+    try {
+      const res = await fetch(`https://graph.facebook.com/v18.0/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({daily_budget: cents, access_token: metaToken})
+      });
+      if (!res.ok) throw new Error();
+      if (level === 'campaign') {
+        setCampaigns(prev => prev.map(c => c.id === id ? {...c, daily_budget: num} : c));
+      } else {
+        setCampaigns(prev => prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, daily_budget: num} : as)})));
+      }
+      setToast({msg: `Orçamento: R$ ${num.toFixed(2)}/dia`, ok: true});
+    } catch {
+      setToast({msg: 'Erro ao salvar orçamento', ok: false});
+    }
+    setTimeout(() => setToast(null), 3000);
+  }
 
   return (
     <AppLayout leadCount={leads.length}>
@@ -999,7 +1092,7 @@ export default function CampanhasPage() {
 
           {/* Tab Campanhas */}
           {activeTab==='campanhas'&&(
-            <div>
+            <div style={{padding:'16px'}}>
               {(()=>{
                 const mostrarSemToken=metaReady&&orgReady&&(!metaToken||!metaAccount);
                 const mostrarLoading=loading&&campaigns.length===0;
@@ -1014,129 +1107,170 @@ export default function CampanhasPage() {
                   </div>
                 );
                 if(mostrarVazio) return <div style={{padding:'40px',textAlign:'center',color:txtMid,fontSize:'13px'}}>Nenhuma campanha com gasto no período selecionado.</div>;
-                return <>{displayedCampaigns.map(c=>{
-                    const isExpanded=expandedIds.has(c.id);
-                    const campScore = campScores.get(c.id) ?? 50;
-                    const scoreCol = scoreColor(campScore);
-                    const periodo=PERIOD_MAP[datePreset]||'all';
-                    const campCRMLeads = getCampLeads(c.name, c.id);
-                    const campRevsList = getCampRevs(c.name, c.id);
-                    const cL = campCRMLeads.length > 0 ? campCRMLeads.length : c.leads_api;
-                    const cR = campRevsList.length;
-                    const leadsDisplay = cL;
-                    const cplVal = leadsDisplay>0&&c.spend>0 ? c.spend/leadsDisplay : null;
-                    const cprVal = cR>0&&c.spend>0 ? c.spend/cR : null;
-                    return(
-                      <div key={c.id} style={{borderBottom:`1px solid ${divCls}`}}>
-                        <div onClick={()=>toggleExpand(c.id)} style={{display:'flex',alignItems:'center',gap:'10px',padding:isMobile?'14px':'12px 16px',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
-                          <ChevronRight style={{width:'14px',height:'14px',color:txtLow,transform:isExpanded?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            {/* Nome + status indicator */}
-                            <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                              {c.status==='ACTIVE'&&(
-                                <div style={{position:'relative',width:'6px',height:'6px',flexShrink:0}}>
-                                  <div style={{width:'6px',height:'6px',borderRadius:'50%',background:'#10b981'}}/>
-                                  <div style={{position:'absolute',inset:0,borderRadius:'50%',background:'#10b981',animation:'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',opacity:0.5}}/>
-                                </div>
-                              )}
-                              <span style={{fontSize:'13.5px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:isMobile?'160px':'300px'}}>{c.name}</span>
-                              {c.status!=='ACTIVE'&&(
-                                <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:500,background:dark?'rgba(255,255,255,0.06)':'#f3f4f6',color:txtMid,flexShrink:0}}>
-                                  <span style={{width:'4px',height:'4px',borderRadius:'50%',background:txtLow}}/>Pausada
-                                </span>
-                              )}
-                            </div>
-                            {/* Métricas */}
-                            <div style={{display:'flex',gap:'4px',marginTop:'5px',alignItems:'center',flexWrap:'wrap'}}>
-                              <span style={{fontSize:'12px',color:txtMid}}>R$ {fmt(c.spend)}</span>
-                              {!isMobile&&<>{dot}<span style={{fontSize:'12px',color:txtMid}}>{fmtInt(c.impressions)} imp</span>{dot}<span style={{fontSize:'12px',color:txtMid}}>{(c.ctr||0).toFixed(2)}% CTR</span></>}
-                              {dot}
-                              {/* Tag Leads — verde */}
-                              <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
-                                {leadsDisplay} leads ↗
-                              </button>
-                              {cplVal&&<span style={{fontSize:'12px',color:'#10b981',fontWeight:500}}>R$ {fmt(cplVal)}</span>}
-                              {dot}
-                              {/* Tag Rev — roxo */}
-                              <button onClick={e=>{e.stopPropagation();navigate(`/leads?campanha=${encodeURIComponent(c.name)}&periodo=${periodo}&status=3`);}} style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)',cursor:'pointer',fontFamily:'inherit'}}>
-                                {cR} rev ↗
-                              </button>
-                              <span style={{fontSize:'12px',color:'#a855f7',fontWeight:500}}>{cprVal?`R$ ${fmt(cprVal)}`:'—'}</span>
-                            </div>
+                const periodo=PERIOD_MAP[datePreset]||'all';
+                const cols='40px 100px 1fr 140px 100px 100px 80px 80px 80px 80px';
+                const totalSpendAll=displayedCampaigns.reduce((s,c)=>s+c.spend,0);
+                const totalLeadsAll=displayedCampaigns.reduce((s,c)=>s+c.leads_api,0);
+                return (
+                  <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+                    {/* Abas Meta Ads Manager */}
+                    <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+                      <button onClick={()=>setActiveLevel('campanhas')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='campanhas'?'#2563eb':border}`,background:activeLevel==='campanhas'?'#2563eb':'transparent',color:activeLevel==='campanhas'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='campanhas'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s',display:'flex',alignItems:'center',gap:'5px'}}>
+                        <TrendingUp size={13}/>Campanhas
+                      </button>
+                      {selectedCampIds.size > 0 && (
+                        <>
+                          <button onClick={()=>setActiveLevel('conjuntos')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='conjuntos'?'#2563eb':border}`,background:activeLevel==='conjuntos'?'#2563eb':'transparent',color:activeLevel==='conjuntos'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='conjuntos'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}>
+                            Conjuntos ({selectedCampIds.size})
+                          </button>
+                          <button onClick={()=>setActiveLevel('anuncios')} style={{padding:'6px 14px',borderRadius:'8px',border:`1px solid ${activeLevel==='anuncios'?'#2563eb':border}`,background:activeLevel==='anuncios'?'#2563eb':'transparent',color:activeLevel==='anuncios'?'#fff':txtMid,fontSize:'13px',fontWeight:activeLevel==='anuncios'?700:500,cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}>
+                            Anúncios ({selectedCampIds.size})
+                          </button>
+                          <div onClick={()=>{setSelectedCampIds(new Set());setActiveLevel('campanhas');}} style={{padding:'5px 10px',borderRadius:'20px',background:dark?'rgba(37,99,235,0.12)':'#eff6ff',border:'1px solid rgba(37,99,235,0.3)',color:'#2563eb',fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:'5px'}}>
+                            {selectedCampIds.size} selecionado{selectedCampIds.size>1?'s':''} <X size={11}/>
                           </div>
-                          {!isMobile&&(
-                            <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
-                              <div style={{height:'4px',width:'60px',borderRadius:'99px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',overflow:'hidden'}}>
-                                <div style={{height:'100%',width:`${campScore}%`,background:scoreColorSolid(campScore),borderRadius:'99px'}}/>
-                              </div>
-                              <span style={{fontSize:'11px',color:scoreColorSolid(campScore),fontWeight:700}}>{campScore}%</span>
-                            </div>
-                          )}
-                        </div>
+                        </>
+                      )}
+                    </div>
 
-                        {/* Conjuntos */}
-                        {isExpanded&&(
-                          <div style={{background:dark?'rgba(255,255,255,0.012)':'rgba(0,0,0,0.012)',borderTop:`1px solid ${divCls}`}}>
-                            {c.adsets&&c.adsets.length>0&&(
-                              <div style={{padding:isMobile?'8px 12px':'8px 16px'}}>
-                                <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px',paddingLeft:'20px'}}>Conjuntos</p>
-                                {c.adsets.map(as=>{
-                                  const asEx=expandedAdsetIds.has(as.id);
-                                  return(
-                                    <div key={as.id} style={{marginBottom:'4px',borderRadius:'10px',border:`1px solid ${divCls}`,overflow:'hidden'}}>
-                                      <div onClick={()=>toggleExpandAdset(as.id)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 10px 9px 20px',background:dark?'rgba(255,255,255,0.015)':'rgba(0,0,0,0.01)',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none',WebkitTapHighlightColor:'transparent'}}>
-                                        <ChevronRight style={{width:'12px',height:'12px',color:txtLow,transform:asEx?'rotate(90deg)':'',transition:'transform 0.18s',flexShrink:0}}/>
-                                        <div style={{width:'6px',height:'6px',borderRadius:'50%',background:as.status==='ACTIVE'?'#10b981':txtLow,flexShrink:0}}/>
-                                        <div style={{flex:1,minWidth:0}}>
-                                          <p style={{margin:0,fontSize:'12.5px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{as.name}</p>
-                                          <div style={{display:'flex',gap:'4px',marginTop:'2px',flexWrap:'wrap',alignItems:'center'}}>
-                                            <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(as.spend)}</span>
-                                            {dot}
-                                            <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{as.leads_api} leads</span>
-                                            {as.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>R$ {fmt(as.cpl)}</span>}
-                                            {dot}
-                                            {(()=>{const asRev=as.leads_api>0&&c.leads_api>0?Math.round(cR*as.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{asRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{asRev>0&&as.spend>0?`R$ ${fmt(as.spend/asRev)}`:'—'}</span></>;})()}
-                                            {dot}
-                                            <span style={{fontSize:'11px',color:txtMid}}>{(as.ctr||0).toFixed(2)}% CTR</span>
-                                          </div>
-                                        </div>
+                    {/* Barra de ações */}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:dark?'#16161a':'#f9fafb',borderRadius:'8px',border:`1px solid ${border}`}}>
+                      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                        <button style={{padding:'6px 10px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
+                          <Settings size={13}/>
+                        </button>
+                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} style={{padding:'6px 12px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
+                          <ExternalLink size={13}/>Abrir no gerenciador
+                        </button>
+                        <button style={{padding:'6px 12px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
+                          <Copy size={13}/>Duplicar <ChevronDown size={12}/>
+                        </button>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                        <span style={{fontSize:'11px',color:txtMid}}>
+                          {lastLoadTime ? `Atualizado há ${Math.floor((Date.now()-lastLoadTime.getTime())/60000)} min` : 'Carregando…'}
+                        </span>
+                        <button onClick={load} style={{padding:'6px 16px',borderRadius:'6px',background:'#2563eb',color:'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer',border:'none',fontFamily:'inherit'}}>
+                          Atualizar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Tabela */}
+                    <div style={{background:cardBg,borderRadius:'12px',border:`1px solid ${border}`,overflow:'hidden'}}>
+                      {/* Header */}
+                      {!isMobile && (
+                        <div style={{display:'grid',gridTemplateColumns:cols,padding:'10px 12px',borderBottom:`1px solid ${border}`,background:dark?'#16161a':'#f9fafb',alignItems:'center'}}>
+                          <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <input type="checkbox" checked={selectedCampIds.size===displayedCampaigns.length&&displayedCampaigns.length>0} onChange={e=>{if(e.target.checked){setSelectedCampIds(new Set(displayedCampaigns.map(c=>c.id)))}else{setSelectedCampIds(new Set())}}} style={{width:'14px',height:'14px',cursor:'pointer'}}/>
+                          </div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase'}}>STATUS</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase'}}>NOME</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase',textAlign:'center'}}>{activeLevel==='campanhas'?'SCORE':''}</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase',textAlign:'right'}}>ORÇAMENTO</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:txtMid,textTransform:'uppercase',textAlign:'right'}}>GASTO</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:'#10b981',textTransform:'uppercase',textAlign:'right'}}>LEADS</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:'#10b981',textTransform:'uppercase',textAlign:'right'}}>CPL</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:'#a855f7',textTransform:'uppercase',textAlign:'right'}}>REV</div>
+                          <div style={{fontSize:'11px',fontWeight:700,color:'#a855f7',textTransform:'uppercase',textAlign:'right'}}>CPR</div>
+                        </div>
+                      )}
+
+                      {/* Linhas */}
+                      {tableData.map(row=>{
+                        const isSelected=row.type==='campaign'&&selectedCampIds.has(row.id);
+                        const scoreCor=row.score!=null?scoreColorSolid(row.score):txtMid;
+                        return (
+                          <div key={row.id} style={{borderBottom:`1px solid ${border}`}}>
+                            {isMobile ? (
+                              <div style={{padding:'12px 14px',background:isSelected?dark?'rgba(37,99,235,0.08)':'#eff6ff':'transparent'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
+                                  <div onClick={()=>toggleStatus(row.id,row.status,row.type)} style={{width:'40px',height:'22px',borderRadius:'99px',background:row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
+                                    <div style={{position:'absolute',top:'3px',left:row.status==='ACTIVE'?'21px':'3px',width:'16px',height:'16px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
+                                  </div>
+                                  {row.thumbnail_url!==undefined&&<Thumbnail url={row.thumbnail_url??null} name={row.name} size={24}/>}
+                                  <span style={{flex:1,fontSize:'13px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</span>
+                                </div>
+                                <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center',paddingLeft:'48px'}}>
+                                  <span style={{fontSize:'11px',color:txtMid}}>R$ {row.spend.toFixed(2)}</span>
+                                  {dot}
+                                  <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{row.leads} leads</span>
+                                  {row.rev>0&&<span style={{fontSize:'11px',color:'#a855f7',fontWeight:600}}>{row.rev} rev</span>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{display:'grid',gridTemplateColumns:cols,padding:'12px',alignItems:'center',background:isSelected?dark?'rgba(37,99,235,0.06)':'#eff6ff':'transparent',transition:'background 0.15s'}}>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                  {row.type==='campaign'&&<input type="checkbox" checked={isSelected} onChange={e=>{const n=new Set(selectedCampIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedCampIds(n);}} style={{width:'14px',height:'14px',cursor:'pointer',accentColor:'#2563eb'}}/>}
+                                </div>
+                                <div onClick={()=>toggleStatus(row.id,row.status,row.type)} style={{width:'44px',height:'24px',borderRadius:'99px',background:row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:'pointer',transition:'background 0.2s'}}>
+                                  <div style={{position:'absolute',top:'3px',left:row.status==='ACTIVE'?'23px':'3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
+                                </div>
+                                <div style={{display:'flex',alignItems:'center',gap:'8px',minWidth:0}}>
+                                  {row.thumbnail_url!==undefined&&<Thumbnail url={row.thumbnail_url??null} name={row.name} size={28}/>}
+                                  <span style={{fontSize:'13px',fontWeight:row.type==='campaign'?600:500,color:row.type==='campaign'?txtHi:txtMid,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</span>
+                                </div>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'5px'}}>
+                                  {row.score!=null&&(
+                                    <>
+                                      <div style={{width:'44px',height:'4px',borderRadius:'2px',background:dark?'#27272a':'#e5e7eb',overflow:'hidden'}}>
+                                        <div style={{height:'100%',width:`${row.score}%`,background:scoreCor,transition:'width 0.3s'}}/>
                                       </div>
-                                      {/* Anúncios */}
-                                      {asEx&&as.ads&&as.ads.length>0&&(
-                                        <div style={{background:dark?'rgba(255,255,255,0.008)':'rgba(0,0,0,0.015)',borderTop:`1px solid ${divCls}`,padding:'6px 10px 8px 34px'}}>
-                                          <p style={{fontSize:'10px',fontWeight:700,color:txtLow,textTransform:'uppercase',letterSpacing:'0.08em',margin:'0 0 6px'}}>Anúncios</p>
-                                          {as.ads!.map(ad=>(
-                                            <div key={ad.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'7px 8px',borderRadius:'8px',marginBottom:'3px',background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)'}}>
-                                              <Thumbnail url={ad.thumbnail_url} name={ad.name} size={32}/>
-                                              <div style={{flex:1,minWidth:0}}>
-                                                <p style={{margin:0,fontSize:'12px',fontWeight:500,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.name}</p>
-                                                <div style={{display:'flex',gap:'4px',marginTop:'2px',flexWrap:'wrap',alignItems:'center'}}>
-                                                  <span style={{fontSize:'11px',color:ad.status==='ACTIVE'?'#10b981':txtMid}}>{ad.status==='ACTIVE'?'● Ativo':'○ Pausado'}</span>
-                                                  {dot}
-                                                  <span style={{fontSize:'11px',color:txtMid}}>R$ {fmt(ad.spend)}</span>
-                                                  {dot}
-                                                  <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#10b981',background:dark?'rgba(16,185,129,0.12)':'#dcfce7',border:'1px solid rgba(16,185,129,0.25)'}}>{ad.leads_api} leads</span>
-                                                  {ad.cpl>0&&<span style={{fontSize:'11px',color:'#10b981',fontWeight:500}}>R$ {fmt(ad.cpl)}</span>}
-                                                  {dot}
-                                                  {(()=>{const adRev=ad.leads_api>0&&c.leads_api>0?Math.round(cR*ad.leads_api/c.leads_api):0;return <><span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,color:'#a855f7',background:dark?'rgba(168,85,247,0.12)':'#f3e8ff',border:'1px solid rgba(168,85,247,0.25)'}}>{adRev} rev</span> <span style={{fontSize:'11px',color:'#a855f7',fontWeight:500}}>{adRev>0&&ad.spend>0?`R$ ${fmt(ad.spend/adRev)}`:'—'}</span></>;})()}
-                                                  {dot}
-                                                  <span style={{fontSize:'11px',color:txtMid}}>{(ad.ctr||0).toFixed(2)}% CTR</span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                      <span style={{fontSize:'11px',fontWeight:700,color:scoreCor,minWidth:'28px'}}>{row.score}%</span>
+                                    </>
+                                  )}
+                                </div>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:'4px'}}>
+                                  {row.type!=='ad'?(
+                                    editingBudget?.id===row.id?(
+                                      <input autoFocus value={editingBudget.value}
+                                        onChange={e=>setEditingBudget({id:row.id,value:e.target.value,level:row.type==='campaign'?'campaign':'adset'})}
+                                        onKeyDown={e=>{if(e.key==='Enter')saveBudget(row.id,editingBudget.value,row.type==='campaign'?'campaign':'adset');if(e.key==='Escape')setEditingBudget(null);}}
+                                        onBlur={()=>editingBudget&&saveBudget(row.id,editingBudget.value,row.type==='campaign'?'campaign':'adset')}
+                                        style={{width:'70px',padding:'4px 6px',borderRadius:'4px',border:'1px solid #2563eb',background:inputBg,color:txtHi,fontSize:'12px',textAlign:'right',fontFamily:'inherit'}}/>
+                                    ):(
+                                      <div style={{display:'flex',alignItems:'center',gap:'4px',cursor:'pointer'}} onClick={()=>setEditingBudget({id:row.id,value:row.budget.toFixed(2),level:row.type==='campaign'?'campaign':'adset'})}>
+                                        <span style={{fontSize:'12px',fontWeight:600,color:row.budget?txtHi:txtMid}}>{row.budget?`R$ ${row.budget.toFixed(2)}`:'—'}</span>
+                                        <Edit2 size={11} style={{color:txtMid}}/>
+                                      </div>
+                                    )
+                                  ):<span style={{fontSize:'12px',color:txtMid,display:'block',textAlign:'right'}}>—</span>}
+                                </div>
+                                <div style={{fontSize:'12px',color:txtHi,textAlign:'right',fontWeight:600}}>R$ {row.spend.toFixed(2)}</div>
+                                <div onClick={()=>{if(row.type==='campaign')navigate(`/leads?campanha=${encodeURIComponent(row.name)}&periodo=${periodo}`);}} style={{fontSize:'12px',color:'#10b981',textAlign:'right',fontWeight:700,cursor:row.type==='campaign'?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'flex-end',gap:'3px'}}>
+                                  {row.leads}{row.type==='campaign'&&<TrendingUp size={11}/>}
+                                </div>
+                                <div style={{fontSize:'12px',color:'#10b981',textAlign:'right',fontWeight:600}}>{row.cpl>0?`R$ ${row.cpl.toFixed(2)}`:'—'}</div>
+                                <div onClick={()=>{if(row.type==='campaign'&&row.rev>0)navigate(`/leads?campanha=${encodeURIComponent(row.name)}&periodo=${periodo}&status=3`);}} style={{fontSize:'12px',color:'#a855f7',textAlign:'right',fontWeight:700,cursor:row.type==='campaign'&&row.rev>0?'pointer':'default'}}>{row.rev>0?row.rev:'—'}</div>
+                                <div style={{fontSize:'12px',color:'#a855f7',textAlign:'right',fontWeight:600}}>{row.cpr>0?`R$ ${row.cpr.toFixed(2)}`:'—'}</div>
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}</>;
+                        );
+                      })}
+
+                      {/* Rodapé totais */}
+                      {!isMobile&&tableData.length>0&&(()=>{
+                        const tSpend=tableData.reduce((s,r)=>s+r.spend,0);
+                        const tLeads=tableData.reduce((s,r)=>s+r.leads,0);
+                        const tRev=tableData.reduce((s,r)=>s+r.rev,0);
+                        const lvl=activeLevel==='campanhas'?'CAMPANHA':activeLevel==='conjuntos'?'CONJUNTO':'ANÚNCIO';
+                        return(
+                          <div style={{display:'grid',gridTemplateColumns:cols,padding:'10px 12px',background:dark?'#1a1a1e':'#f3f4f6',fontWeight:700,borderTop:`1px solid ${border}`}}>
+                            <div/><div/>
+                            <div style={{fontSize:'12px',color:txtHi}}>{tableData.length} {lvl}{tableData.length!==1?'S':''}</div>
+                            <div/><div/>
+                            <div style={{fontSize:'12px',color:txtHi,textAlign:'right'}}>R$ {tSpend.toFixed(2)}</div>
+                            <div style={{fontSize:'12px',color:'#10b981',textAlign:'right'}}>{tLeads}</div>
+                            <div style={{fontSize:'12px',color:'#10b981',textAlign:'right'}}>{tLeads>0?`R$ ${(tSpend/tLeads).toFixed(2)}`:'—'}</div>
+                            <div style={{fontSize:'12px',color:'#a855f7',textAlign:'right'}}>{tRev>0?tRev:'—'}</div>
+                            <div style={{fontSize:'12px',color:'#a855f7',textAlign:'right'}}>{tRev>0&&tSpend>0?`R$ ${(tSpend/tRev).toFixed(2)}`:'—'}</div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                );
               })()}
             </div>
           )}
@@ -1267,10 +1401,17 @@ export default function CampanhasPage() {
         </div>
       </div>
     )}
+      {/* Toast */}
+      {toast&&(
+        <div style={{position:'fixed',bottom:'24px',right:'24px',zIndex:99999,padding:'12px 20px',borderRadius:'12px',background:toast.ok?'#10b981':'#ef4444',color:'#fff',fontSize:'13px',fontWeight:600,boxShadow:'0 8px 24px rgba(0,0,0,0.2)',animation:'slideUp 0.3s ease'}}>
+          {toast.ok?'✓':'✕'} {toast.msg}
+        </div>
+      )}
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes slideUp{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
       `}</style>
     </AppLayout>
   );
