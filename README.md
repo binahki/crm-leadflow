@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# Floow CRM
 
-TODO: Document your project here
+Deploy: 2026-05-21
