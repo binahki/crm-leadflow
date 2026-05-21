@@ -4,11 +4,12 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
+import { createPortal } from 'react-dom';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -346,28 +347,76 @@ function TooltipIcon({ text, dark }: { text: string; dark: boolean }) {
       onMouseEnter={() => {
         if (ref.current) {
           const r = ref.current.getBoundingClientRect();
-          setPos({ top: r.top, left: r.left + r.width / 2 });
+          setPos({ top: r.top + window.scrollY, left: r.left + r.width / 2 + window.scrollX });
         }
       }}
       onMouseLeave={() => setPos(null)}
-      style={{display:'inline-flex',alignItems:'center',marginLeft:'4px',flexShrink:0,cursor:'help',userSelect:'none',fontSize:'11px',color:'inherit',lineHeight:1}}
+      style={{display:'inline-flex',alignItems:'center',marginLeft:'6px',flexShrink:0,cursor:'help',userSelect:'none',lineHeight:1}}
     >
-      ⓘ
-      {pos && (
-        <div style={{
-          position:'fixed',top:pos.top-8,left:pos.left,transform:'translateX(-50%) translateY(-100%)',
-          fontSize:'11px',fontWeight:400,padding:'6px 10px',borderRadius:'6px',
-          width:'max-content',maxWidth:'220px',whiteSpace:'normal',textAlign:'center',
-          zIndex:99999,pointerEvents:'none',boxShadow:'0 4px 12px rgba(0,0,0,0.25)',lineHeight:1.5,
-          background:dark?'#1f2937':'#e4e4e7',color:dark?'#f9fafb':'#18181b',
-          border:dark?'none':'1px solid #d4d4d8',
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '14px',
+        height: '14px',
+        borderRadius: '50%',
+        border: `1.2px solid ${dark ? '#71717a' : '#9ca3af'}`,
+        fontSize: '9px',
+        fontWeight: 'bold',
+        fontFamily: 'serif',
+        lineHeight: 1,
+        textAlign: 'center',
+        color: dark ? '#a1a1aa' : '#6b7280',
+        userSelect: 'none',
+        flexShrink: 0,
+      }}>
+        i
+      </span>
+      {pos && createPortal(
+        <div className="tooltip-premium" style={{
+          position:'absolute',
+          top: pos.top - 8,
+          left: Math.max(130, Math.min(window.innerWidth - 130, pos.left)),
+          transform: 'translateX(-50%) translateY(-100%)',
+          fontSize: '11.5px',
+          fontWeight: 400,
+          padding: '8px 12px',
+          borderRadius: '8px',
+          width: '240px',
+          whiteSpace: 'normal',
+          textAlign: 'center',
+          zIndex: 999999,
+          pointerEvents: 'none',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.15)',
+          lineHeight: 1.5,
+          background: dark ? '#1e1e24' : '#ffffff',
+          color: dark ? '#f4f4f5' : '#1f2937',
+          border: `1px solid ${dark ? '#2e2e38' : '#e5e7eb'}`,
         }}>
           {text}
-          <div style={{position:'absolute',top:'100%',left:'50%',transform:'translateX(-50%)',
-            borderWidth:'5px',borderStyle:'solid',
-            borderColor:`${dark?'#1f2937':'#e4e4e7'} transparent transparent transparent`,
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: `${Math.min(90, Math.max(10, ((pos.left - Math.max(130, Math.min(window.innerWidth - 130, pos.left))) / 240) * 100 + 50))}%`,
+            transform: 'translateX(-50%)',
+            borderWidth: '6px',
+            borderStyle: 'solid',
+            borderColor: `${dark ? '#1e1e24' : '#ffffff'} transparent transparent transparent`,
           }}/>
-        </div>
+          {!dark && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: `${Math.min(90, Math.max(10, ((pos.left - Math.max(130, Math.min(window.innerWidth - 130, pos.left))) / 240) * 100 + 50))}%`,
+              transform: 'translateX(-50%)',
+              borderWidth: '7px',
+              borderStyle: 'solid',
+              borderColor: '#e5e7eb transparent transparent transparent',
+              zIndex: -1,
+            }}/>
+          )}
+        </div>,
+        document.body
       )}
     </span>
   );
@@ -1383,60 +1432,55 @@ export default function CampanhasPage() {
         {/* Meta Ads Manager */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden',marginTop:'24px'}}>
           {/* Facebook-style flat tab bar */}
-          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background:'transparent', alignItems:'flex-end', padding:'0'}}>
+          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background: dark ? '#0d0d0f' : '#ffffff', alignItems:'flex-end', padding:'0', height:'60px'}}>
             {/* Tab Campanhas */}
             <button
               onClick={() => setActiveLevel('campanhas')}
+              className="tab-btn"
               style={{
-                display:'flex', alignItems:'center', gap:'8px',
-                padding:'0 24px', height:'56px',
-                border:'none', background:'transparent',
                 color: activeLevel==='campanhas' ? '#2563eb' : txtMid,
-                cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='campanhas' ? 700 : 500,
+                fontWeight: activeLevel==='campanhas' ? 700 : 500,
                 borderBottom: activeLevel==='campanhas' ? '3px solid #2563eb' : '3px solid transparent',
-                transition:'color 0.15s',
-                whiteSpace:'nowrap',
               }}
             >
-              <Monitor size={16} style={{flexShrink:0}}/>
+              <Folder size={16} style={{flexShrink:0}}/>
               Campanhas
+              {selectedCampIds.size > 0 && (
+                <span style={{
+                  display:'inline-flex',alignItems:'center',gap:'5px',
+                  background: activeLevel === 'campanhas' ? '#2563eb' : (dark ? '#27272a' : '#e4e4e7'),
+                  color: activeLevel === 'campanhas' ? '#fff' : (dark ? '#d4d4d8' : '#3f3f46'),
+                  padding:'3px 9px',borderRadius:'99px',fontSize:'11px',fontWeight:600,flexShrink:0,marginLeft:'6px'
+                }}>
+                  {selectedCampIds.size} selecionado{selectedCampIds.size > 1 ? 's' : ''}
+                  <span onClick={e=>{e.stopPropagation();setSelectedCampIds(new Set());}} style={{cursor:'pointer',fontSize:'10px',lineHeight:1,display:'inline-flex',alignItems:'center',background:'rgba(0,0,0,0.1)',padding:'1px',borderRadius:'50%',marginLeft:'2px'}}>✕</span>
+                </span>
+              )}
             </button>
-
-            {/* Pill seleção campanhas — separada da aba, igual Meta Ads */}
-            {selectedCampIds.size > 0 && (
-              <span style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#2563eb',color:'#fff',padding:'4px 10px',borderRadius:'99px',fontSize:'12px',fontWeight:600,alignSelf:'center',flexShrink:0,margin:'0 4px'}}>
-                {selectedCampIds.size} selecionado{selectedCampIds.size > 1 ? 's' : ''}
-                <span onClick={e=>{e.stopPropagation();setSelectedCampIds(new Set());}} style={{cursor:'pointer',fontSize:'11px',lineHeight:1,display:'inline-flex',alignItems:'center'}}>✕</span>
-              </span>
-            )}
 
             {/* Tab Conjuntos */}
             <button
               onClick={() => { setActiveLevel('conjuntos'); setSelectedAdIds(new Set()); }}
+              className="tab-btn"
               style={{
-                display:'flex', alignItems:'center', gap:'8px',
-                padding:'0 24px', height:'56px',
-                border:'none', background:'transparent',
                 color: activeLevel==='conjuntos' ? '#2563eb' : txtMid,
-                cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='conjuntos' ? 700 : 500,
+                fontWeight: activeLevel==='conjuntos' ? 700 : 500,
                 borderBottom: activeLevel==='conjuntos' ? '3px solid #2563eb' : '3px solid transparent',
-                transition:'color 0.15s',
-                whiteSpace:'nowrap',
               }}
             >
-              <Folder size={16} style={{flexShrink:0}}/>
+              <LayoutGrid size={16} style={{flexShrink:0}}/>
               {selectedCampIds.size > 0
                 ? `Conjuntos para ${selectedCampIds.size} campanha${selectedCampIds.size>1?'s':''}`
                 : 'Conjuntos'}
               {selectedAdsetIds.size > 0 && (
-                <span style={{display:'inline-flex',alignItems:'center',gap:'3px',background:'#2563eb',color:'#fff',padding:'1px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:700}}>
-                  {selectedAdsetIds.size}
-                  <span
-                    onClick={e=>{e.stopPropagation();setSelectedAdsetIds(new Set());}}
-                    style={{cursor:'pointer',fontSize:'10px',lineHeight:1,marginLeft:'1px'}}
-                  >✕</span>
+                <span style={{
+                  display:'inline-flex',alignItems:'center',gap:'5px',
+                  background: activeLevel === 'conjuntos' ? '#2563eb' : (dark ? '#27272a' : '#e4e4e7'),
+                  color: activeLevel === 'conjuntos' ? '#fff' : (dark ? '#d4d4d8' : '#3f3f46'),
+                  padding:'3px 9px',borderRadius:'99px',fontSize:'11px',fontWeight:600,flexShrink:0,marginLeft:'6px'
+                }}>
+                  {selectedAdsetIds.size} selecionado{selectedAdsetIds.size > 1 ? 's' : ''}
+                  <span onClick={e=>{e.stopPropagation();setSelectedAdsetIds(new Set());}} style={{cursor:'pointer',fontSize:'10px',lineHeight:1,display:'inline-flex',alignItems:'center',background:'rgba(0,0,0,0.1)',padding:'1px',borderRadius:'50%',marginLeft:'2px'}}>✕</span>
                 </span>
               )}
             </button>
@@ -1444,37 +1488,31 @@ export default function CampanhasPage() {
             {/* Tab Anúncios */}
             <button
               onClick={() => setActiveLevel('anuncios')}
+              className="tab-btn"
               style={{
-                display:'flex', alignItems:'center', gap:'8px',
-                padding:'0 24px', height:'56px',
-                border:'none', background:'transparent',
                 color: activeLevel==='anuncios' ? '#2563eb' : txtMid,
-                cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='anuncios' ? 700 : 500,
+                fontWeight: activeLevel==='anuncios' ? 700 : 500,
                 borderBottom: activeLevel==='anuncios' ? '3px solid #2563eb' : '3px solid transparent',
-                transition:'color 0.15s',
-                whiteSpace:'nowrap',
               }}
             >
-              <Monitor size={16} style={{flexShrink:0}}/>
+              <Smartphone size={16} style={{flexShrink:0}}/>
               {selectedAdsetIds.size > 0
                 ? `Anúncios para ${selectedAdsetIds.size} conjunto${selectedAdsetIds.size>1?'s':''}`
                 : selectedCampIds.size > 0
                   ? `Anúncios para ${selectedCampIds.size} campanha${selectedCampIds.size>1?'s':''}`
                   : 'Anúncios'}
               {selectedAdIds.size > 0 && (
-                <span style={{display:'inline-flex',alignItems:'center',gap:'3px',background:'#2563eb',color:'#fff',padding:'1px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:700}}>
-                  {selectedAdIds.size}
-                  <span
-                    onClick={e=>{e.stopPropagation();setSelectedAdIds(new Set());}}
-                    style={{cursor:'pointer',fontSize:'10px',lineHeight:1,marginLeft:'1px'}}
-                  >✕</span>
+                <span style={{
+                  display:'inline-flex',alignItems:'center',gap:'5px',
+                  background: activeLevel === 'anuncios' ? '#2563eb' : (dark ? '#27272a' : '#e4e4e7'),
+                  color: activeLevel === 'anuncios' ? '#fff' : (dark ? '#d4d4d8' : '#3f3f46'),
+                  padding:'3px 9px',borderRadius:'99px',fontSize:'11px',fontWeight:600,flexShrink:0,marginLeft:'6px'
+                }}>
+                  {selectedAdIds.size} selecionado{selectedAdIds.size > 1 ? 's' : ''}
+                  <span onClick={e=>{e.stopPropagation();setSelectedAdIds(new Set());}} style={{cursor:'pointer',fontSize:'10px',lineHeight:1,display:'inline-flex',alignItems:'center',background:'rgba(0,0,0,0.1)',padding:'1px',borderRadius:'50%',marginLeft:'2px'}}>✕</span>
                 </span>
               )}
             </button>
-
-            {/* Divisor vertical */}
-            <div style={{width:'1px',height:'20px',background:border,margin:'0 8px 12px',flexShrink:0}}/>
           </div>
           {/* Conteúdo */}
           {(()=>{
@@ -1501,24 +1539,41 @@ export default function CampanhasPage() {
                   const canDup = activeSelCount > 0;
                   const canDel = activeSelCount > 0;
                   return (
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',borderBottom:`1px solid ${border}`}}>
-                      <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                        <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" style={{padding:'8px 16px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'13px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 24px',background:dark?'#0d0d0f':'#ffffff',borderBottom:`1px solid ${border}`}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                        <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" className="toolbar-btn" style={{color:txtHi}}>
                           <Settings size={14}/>
+                          <span>Colunas</span>
                         </button>
-                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} style={{padding:'8px 16px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'13px',fontWeight:500,cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit'}}>
-                          <ExternalLink size={14}/>Abrir no gerenciador
+                        
+                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
+                        
+                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} className="toolbar-btn" style={{color:txtHi}}>
+                          <ExternalLink size={14}/>
+                          <span>Abrir no gerenciador</span>
                         </button>
+                        
+                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
+                        
                         <button
                           onClick={canDup?handleDuplicate:undefined}
-                          style={{padding:'8px 16px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:canDup?txtHi:txtLow,fontSize:'13px',fontWeight:500,cursor:canDup?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit',opacity:canDup?1:0.45}}
+                          disabled={!canDup}
+                          className="toolbar-btn"
+                          style={{color:canDup?txtHi:txtLow}}
                         >
-                          <Copy size={14}/>{dupLabel} <ChevronDown size={13}/>
+                          <Copy size={14}/>
+                          <span>{dupLabel}</span>
+                          <ChevronDown size={13}/>
                         </button>
+                        
+                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
+                        
                         <button
                           onClick={canDel?handleDelete:undefined}
+                          disabled={!canDel}
                           title="Excluir selecionados"
-                          style={{padding:'8px 16px',borderRadius:'6px',border:`1px solid ${canDel?'#ef444455':border}`,background:canDel?'#fef2f2':cardBg,color:canDel?'#ef4444':txtLow,fontSize:'13px',cursor:canDel?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit',opacity:canDel?1:0.45,transition:'all 0.15s'}}
+                          className="toolbar-btn btn-danger"
+                          style={{color:canDel?'#ef4444':txtLow}}
                         >
                           <Trash2 size={14}/>
                         </button>
@@ -2032,6 +2087,69 @@ export default function CampanhasPage() {
         .tooltip-light::after{border-top-color:#1f2937;}
         .tooltip-dark{background:#e4e4e7;color:#18181b;border:1px solid #d4d4d8;}
         .tooltip-dark::after{border-top-color:#e4e4e7;}
+
+        /* Premium Tooltip Animation */
+        @keyframes tooltipFadeIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-95%); }
+          to { opacity: 1; transform: translateX(-50%) translateY(-100%); }
+        }
+        .tooltip-premium {
+          animation: tooltipFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Facebook-style Tab Button */
+        .tab-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          height: 100%;
+          flex: 1;
+          padding: 0 24px;
+          font-size: 13.5px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          position: relative;
+          user-select: none;
+          font-family: inherit;
+        }
+        .tab-btn:hover {
+          background: rgba(120, 120, 120, 0.05);
+        }
+
+        /* Spacious Borderless Action Toolbar Button */
+        .toolbar-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 6px;
+          background: transparent;
+          border: none;
+          color: inherit;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          font-family: inherit;
+          user-select: none;
+        }
+        .toolbar-btn:hover:not(:disabled) {
+          background: rgba(120, 120, 120, 0.08);
+        }
+        .toolbar-btn:active:not(:disabled) {
+          transform: scale(0.97);
+        }
+        .toolbar-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .toolbar-btn.btn-danger:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.08);
+        }
       `}</style>
     </AppLayout>
   );
