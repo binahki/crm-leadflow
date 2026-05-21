@@ -8,6 +8,7 @@ import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
+import { useTerminology } from '@/hooks/useTerminology';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
@@ -282,6 +283,7 @@ export default function Dashboard() {
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { orgId, ready: orgReady } = useOrgId();
   const { theme } = useTheme();
+  const t = useTerminology();
   const navigate = useNavigate();
   const location = useLocation();
   const dark = theme === 'dark';
@@ -725,7 +727,7 @@ export default function Dashboard() {
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
                 <TrendingUp style={{ width:'14px', height:'14px', color:'#ffffff', flexShrink:0 }}/>
-                <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', fontWeight:500 }}>revendedoras</span>
+                <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.85)', fontWeight:500 }}>{t.convertidoPlural}</span>
               </div>
               {metaOrg.revs > 0 && (
                 <span style={{ fontSize:'13px', fontWeight:700, color:'#ffffff', background:'rgba(255,255,255,0.15)', padding:'4px 10px', borderRadius:'6px' }}>
@@ -766,20 +768,20 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Card 4: REVENDEDORAS + CPR */}
+          {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
           <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
-            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Revendedoras</p>
+            <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>{t.convertidoPlural}</p>
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
               {loading ? '…' : String(approved)}
             </p>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
                 <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
-                <span style={{ fontSize:'11px', color:txtLow }}>aprovadas</span>
+                <span style={{ fontSize:'11px', color:txtLow }}>{t.statusConvertidoLabel.toLowerCase()}</span>
               </div>
               {spend > 0 && approved > 0 && (
                 <span style={{ fontSize:'12px', fontWeight:700, color:'#a855f7' }}>
-                  CPR R$ {safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                  {t.custoConversaoSigla} R$ {safe(spend/approved).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
                 </span>
               )}
             </div>

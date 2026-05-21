@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useTerminology } from '@/hooks/useTerminology';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
@@ -135,17 +136,16 @@ function gerarCriterios(
   mediaCPR: number,
   mediaCPL: number,
   isNew: boolean,
-  potenciais: number
+  potenciais: number,
+  term: { convertidoPlural: string; convertidoCurto: string; custoConversaoSigla: string }
 ): ScoreCriterio[] {
   const crit: ScoreCriterio[] = [];
   const maxRevs = Math.max(...allRows.map(x => x.rev), 1);
 
-  // Revendedoras
   const revsScore = Math.round((r.rev / maxRevs) * 45);
   const revsLabel = revsScore < 15 ? 'Baixo' : revsScore < 32 ? 'Médio' : 'Excelente';
-  crit.push({ icon: '👑', label: 'Revendedoras', detalhe: `${r.rev} rev — ${revsLabel}`, pts: revsScore });
+  crit.push({ icon: '👑', label: term.convertidoPlural, detalhe: `${r.rev} ${term.convertidoCurto} — ${revsLabel}`, pts: revsScore });
 
-  // CPR
   let cprScore = 0; let cprDetalhe = '—';
   if (r.cpr > 0 && mediaCPR > 0) {
     const ratio = r.cpr / mediaCPR;
@@ -157,11 +157,11 @@ function gerarCriterios(
     else if (ratio <= 1.8) { cprScore = -4; cprDetalhe = `R$ ${Math.round(r.cpr)} — 40%+ acima da média`; }
     else                   { cprScore = -10; cprDetalhe = `R$ ${Math.round(r.cpr)} — muito acima da média`; }
   } else if (r.rev === 0 && !isNew) {
-    cprScore = -10; cprDetalhe = 'Sem revendedoras no período';
+    cprScore = -10; cprDetalhe = `Sem ${term.convertidoPlural} no período`;
   } else {
     cprDetalhe = isNew ? 'Aguardando dados' : 'Sem conversões';
   }
-  crit.push({ icon: '💰', label: 'Custo por Rev (CPR)', detalhe: cprDetalhe, pts: cprScore });
+  crit.push({ icon: '💰', label: `Custo por ${term.convertidoCurto.toUpperCase()} (${term.custoConversaoSigla})`, detalhe: cprDetalhe, pts: cprScore });
 
   // CPL
   let cplScore = 0; let cplDetalhe = '—';
@@ -333,7 +333,7 @@ const AVAILABLE_COLUMNS = [
   { key: 'leads', label: 'Leads' },
   { key: 'cpl', label: 'CPL' },
   { key: 'rev', label: 'Rev' },
-  { key: 'cpr', label: 'CPR' },
+  { key: 'cpr', label: 'CPR' }, // labels overridden at render time with terminology
   { key: 'score', label: 'Score' },
 ] as const;
 type ColKey = typeof AVAILABLE_COLUMNS[number]['key'];
@@ -427,6 +427,7 @@ export default function CampanhasPage() {
   const { theme } = useTheme();
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { orgId, ready: orgReady } = useOrgId();
+  const t = useTerminology();
   const dark = theme === 'dark';
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
@@ -864,15 +865,15 @@ export default function CampanhasPage() {
       if(avgCPL>0&&cpl>avgCPL*1.3&&c.spend>20&&items.length<5)
         items.push({type:'red',msg:`${trunc(c.name)} — CPL R$ ${fmt(cpl)} está ${Math.round((cpl/avgCPL-1)*100)}% acima da média`});
       else if(cL>5&&cR===0&&items.length<5)
-        items.push({type:'red',msg:`${trunc(c.name)} — ${cL} leads sem nenhuma revendedora`});
+        items.push({type:'red',msg:`${trunc(c.name)} — ${cL} leads sem nenhum ${t.convertidoSingular}`});
       if(c.ctr<1.5&&c.impressions>1000&&items.length<5)
         items.push({type:'yellow',msg:`${trunc(c.name)} — CTR ${c.ctr.toFixed(2)}% abaixo de 1.5%`});
       if(cR>0&&cpr>200&&items.length<5)
-        items.push({type:'yellow',msg:`${trunc(c.name)} — CPR R$ ${fmt(cpr)} acima de R$ 200`});
+        items.push({type:'yellow',msg:`${trunc(c.name)} — ${t.custoConversaoSigla} R$ ${fmt(cpr)} acima de R$ 200`});
       if(avgCPL>0&&cpl>0&&cpl<avgCPL&&c.spend>20&&items.length<5)
         items.push({type:'green',msg:`${trunc(c.name)} — CPL R$ ${fmt(cpl)} abaixo da média da conta`});
       if(cL>=5&&cR/cL>0.1&&items.length<5)
-        items.push({type:'green',msg:`${trunc(c.name)} — ${Math.round(cR/cL*100)}% de aprovação (${cR} rev de ${cL} leads)`});
+        items.push({type:'green',msg:`${trunc(c.name)} — ${Math.round(cR/cL*100)}% de aprovação (${cR} ${t.convertidoCurto} de ${cL} leads)`});
     }
     return items.sort((a,b)=>{const o={red:0,yellow:1,green:2};return o[a.type]-o[b.type];}).slice(0,5);
   },[filtered,getCampLeads,avgCPL,loading]); // eslint-disable-line
@@ -1173,9 +1174,9 @@ export default function CampanhasPage() {
             </div>
           </div>
 
-          {/* Card 3: REVENDEDORAS + CPR */}
+          {/* Card 3: CONVERTIDOS + CUSTO CONVERSAO */}
           <div style={{background:cardBg,borderRadius:'16px',padding:isMobile?'12px':'20px',border:`1px solid ${border}`}}>
-            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>Revendedoras</p>
+            <p style={{fontSize:'12px',color:txtMid,margin:'0 0 4px'}}>{t.convertidoPlural}</p>
             <p style={{fontSize:isMobile?'18px':'22px',fontWeight:700,color:txtHi,letterSpacing:'-0.03em',margin:'0 0 6px'}}>
               {loading ? '…' : fmtInt(revsCRMTotal)}
             </p>
@@ -1183,7 +1184,7 @@ export default function CampanhasPage() {
               <span style={{fontSize:'11px',color:txtLow}}>via tráfego</span>
               {cprCard > 0 && (
                 <span style={{fontSize:'12px',fontWeight:700,color:'#a855f7'}}>
-                  CPR R$ {fmt(cprCard)}
+                  {t.custoConversaoSigla} R$ {fmt(cprCard)}
                 </span>
               )}
             </div>
@@ -1259,14 +1260,14 @@ export default function CampanhasPage() {
           </div>
         )}
 
-        {/* Leads × Revendedoras por Campanha — Bar Chart */}
+        {/* Leads × Convertidos por Campanha — Bar Chart */}
         {!loading && chartRows.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 260px', gap: '16px', marginTop: '24px' }}>
 
             {/* GRÁFICO */}
             <div style={{ background: cardBg, borderRadius: '16px', border: `1px solid ${border}`, padding: '24px' }}>
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Leads × Revendedoras por Campanha</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: txtHi, margin: 0 }}>Leads × {t.convertidoPlural} por Campanha</h3>
                 <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 0' }}>Comparativo de captação e conversão no período selecionado</p>
               </div>
 
@@ -1319,12 +1320,12 @@ export default function CampanhasPage() {
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Investido</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>R$ {fmt(d.spend)}</span></div>
                             </div>
                           </div>
-                          {/* Seção Revendedoras */}
+                          {/* Seção Convertidos */}
                           <div>
-                            <p style={{ fontSize: '10px', fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Revendedoras</p>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>{t.convertidoPlural}</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Total</span><span style={{ fontSize: '12px', fontWeight: 700, color: '#a855f7' }}>{d.revs}</span></div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>CPR</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>{d.cpr > 0 ? `R$ ${d.cpr}` : '—'}</span></div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>{t.custoConversaoSigla}</span><span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>{d.cpr > 0 ? `R$ ${d.cpr}` : '—'}</span></div>
                               {d.potenciais > 0 && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}><span style={{ fontSize: '12px', color: txtMid }}>Em potencial</span><span style={{ fontSize: '12px', fontWeight: 600, color: '#f59e0b' }}>+{d.potenciais}</span></div>
                               )}
@@ -1337,14 +1338,14 @@ export default function CampanhasPage() {
                   <Bar dataKey="leads" name="Leads" fill="#10b981" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
                     <LabelList dataKey="leads" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#10b981' }} />
                   </Bar>
-                  <Bar dataKey="revs" name="Revendedoras" fill="#a855f7" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
+                  <Bar dataKey="revs" name={t.convertidoPlural} fill="#a855f7" radius={[6,6,0,0]} maxBarSize={40} animationDuration={800} animationEasing="ease-out">
                     <LabelList dataKey="revs" position="top" style={{ fontSize: '11px', fontWeight: 700, fill: '#a855f7' }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
 
               <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginTop: '8px' }}>
-                {[{ color: '#10b981', label: 'Leads' }, { color: '#a855f7', label: 'Revendedoras' }].map(({ color, label }) => (
+                {[{ color: '#10b981', label: 'Leads' }, { color: '#a855f7', label: t.convertidoPlural }].map(({ color, label }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: color }} />
                     <span style={{ fontSize: '12px', color: txtMid, fontWeight: 500 }}>{label}</span>
@@ -1380,7 +1381,7 @@ export default function CampanhasPage() {
                       isNew,
                       potenciais,
                       ageDays,
-                      criteria: gerarCriterios(r, chartRows, mCPR, mCPL, isNew, potenciais),
+                      criteria: gerarCriterios(r, chartRows, mCPR, mCPL, isNew, potenciais, t),
                     })}
                     style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', cursor: 'pointer', overflow: 'hidden', maxWidth: '100%' }}
                   >
@@ -1398,12 +1399,12 @@ export default function CampanhasPage() {
                     </div>
                     {/* Métricas */}
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#a855f7' }}>{r.rev} rev</span>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#a855f7' }}>{r.rev} {t.convertidoCurto}</span>
                       {potenciais > 0 && (
                         <span style={{ fontSize: '11px', color: txtMid }}>+{potenciais} pot</span>
                       )}
                       <span style={{ fontSize: '11px', color: txtMid, marginLeft: 'auto' }}>
-                        {r.cpr > 0 ? `CPR R$${Math.round(r.cpr)}` : r.leads > 0 ? `${r.leads} leads` : '—'}
+                        {r.cpr > 0 ? `${t.custoConversaoSigla} R$${Math.round(r.cpr)}` : r.leads > 0 ? `${r.leads} leads` : '—'}
                       </span>
                     </div>
                     {/* Barra de score — cor sólida baseada no score */}
@@ -1627,9 +1628,9 @@ export default function CampanhasPage() {
 
                           const tooltipTexts: Partial<Record<ColKey,string>> = {
                             cpl: 'Custo por Lead — Valor investido dividido pelo total de leads gerados no período.',
-                            rev: 'Revendedoras — Leads que foram aprovados e se tornaram revendedoras oficiais.',
-                            cpr: 'Custo por Revendedora — Valor investido dividido pelo número de revendedoras aprovadas.',
-                            score: 'Pontuação inteligente (0-100) baseada em CPR, CPL, volume de leads e revendedoras. Quanto maior, melhor o custo-benefício.',
+                            rev: `${t.convertidoPlural} — Leads que foram aprovados e se tornaram ${t.convertidoPlural} oficiais.`,
+                            cpr: `${t.custoConversaoCompleto} — Valor investido dividido pelo número de ${t.convertidoPlural} aprovados.`,
+                            score: `Pontuação inteligente (0-100) baseada em ${t.custoConversaoSigla}, CPL, volume de leads e ${t.convertidoPlural}. Quanto maior, melhor o custo-benefício.`,
                           };
                           const tooltipTxt = tooltipTexts[col];
                           const infoBadge = tooltipTxt ? <TooltipIcon text={tooltipTxt} dark={dark}/> : null;
@@ -1724,14 +1725,14 @@ export default function CampanhasPage() {
                             );
                             case 'rev': return (
                               <div key={col} style={{...cellStyle, color:'#a855f7', justifyContent:'flex-end'}}>
-                                <span>REV</span>
+                                <span>{t.convertidoCurto.toUpperCase()}</span>
                                 {infoBadge}
                                 {resizerHandle}
                               </div>
                             );
                             case 'cpr': return (
                               <div key={col} style={{...cellStyle, color:'#a855f7', justifyContent:'flex-end'}}>
-                                <span>CPR</span>
+                                <span>{t.custoConversaoSigla}</span>
                                 {infoBadge}
                                 {resizerHandle}
                               </div>
@@ -2021,9 +2022,9 @@ export default function CampanhasPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               {[
                 { label: 'Leads', value: String(selectedCamp.r.leads), color: '#10b981' },
-                { label: 'Revendedoras', value: String(selectedCamp.r.rev), color: '#a855f7' },
+                { label: t.convertidoPlural, value: String(selectedCamp.r.rev), color: '#a855f7' },
                 { label: 'CPL', value: selectedCamp.r.cpl > 0 ? `R$ ${Math.round(selectedCamp.r.cpl)}` : '—', color: txtHi },
-                { label: 'CPR', value: selectedCamp.r.cpr > 0 ? `R$ ${Math.round(selectedCamp.r.cpr)}` : '—', color: txtHi },
+                { label: t.custoConversaoSigla, value: selectedCamp.r.cpr > 0 ? `R$ ${Math.round(selectedCamp.r.cpr)}` : '—', color: txtHi },
                 { label: 'Investido', value: `R$ ${fmt(selectedCamp.r.spend)}`, color: txtHi },
                 { label: 'Em potencial', value: String(selectedCamp.potenciais), color: '#f59e0b' },
               ].map((m, i) => (
@@ -2259,7 +2260,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                     <p style={{ fontSize: '22px', fontWeight: 800, color: txtHi, margin: 0 }}>
                       {revsAtual}
                       <span style={{ fontSize: '14px', fontWeight: 500, color: txtMid }}>
-                        {metaRevs > 0 ? ` / ${metaRevs} revendedoras` : ' revendedoras'}
+                        {metaRevs > 0 ? ` / ${metaRevs} ${t.convertidoPlural}` : ` ${t.convertidoPlural}`}
                       </span>
                     </p>
                   </div>

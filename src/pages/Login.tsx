@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { TERMINOLOGY_PRESETS, DEFAULT_TERMINOLOGY, toDb } from '@/hooks/useTerminology';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
@@ -39,6 +40,7 @@ export default function LoginPage() {
   const [cadEmail, setCadEmail] = useState('');
   const [cadSenha, setCadSenha] = useState('');
   const [cadConfirmar, setCadConfirmar] = useState('');
+  const [modeloNegocio, setModeloNegocio] = useState('revenda');
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -136,6 +138,26 @@ export default function LoginPage() {
         toast.success('Conta criada! Trial de 7 dias ativado.');
         const { error: loginError } = await signIn(cadEmail, cadSenha);
         if (!loginError) {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const userId = sessionData?.session?.user?.id;
+            if (userId) {
+              const { data: membership } = await (supabase as any)
+                .from('memberships')
+                .select('org_id')
+                .eq('user_id', userId)
+                .single();
+              if (membership?.org_id) {
+                const preset = TERMINOLOGY_PRESETS[modeloNegocio] ?? DEFAULT_TERMINOLOGY;
+                await (supabase as any)
+                  .from('organizations')
+                  .update({ terminology: toDb(preset) })
+                  .eq('id', membership.org_id);
+              }
+            }
+          } catch {
+            // non-critical
+          }
           navigate('/');
         } else {
           setMode('login');
@@ -209,6 +231,38 @@ export default function LoginPage() {
             <div>
               <label style={lbl}>Confirmar senha</label>
               <input style={inp} type="password" required placeholder="Repita a senha" value={cadConfirmar} onChange={e => setCadConfirmar(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
+            </div>
+            <div>
+              <label style={lbl}>Modelo de negócio</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {([
+                  { key: 'revenda', label: 'Revenda de produtos' },
+                  { key: 'b2b', label: 'Vendas B2B' },
+                  { key: 'ecommerce', label: 'E-commerce / varejo' },
+                  { key: 'outro', label: 'Outro' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setModeloNegocio(opt.key)}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${modeloNegocio === opt.key ? '#366fec' : 'rgba(255,255,255,0.12)'}`,
+                      background: modeloNegocio === opt.key ? 'rgba(54,111,236,0.15)' : 'rgba(255,255,255,0.05)',
+                      color: modeloNegocio === opt.key ? '#7aa6f5' : '#a1a1aa',
+                      fontSize: '12px',
+                      fontWeight: modeloNegocio === opt.key ? 600 : 400,
+                      cursor: 'pointer',
+                      fontFamily: FONT,
+                      textAlign: 'left',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <button type="submit" disabled={submitting} style={{ width: '100%', height: '44px', borderRadius: '8px', border: 'none', background: submitting ? '#27272a' : '#366fec', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'default' : 'pointer', fontFamily: FONT, marginTop: '4px' }}>
               {submitting ? 'Criando conta…' : 'Criar minha conta'}

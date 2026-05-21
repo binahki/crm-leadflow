@@ -5,6 +5,7 @@ import { useAppStore, Lead, STATUS_LABELS, STATUS_CONFIG, calcularFaixa } from '
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter } from 'lucide-react';
@@ -255,13 +256,13 @@ function PhoneInput({ value, onChange, style: st }: { value:string; onChange:(v:
   return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={handleChange} style={st}/>;
 }
 
-function FormStatusSelect({ value, onChange, dark }: { value:number; onChange:(v:number)=>void; dark:boolean }) {
+function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:number; onChange:(v:number)=>void; dark:boolean; aprovadoLabel?: string }) {
   const [open, setOpen] = useState(false);
   const options = [
     { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
     { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
     { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
-    { value: 3, label: 'Aprovado',       dot: STATUS_CONFIG[3].dot },
+    { value: 3, label: aprovadoLabel || 'Aprovado', dot: STATUS_CONFIG[3].dot },
     { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
   ];
   const selected = options.find(o => o.value === value) || options[0];
@@ -351,7 +352,12 @@ function LeadsPage() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { orgId, ready: orgReady } = useOrgId();
+  const t = useTerminology();
   const dark = theme === 'dark';
+
+  const statusOptions = useMemo(() => STATUS_OPTIONS.map(o =>
+    o.value === '3' ? { ...o, label: t.statusConvertidoLabel } : o
+  ), [t.statusConvertidoLabel]);
 
   const { hasWA } = useWhatsAppAccount();
 
@@ -720,7 +726,7 @@ function LeadsPage() {
                       {/* STATUS INICIAL */}
                       <div>
                         <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
-                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} />
+                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel} />
                       </div>
 
                       {/* OBSERVAÇÕES */}
@@ -745,7 +751,7 @@ function LeadsPage() {
                   <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:dark?'#71717a':'#9ca3af'}}/>
                   <input placeholder="Buscar..." value={search} onChange={e=>{ setSearch(e.target.value); if(campanhaFiltro)setCampanhaFiltro(''); }} style={{paddingLeft:'32px',paddingRight:'12px',paddingTop:'7px',paddingBottom:'7px',borderRadius:'9px',border:`1px solid ${border}`,background:dark?'#111113':'#fff',color:dark?'#d4d4d8':'#374151',fontSize:'13px',outline:'none',width:'180px',fontFamily:'inherit'}}/>
                 </div>
-                <FilterDropdown value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} dark={dark}/>
+                <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
@@ -776,7 +782,7 @@ function LeadsPage() {
                       {/* STATUS INICIAL */}
                       <div>
                         <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
-                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} />
+                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel} />
                       </div>
 
                       {/* OBSERVAÇÕES */}
@@ -807,7 +813,7 @@ function LeadsPage() {
             </div>
             {showFilters && (
               <div style={{display:'flex',gap:'6px',flexWrap:'wrap',padding:'10px',background:cardBg,borderRadius:'10px',border:`1px solid ${border}`}}>
-                <FilterDropdown value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} dark={dark}/>
+                <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
