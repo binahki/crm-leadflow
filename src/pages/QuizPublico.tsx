@@ -70,6 +70,14 @@ export default function QuizPublico() {
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Cria sessão assim que a capa do quiz é exibida ────────────────────────────
+  // Chamada imediata: garante registro mesmo se a pessoa fechar antes de começar.
+  useEffect(() => {
+    if (phase === 'capa' && quiz) {
+      iniciarSessao();
+    }
+  }, [phase, quiz]); // eslint-disable-line
+
   // ── Corrige total_etapas após perguntas carregarem ─────────────────────────────
   useEffect(() => {
     if (todasPerguntas.length > 0 && phase !== 'loading') {

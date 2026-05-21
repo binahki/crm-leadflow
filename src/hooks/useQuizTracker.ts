@@ -89,30 +89,34 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     }
 
     enqueue(async () => {
-      const updatePayload: any = {
+      // Upsert garante que a linha é criada mesmo se iniciarSessao falhou
+      // (RLS, rede, etc). Campos concluiu/virou_lead são omitidos para não
+      // sobrescrever valores já gravados por marcarConcluido.
+      const upsertPayload: any = {
+        session_id: sessionIdRef.current,
+        quiz_slug: quizSlugRef.current,
+        org_id: orgIdRef.current || null,
         ultima_etapa: etapaIndex,
         updated_at: new Date().toISOString(),
+        dispositivo: getDispositivo(),
+        user_agent: navigator.userAgent.slice(0, 200),
+        ...getUTMs(),
       };
 
-      if (orgIdRef.current) {
-        updatePayload.org_id = orgIdRef.current;
-      }
-
       if (Object.keys(respostasRef.current).length > 0) {
-        updatePayload.respostas = { ...respostasRef.current };
+        upsertPayload.respostas = { ...respostasRef.current };
       }
 
       if (totalEtapasRef.current > 0) {
-        updatePayload.total_etapas = totalEtapasRef.current;
+        upsertPayload.total_etapas = totalEtapasRef.current;
       }
 
       const { error } = await supabase
         .from('quiz_sessoes')
-        .update(updatePayload)
-        .eq('session_id', sessionIdRef.current);
+        .upsert(upsertPayload, { onConflict: 'session_id' });
 
       if (error) {
-        console.error("useQuizTracker: Error in registrarEtapa update", error);
+        console.error("useQuizTracker: Error in registrarEtapa upsert", error);
       }
     });
   }, [iniciarSessao, enqueue]);
