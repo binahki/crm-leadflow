@@ -15,7 +15,8 @@
       "Bash(npx supabase:*)",
       "Bash(wc -l /c/Users/Murilo/leadflow-dashboard/src/pages/*.tsx)",
       "Bash(supabase:*)",
-      "Skill(impeccable)"
+      "Skill(impeccable)",
+      "Bash(git rm *)"
     ]
   }
 }
