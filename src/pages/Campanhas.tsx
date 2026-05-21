@@ -1383,23 +1383,23 @@ export default function CampanhasPage() {
         {/* Meta Ads Manager */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden',marginTop:'24px'}}>
           {/* Facebook-style flat tab bar */}
-          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background:cardBg, alignItems:'flex-end', padding:'0 8px'}}>
+          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background:'transparent', alignItems:'flex-end', padding:'0 4px'}}>
             {/* Tab Campanhas */}
             <button
               onClick={() => setActiveLevel('campanhas')}
               style={{
-                display:'flex', alignItems:'center', gap:'7px',
-                padding:'0 20px', height:'52px',
+                display:'flex', alignItems:'center', gap:'8px',
+                padding:'0 24px', height:'56px',
                 border:'none', background:'transparent',
                 color: activeLevel==='campanhas' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='campanhas' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='campanhas' ? 700 : 500,
                 borderBottom: activeLevel==='campanhas' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
-              <Monitor size={15} style={{flexShrink:0}}/>
+              <Monitor size={16} style={{flexShrink:0}}/>
               Campanhas
               {selectedCampIds.size > 0 && (
                 <span style={{display:'inline-flex',alignItems:'center',gap:'3px',background:'#2563eb',color:'#fff',padding:'1px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:700}}>
@@ -1416,18 +1416,18 @@ export default function CampanhasPage() {
             <button
               onClick={() => { setActiveLevel('conjuntos'); setSelectedAdIds(new Set()); }}
               style={{
-                display:'flex', alignItems:'center', gap:'7px',
-                padding:'0 20px', height:'52px',
+                display:'flex', alignItems:'center', gap:'8px',
+                padding:'0 24px', height:'56px',
                 border:'none', background:'transparent',
                 color: activeLevel==='conjuntos' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='conjuntos' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='conjuntos' ? 700 : 500,
                 borderBottom: activeLevel==='conjuntos' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
-              <Folder size={15} style={{flexShrink:0}}/>
+              <Folder size={16} style={{flexShrink:0}}/>
               {selectedCampIds.size > 0
                 ? `Conjuntos para ${selectedCampIds.size} campanha${selectedCampIds.size>1?'s':''}`
                 : 'Conjuntos'}
@@ -1446,18 +1446,18 @@ export default function CampanhasPage() {
             <button
               onClick={() => setActiveLevel('anuncios')}
               style={{
-                display:'flex', alignItems:'center', gap:'7px',
-                padding:'0 20px', height:'52px',
+                display:'flex', alignItems:'center', gap:'8px',
+                padding:'0 24px', height:'56px',
                 border:'none', background:'transparent',
                 color: activeLevel==='anuncios' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'15px', fontWeight: activeLevel==='anuncios' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='anuncios' ? 700 : 500,
                 borderBottom: activeLevel==='anuncios' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
-              <Monitor size={15} style={{flexShrink:0}}/>
+              <Monitor size={16} style={{flexShrink:0}}/>
               {selectedAdsetIds.size > 0
                 ? `Anúncios para ${selectedAdsetIds.size} conjunto${selectedAdsetIds.size>1?'s':''}`
                 : selectedCampIds.size > 0
@@ -1502,26 +1502,26 @@ export default function CampanhasPage() {
                   const canDup = activeSelCount > 0;
                   const canDel = activeSelCount > 0;
                   return (
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 20px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',borderBottom:`1px solid ${border}`}}>
-                      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-                        <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" style={{padding:'6px 10px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
-                          <Settings size={13}/>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',borderBottom:`1px solid ${border}`}}>
+                      <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                        <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" style={{padding:'7px 14px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'13px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
+                          <Settings size={14}/>
                         </button>
-                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} style={{padding:'6px 12px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',fontWeight:500,cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
-                          <ExternalLink size={13}/>Abrir no gerenciador
+                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} style={{padding:'7px 14px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'13px',fontWeight:500,cursor:'pointer',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit'}}>
+                          <ExternalLink size={14}/>Abrir no gerenciador
                         </button>
                         <button
                           onClick={canDup?handleDuplicate:undefined}
-                          style={{padding:'6px 12px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:canDup?txtHi:txtLow,fontSize:'12px',fontWeight:500,cursor:canDup?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit',opacity:canDup?1:0.45}}
+                          style={{padding:'7px 14px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:canDup?txtHi:txtLow,fontSize:'13px',fontWeight:500,cursor:canDup?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit',opacity:canDup?1:0.45}}
                         >
-                          <Copy size={13}/>{dupLabel} <ChevronDown size={12}/>
+                          <Copy size={14}/>{dupLabel} <ChevronDown size={13}/>
                         </button>
                         <button
                           onClick={canDel?handleDelete:undefined}
                           title="Excluir selecionados"
-                          style={{padding:'6px 10px',borderRadius:'6px',border:`1px solid ${canDel?'#ef444455':border}`,background:canDel?'#fef2f2':cardBg,color:canDel?'#ef4444':txtLow,fontSize:'12px',cursor:canDel?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit',opacity:canDel?1:0.45,transition:'all 0.15s'}}
+                          style={{padding:'7px 14px',borderRadius:'6px',border:`1px solid ${canDel?'#ef444455':border}`,background:canDel?'#fef2f2':cardBg,color:canDel?'#ef4444':txtLow,fontSize:'13px',cursor:canDel?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'5px',fontFamily:'inherit',opacity:canDel?1:0.45,transition:'all 0.15s'}}
                         >
-                          <Trash2 size={13}/>
+                          <Trash2 size={14}/>
                         </button>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
@@ -1531,7 +1531,7 @@ export default function CampanhasPage() {
                         <button
                           onClick={()=>{const k=`meta_camp_${orgId}_${datePreset}`;sessionStorage.removeItem(k);load();}}
                           disabled={loading}
-                          style={{padding:'6px 16px',borderRadius:'6px',background:'#2563eb',color:'#fff',fontSize:'12px',fontWeight:600,cursor:loading?'not-allowed':'pointer',border:'none',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'5px',opacity:loading?0.7:1}}
+                          style={{padding:'8px 20px',borderRadius:'6px',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:600,cursor:loading?'not-allowed':'pointer',border:'none',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'5px',opacity:loading?0.7:1}}
                         >
                           <RefreshCw size={12} style={{animation:loading?'spin 1s linear infinite':'none'}}/>
                           {loading?'Carregando…':'Atualizar'}
