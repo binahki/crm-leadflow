@@ -36,6 +36,11 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
   const orgIdRef = useRef(orgId);
   const totalEtapasRef = useRef(totalEtapas || 0);
 
+  // Sync refs immediately in the render phase to avoid timing race conditions
+  quizSlugRef.current = quizSlug;
+  orgIdRef.current = orgId;
+  totalEtapasRef.current = totalEtapas || 0;
+
   useEffect(() => { quizSlugRef.current = quizSlug; }, [quizSlug]);
   useEffect(() => { orgIdRef.current = orgId; }, [orgId]);
   useEffect(() => { totalEtapasRef.current = totalEtapas || 0; }, [totalEtapas]);

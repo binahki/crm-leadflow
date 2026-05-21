@@ -37,7 +37,7 @@ const STATUS = STATUS_SEQUENCE.map(idx => {
   };
 });
 
-const MOTIVOS = ['Sem retorno', 'Fora de SP', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Desistiu', 'Outro'];
+const MOTIVOS = ['Sem retorno/Desistiu', 'Região não atendida', 'Perfil não elegível', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Outro'];
 
 const GRADIENTS = [
   ['#a78bfa', '#60a5fa'], ['#f472b6', '#fb923c'],

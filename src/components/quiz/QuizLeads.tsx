@@ -55,14 +55,13 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
       const { data: qData } = await supabase.from('quizzes').select('slug, id, org_id').eq('id', quizId).single();
       if (!qData) return;
       setQuiz(qData);
-
       const [bData, pData, sData] = await Promise.all([
         supabase.from('quiz_blocos').select('id, ordem').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
         supabase.from('quiz_sessoes')
           .select('*')
           .eq('quiz_slug', qData.slug)
-          .or('ultima_etapa.gt.0,virou_lead.eq.true')
+          .or('ultima_etapa.gt.0,virou_lead.eq.true,concluiu.eq.true')
           .order('updated_at', { ascending: false }),
       ]);
 

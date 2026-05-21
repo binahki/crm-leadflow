@@ -118,9 +118,6 @@ export default function QuizPublico() {
 
       setTodasPerguntas(perguntasComOpcoes);
       setPhase('capa');
-      
-      // Start Session
-      if (!isPreview) iniciarSessao();
     }
     loadQuiz();
   }, [slug, isPreview, iniciarSessao]);
@@ -715,6 +712,7 @@ export default function QuizPublico() {
       submitting={submitting}
       canSubmit={canSubmit}
       onStart={() => {
+        iniciarSessao();
         setPhase('quiz');
         registrarEtapa(1);
       }}

@@ -1985,7 +1985,7 @@ export default function QuizBuilderPage() {
                   {isSaving ? 'Salvando...' : 'Salvar'}
                 </button>
                 <button onClick={() => setShowPublishModal(true)} style={{
-                  padding: '6px 12px', borderRadius: tokens.radius.sm, border: 'none',
+                  padding: '6px 12px', borderRadius: tokens.radius.sm,
                   background: isPublicado ? 'transparent' : '#2563eb', 
                   color: isPublicado ? '#16a34a' : '#fff',
                   border: isPublicado ? '1px solid #16a34a' : 'none',
