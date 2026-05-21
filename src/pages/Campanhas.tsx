@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -337,6 +337,42 @@ const AVAILABLE_COLUMNS = [
 ] as const;
 type ColKey = typeof AVAILABLE_COLUMNS[number]['key'];
 
+function TooltipIcon({ text, dark }: { text: string; dark: boolean }) {
+  const [pos, setPos] = useState<{top:number;left:number}|null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  return (
+    <span
+      ref={ref}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const r = ref.current.getBoundingClientRect();
+          setPos({ top: r.top, left: r.left + r.width / 2 });
+        }
+      }}
+      onMouseLeave={() => setPos(null)}
+      style={{display:'inline-flex',alignItems:'center',marginLeft:'4px',flexShrink:0,cursor:'help',userSelect:'none',fontSize:'11px',color:'inherit',lineHeight:1}}
+    >
+      ⓘ
+      {pos && (
+        <div style={{
+          position:'fixed',top:pos.top-8,left:pos.left,transform:'translateX(-50%) translateY(-100%)',
+          fontSize:'11px',fontWeight:400,padding:'6px 10px',borderRadius:'6px',
+          width:'max-content',maxWidth:'220px',whiteSpace:'normal',textAlign:'center',
+          zIndex:99999,pointerEvents:'none',boxShadow:'0 4px 12px rgba(0,0,0,0.25)',lineHeight:1.5,
+          background:dark?'#1f2937':'#e4e4e7',color:dark?'#f9fafb':'#18181b',
+          border:dark?'none':'1px solid #d4d4d8',
+        }}>
+          {text}
+          <div style={{position:'absolute',top:'100%',left:'50%',transform:'translateX(-50%)',
+            borderWidth:'5px',borderStyle:'solid',
+            borderColor:`${dark?'#1f2937':'#e4e4e7'} transparent transparent transparent`,
+          }}/>
+        </div>
+      )}
+    </span>
+  );
+}
+
 export default function CampanhasPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
@@ -421,6 +457,7 @@ export default function CampanhasPage() {
     isNew: boolean; potenciais: number; ageDays: number;
     criteria: ScoreCriterio[];
   } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{type:'duplicate'|'delete';count:number;label:string}|null>(null);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -877,6 +914,48 @@ export default function CampanhasPage() {
   }
 
   function handleDuplicate() {
+    const count = activeLevel==='campanhas'?selectedCampIds.size:activeLevel==='conjuntos'?selectedAdsetIds.size:selectedAdIds.size;
+    if (count === 0) return;
+    const label = activeLevel==='campanhas'?'campanha':activeLevel==='conjuntos'?'conjunto':'anúncio';
+    setConfirmModal({ type: 'duplicate', count, label });
+  }
+
+  function handleDelete() {
+    const count = activeLevel==='campanhas'?selectedCampIds.size:activeLevel==='conjuntos'?selectedAdsetIds.size:selectedAdIds.size;
+    if (count === 0) return;
+    const label = activeLevel==='campanhas'?'campanha':activeLevel==='conjuntos'?'conjunto':'anúncio';
+    setConfirmModal({ type: 'delete', count, label });
+  }
+
+  function executeDelete() {
+    const key = `meta_camp_${orgId}_${datePreset}`;
+    if (activeLevel === 'campanhas') {
+      if (selectedCampIds.size === 0) return;
+      const next = campaigns.filter(c => !selectedCampIds.has(c.id));
+      setCampaigns(next); setMetaCache(key, next);
+      const n = selectedCampIds.size; setSelectedCampIds(new Set());
+      setToast({ msg: `${n} campanha${n>1?'s':''} excluída${n>1?'s':''}`, ok: true });
+    } else if (activeLevel === 'conjuntos') {
+      if (selectedAdsetIds.size === 0) return;
+      const next = campaigns.map(c => ({...c, adsets:(c.adsets||[]).filter(as=>!selectedAdsetIds.has(as.id))}));
+      setCampaigns(next); setMetaCache(key, next);
+      const n = selectedAdsetIds.size; setSelectedAdsetIds(new Set());
+      setToast({ msg: `${n} conjunto${n>1?'s':''} excluído${n>1?'s':''}`, ok: true });
+    } else {
+      if (selectedAdIds.size === 0) return;
+      const next = campaigns.map(c => ({
+        ...c,
+        ads:(c.ads||[]).filter(ad=>!selectedAdIds.has(ad.id)),
+        adsets:(c.adsets||[]).map(as=>({...as,ads:(as.ads||[]).filter(ad=>!selectedAdIds.has(ad.id))}))
+      }));
+      setCampaigns(next); setMetaCache(key, next);
+      const n = selectedAdIds.size; setSelectedAdIds(new Set());
+      setToast({ msg: `${n} anúncio${n>1?'s':''} excluído${n>1?'s':''}`, ok: true });
+    }
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function executeDuplicate() {
     const ts = Date.now();
     const key = `meta_camp_${orgId}_${datePreset}`;
     if (activeLevel === 'campanhas') {
@@ -1309,17 +1388,18 @@ export default function CampanhasPage() {
             <button
               onClick={() => setActiveLevel('campanhas')}
               style={{
-                display:'flex', alignItems:'center', gap:'6px',
-                padding:'0 16px', height:'44px',
+                display:'flex', alignItems:'center', gap:'7px',
+                padding:'0 20px', height:'52px',
                 border:'none', background:'transparent',
                 color: activeLevel==='campanhas' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'14px', fontWeight: activeLevel==='campanhas' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='campanhas' ? 600 : 400,
                 borderBottom: activeLevel==='campanhas' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
+              <Monitor size={15} style={{flexShrink:0}}/>
               Campanhas
               {selectedCampIds.size > 0 && (
                 <span style={{display:'inline-flex',alignItems:'center',gap:'3px',background:'#2563eb',color:'#fff',padding:'1px 7px',borderRadius:'99px',fontSize:'11px',fontWeight:700}}>
@@ -1336,17 +1416,18 @@ export default function CampanhasPage() {
             <button
               onClick={() => { setActiveLevel('conjuntos'); setSelectedAdIds(new Set()); }}
               style={{
-                display:'flex', alignItems:'center', gap:'6px',
-                padding:'0 16px', height:'44px',
+                display:'flex', alignItems:'center', gap:'7px',
+                padding:'0 20px', height:'52px',
                 border:'none', background:'transparent',
                 color: activeLevel==='conjuntos' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'14px', fontWeight: activeLevel==='conjuntos' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='conjuntos' ? 600 : 400,
                 borderBottom: activeLevel==='conjuntos' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
+              <Folder size={15} style={{flexShrink:0}}/>
               {selectedCampIds.size > 0
                 ? `Conjuntos para ${selectedCampIds.size} campanha${selectedCampIds.size>1?'s':''}`
                 : 'Conjuntos'}
@@ -1365,17 +1446,18 @@ export default function CampanhasPage() {
             <button
               onClick={() => setActiveLevel('anuncios')}
               style={{
-                display:'flex', alignItems:'center', gap:'6px',
-                padding:'0 16px', height:'44px',
+                display:'flex', alignItems:'center', gap:'7px',
+                padding:'0 20px', height:'52px',
                 border:'none', background:'transparent',
                 color: activeLevel==='anuncios' ? '#2563eb' : txtMid,
                 cursor:'pointer', fontFamily:'inherit',
-                fontSize:'14px', fontWeight: activeLevel==='anuncios' ? 600 : 400,
+                fontSize:'15px', fontWeight: activeLevel==='anuncios' ? 600 : 400,
                 borderBottom: activeLevel==='anuncios' ? '3px solid #2563eb' : '3px solid transparent',
                 transition:'color 0.15s',
                 whiteSpace:'nowrap',
               }}
             >
+              <Monitor size={15} style={{flexShrink:0}}/>
               {selectedAdsetIds.size > 0
                 ? `Anúncios para ${selectedAdsetIds.size} conjunto${selectedAdsetIds.size>1?'s':''}`
                 : selectedCampIds.size > 0
@@ -1418,8 +1500,9 @@ export default function CampanhasPage() {
                   const activeSelCount = activeLevel==='campanhas'?selectedCampIds.size:activeLevel==='conjuntos'?selectedAdsetIds.size:selectedAdIds.size;
                   const dupLabel = `Duplicar ${activeLevel==='campanhas'?'campanhas':activeLevel==='conjuntos'?'conjuntos':'anúncios'}`;
                   const canDup = activeSelCount > 0;
+                  const canDel = activeSelCount > 0;
                   return (
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 16px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',borderBottom:`1px solid ${border}`}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 20px',background:dark?'rgba(255,255,255,0.02)':'#f9fafb',borderBottom:`1px solid ${border}`}}>
                       <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
                         <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" style={{padding:'6px 10px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit'}}>
                           <Settings size={13}/>
@@ -1432,6 +1515,13 @@ export default function CampanhasPage() {
                           style={{padding:'6px 12px',borderRadius:'6px',border:`1px solid ${border}`,background:cardBg,color:canDup?txtHi:txtLow,fontSize:'12px',fontWeight:500,cursor:canDup?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit',opacity:canDup?1:0.45}}
                         >
                           <Copy size={13}/>{dupLabel} <ChevronDown size={12}/>
+                        </button>
+                        <button
+                          onClick={canDel?handleDelete:undefined}
+                          title="Excluir selecionados"
+                          style={{padding:'6px 10px',borderRadius:'6px',border:`1px solid ${canDel?'#ef444455':border}`,background:canDel?'#fef2f2':cardBg,color:canDel?'#ef4444':txtLow,fontSize:'12px',cursor:canDel?'pointer':'not-allowed',display:'flex',alignItems:'center',gap:'4px',fontFamily:'inherit',opacity:canDel?1:0.45,transition:'all 0.15s'}}
+                        >
+                          <Trash2 size={13}/>
                         </button>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
@@ -1488,12 +1578,7 @@ export default function CampanhasPage() {
                             score: 'Pontuação inteligente (0-100) baseada em CPR, CPL, volume de leads e revendedoras. Quanto maior, melhor o custo-benefício.',
                           };
                           const tooltipTxt = tooltipTexts[col];
-                          const infoBadge = tooltipTxt ? (
-                            <span className="tooltip-wrap" style={{display:'inline-flex',alignItems:'center',marginLeft:'4px',flexShrink:0}}>
-                              <span style={{fontSize:'11px',color:txtMid,cursor:'help',userSelect:'none',lineHeight:1}}>ⓘ</span>
-                              <span className={`tooltip-box tooltip-${dark?'dark':'light'}`}>{tooltipTxt}</span>
-                            </span>
-                          ) : null;
+                          const infoBadge = tooltipTxt ? <TooltipIcon text={tooltipTxt} dark={dark}/> : null;
 
                           const resizerHandle = (
                             <div 
@@ -1898,6 +1983,37 @@ export default function CampanhasPage() {
         </div>
       </div>
     )}
+      {/* Modal de confirmação — Duplicar / Excluir */}
+      {confirmModal && (
+        <div onClick={()=>setConfirmModal(null)} style={{position:'fixed',inset:0,zIndex:10002,background:'rgba(0,0,0,0.6)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:dark?'#161619':'#fff',borderRadius:'16px',border:`1px solid ${border}`,width:'100%',maxWidth:'380px',padding:'24px',boxShadow:'0 24px 64px rgba(0,0,0,0.35)'}}>
+            <h3 style={{margin:'0 0 10px',fontSize:'16px',fontWeight:700,color:txtHi}}>
+              {confirmModal.type==='duplicate'
+                ?`Duplicar ${confirmModal.count} ${confirmModal.label}${confirmModal.count>1?'s':''}?`
+                :`Excluir ${confirmModal.count} ${confirmModal.label}${confirmModal.count>1?'s':''}?`}
+            </h3>
+            <p style={{margin:'0 0 22px',fontSize:'13px',color:txtMid,lineHeight:1.6}}>
+              {confirmModal.type==='delete'&&confirmModal.label==='conjunto'
+                ?'Ao excluir conjuntos, todos os anúncios dentro deles também serão excluídos. Esta ação não pode ser desfeita.'
+                :confirmModal.type==='delete'
+                  ?'Esta ação não pode ser desfeita.'
+                  :`${confirmModal.count} ${confirmModal.label}${confirmModal.count>1?'s':''} ser${confirmModal.count>1?'ão':'á'} duplicado${confirmModal.count>1?'s':''} como pausado${confirmModal.count>1?'s':''}.`}
+            </p>
+            <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+              <button onClick={()=>setConfirmModal(null)} style={{padding:'8px 20px',borderRadius:'8px',border:`1px solid ${border}`,background:'transparent',color:txtMid,fontSize:'13px',fontWeight:500,cursor:'pointer',fontFamily:'inherit'}}>
+                Cancelar
+              </button>
+              <button
+                onClick={()=>{const m=confirmModal;setConfirmModal(null);m.type==='duplicate'?executeDuplicate():executeDelete();}}
+                style={{padding:'8px 20px',borderRadius:'8px',border:'none',background:confirmModal.type==='duplicate'?'#2563eb':'#ef4444',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}
+              >
+                {confirmModal.type==='duplicate'?'Duplicar':'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast&&(
         <div style={{position:'fixed',bottom:'24px',right:'24px',zIndex:99999,padding:'12px 20px',borderRadius:'12px',background:toast.ok?'#10b981':'#ef4444',color:'#fff',fontSize:'13px',fontWeight:600,boxShadow:'0 8px 24px rgba(0,0,0,0.2)',animation:'slideUp 0.3s ease'}}>
