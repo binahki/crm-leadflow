@@ -1,4 +1,8 @@
 {
-  "trailingSlash": false,
-  "cleanUrls": true
+  "rewrites": [
+    {
+      "source": "/((?!landing-page).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
