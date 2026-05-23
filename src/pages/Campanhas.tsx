@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTerminology } from '@/hooks/useTerminology';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone } from 'lucide-react';
+import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ChevronUp, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone, Search, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -508,6 +508,12 @@ export default function CampanhasPage() {
     criteria: ScoreCriterio[];
   } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{type:'duplicate'|'delete';count:number;label:string}|null>(null);
+  const [togglingCampaigns, setTogglingCampaigns] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const [expandedAdsets, setExpandedAdsets] = useState<Set<string>>(new Set());
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -771,13 +777,56 @@ export default function CampanhasPage() {
 
   // ── Modo Gestor: exibe só campanhas que precisam atenção ──────
   const displayedCampaigns = useMemo(()=>{
-    const base = gestorMode ? filtered.filter(c=>getCampPerf(c)!=='green') : filtered;
+    let base = gestorMode ? filtered.filter(c=>getCampPerf(c)!=='green') : filtered;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(c => c.name.toLowerCase().includes(q));
+    }
     return [...base].sort((a, b) => {
       const sA = campScores.get(a.id) ?? 0;
       const sB = campScores.get(b.id) ?? 0;
       return sB - sA;
     });
-  },[filtered, gestorMode, campScores, getCampLeads, avgCPL]); // eslint-disable-line
+  },[filtered, gestorMode, campScores, getCampLeads, avgCPL, searchQuery]); // eslint-disable-line
+
+  function handleSort(field: string) {
+    if (sortBy === field) setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortOrder('desc'); }
+  }
+
+  function toggleExpanded(campId: string) {
+    setExpandedCampaigns(prev => { const n = new Set(prev); n.has(campId) ? n.delete(campId) : n.add(campId); return n; });
+  }
+  function toggleExpandedAdset(adsetId: string) {
+    setExpandedAdsets(prev => { const n = new Set(prev); n.has(adsetId) ? n.delete(adsetId) : n.add(adsetId); return n; });
+  }
+
+  function saveFilterAndNavigate(filter: object) {
+    if (!orgId) return;
+    console.log('[CLICK] Filtro salvo no localStorage:', filter);
+    console.log('[CLICK] Chave:', `leads_campaign_filter_${orgId}`);
+    localStorage.setItem(`leads_campaign_filter_${orgId}`, JSON.stringify(filter));
+    navigate('/leads');
+  }
+
+  function handleFilterByCampaign(campId: string, campName: string) {
+    saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: false });
+  }
+  function handleFilterByCampaignRevs(campId: string, campName: string) {
+    saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: true });
+  }
+  function handleFilterByAdSet(campId: string, campName: string, adSetId: string, adSetName: string) {
+    saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: false });
+  }
+  function handleFilterByAdSetRevs(campId: string, campName: string, adSetId: string, adSetName: string) {
+    saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: true });
+  }
+  function handleFilterByAd(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
+    saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: false });
+  }
+  function handleFilterByAdRevs(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
+    saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: true });
+  }
 
   // Flat rows para a aba ativa (campanhas / conjuntos / anuncios)
   const tableData = useMemo(() => {
@@ -847,6 +896,23 @@ export default function CampanhasPage() {
     return [];
   }, [activeLevel, displayedCampaigns, selectedCampIds, selectedAdsetIds, campScores, getCampLeads, getCampRevs]);
 
+  const sortedTableData = useMemo(() => {
+    let data = tableData;
+    if (searchQuery.trim() && activeLevel !== 'campanhas') {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(r => r.name.toLowerCase().includes(q));
+    }
+    if (!sortBy) return data;
+    return [...data].sort((a, b) => {
+      const aVal = (a as any)[sortBy];
+      const bVal = (b as any)[sortBy];
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return 0;
+    });
+  }, [tableData, sortBy, sortOrder, searchQuery, activeLevel]);
+
   const gridCols = useMemo(() => {
     return '48px ' + visibleColumns.map(c => `${columnWidths[c] || 80}px`).join(' ');
   }, [visibleColumns, columnWidths]);
@@ -912,12 +978,7 @@ export default function CampanhasPage() {
 
   async function toggleStatus(id: string, currentStatus: string, type: 'campaign'|'adset'|'ad') {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-    setCampaigns(prev => type === 'campaign'
-      ? prev.map(c => c.id === id ? {...c, status: newStatus} : c)
-      : type === 'adset'
-        ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: newStatus} : as)}))
-        : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad)}))}))
-    );
+    setTogglingCampaigns(prev => new Set(prev).add(id));
     const labels = {campaign:'Campanha', adset:'Conjunto', ad:'Anúncio'};
     try {
       const res = await fetch(`https://graph.facebook.com/v18.0/${id}`, {
@@ -926,17 +987,20 @@ export default function CampanhasPage() {
         body: JSON.stringify({status: newStatus, access_token: metaToken})
       });
       if (!res.ok) throw new Error();
+      // Update local state ONLY after API confirms
+      setCampaigns(prev => type === 'campaign'
+        ? prev.map(c => c.id === id ? {...c, status: newStatus} : c)
+        : type === 'adset'
+          ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: newStatus} : as)}))
+          : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad)}))}))
+      );
       setToast({msg: `${labels[type]} ${newStatus === 'ACTIVE' ? 'ativado' : 'pausado'}`, ok: true});
     } catch {
-      setCampaigns(prev => type === 'campaign'
-        ? prev.map(c => c.id === id ? {...c, status: currentStatus} : c)
-        : type === 'adset'
-          ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: currentStatus} : as)}))
-          : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: currentStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: currentStatus} : ad)}))}))
-      );
       setToast({msg: 'Erro ao atualizar — verifique permissão ads_management', ok: false});
+    } finally {
+      setTogglingCampaigns(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setTimeout(() => setToast(null), 3000);
     }
-    setTimeout(() => setToast(null), 3000);
   }
 
   async function saveBudget(id: string, value: string, level: 'campaign'|'adset') {
@@ -1433,7 +1497,7 @@ export default function CampanhasPage() {
         {/* Meta Ads Manager */}
         <div style={{background:cardBg,borderRadius:'16px',border:`1px solid ${border}`,overflow:'hidden',marginTop:'24px'}}>
           {/* Facebook-style flat tab bar */}
-          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background: dark ? '#0d0d0f' : '#ffffff', alignItems:'flex-end', padding:'0', height:'60px'}}>
+          <div style={{display:'flex', borderBottom:`1px solid ${border}`, background: dark ? '#0d0d0f' : '#ffffff', alignItems:'flex-end', padding:'0', height: isMobile ? '48px' : '60px', overflowX: isMobile ? 'auto' : 'visible', WebkitOverflowScrolling: 'touch' as any, flexShrink: 0}}>
             {/* Tab Campanhas */}
             <button
               onClick={() => setActiveLevel('campanhas')}
@@ -1539,73 +1603,222 @@ export default function CampanhasPage() {
                   const dupLabel = `Duplicar ${activeLevel==='campanhas'?'campanhas':activeLevel==='conjuntos'?'conjuntos':'anúncios'}`;
                   const canDup = activeSelCount > 0;
                   const canDel = activeSelCount > 0;
-                  return (
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 24px',background:dark?'#0d0d0f':'#ffffff',borderBottom:`1px solid ${border}`}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                        <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" className="toolbar-btn" style={{color:txtHi}}>
-                          <Settings size={14}/>
-                          <span>Colunas</span>
-                        </button>
-                        
-                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
-                        
-                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} className="toolbar-btn" style={{color:txtHi}}>
-                          <ExternalLink size={14}/>
-                          <span>Abrir no gerenciador</span>
-                        </button>
-                        
-                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
-                        
-                        <button
-                          onClick={canDup?handleDuplicate:undefined}
-                          disabled={!canDup}
-                          className="toolbar-btn"
-                          style={{color:canDup?txtHi:txtLow}}
-                        >
-                          <Copy size={14}/>
-                          <span>{dupLabel}</span>
-                          <ChevronDown size={13}/>
-                        </button>
-                        
-                        <div style={{width:'1px',height:'16px',background:border,margin:'0 8px'}} />
-                        
-                        <button
-                          onClick={canDel?handleDelete:undefined}
-                          disabled={!canDel}
-                          title="Excluir selecionados"
-                          className="toolbar-btn btn-danger"
-                          style={{color:canDel?'#ef4444':txtLow}}
-                        >
-                          <Trash2 size={14}/>
-                        </button>
+                  return isMobile ? (
+                    <div style={{background:dark?'#0d0d0f':'#ffffff',borderBottom:`1px solid ${border}`}}>
+                      {/* Status pills — full width */}
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'10px 16px'}}>
+                        {(['all','ACTIVE','PAUSED'] as const).map(s=>(
+                          <button key={s} onClick={()=>setStatusFilter(s)} style={{flex:1,padding:'8px 0',borderRadius:'99px',border:`1px solid ${statusFilter===s?'#2563eb':border}`,background:statusFilter===s?'#2563eb':'transparent',color:statusFilter===s?'#fff':txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit',fontWeight:statusFilter===s?600:400,transition:'all 0.15s'}}>
+                            {s==='all'?'Todas':s==='ACTIVE'?'Ativas':'Pausadas'}
+                          </button>
+                        ))}
                       </div>
-                      <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-                        <span style={{fontSize:'11px',color:txtMid}}>
-                          {lastLoadTime ? `Atualizado há ${Math.floor((Date.now()-lastLoadTime.getTime())/60000)} min` : ''}
-                        </span>
-                        <button
-                          onClick={()=>{const k=`meta_camp_${orgId}_${datePreset}`;sessionStorage.removeItem(k);load();}}
-                          disabled={loading}
-                          style={{padding:'8px 16px',borderRadius:'6px',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:600,cursor:loading?'not-allowed':'pointer',border:'none',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'5px',opacity:loading?0.7:1}}
-                        >
-                          <RefreshCw size={12} style={{animation:loading?'spin 1s linear infinite':'none'}}/>
-                          {loading?'Carregando…':'Atualizar'}
+                      {/* Search — full width */}
+                      <div style={{padding:'0 16px 10px'}}>
+                        <div style={{position:'relative'}}>
+                          <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:txtMid,pointerEvents:'none'}}/>
+                          <input type="text" placeholder="Buscar campanha..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+                            style={{width:'100%',padding:'9px 32px',borderRadius:'8px',border:`1px solid ${border}`,background:dark?'#1a1a1e':'#f9fafb',color:txtHi,fontSize:'13px',outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                          />
+                          {searchQuery&&<button onClick={()=>setSearchQuery('')} style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:txtMid,display:'flex',padding:'2px'}}><X style={{width:'13px',height:'13px'}}/></button>}
+                        </div>
+                      </div>
+                      {/* Colunas + Gerenciador — side by side */}
+                      <div style={{display:'flex',gap:'8px',padding:'0 16px 10px'}}>
+                        <button onClick={()=>setShowColumnPicker(true)} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'9px',borderRadius:'8px',border:`1px solid ${border}`,background:'transparent',color:txtHi,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+                          <Settings size={14}/><span>Colunas</span>
+                        </button>
+                        <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'9px',borderRadius:'8px',border:`1px solid ${border}`,background:'transparent',color:txtHi,fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+                          <ExternalLink size={14}/><span>Gerenciador</span>
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'10px 16px',background:dark?'#0d0d0f':'#ffffff',borderBottom:`1px solid ${border}`}}>
+                      <button onClick={()=>setShowColumnPicker(true)} title="Personalizar colunas" className="toolbar-btn" style={{color:txtHi,flexShrink:0}}>
+                        <Settings size={14}/>
+                        <span>Colunas</span>
+                      </button>
+                      <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
+                      <div style={{display:'flex',alignItems:'center',gap:'4px',flexShrink:0}}>
+                        {(['all','ACTIVE','PAUSED'] as const).map(s=>(
+                          <button key={s} onClick={()=>setStatusFilter(s)} style={{padding:'5px 10px',borderRadius:'99px',border:`1px solid ${statusFilter===s?'#2563eb':border}`,background:statusFilter===s?'#2563eb':'transparent',color:statusFilter===s?'#fff':txtMid,fontSize:'12px',cursor:'pointer',fontFamily:'inherit',fontWeight:statusFilter===s?600:400,transition:'all 0.15s'}}>
+                            {s==='all'?'Todas':s==='ACTIVE'?'Ativas':'Pausadas'}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
+                      <div style={{position:'relative',flex:1,minWidth:'100px',maxWidth:'260px'}}>
+                        <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:txtMid,pointerEvents:'none'}}/>
+                        <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+                          style={{width:'100%',padding:'7px 32px 7px 32px',borderRadius:'8px',border:`1px solid ${border}`,background:dark?'#1a1a1e':'#f9fafb',color:txtHi,fontSize:'12.5px',outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                        />
+                        {searchQuery&&<button onClick={()=>setSearchQuery('')} style={{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:txtMid,display:'flex',padding:'2px'}}><X style={{width:'12px',height:'12px'}}/></button>}
+                      </div>
+                      <div style={{flex:1}}/>
+                      <button onClick={()=>window.open('https://adsmanager.facebook.com','_blank')} className="toolbar-btn" style={{color:txtHi,flexShrink:0}}>
+                        <ExternalLink size={14}/>
+                        <span>Gerenciador</span>
+                      </button>
+                      <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
+                      <button onClick={canDup?handleDuplicate:undefined} disabled={!canDup} className="toolbar-btn" style={{color:canDup?txtHi:txtLow,flexShrink:0}}>
+                        <Copy size={14}/>
+                        <span>{dupLabel}</span>
+                        <ChevronDown size={13}/>
+                      </button>
+                      <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
+                      <button onClick={canDel?handleDelete:undefined} disabled={!canDel} title="Excluir selecionados" className="toolbar-btn btn-danger" style={{color:canDel?'#ef4444':txtLow,flexShrink:0}}>
+                        <Trash2 size={14}/>
+                      </button>
+                      <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
+                      {lastLoadTime&&<span style={{fontSize:'11px',color:txtMid,flexShrink:0,whiteSpace:'nowrap'}}>{`Atualizado há ${Math.floor((Date.now()-lastLoadTime.getTime())/60000)} min`}</span>}
+                      <button onClick={()=>{const k=`meta_camp_${orgId}_${datePreset}`;sessionStorage.removeItem(k);load();}} disabled={loading} style={{padding:'8px 16px',borderRadius:'6px',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:600,cursor:loading?'not-allowed':'pointer',border:'none',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'5px',opacity:loading?0.7:1,flexShrink:0}}>
+                        <RefreshCw size={12} style={{animation:loading?'spin 1s linear infinite':'none'}}/>
+                        {loading?'Carregando…':'Atualizar'}
+                      </button>
+                    </div>
                   );
                 })()}
-                {/* Tabela */}
-                <div style={{background:cardBg,overflowX:'auto',width:'100%'}}>
-                  <div style={{minWidth:'max-content'}}>
+                {/* Cards mobile - REMOVIDO: usa tabela com scroll horizontal */}
+                {false && (
+                  <div>
+                    {displayedCampaigns.map(camp=>{
+                      const crmLeads=getCampLeads(camp.name,camp.id);
+                      const campLeads=crmLeads.length>0?crmLeads.length:camp.leads_api;
+                      const campRev=getCampRevs(camp.name,camp.id).length;
+                      const campCpl=campLeads>0&&camp.spend>0?camp.spend/campLeads:0;
+                      const campScore=campScores.get(camp.id)??50;
+                      const campScoreCor=scoreColorSolid(campScore);
+                      const isCampExp=expandedCampaigns.has(camp.id);
+                      const q=searchQuery.trim().toLowerCase();
+                      if(q&&!camp.name.toLowerCase().includes(q))return null;
+                      return(
+                        <div key={camp.id} style={{borderBottom:`1px solid ${border}`}}>
+                          {/* Campaign card */}
+                          <div style={{padding:'14px 16px',background:selectedCampIds.has(camp.id)?dark?'rgba(37,99,235,0.06)':'#eff6ff':'transparent'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px'}}>
+                              <div onClick={e=>{e.stopPropagation();!togglingCampaigns.has(camp.id)&&toggleStatus(camp.id,camp.status,'campaign');}} style={{width:'42px',height:'24px',borderRadius:'99px',background:togglingCampaigns.has(camp.id)?'#9ca3af':camp.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:togglingCampaigns.has(camp.id)?'not-allowed':'pointer',transition:'background 0.2s',flexShrink:0,opacity:togglingCampaigns.has(camp.id)?0.6:1}}>
+                                <div style={{position:'absolute',top:'3px',left:camp.status==='ACTIVE'?'21px':'3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
+                              </div>
+                              <div onClick={()=>toggleExpanded(camp.id)} style={{flex:1,minWidth:0,cursor:'pointer'}}>
+                                <div style={{fontSize:'13px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{camp.name}</div>
+                                <div style={{fontSize:'11px',color:camp.status==='ACTIVE'?'#10b981':txtMid,marginTop:'2px'}}>{camp.status==='ACTIVE'?'Ativa':'Pausada'} {(camp.adsets?.length??0)>0?`· ${camp.adsets!.length} conjuntos`:''}</div>
+                              </div>
+                              {(camp.adsets?.length??0)>0&&(
+                                <button onClick={()=>toggleExpanded(camp.id)} style={{background:'none',border:'none',cursor:'pointer',color:txtMid,display:'flex',alignItems:'center',padding:'4px',borderRadius:'6px',flexShrink:0}}>
+                                  {isCampExp?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
+                                </button>
+                              )}
+                            </div>
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+                              <div style={{background:dark?'rgba(255,255,255,0.04)':'#f9fafb',borderRadius:'8px',padding:'10px'}}>
+                                <div style={{fontSize:'10px',color:txtMid,marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>Gasto</div>
+                                <div style={{fontSize:'14px',fontWeight:600,color:txtHi}}>R$ {camp.spend.toFixed(2)}</div>
+                              </div>
+                              <div style={{background:dark?'rgba(16,185,129,0.06)':'#f0fdf4',borderRadius:'8px',padding:'10px'}}>
+                                <div style={{fontSize:'10px',color:'#10b981',marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>CPL</div>
+                                <div style={{fontSize:'14px',fontWeight:600,color:'#10b981'}}>{campCpl>0?`R$ ${Math.round(campCpl)}`:'—'}</div>
+                              </div>
+                              <div onClick={campLeads>0?()=>handleFilterByCampaign(camp.id,camp.name):undefined} style={{background:dark?'rgba(16,185,129,0.08)':'#ecfdf5',borderRadius:'8px',padding:'10px',cursor:campLeads>0?'pointer':'default'}}>
+                                <div style={{fontSize:'10px',color:'#10b981',marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>Leads</div>
+                                <div style={{fontSize:'14px',fontWeight:700,color:'#10b981'}}>{campLeads||'—'}</div>
+                              </div>
+                              <div onClick={campRev>0?()=>handleFilterByCampaignRevs(camp.id,camp.name):undefined} style={{background:dark?'rgba(168,85,247,0.08)':'#faf5ff',borderRadius:'8px',padding:'10px',cursor:campRev>0?'pointer':'default'}}>
+                                <div style={{fontSize:'10px',color:'#a855f7',marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>{t.convertidoCurto}</div>
+                                <div style={{fontSize:'14px',fontWeight:700,color:'#a855f7'}}>{campRev||'—'}</div>
+                              </div>
+                              <div style={{background:dark?'rgba(255,255,255,0.04)':'#f9fafb',borderRadius:'8px',padding:'10px'}}>
+                                <div style={{fontSize:'10px',color:txtMid,marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>Impressões</div>
+                                <div style={{fontSize:'14px',fontWeight:600,color:txtHi}}>{camp.impressions>0?camp.impressions.toLocaleString('pt-BR'):'—'}</div>
+                              </div>
+                              <div style={{background:dark?'rgba(255,255,255,0.04)':'#f9fafb',borderRadius:'8px',padding:'10px'}}>
+                                <div style={{fontSize:'10px',color:txtMid,marginBottom:'2px',textTransform:'uppercase',letterSpacing:'0.3px'}}>CTR</div>
+                                <div style={{fontSize:'14px',fontWeight:600,color:txtHi}}>{camp.ctr>0?`${camp.ctr.toFixed(2)}%`:'—'}</div>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Adsets nested */}
+                          {isCampExp&&(camp.adsets||[]).map(as=>{
+                            const isAsExp=expandedAdsets.has(as.id);
+                            return(
+                              <div key={as.id} style={{borderTop:`1px solid ${border}`,background:dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.015)'}}>
+                                <div style={{padding:'12px 16px 12px 32px'}}>
+                                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+                                    <div onClick={()=>!togglingCampaigns.has(as.id)&&toggleStatus(as.id,as.status,'adset')} style={{width:'36px',height:'20px',borderRadius:'99px',background:togglingCampaigns.has(as.id)?'#9ca3af':as.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:togglingCampaigns.has(as.id)?'not-allowed':'pointer',transition:'background 0.2s',flexShrink:0,opacity:togglingCampaigns.has(as.id)?0.6:1}}>
+                                      <div style={{position:'absolute',top:'2px',left:as.status==='ACTIVE'?'18px':'2px',width:'16px',height:'16px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 2px rgba(0,0,0,0.2)'}}/>
+                                    </div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontSize:'12px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{as.name}</div>
+                                      <div style={{fontSize:'10px',color:txtMid}}>Conjunto · {as.status==='ACTIVE'?'Ativo':'Pausado'}</div>
+                                    </div>
+                                    {(as.ads?.length??0)>0&&(
+                                      <button onClick={()=>toggleExpandedAdset(as.id)} style={{background:'none',border:'none',cursor:'pointer',color:txtMid,display:'flex',alignItems:'center',padding:'2px',flexShrink:0}}>
+                                        {isAsExp?<ChevronDown size={14}/>:<ChevronRight size={14}/>}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'6px'}}>
+                                    <div style={{background:dark?'rgba(255,255,255,0.04)':'#f9fafb',borderRadius:'6px',padding:'8px'}}>
+                                      <div style={{fontSize:'9px',color:txtMid,marginBottom:'1px',textTransform:'uppercase'}}>Gasto</div>
+                                      <div style={{fontSize:'12px',fontWeight:600,color:txtHi}}>R$ {as.spend.toFixed(2)}</div>
+                                    </div>
+                                    <div onClick={as.leads_api>0?()=>handleFilterByAdSet(camp.id,camp.name,as.id,as.name):undefined} style={{background:dark?'rgba(16,185,129,0.08)':'#ecfdf5',borderRadius:'6px',padding:'8px',cursor:as.leads_api>0?'pointer':'default'}}>
+                                      <div style={{fontSize:'9px',color:'#10b981',marginBottom:'1px',textTransform:'uppercase'}}>Leads</div>
+                                      <div style={{fontSize:'12px',fontWeight:700,color:'#10b981'}}>{as.leads_api||'—'}</div>
+                                    </div>
+                                    <div style={{background:dark?'rgba(16,185,129,0.06)':'#f0fdf4',borderRadius:'6px',padding:'8px'}}>
+                                      <div style={{fontSize:'9px',color:'#10b981',marginBottom:'1px',textTransform:'uppercase'}}>CPL</div>
+                                      <div style={{fontSize:'12px',fontWeight:600,color:'#10b981'}}>{as.cpl>0?`R$ ${Math.round(as.cpl)}`:'—'}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                {/* Ads nested */}
+                                {isAsExp&&(as.ads||[]).map(ad=>(
+                                  <div key={ad.id} style={{borderTop:`1px solid ${border}`,padding:'10px 16px 10px 48px',background:dark?'rgba(255,255,255,0.01)':'rgba(0,0,0,0.02)'}}>
+                                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}}>
+                                      <div onClick={()=>!togglingCampaigns.has(ad.id)&&toggleStatus(ad.id,ad.status,'ad')} style={{width:'32px',height:'18px',borderRadius:'99px',background:togglingCampaigns.has(ad.id)?'#9ca3af':ad.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:togglingCampaigns.has(ad.id)?'not-allowed':'pointer',transition:'background 0.2s',flexShrink:0,opacity:togglingCampaigns.has(ad.id)?0.6:1}}>
+                                        <div style={{position:'absolute',top:'2px',left:ad.status==='ACTIVE'?'14px':'2px',width:'14px',height:'14px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 2px rgba(0,0,0,0.2)'}}/>
+                                      </div>
+                                      {ad.thumbnail_url&&<Thumbnail url={ad.thumbnail_url} name={ad.name} size={24}/>}
+                                      <div style={{flex:1,minWidth:0}}>
+                                        <div style={{fontSize:'11px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.name}</div>
+                                        <div style={{fontSize:'10px',color:txtMid}}>Anúncio</div>
+                                      </div>
+                                    </div>
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'6px'}}>
+                                      <div style={{background:dark?'rgba(255,255,255,0.04)':'#f9fafb',borderRadius:'6px',padding:'6px 8px'}}>
+                                        <div style={{fontSize:'9px',color:txtMid,textTransform:'uppercase'}}>Gasto</div>
+                                        <div style={{fontSize:'11px',fontWeight:600,color:txtHi}}>R$ {ad.spend.toFixed(2)}</div>
+                                      </div>
+                                      <div onClick={ad.leads_api>0?()=>handleFilterByAd(camp.id,camp.name,as.id,as.name,ad.id,ad.name):undefined} style={{background:dark?'rgba(16,185,129,0.08)':'#ecfdf5',borderRadius:'6px',padding:'6px 8px',cursor:ad.leads_api>0?'pointer':'default'}}>
+                                        <div style={{fontSize:'9px',color:'#10b981',textTransform:'uppercase'}}>Leads</div>
+                                        <div style={{fontSize:'11px',fontWeight:700,color:'#10b981'}}>{ad.leads_api||'—'}</div>
+                                      </div>
+                                      <div style={{background:dark?'rgba(16,185,129,0.06)':'#f0fdf4',borderRadius:'6px',padding:'6px 8px'}}>
+                                        <div style={{fontSize:'9px',color:'#10b981',textTransform:'uppercase'}}>CPL</div>
+                                        <div style={{fontSize:'11px',fontWeight:600,color:'#10b981'}}>{ad.cpl>0?`R$ ${Math.round(ad.cpl)}`:'—'}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Tabela — scroll horizontal no mobile */}
+                <div style={{background:cardBg,overflowX:'auto',width:'100%',WebkitOverflowScrolling:'touch' as any}}>
+                  <div style={{minWidth:isMobile?'820px':'max-content'}}>
                     {/* Header */}
-                    {!isMobile && (
-                      <div style={{display:'grid',gridTemplateColumns:gridCols,borderBottom:`1px solid ${border}`,background:dark?'#16161a':'#f9fafb',alignItems:'stretch'}}>
+                    <div style={{display:'grid',gridTemplateColumns:gridCols,borderBottom:`1px solid ${border}`,background:dark?'#16161a':'#f9fafb',alignItems:'stretch'}}>
                         <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'12px 14px',borderRight:`1px solid ${border}`}}>
                           <input type="checkbox"
-                            checked={activeLevel==='campanhas'?selectedCampIds.size===tableData.length&&tableData.length>0:activeLevel==='conjuntos'?selectedAdsetIds.size===tableData.length&&tableData.length>0:selectedAdIds.size===tableData.length&&tableData.length>0}
+                            checked={activeLevel==='campanhas'?selectedCampIds.size===sortedTableData.length&&sortedTableData.length>0:activeLevel==='conjuntos'?selectedAdsetIds.size===sortedTableData.length&&sortedTableData.length>0:selectedAdIds.size===sortedTableData.length&&sortedTableData.length>0}
                             onChange={e=>{
-                              const ids=new Set(tableData.map(r=>r.id));
+                              const ids=new Set(sortedTableData.map(r=>r.id));
                               if(activeLevel==='campanhas')setSelectedCampIds(e.target.checked?ids:new Set());
                               else if(activeLevel==='conjuntos')setSelectedAdsetIds(e.target.checked?ids:new Set());
                               else setSelectedAdIds(e.target.checked?ids:new Set());
@@ -1680,60 +1893,69 @@ export default function CampanhasPage() {
                                 {resizerHandle}
                               </div>
                             );
-                            case 'spend': return (
-                              <div key={col} style={{...cellStyle, justifyContent:'flex-end'}}>
-                                <span>GASTO</span>
-                                {resizerHandle}
-                              </div>
-                            );
                             case 'impressions': return (
-                              <div key={col} style={{...cellStyle, justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('impressions')} style={{...cellStyle, justifyContent:'flex-end', cursor:'pointer', userSelect:'none', color:sortBy==='impressions'?'#2563eb':txtMid}}>
                                 <span>IMPRESSÕES</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='impressions'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='impressions'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='impressions'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='impressions'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'clicks': return (
-                              <div key={col} style={{...cellStyle, justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('clicks')} style={{...cellStyle, justifyContent:'flex-end', cursor:'pointer', userSelect:'none', color:sortBy==='clicks'?'#2563eb':txtMid}}>
                                 <span>CLIQUES</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='clicks'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='clicks'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='clicks'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='clicks'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'ctr': return (
-                              <div key={col} style={{...cellStyle, justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('ctr')} style={{...cellStyle, justifyContent:'flex-end', cursor:'pointer', userSelect:'none', color:sortBy==='ctr'?'#2563eb':txtMid}}>
                                 <span>CTR</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='ctr'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='ctr'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='ctr'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='ctr'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'cpm': return (
-                              <div key={col} style={{...cellStyle, justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('cpm')} style={{...cellStyle, justifyContent:'flex-end', cursor:'pointer', userSelect:'none', color:sortBy==='cpm'?'#2563eb':txtMid}}>
                                 <span>CPM</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='cpm'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='cpm'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='cpm'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='cpm'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'leads': return (
-                              <div key={col} style={{...cellStyle, color:'#10b981', justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('leads')} style={{...cellStyle, color:sortBy==='leads'?'#2563eb':'#10b981', justifyContent:'flex-end', cursor:'pointer', userSelect:'none'}}>
                                 <span>LEADS</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='leads'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='leads'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='leads'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='leads'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'cpl': return (
-                              <div key={col} style={{...cellStyle, color:'#10b981', justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('cpl')} style={{...cellStyle, color:sortBy==='cpl'?'#2563eb':'#10b981', justifyContent:'flex-end', cursor:'pointer', userSelect:'none'}}>
                                 <span>CPL</span>
                                 {infoBadge}
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='cpl'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='cpl'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='cpl'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='cpl'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'rev': return (
-                              <div key={col} style={{...cellStyle, color:'#a855f7', justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('rev')} style={{...cellStyle, color:sortBy==='rev'?'#2563eb':'#a855f7', justifyContent:'flex-end', cursor:'pointer', userSelect:'none'}}>
                                 <span>{t.convertidoCurto.toUpperCase()}</span>
                                 {infoBadge}
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='rev'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='rev'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='rev'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='rev'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
                             case 'cpr': return (
-                              <div key={col} style={{...cellStyle, color:'#a855f7', justifyContent:'flex-end'}}>
+                              <div key={col} onClick={()=>handleSort('cpr')} style={{...cellStyle, color:sortBy==='cpr'?'#2563eb':'#a855f7', justifyContent:'flex-end', cursor:'pointer', userSelect:'none'}}>
                                 <span>{t.custoConversaoSigla}</span>
                                 {infoBadge}
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='cpr'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='cpr'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='cpr'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='cpr'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
+                                {resizerHandle}
+                              </div>
+                            );
+                            case 'spend': return (
+                              <div key={col} onClick={()=>handleSort('spend')} style={{...cellStyle, justifyContent:'flex-end', cursor:'pointer', userSelect:'none', color:sortBy==='spend'?'#2563eb':txtMid}}>
+                                <span>GASTO</span>
+                                <span style={{display:'inline-flex',flexDirection:'column',marginLeft:'3px',flexShrink:0}}><ChevronUp size={11} style={{opacity:sortBy==='spend'&&sortOrder==='asc'?1:0.6,strokeWidth:sortBy==='spend'&&sortOrder==='asc'?2.5:2,display:'block'}}/><ChevronDown size={11} style={{opacity:sortBy==='spend'&&sortOrder==='desc'?1:0.6,strokeWidth:sortBy==='spend'&&sortOrder==='desc'?2.5:2,display:'block'}}/></span>
                                 {resizerHandle}
                               </div>
                             );
@@ -1741,31 +1963,14 @@ export default function CampanhasPage() {
                           }
                         })}
                       </div>
-                    )}
                     {/* Linhas */}
-                    {tableData.map(row=>{
+                    {sortedTableData.map(row=>{
                       const isSelected=activeLevel==='campanhas'?selectedCampIds.has(row.id):activeLevel==='conjuntos'?selectedAdsetIds.has(row.id):selectedAdIds.has(row.id);
                       const scoreCor=row.score!=null?scoreColorSolid(row.score):txtMid;
+                      const parentCampName = row.type==='campaign' ? row.name : displayedCampaigns.find(c=>c.id===row.parentCampId)?.name;
                       return (
                         <div key={row.id} style={{borderBottom:`1px solid ${border}`}}>
-                          {isMobile ? (
-                            <div style={{padding:'12px 14px',background:isSelected?dark?'rgba(37,99,235,0.08)':'#eff6ff':'transparent'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
-                                <div onClick={()=>toggleStatus(row.id,row.status,row.type)} style={{width:'40px',height:'22px',borderRadius:'99px',background:row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:'pointer',transition:'background 0.2s',flexShrink:0}}>
-                                  <div style={{position:'absolute',top:'3px',left:row.status==='ACTIVE'?'21px':'3px',width:'16px',height:'16px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
-                                </div>
-                                {row.thumbnail_url!==undefined&&<Thumbnail url={row.thumbnail_url??null} name={row.name} size={24}/>}
-                                <span style={{flex:1,fontSize:'13px',fontWeight:600,color:txtHi,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.name}</span>
-                              </div>
-                              <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center',paddingLeft:'48px'}}>
-                                <span style={{fontSize:'11px',color:txtMid}}>R$ {row.spend.toFixed(2)}</span>
-                                {dot}
-                                <span style={{fontSize:'11px',color:'#10b981',fontWeight:600}}>{row.leads} leads</span>
-                                {row.rev>0&&<span style={{fontSize:'11px',color:'#a855f7',fontWeight:600}}>{row.rev} rev</span>}
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{display:'grid',gridTemplateColumns:gridCols,alignItems:'stretch',background:isSelected?dark?'rgba(37,99,235,0.06)':'#eff6ff':'transparent',transition:'background 0.15s'}}>
+                          <div style={{display:'grid',gridTemplateColumns:gridCols,alignItems:'stretch',background:isSelected?dark?'rgba(37,99,235,0.06)':'#eff6ff':'transparent',transition:'background 0.15s'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'14px 12px',borderRight:`1px solid ${border}`}}>
                                 <input type="checkbox" checked={isSelected} onChange={e=>{
                                   if(activeLevel==='campanhas'){const n=new Set(selectedCampIds);e.target.checked?n.add(row.id):n.delete(row.id);setSelectedCampIds(n);}
@@ -1779,7 +1984,7 @@ export default function CampanhasPage() {
                                 switch(col){
                                   case 'status': return (
                                     <div key={col} style={{...cellStyle}}>
-                                      <div onClick={()=>toggleStatus(row.id,row.status,row.type)} style={{width:'44px',height:'24px',borderRadius:'99px',background:row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:'pointer',transition:'background 0.2s'}}>
+                                      <div onClick={()=>!togglingCampaigns.has(row.id)&&toggleStatus(row.id,row.status,row.type)} style={{width:'44px',height:'24px',borderRadius:'99px',background:togglingCampaigns.has(row.id)?'#9ca3af':row.status==='ACTIVE'?'#2563eb':'#d1d5db',position:'relative',cursor:togglingCampaigns.has(row.id)?'not-allowed':'pointer',transition:'background 0.2s',opacity:togglingCampaigns.has(row.id)?0.6:1}}>
                                         <div style={{position:'absolute',top:'3px',left:row.status==='ACTIVE'?'23px':'3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.3)'}}/>
                                       </div>
                                     </div>
@@ -1804,20 +2009,45 @@ export default function CampanhasPage() {
                                   );
                                   case 'budget': return (
                                     <div key={col} style={{...cellStyle, justifyContent:'flex-end', gap:'6px'}}>
-                                      {row.type!=='ad'?(
-                                        editingBudget?.id===row.id?(
-                                          <input autoFocus value={editingBudget.value}
-                                            onChange={e=>setEditingBudget({id:row.id,value:e.target.value,level:row.type==='campaign'?'campaign':'adset'})}
-                                            onKeyDown={e=>{if(e.key==='Enter')saveBudget(row.id,editingBudget.value,row.type==='campaign'?'campaign':'adset');if(e.key==='Escape')setEditingBudget(null);}}
-                                            onBlur={()=>editingBudget&&saveBudget(row.id,editingBudget.value,row.type==='campaign'?'campaign':'adset')}
-                                            style={{width:'90px',padding:'6px 8px',borderRadius:'6px',border:'1px solid #2563eb',background:inputBg,color:txtHi,fontSize:'13px',textAlign:'right',fontFamily:'inherit'}}/>
-                                        ):(
-                                          <div style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer'}} onClick={()=>setEditingBudget({id:row.id,value:row.budget.toFixed(2),level:row.type==='campaign'?'campaign':'adset'})}>
-                                            <span style={{fontSize:'13px',fontWeight:400,color:row.budget?txtHi:txtMid}}>{row.budget?`R$ ${row.budget.toFixed(2)}`:'—'}</span>
-                                            <Edit2 size={12} style={{color:txtMid}}/>
-                                          </div>
+                                      {row.type==='ad' ? (
+                                        <span style={{fontSize:'13px',color:txtMid}}>—</span>
+                                      ) : row.type==='campaign' ? (
+                                        row.budget > 0 ? (
+                                          editingBudget?.id===row.id ? (
+                                            <input autoFocus value={editingBudget.value}
+                                              onChange={e=>setEditingBudget({id:row.id,value:e.target.value,level:'campaign'})}
+                                              onKeyDown={e=>{if(e.key==='Enter')saveBudget(row.id,editingBudget.value,'campaign');if(e.key==='Escape')setEditingBudget(null);}}
+                                              onBlur={()=>editingBudget&&saveBudget(row.id,editingBudget.value,'campaign')}
+                                              style={{width:'90px',padding:'6px 8px',borderRadius:'6px',border:'1px solid #2563eb',background:inputBg,color:txtHi,fontSize:'13px',textAlign:'right',fontFamily:'inherit'}}/>
+                                          ) : (
+                                            <div style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer'}} onClick={()=>setEditingBudget({id:row.id,value:row.budget.toFixed(2),level:'campaign'})}>
+                                              <span style={{fontSize:'13px',color:txtHi}}>R$ {row.budget.toFixed(2)}</span>
+                                              <Edit2 size={12} style={{color:txtMid}}/>
+                                            </div>
+                                          )
+                                        ) : (
+                                          <span style={{fontSize:'11px',color:txtMid,fontStyle:'italic'}} title="Campanha ABO: orçamento definido nos conjuntos">Edite nos conjuntos</span>
                                         )
-                                      ):<span style={{fontSize:'14px',color:txtMid,display:'block',textAlign:'right'}}>—</span>}
+                                      ) : (
+                                        /* adset — verificar se pai é CBO */
+                                        (()=>{
+                                          const parentC = displayedCampaigns.find(c=>c.id===row.parentCampId);
+                                          const isCBO = parentC && ((parentC.daily_budget??0)>0||(parentC.lifetime_budget??0)>0);
+                                          if (isCBO) return <span style={{fontSize:'11px',color:txtMid,fontStyle:'italic'}} title="Campanha CBO: orçamento gerenciado pela campanha">Gerenciado pela campanha</span>;
+                                          return editingBudget?.id===row.id ? (
+                                            <input autoFocus value={editingBudget.value}
+                                              onChange={e=>setEditingBudget({id:row.id,value:e.target.value,level:'adset'})}
+                                              onKeyDown={e=>{if(e.key==='Enter')saveBudget(row.id,editingBudget.value,'adset');if(e.key==='Escape')setEditingBudget(null);}}
+                                              onBlur={()=>editingBudget&&saveBudget(row.id,editingBudget.value,'adset')}
+                                              style={{width:'90px',padding:'6px 8px',borderRadius:'6px',border:'1px solid #2563eb',background:inputBg,color:txtHi,fontSize:'13px',textAlign:'right',fontFamily:'inherit'}}/>
+                                          ) : (
+                                            <div style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer'}} onClick={()=>setEditingBudget({id:row.id,value:row.budget.toFixed(2),level:'adset'})}>
+                                              <span style={{fontSize:'13px',color:row.budget?txtHi:txtMid}}>{row.budget?`R$ ${row.budget.toFixed(2)}`:'—'}</span>
+                                              <Edit2 size={12} style={{color:txtMid}}/>
+                                            </div>
+                                          );
+                                        })()
+                                      )}
                                     </div>
                                   );
                                   case 'spend': return <div key={col} style={{...cellStyle, fontSize:'13px', color:txtHi, justifyContent:'flex-end', fontWeight:400}}>R$ {row.spend.toFixed(2)}</div>;
@@ -1826,13 +2056,22 @@ export default function CampanhasPage() {
                                   case 'ctr': return <div key={col} style={{...cellStyle, fontSize:'13px', color:txtMid, justifyContent:'flex-end', fontWeight:400}}>{(row as any).ctr>0?`${(row as any).ctr.toFixed(2)}%`:'—'}</div>;
                                   case 'cpm': return <div key={col} style={{...cellStyle, fontSize:'13px', color:txtMid, justifyContent:'flex-end', fontWeight:400}}>{(row as any).cpm>0?`R$ ${(row as any).cpm.toFixed(2)}`:'—'}</div>;
                                   case 'leads': return (
-                                    <div key={col} onClick={()=>{if(row.type==='campaign')navigate(`/leads?campanha=${encodeURIComponent(row.name)}&periodo=${periodo}`);}} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:500, cursor:row.type==='campaign'?'pointer':'default', gap:'4px'}}>
-                                      {row.leads}{row.type==='campaign'&&<TrendingUp size={12}/>}
+                                    <div key={col} onClick={()=>{
+                                      if(row.leads<=0)return;
+                                      if(row.type==='campaign')handleFilterByCampaign(row.id,row.name);
+                                      else if(row.type==='adset'){const cn=displayedCampaigns.find(c=>c.id===row.parentCampId);if(cn)handleFilterByAdSet(row.parentCampId!,cn.name,row.id,row.name);}
+                                      else{const cn=displayedCampaigns.find(c=>c.id===row.parentCampId);const as_=cn?.adsets?.find(a=>a.id===row.parentAdsetId);if(cn)handleFilterByAd(row.parentCampId!,cn.name,row.parentAdsetId||'',as_?.name||'',row.id,row.name);}
+                                    }} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:500, cursor:row.leads>0?'pointer':'default', gap:'4px'}}>
+                                      {row.leads>0?row.leads:'—'}{row.type==='campaign'&&row.leads>0&&<TrendingUp size={12}/>}
                                     </div>
                                   );
                                   case 'cpl': return <div key={col} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:400}}>{row.cpl>0?`R$ ${row.cpl.toFixed(2)}`:'—'}</div>;
                                   case 'rev': return (
-                                    <div key={col} onClick={()=>{if(row.type==='campaign'&&row.rev>0)navigate(`/leads?campanha=${encodeURIComponent(row.name)}&periodo=${periodo}&status=3`);}} style={{...cellStyle, fontSize:'13px', color:'#a855f7', justifyContent:'flex-end', fontWeight:500, cursor:row.type==='campaign'&&row.rev>0?'pointer':'default'}}>
+                                    <div key={col} onClick={()=>{
+                                      if(row.rev<=0)return;
+                                      if(row.type==='campaign')handleFilterByCampaignRevs(row.id,row.name);
+                                      else if(row.type==='adset'){const cn=displayedCampaigns.find(c=>c.id===row.parentCampId);if(cn)handleFilterByAdSetRevs(row.parentCampId!,cn.name,row.id,row.name);}
+                                    }} style={{...cellStyle, fontSize:'13px', color:'#a855f7', justifyContent:'flex-end', fontWeight:500, cursor:row.rev>0?'pointer':'default'}}>
                                       {row.rev>0?row.rev:'—'}
                                     </div>
                                   );
@@ -1841,15 +2080,14 @@ export default function CampanhasPage() {
                                 }
                               })}
                             </div>
-                          )}
                         </div>
                       );
                     })}
                     {/* Rodapé totais */}
-                    {!isMobile&&tableData.length>0&&(()=>{
-                      const tSpend=tableData.reduce((s,r)=>s+r.spend,0);
-                      const tLeads=tableData.reduce((s,r)=>s+r.leads,0);
-                      const tRev=tableData.reduce((s,r)=>s+r.rev,0);
+                    {sortedTableData.length>0&&(()=>{
+                      const tSpend=sortedTableData.reduce((s,r)=>s+r.spend,0);
+                      const tLeads=sortedTableData.reduce((s,r)=>s+r.leads,0);
+                      const tRev=sortedTableData.reduce((s,r)=>s+r.rev,0);
                       const lvl=activeLevel==='campanhas'?'CAMPANHA':activeLevel==='conjuntos'?'CONJUNTO':'ANÚNCIO';
                       return(
                         <div style={{display:'grid',gridTemplateColumns:gridCols,background:dark?'#16161a':'#f9fafb',fontWeight:800,borderTop:`2px solid ${border}`,borderBottom:`1px solid ${border}`,alignItems:'stretch'}}>
@@ -1858,7 +2096,7 @@ export default function CampanhasPage() {
                             const isLast = idx === visibleColumns.length - 1;
                             const cellStyle = { display:'flex', alignItems:'center', padding:'14px 12px', borderRight: isLast ? 'none' : `1px solid ${border}` };
                             switch(col){
-                              case 'name': return <div key={col} style={{...cellStyle, fontSize:'14px', color:txtHi, fontWeight:800}}>{tableData.length} {lvl}{tableData.length!==1?'S':''}</div>;
+                              case 'name': return <div key={col} style={{...cellStyle, fontSize:'14px', color:txtHi, fontWeight:800}}>{sortedTableData.length} {lvl}{sortedTableData.length!==1?'S':''}</div>;
                               case 'spend': return <div key={col} style={{...cellStyle, fontSize:'14px', color:txtHi, justifyContent:'flex-end', fontWeight:800}}>R$ {tSpend.toFixed(2)}</div>;
                               case 'leads': return <div key={col} style={{...cellStyle, fontSize:'14px', color:'#10b981', justifyContent:'flex-end', fontWeight:800}}>{tLeads}</div>;
                               case 'cpl': return <div key={col} style={{...cellStyle, fontSize:'14px', color:'#10b981', justifyContent:'flex-end', fontWeight:800}}>{tLeads>0?`R$ ${(tSpend/tLeads).toFixed(2)}`:'—'}</div>;

@@ -8,7 +8,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
-import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter } from 'lucide-react';
+import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { toast } from 'sonner';
@@ -46,7 +46,6 @@ function getInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// ── Datas no fuso de Brasília ─────────────────────────────────
 function parseLeadDate(str?: string | null): Date {
   if (!str) return new Date(0);
   if (str.includes('T')) {
@@ -97,22 +96,17 @@ function subDays(dateStr: string, n: number): string {
   } catch { return dateStr; }
 }
 
-function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string, statusFilter?: string): Lead[] {
+function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string): Lead[] {
   if (period === 'all') return leads;
   const today = todayBR();
-  
-  // Sempre usa ultimo_status_change como referência de "quando algo aconteceu"
-  // Fallback para created_at se ultimo_status_change for nulo
   const getDateRef = (l: Lead): string | null | undefined => {
     const la = l as any;
     return la.ultimo_status_change || l.created_at;
   };
-
   const ok = (l: Lead, from: string, to: string) => {
     const d = leadDateBR(getDateRef(l));
     return !!d && d >= from && d <= to;
   };
-
   switch (period) {
     case 'today':     return leads.filter(l => ok(l, today, today));
     case 'yesterday': { const y = subDays(today, 1); return leads.filter(l => ok(l, y, y)); }
@@ -158,6 +152,11 @@ function normalizeCity(raw: string): string {
 
 function toStatusNum(s: any): number {
   if(s===null||s===undefined||s==='')return 1; const n=Number(s); if(isNaN(n)||n===0)return 1; return n;
+}
+
+function extractCampaignName(utmCampaign: string | null | undefined): string {
+  if (!utmCampaign) return '';
+  return String(utmCampaign).split('|')[0].trim();
 }
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
@@ -269,7 +268,6 @@ function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:numb
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const bg = dark ? '#1a1a1e' : '#f9fafb';
   const txt = dark ? '#f4f4f5' : '#111827';
-  
   return (
     <div style={{ position: 'relative' }}>
       <button type="button" onClick={() => setOpen(!open)} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
@@ -314,7 +312,6 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
-
   function handleEnter() {
     if (ref.current) {
       const r = ref.current.getBoundingClientRect();
@@ -322,16 +319,9 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
     }
     setShow(true);
   }
-
   return (
     <>
-      <div
-        ref={ref}
-        style={{ position:'relative', display:'inline-flex', flexShrink:0 }}
-        onMouseEnter={handleEnter}
-        onMouseLeave={() => setShow(false)}
-        onClick={e => { e.stopPropagation(); if (ref.current) { const r=ref.current.getBoundingClientRect(); setPos({top:r.top-8,left:r.left+r.width/2}); } setShow(v=>!v); }}
-      >
+      <div ref={ref} style={{ position:'relative', display:'inline-flex', flexShrink:0 }} onMouseEnter={handleEnter} onMouseLeave={() => setShow(false)} onClick={e => { e.stopPropagation(); if (ref.current) { const r=ref.current.getBoundingClientRect(); setPos({top:r.top-8,left:r.left+r.width/2}); } setShow(v=>!v); }}>
         <div style={{ width:'16px', height:'16px', borderRadius:'50%', background:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
           <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={dark?'#9ca3af':'#6b7280'} strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
@@ -346,6 +336,254 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   );
 }
 
+// ── Campaign Filter Modal ─────────────────────────────────────────────────────
+function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose }: {
+  dark: boolean;
+  campaigns: { name: string; count: number }[];
+  pendingSelected: Set<string>;
+  onToggle: (name: string) => void;
+  onApply: () => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#71717a' : '#6b7280';
+  const bg = dark ? '#111113' : '#fff';
+  const rowBg = dark ? '#1a1a1e' : '#f9fafb';
+
+  const visibleCampaigns = campaigns.filter(c =>
+    !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectedLeadCount = visibleCampaigns
+    .filter(c => pendingSelected.has(c.name))
+    .reduce((sum, c) => sum + c.count, 0);
+
+  const hasSelection = pendingSelected.size > 0;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }}/>
+      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'16px', width:'90%', maxWidth:'420px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.6)':'0 12px 40px rgba(0,0,0,0.15)', fontFamily:'inherit', display:'flex', flexDirection:'column', maxHeight:'80vh' }}>
+        {/* Header */}
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${border}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+            <Tag style={{ width:'16px', height:'16px', color:'#2563eb' }}/>
+            <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Filtrar por campanhas</span>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${border}`, flexShrink:0 }}>
+          <div style={{ position:'relative' }}>
+            <Search style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', width:'13px', height:'13px', color:txtMid }}/>
+            <input
+              autoFocus
+              placeholder="Buscar campanha..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width:'100%', paddingLeft:'32px', paddingRight:'12px', paddingTop:'8px', paddingBottom:'8px', borderRadius:'9px', border:`1px solid ${border}`, background:rowBg, color:txtHi, fontSize:'13px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any }}
+            />
+          </div>
+        </div>
+
+        {/* List */}
+        <div style={{ overflowY:'auto', flex:1, padding:'8px' }}>
+          {campaigns.length === 0 && (
+            <div style={{ textAlign:'center', padding:'32px 0', color:txtMid, fontSize:'13px' }}>
+              Nenhuma campanha encontrada no período
+            </div>
+          )}
+          {visibleCampaigns.length === 0 && campaigns.length > 0 && (
+            <div style={{ textAlign:'center', padding:'32px 0', color:txtMid, fontSize:'13px' }}>
+              Nenhuma campanha corresponde à busca
+            </div>
+          )}
+          {visibleCampaigns.map(camp => {
+            const isSelected = pendingSelected.has(camp.name);
+            return (
+              <button
+                key={camp.name}
+                onClick={() => onToggle(camp.name)}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'9px', border:'none', background:isSelected?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'2px' }}
+              >
+                <div style={{ width:'16px', height:'16px', borderRadius:'4px', border:`2px solid ${isSelected?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSelected?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.12s' }}>
+                  {isSelected && <Check style={{ width:'10px', height:'10px', color:'#fff' }}/>}
+                </div>
+                <span style={{ flex:1, fontSize:'13px', fontWeight:500, color:isSelected?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {camp.name || 'Sem campanha'}
+                </span>
+                <span style={{ fontSize:'12px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>
+                  {camp.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
+          <button onClick={onClear} style={{ padding:'8px 14px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
+            Limpar
+          </button>
+          <button
+            onClick={onApply}
+            style={{ flex:1, padding:'9px 14px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}
+          >
+            {hasSelection
+              ? `Aplicar filtro (${selectedLeadCount} lead${selectedLeadCount !== 1 ? 's' : ''})`
+              : 'Aplicar'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Unified Selection + Actions Bar ───────────────────────────────────────────
+function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilters, filteredCount, totalCount, allSelectedAreEvaluated, dark, isMobile, aprovadoLabel, onSelectAll, onClearSelection, onMoveStatus, onToggleAvaliado, onDelete }: {
+  selectedCount: number;
+  allSystemSelected: boolean;
+  hasActiveFilters: boolean;
+  filteredCount: number;
+  totalCount: number;
+  allSelectedAreEvaluated: boolean;
+  dark: boolean;
+  isMobile: boolean;
+  aprovadoLabel: string;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onMoveStatus: (status: number) => void;
+  onToggleAvaliado: () => void;
+  onDelete: () => void;
+}) {
+  const [showStatusDrop, setShowStatusDrop] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const barBorder = dark ? 'rgba(37,99,235,0.22)' : '#bfdbfe';
+  const accentTxt = dark ? '#93c5fd' : '#1d4ed8';
+  const btnBg = dark ? '#111113' : '#fff';
+  const btnBorder = dark ? '#2d3748' : '#d1d5db';
+  const btnTxt = dark ? '#cbd5e1' : '#374151';
+
+  const statusOpts = [
+    { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
+    { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
+    { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
+    { value: 3, label: aprovadoLabel,    dot: STATUS_CONFIG[3].dot },
+    { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
+  ];
+
+  function openDrop() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 4, left: r.left });
+    }
+    setShowStatusDrop(v => !v);
+  }
+
+  const selectAllLabel = hasActiveFilters
+    ? `Ver todos (${filteredCount})`
+    : `Ver todos (${totalCount})`;
+
+  return (
+    <div style={{ padding:'10px 14px', background:dark?'rgba(37,99,235,0.08)':'#eff6ff', border:`1px solid ${barBorder}`, borderRadius:'10px', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+
+      {/* Lado esquerdo: info de seleção */}
+      <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', minWidth:0, flex:1 }}>
+        <span style={{ fontSize:'13px', fontWeight:600, color:accentTxt, display:'flex', alignItems:'center', gap:'5px', whiteSpace:'nowrap' }}>
+          <Check style={{ width:'13px', height:'13px', flexShrink:0 }}/>
+          {allSystemSelected
+            ? `Todos os ${filteredCount} lead${filteredCount !== 1 ? 's' : ''} selecionados`
+            : `${selectedCount} lead${selectedCount !== 1 ? 's' : ''} selecionado${selectedCount !== 1 ? 's' : ''}`}
+        </span>
+        {!allSystemSelected && (
+          <>
+            <span style={{ color:dark?'rgba(147,197,253,0.25)':'#bfdbfe', fontSize:'13px', flexShrink:0 }}>·</span>
+            <button onClick={onSelectAll} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#60a5fa':'#2563eb', fontWeight:600, fontSize:'12.5px', padding:0, textDecoration:'underline', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+              {selectAllLabel}
+            </button>
+          </>
+        )}
+        <span style={{ color:dark?'rgba(147,197,253,0.25)':'#bfdbfe', fontSize:'13px', flexShrink:0 }}>·</span>
+        <button onClick={onClearSelection} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'12px', padding:0, fontFamily:'inherit', whiteSpace:'nowrap' }}>
+          Limpar
+        </button>
+      </div>
+
+      {/* Lado direito: botões de ação */}
+      <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+        {/* Mover para status */}
+        <div style={{ position:'relative' }}>
+          <button ref={btnRef} onClick={openDrop} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 10px', borderRadius:'8px', border:`1px solid ${btnBorder}`, background:btnBg, color:btnTxt, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+            Mover para <ChevronDown style={{ width:'11px', height:'11px', transform:showStatusDrop?'rotate(180deg)':'', transition:'transform 0.15s' }}/>
+          </button>
+          {showStatusDrop && (
+            <>
+              <div onClick={() => setShowStatusDrop(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+              <div style={{ position:'fixed', top:dropPos.top, left:dropPos.left, width:'190px', background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.12)' }}>
+                {statusOpts.map(o => (
+                  <button key={o.value} onClick={() => { onMoveStatus(o.value); setShowStatusDrop(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:'transparent', color:dark?'#d4d4d8':'#374151', fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                    <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Toggle avaliado */}
+        <button onClick={onToggleAvaliado} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 10px', borderRadius:'8px', border:`1px solid ${btnBorder}`, background:btnBg, color:btnTxt, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+          {allSelectedAreEvaluated
+            ? <><X style={{ width:'12px', height:'12px' }}/> Desavaliar</>
+            : <><Check style={{ width:'12px', height:'12px' }}/> Avaliar</>}
+        </button>
+
+        {/* Excluir */}
+        <button onClick={onDelete} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 10px', borderRadius:'8px', border:'1px solid #fecaca', background:dark?'rgba(220,38,38,0.08)':'#fff1f2', color:'#dc2626', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+          <Trash2 style={{ width:'12px', height:'12px' }}/> Excluir ({selectedCount})
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirm Dialog (reutilizável) ─────────────────────────────────────────────
+function ConfirmDialog({ title, message, confirmText = 'Confirmar', cancelText = 'Cancelar', onConfirm, onCancel, loading, dark, variant = 'default' }: {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+  dark: boolean;
+  variant?: 'default' | 'danger';
+}) {
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const confirmBg = variant === 'danger' ? '#dc2626' : '#2563eb';
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.3)', backdropFilter:'blur(4px)' }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{ background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'16px', padding:'24px', width:'90%', maxWidth:'380px' }}>
+        <h3 style={{ margin:'0 0 10px', fontSize:'15px', fontWeight:600, color:dark?'#fff':'#111827' }}>{title}</h3>
+        <p style={{ fontSize:'13px', color:dark?'#9ca3af':'#6b7280', margin:'0 0 20px', lineHeight:1.5 }}>{message}</p>
+        <div style={{ display:'flex', gap:'8px' }}>
+          <button onClick={onCancel} disabled={loading} style={{ flex:1, padding:'9px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#d4d4d8':'#374151', fontSize:'13px', cursor:loading?'not-allowed':'pointer', opacity:loading?0.5:1 }}>{cancelText}</button>
+          <button onClick={onConfirm} disabled={loading} style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:confirmBg, color:'#fff', fontSize:'13px', cursor:loading?'not-allowed':'pointer', opacity:loading?0.7:1 }}>
+            {loading ? '…' : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 function LeadsPage() {
   const navigate = useNavigate();
   const { updateLead, configuracoes } = useAppStore();
@@ -365,12 +603,8 @@ function LeadsPage() {
     if (!lead.whatsapp) return;
     const clean = lead.whatsapp.replace(/\D/g, '');
     const phone = clean.startsWith('55') ? clean : `55${clean}`;
-    
-    if (hasWA) {
-      navigate(`/whatsapp?phone=${phone}`);
-    } else {
-      window.open(`https://wa.me/${phone}`, '_blank');
-    }
+    if (hasWA) { navigate(`/whatsapp?phone=${phone}`); }
+    else { window.open(`https://wa.me/${phone}`, '_blank'); }
   }, [navigate, hasWA]);
 
   const [isMobile, setIsMobile] = useState(false);
@@ -386,32 +620,56 @@ function LeadsPage() {
   const bgCancelRef = useRef(false);
   const INITIAL_SIZE = 200;
   const PAGE_SIZE = 100;
+
+  // ── Filters ───────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState('all');
+  const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [pendingCampaigns, setPendingCampaigns] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 20;
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [showCustom, setShowCustom] = useState(false);
+  const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
+  const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
+
+  // ── Lead actions ──────────────────────────────────────────────────────────
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
-  const [newLead, setNewLead] = useState({
-    nome: '', whatsapp: '', cidade: '',
-    origem: '', origemCustom: '', status: 1, observacoes: ''
-  });
+  const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status:1, observacoes:'' });
   const ORIGENS = ['Indicação', 'Outro'];
+
+  // ── Selection ─────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [allSystemSelected, setAllSystemSelected] = useState(false);
+
+  // ── Bulk actions ──────────────────────────────────────────────────────────
   const [showDeleteConf, setShowDeleteConf] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [allSystemSelected, setAllSystemSelected] = useState(false);
-  const [campanhaFiltro, setCampanhaFiltro] = useState('');
-  const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
-  const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
+  const [showMoveStatusConfirm, setShowMoveStatusConfirm] = useState(false);
+  const [pendingMoveStatus, setPendingMoveStatus] = useState<number|null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [showAvaliarConf, setShowAvaliarConf] = useState(false);
+  const [campDeepFilter, setCampDeepFilter] = useState<{
+    type: 'campaign'|'adset'|'ad';
+    campaignId: string;
+    campaignName?: string;
+    adSetId?: string;
+    adSetName?: string;
+    adId?: string;
+    adName?: string;
+    showRevs: boolean;
+  } | null>(null);
+
   const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
 
+  // ── URL params → filters (on mount only) ─────────────────────────────────
+  const urlParamsApplied = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const periodo = params.get('periodo');
@@ -420,22 +678,83 @@ function LeadsPage() {
     const ate = params.get('ate');
     const status = params.get('status');
     const searchParam = params.get('search');
-    if (periodo) setPeriodFilter(periodo);
-    if (de) setCustomFrom(de);
-    if (ate) setCustomTo(ate);
-    if (campanha) {
-      try {
-        setCampanhaFiltro(decodeURIComponent(campanha).split('|')[0].trim());
-      } catch {
-        setCampanhaFiltro(campanha.split('|')[0].trim());
-      }
-    }
-    if (status) setStatusFilter(status);
-    if (searchParam) setSearch(decodeURIComponent(searchParam));
     const idParam = params.get('id');
-    if (idParam) setTargetLeadId(idParam);
-  }, []);
 
+    let hasUrlParams = false;
+    if (periodo) { setPeriodFilter(periodo); hasUrlParams = true; }
+    if (de) { setCustomFrom(de); hasUrlParams = true; }
+    if (ate) { setCustomTo(ate); hasUrlParams = true; }
+    if (campanha) {
+      try { setSelectedCampaigns(new Set([decodeURIComponent(campanha).split('|')[0].trim()])); }
+      catch { setSelectedCampaigns(new Set([campanha.split('|')[0].trim()])); }
+      hasUrlParams = true;
+    }
+    if (status) { setStatusFilter(status); hasUrlParams = true; }
+    if (searchParam) { setSearch(decodeURIComponent(searchParam)); hasUrlParams = true; }
+    if (idParam) { setTargetLeadId(idParam); }
+
+    urlParamsApplied.current = true;
+
+    // Restore from localStorage only if no URL params
+    if (!hasUrlParams && orgId) {
+      try {
+        const saved = localStorage.getItem(`leads_filters_${orgId}`);
+        if (saved) {
+          const f = JSON.parse(saved);
+          if (f.periodFilter && f.periodFilter !== 'custom') setPeriodFilter(f.periodFilter);
+          if (f.statusFilter) setStatusFilter(f.statusFilter);
+          if (f.selectedCampaigns?.length) setSelectedCampaigns(new Set(f.selectedCampaigns));
+          if (f.sortByDate) setSortByDate(f.sortByDate);
+        }
+      } catch {}
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load deep campaign filter from Campanhas page ────────────────────────
+  const deepFilterApplied = useRef(false);
+  useEffect(() => {
+    if (!orgId || deepFilterApplied.current) return;
+    deepFilterApplied.current = true;
+    try {
+      const raw = localStorage.getItem(`leads_campaign_filter_${orgId}`);
+      console.log('[FILTRO] Raw localStorage:', raw);
+      if (raw) {
+        const df = JSON.parse(raw);
+        console.log('[FILTRO] Filtro carregado do localStorage:', df);
+        setCampDeepFilter(df);
+        localStorage.removeItem(`leads_campaign_filter_${orgId}`);
+        // Toast com nomes legíveis
+        const campNm = df.campaignName || df.campaignId;
+        const asNm = df.adSetName || df.adSetId || '';
+        const adNm = df.adName || df.adId || '';
+        if (df.showRevs) {
+          const src = df.type==='ad' ? adNm : df.type==='adset' ? asNm : campNm;
+          toast(`Filtrando ${(window as any).__terminology?.convertidoPlural||'aprovados'} de: ${src}`);
+        } else if (df.type==='campaign') {
+          toast(`Filtrando por: ${campNm}`);
+        } else if (df.type==='adset') {
+          toast(`Filtrando por: ${campNm} → ${asNm}`);
+        } else {
+          toast(`Filtrando por: ${campNm} → ${asNm} → ${adNm}`);
+        }
+      }
+    } catch {}
+  }, [orgId]);
+
+  // ── Persist filters to localStorage ──────────────────────────────────────
+  useEffect(() => {
+    if (!orgId || !urlParamsApplied.current) return;
+    try {
+      localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({
+        periodFilter,
+        statusFilter,
+        selectedCampaigns: Array.from(selectedCampaigns),
+        sortByDate,
+      }));
+    } catch {}
+  }, [orgId, periodFilter, statusFilter, selectedCampaigns, sortByDate]);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
   const loadRestInBackground = useCallback(async (total: number, loaded: number) => {
     bgCancelRef.current = false;
     let from = loaded;
@@ -444,13 +763,7 @@ function LeadsPage() {
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
-        .select(`
-        id, nome, whatsapp, cidade, status, created_at,
-        utm_source, utm_campaign, score, faixa,
-        observacoes, motivo_reprovacao, ultimo_status_change,
-          status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
-          org_id, wa_sent, avaliado
-`)
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
         .order('ultimo_status_change', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
@@ -463,27 +776,19 @@ function LeadsPage() {
 
   const fetchLeads = useCallback(async () => {
     if (!orgReady || !orgId) return;
-    bgCancelRef.current = true; // cancela qualquer background load anterior
+    bgCancelRef.current = true;
     setIsLoading(true);
     setAllLeads([]);
 
-    // Count total (query leve — só id)
     const { count } = await supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId);
     setTotalCount(count || 0);
 
-    // Busca os primeiros 200 imediatamente
     const { data, error } = await supabase
       .from('leads')
-      .select(`
-        id, nome, whatsapp, cidade, status, created_at,
-        utm_source, utm_campaign, score, faixa,
-        observacoes, motivo_reprovacao, ultimo_status_change,
-        status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at,
-        org_id, wa_sent, avaliado
-      `)
+      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
       .order('ultimo_status_change', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
@@ -492,7 +797,6 @@ function LeadsPage() {
     setAllLeads((data || []) as unknown as Lead[]);
     setIsLoading(false);
 
-    // Carrega o restante em background sem travar a UI
     if (count && count > INITIAL_SIZE) {
       loadRestInBackground(count, INITIAL_SIZE);
     }
@@ -503,7 +807,6 @@ function LeadsPage() {
     fetchLeads();
   }, [orgId, orgReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Abre o drawer com dados parciais imediatamente, depois enriquece com quiz_respostas
   const handleViewLead = useCallback(async (lead: Lead) => {
     setViewingLead(lead);
     const { data } = await supabase.from('leads').select('*').eq('id', lead.id).single();
@@ -520,57 +823,113 @@ function LeadsPage() {
     return () => { supabase.removeChannel(ch); };
   }, [orgId, orgReady]);
 
-  // Abre o drawer automaticamente quando ?id=NUMERO está na URL
   useEffect(() => {
     if (!targetLeadId || isLoading) return;
     const lead = allLeads.find(l => String(l.id) === String(targetLeadId));
-    if (lead) {
-      handleViewLead(lead);
-      setTargetLeadId(null);
-    } else if (allLeads.length > 0) {
-      // Lead pode estar fora dos 200 carregados — busca direto no banco
+    if (lead) { handleViewLead(lead); setTargetLeadId(null); }
+    else if (allLeads.length > 0) {
       supabase.from('leads').select('*').eq('id', targetLeadId).single()
-        .then(({ data }) => {
-          if (data) { handleViewLead(data as unknown as Lead); setTargetLeadId(null); }
-        });
+        .then(({ data }) => { if (data) { handleViewLead(data as unknown as Lead); setTargetLeadId(null); } });
     }
   }, [targetLeadId, isLoading, allLeads]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Campaign options (derived from period-filtered leads) ─────────────────
+  const campaignOptions = useMemo(() => {
+    const leadsForPeriod = filterByPeriod(allLeads, periodFilter, customFrom, customTo);
+    const map = new Map<string, number>();
+    leadsForPeriod.forEach(l => {
+      const name = extractCampaignName((l as any).utm_campaign);
+      if (name) map.set(name, (map.get(name) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [allLeads, periodFilter, customFrom, customTo]);
+
+  // ── Filtered leads (all active filters, AND logic) ────────────────────────
   const filtered = useMemo(() => {
-    let r=[...allLeads];
-    r=filterByPeriod(r,periodFilter,customFrom,customTo,statusFilter!=='all'&&statusFilter!=='novo'?statusFilter:undefined);
-    if(statusFilter==='novo') r=r.filter(l=>toStatusNum(l.status)===1&&!l.avaliado);
-    else if(statusFilter!=='all') r=r.filter(l=>toStatusNum(l.status)===parseInt(statusFilter));
-    if(campanhaFiltro.trim()){
-      r=r.filter(l=>{
-        try {
-          const la=l as any;
-          const utm=String(la.utm_campaign||'').toLowerCase().split('|')[0].trim();
-          const camp=campanhaFiltro.toLowerCase().split('|')[0].trim().slice(0,20);
-          return utm.includes(camp);
-        } catch { return false; }
-      });
+    let r = [...allLeads];
+    r = filterByPeriod(r, periodFilter, customFrom, customTo);
+    if (statusFilter === 'novo') r = r.filter(l => toStatusNum(l.status) === 1 && !l.avaliado);
+    else if (statusFilter !== 'all') r = r.filter(l => toStatusNum(l.status) === parseInt(statusFilter));
+    if (selectedCampaigns.size > 0) {
+      r = r.filter(l => selectedCampaigns.has(extractCampaignName((l as any).utm_campaign)));
     }
-    if(search.trim()&&!campanhaFiltro.trim()){
-      const q=search.toLowerCase();
-      r=r.filter(l=>{ const la=l as any; return l.nome?.toLowerCase().includes(q)||l.whatsapp?.includes(search)||l.cidade?.toLowerCase().includes(q)||safeName((la.utm_campaign||'')).toLowerCase().includes(q); });
+    if (campDeepFilter) {
+      console.log('[FILTRO] Filtro ativo:', campDeepFilter);
+      console.log('[FILTRO] Total leads antes do filtro de campanha:', r.length);
+
+      function extractCampIds(utm: string): { cId: string; asId: string; adId: string } | null {
+        if (!utm) return null;
+        // Método 1: pipe-delimited Name|ID|Name|ID|Name|ID
+        if (utm.includes('|')) {
+          const parts = utm.split('|').map((p: string) => p.trim());
+          return { cId: String(parts[1] || ''), asId: String(parts[3] || ''), adId: String(parts[5] || '') };
+        }
+        // Método 2: extrair IDs numéricos longos por regex (fallback)
+        const ids = utm.match(/\d{10,}/g) || [];
+        console.log('[FILTRO] Fallback regex IDs:', ids, 'utm:', utm);
+        return { cId: String(ids[0] || ''), asId: String(ids[1] || ''), adId: String(ids[2] || '') };
+      }
+
+      const filterCampId  = String(campDeepFilter.campaignId || '');
+      const filterAdSetId = String(campDeepFilter.adSetId   || '');
+      const filterAdId    = String(campDeepFilter.adId      || '');
+
+      r = r.filter((l, idx) => {
+        const utmRaw = ((l as any).utm_campaign || '').trim();
+        const ids = extractCampIds(utmRaw);
+
+        if (idx < 3) {
+          console.log(`[FILTRO] Lead ${idx} utm_campaign:`, utmRaw);
+          console.log(`[FILTRO] Lead ${idx} IDs extraídos:`, ids);
+          console.log(`[FILTRO] Lead ${idx} filtro IDs:`, { filterCampId, filterAdSetId, filterAdId });
+        }
+
+        if (!ids || !ids.cId) return false;
+
+        const matchCamp  = ids.cId  === filterCampId;
+        const matchAdSet = campDeepFilter.type === 'campaign' || ids.asId === filterAdSetId;
+        const matchAd    = campDeepFilter.type !== 'ad'       || ids.adId === filterAdId;
+
+        if (idx < 3) {
+          console.log(`[FILTRO] Lead ${idx} match:`, { matchCamp, matchAdSet, matchAd, result: matchCamp && matchAdSet && matchAd });
+        }
+
+        return matchCamp && matchAdSet && matchAd;
+      });
+
+      console.log('[FILTRO] Total leads após filtro de campanha:', r.length);
+
+      if (campDeepFilter.showRevs) {
+        r = r.filter(l => toStatusNum(l.status) === 3);
+        console.log('[FILTRO] Total leads após filtro showRevs:', r.length);
+      }
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      r = r.filter(l => { const la = l as any; return l.nome?.toLowerCase().includes(q) || l.whatsapp?.includes(search) || l.cidade?.toLowerCase().includes(q) || safeName((la.utm_campaign || '')).toLowerCase().includes(q); });
     }
     if (sortByScore) {
-      r=[...r].sort((a,b)=>{ const sa=(a as any).score??-1; const sb=(b as any).score??-1; return sortByScore==='desc'?sb-sa:sa-sb; });
+      r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
-      r=[...r].sort((a,b)=>{
-        const da=parseLeadDate(a.created_at).getTime();
-        const db=parseLeadDate(b.created_at).getTime();
-        return sortByDate==='desc'?db-da:da-db;
+      r = [...r].sort((a, b) => {
+        const da = parseLeadDate(a.created_at).getTime();
+        const db = parseLeadDate(b.created_at).getTime();
+        return sortByDate === 'desc' ? db - da : da - db;
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, campanhaFiltro, customFrom, customTo, sortByScore, sortByDate]);
+  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate]);
 
-  useEffect(() => { setCurrentPage(1); setSelectedIds(new Set()); setAllSystemSelected(false); }, [periodFilter, statusFilter, search, campanhaFiltro]);
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedIds(new Set());
+    setAllSystemSelected(false);
+  }, [periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter]);
 
-  const totalPages = Math.ceil(filtered.length/leadsPerPage);
-  const paginatedLeads = useMemo(() => filtered.slice((currentPage-1)*leadsPerPage, currentPage*leadsPerPage), [filtered, currentPage]);
+  const totalPages = Math.ceil(filtered.length / leadsPerPage);
+  const paginatedLeads = useMemo(() => filtered.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage), [filtered, currentPage]);
 
   const pageIds = paginatedLeads.map(l => l.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
@@ -582,8 +941,94 @@ function LeadsPage() {
     setSelectedIds(n);
   }
 
-  function handleSelectAllSystem() { setSelectedIds(new Set(allLeads.map(l => l.id))); setAllSystemSelected(true); }
+  const hasActiveFilters = periodFilter !== 'all' || statusFilter !== 'all' || selectedCampaigns.size > 0 || !!search.trim() || !!campDeepFilter;
+
+  function handleSelectAllFiltered() {
+    if (filtered.length <= 1000) {
+      setSelectedIds(new Set(filtered.map(l => l.id)));
+    }
+    setAllSystemSelected(true);
+  }
+
   function handleClearSelection() { setSelectedIds(new Set()); setAllSystemSelected(false); }
+
+  // ── Selected leads derived state ──────────────────────────────────────────
+  const selectedLeads = useMemo(() => {
+    if (allSystemSelected) return filtered;
+    return allLeads.filter(l => selectedIds.has(l.id));
+  }, [selectedIds, allSystemSelected, filtered, allLeads]);
+
+  const allSelectedAreEvaluated = useMemo(() => {
+    if (selectedLeads.length === 0) return false;
+    return selectedLeads.every(l => (l as any).avaliado === true);
+  }, [selectedLeads]);
+
+  // ── Bulk operations ───────────────────────────────────────────────────────
+  async function handleBulkMoveStatus(newStatus: number) {
+    setBulkLoading(true);
+    const now = new Date().toISOString();
+    const tsField: Record<number, string> = { 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const updates: any = { status: newStatus, ultimo_status_change: now };
+    if (tsField[newStatus]) updates[tsField[newStatus]] = now;
+
+    try {
+      const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+      const CHUNK = 200;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        await supabase.from('leads').update(updates).in('id', ids.slice(i, i + CHUNK));
+      }
+      const idSet = new Set(ids);
+      setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, ...updates } : l));
+      const label = newStatus === 3 ? t.statusConvertidoLabel : STATUS_LABELS[newStatus];
+      toast.success(`${ids.length} lead${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para "${label}"`);
+      setSelectedIds(new Set());
+      setAllSystemSelected(false);
+      setShowMoveStatusConfirm(false);
+      setPendingMoveStatus(null);
+    } catch {
+      toast.error('Erro ao atualizar leads');
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  async function handleToggleAvaliado() {
+    const newValue = !allSelectedAreEvaluated;
+    const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+    const count = ids.length;
+    setBulkLoading(true);
+    try {
+      const CHUNK = 200;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        await supabase.from('leads').update({ avaliado: newValue }).in('id', ids.slice(i, i + CHUNK));
+      }
+      const idSet = new Set(ids);
+      setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, avaliado: newValue } : l));
+      toast.success(`${count} lead${count !== 1 ? 's' : ''} ${newValue ? 'marcado' : 'desmarcado'}${count !== 1 ? 's' : ''} como ${newValue ? 'avaliado' : 'não avaliado'}!`);
+      setSelectedIds(new Set());
+      setAllSystemSelected(false);
+    } catch {
+      toast.error('Erro ao atualizar leads');
+    } finally {
+      setBulkLoading(false);
+      setShowAvaliarConf(false);
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    setDeleting(true);
+    const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+    await supabase.from('quiz_sessoes').update({ lead_id: null }).in('lead_id', ids);
+    const { error } = await supabase.from('leads').delete().in('id', ids);
+    setDeleting(false);
+    if (error) { toast.error('Erro ao excluir'); return; }
+    const idSet = new Set(ids);
+    setAllLeads(prev => prev.filter(l => !idSet.has(l.id)));
+    setSelectedIds(new Set());
+    setAllSystemSelected(false);
+    setShowDeleteConf(false);
+    toast.success(`${ids.length} lead${ids.length !== 1 ? 's' : ''} excluído${ids.length !== 1 ? 's' : ''}!`);
+  };
 
   const handleAddLead = async () => {
     if (!newLead.nome.trim()) { toast.error('Nome obrigatório'); return; }
@@ -595,7 +1040,6 @@ function LeadsPage() {
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
 
-    // Busca o score mínimo verde da org via quizzes
     const { data: quizData } = await supabase
       .from('quizzes')
       .select('corte_verde')
@@ -603,7 +1047,7 @@ function LeadsPage() {
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
-    
+
     const scoreMinVerde = quizData?.corte_verde || 35;
 
     const { data, error } = await supabase.from('leads').insert({
@@ -614,67 +1058,55 @@ function LeadsPage() {
       score: scoreMinVerde,
       faixa: 'verde',
       observacoes: newLead.observacoes || null,
-      utm_source: newLead.origem === 'Outro'
-        ? (newLead.origemCustom || 'Outro')
-        : (newLead.origem || null),
-      utm_campaign: null,
-      utm_medium: null,
-      utm_content: null,
-      utm_term: null,
-      utm_id: null,
+      utm_source: newLead.origem === 'Outro' ? (newLead.origemCustom || 'Outro') : (newLead.origem || null),
+      utm_campaign: null, utm_medium: null, utm_content: null, utm_term: null, utm_id: null,
       org_id: orgId,
       created_at: new Date().toISOString(),
     }).select('*').single();
 
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
-
-    setNewLead({
-      nome: '', whatsapp: '', cidade: '',
-      origem: '', origemCustom: '', status: 1, observacoes: ''
-    });
+    setNewLead({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status:1, observacoes:'' });
     setIsAddOpen(false);
     toast.success('Lead adicionado!');
   };
 
   const handleEditLead = async () => {
-    if(!editingLead)return;
-    const cidadeNorm=normalizeCity(editingLead.cidade||'');
-    const originalLead=allLeads.find(l=>l.id===editingLead.id);
-    const newStatus=editingLead.status??0;
-    const updates:any={nome:editingLead.nome,whatsapp:editingLead.whatsapp,cidade:cidadeNorm,status:newStatus};
-    // Adiciona timestamp do status se ele mudou
-    if(originalLead&&Number(originalLead.status)!==Number(newStatus)){
-      const now=new Date().toISOString();
-      const tsField:Record<number,string>={0:'status_atendimento_at',1:'status_atendimento_at',2:'status_reuniao_at',5:'status_contrato_at',3:'status_aprovado_at'};
-      updates.ultimo_status_change=now;
-      if(tsField[Number(newStatus)]) updates[tsField[Number(newStatus)]]=now;
+    if (!editingLead) return;
+    const cidadeNorm = normalizeCity(editingLead.cidade || '');
+    const originalLead = allLeads.find(l => l.id === editingLead.id);
+    const newStatus = editingLead.status ?? 0;
+    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus };
+    if (originalLead && Number(originalLead.status) !== Number(newStatus)) {
+      const now = new Date().toISOString();
+      const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at' };
+      updates.ultimo_status_change = now;
+      if (tsField[Number(newStatus)]) updates[tsField[Number(newStatus)]] = now;
     }
-    const{error}=await supabase.from('leads').update(updates).eq('id',editingLead.id);
-    if(error){toast.error(`Erro: ${error.message}`);return;}
-    setAllLeads(prev=>prev.map(l=>l.id===editingLead.id?{...l,...updates}:l)); updateLead(editingLead.id,updates); setIsEditOpen(false); setEditingLead(null); toast.success('Lead atualizado!');
-  };
-
-  const handleDeleteSelected = async () => {
-    setDeleting(true);
-    const ids = Array.from(selectedIds);
-    // Remove FK em quiz_sessoes antes de deletar o lead (evita erro 409)
-    await supabase.from('quiz_sessoes').update({ lead_id: null }).in('lead_id', ids);
-    const { error } = await supabase.from('leads').delete().in('id', ids);
-    setDeleting(false);
-    if (error) { toast.error('Erro ao excluir'); return; }
-    setAllLeads(prev => prev.filter(l => !selectedIds.has(l.id)));
-    setSelectedIds(new Set());
-    setAllSystemSelected(false);
-    setShowDeleteConf(false);
-    toast.success(`${ids.length} lead(s) excluído(s)!`);
+    const { error } = await supabase.from('leads').update(updates).eq('id', editingLead.id);
+    if (error) { toast.error(`Erro: ${error.message}`); return; }
+    setAllLeads(prev => prev.map(l => l.id === editingLead.id ? { ...l, ...updates } : l));
+    updateLead(editingLead.id, updates);
+    setIsEditOpen(false);
+    setEditingLead(null);
+    toast.success('Lead atualizado!');
   };
 
   const exportCSV = () => {
-    const toExport=selectedIds.size>0?allLeads.filter(l=>selectedIds.has(l.id)):filtered; if(!toExport.length){toast.error('Nenhum lead para exportar');return;}
-    const allKeys=Array.from(new Set(toExport.flatMap(l=>Object.keys(l as object))));
-    const rows=toExport.map(l=>allKeys.map(k=>{const v=(l as any)[k];if(v===null||v===undefined)return'';const s=String(v).replace(/"/g,'""');return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s}"`:s;}).join(',')).join('\n');
-    const blob=new Blob([allKeys.join(',')+'\n'+rows],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`leads_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    let toExport: Lead[];
+    if (selectedIds.size > 0 && !allSystemSelected) {
+      toExport = allLeads.filter(l => selectedIds.has(l.id));
+    } else {
+      toExport = filtered;
+    }
+    if (!toExport.length) { toast.error('Nenhum lead para exportar'); return; }
+    const allKeys = Array.from(new Set(toExport.flatMap(l => Object.keys(l as object))));
+    const rows = toExport.map(l => allKeys.map(k => { const v = (l as any)[k]; if (v === null || v === undefined) return ''; const s = String(v).replace(/"/g, '""'); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s; }).join(',')).join('\n');
+    const blob = new Blob([allKeys.join(',') + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `leads_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    if (allSystemSelected) toast.success(`${toExport.length} leads exportados (todos os filtrados)`);
+    else if (selectedIds.size > 0) toast.success(`${toExport.length} leads selecionados exportados`);
+    else toast.success(`${toExport.length} leads exportados`);
   };
 
   function handlePeriodChange(v: string) {
@@ -682,17 +1114,58 @@ function LeadsPage() {
     else { setPeriodFilter(v); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }
   }
 
-  const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
-  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280';
-  const divider=dark?'border-[#1e1e22]':'border-gray-100'; const bold=dark?'text-white':'text-gray-900';
-  const muted=dark?'text-gray-500':'text-gray-600'; const theadBg=dark?'bg-[#18181b]':'bg-gray-50';
-  const hov=dark?'hover:bg-[#1a1a1e]':'hover:bg-blue-50/50'; const card=dark?'bg-[#111113] border-[#1e1e22]':'bg-white border-gray-100';
+  // ── Style tokens ──────────────────────────────────────────────────────────
+  const bg = dark ? '#090909' : '#f4f4f5';
+  const cardBg = dark ? '#111113' : '#ffffff';
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#71717a' : '#6b7280';
+  const divider = dark ? 'border-[#1e1e22]' : 'border-gray-100';
+  const bold = dark ? 'text-white' : 'text-gray-900';
+  const muted = dark ? 'text-gray-500' : 'text-gray-600';
+  const theadBg = dark ? 'bg-[#18181b]' : 'bg-gray-50';
+  const hov = dark ? 'hover:bg-[#1a1a1e]' : 'hover:bg-blue-50/50';
+  const card = dark ? 'bg-[#111113] border-[#1e1e22]' : 'bg-white border-gray-100';
   const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
   const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
+  const activeBulkCount = allSystemSelected ? filtered.length : selectedIds.size;
+  const showSelectionBar = selectedIds.size > 0 || allSystemSelected;
+  const pendingMoveStatusLabel = pendingMoveStatus != null
+    ? (pendingMoveStatus === 3 ? t.statusConvertidoLabel : STATUS_LABELS[pendingMoveStatus] || '')
+    : '';
+
+  // Add Lead dialog content (shared between mobile/desktop)
+  const addLeadForm = (
+    <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginTop:'8px' }}>
+      <input placeholder="Nome completo *" required value={newLead.nome} onChange={e => setNewLead(n => ({ ...n, nome: e.target.value }))} style={inputStyle}/>
+      <PhoneInput value={newLead.whatsapp} onChange={v => setNewLead(n => ({ ...n, whatsapp: v }))} style={inputStyle}/>
+      <input placeholder="Cidade *" required value={newLead.cidade} onChange={e => setNewLead(n => ({ ...n, cidade: e.target.value }))} style={inputStyle}/>
+      <div>
+        <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Origem</label>
+        <select value={newLead.origem} onChange={e => setNewLead(n => ({ ...n, origem: e.target.value }))} style={inputStyle}>
+          <option value="">Selecionar origem...</option>
+          {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {newLead.origem === 'Outro' && (
+          <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop:'8px' }}/>
+        )}
+      </div>
+      <div>
+        <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Status inicial</label>
+        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel}/>
+      </div>
+      <div>
+        <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Observações</label>
+        <textarea placeholder="Notas sobre o lead..." value={newLead.observacoes} onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} style={{ ...inputStyle, height:'80px', resize:'none' }}/>
+      </div>
+      <button onClick={handleAddLead} style={{ padding:'10px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13.5px', fontWeight:600, cursor:'pointer', marginTop:'8px' }}>Adicionar Lead</button>
+    </div>
+  );
+
   return (
     <AppLayout leadCount={totalCount}>
-      <div style={{ padding:isMobile?'12px':'28px', background:bg, minHeight:'100vh' }}>
+      <div style={{ padding: isMobile ? '12px' : '28px', background: bg, minHeight: '100vh' }}>
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
@@ -700,104 +1173,40 @@ function LeadsPage() {
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
-                {selectedIds.size>0&&<button onClick={()=>setShowDeleteConf(true)} style={{...btnGhost,border:'1px solid #fecaca',background:'#fff1f2',color:'#dc2626',padding:'7px'}}><Trash2 style={{width:'16px',height:'16px'}}/></button>}
-                <button onClick={()=>setShowFilters(v=>!v)} style={{...btnGhost,gap:'4px'}}><Filter style={{width:'14px',height:'14px'}}/> Filtros</button>
+                <button onClick={() => setShowFilters(v => !v)} style={{ ...btnGhost, gap:'4px' }}><Filter style={{ width:'14px', height:'14px' }}/> Filtros</button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild><button style={{display:'flex',alignItems:'center',gap:'4px',padding:'7px 12px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:500,cursor:'pointer'}}><Plus style={{width:'14px',height:'14px'}}/> Add</button></DialogTrigger>
-                  <DialogContent style={{background:dark?'#111113':'#fff',border:`1px solid ${border}`,borderRadius:'16px'}}>
-                    <DialogHeader><DialogTitle style={{color:dark?'#fff':'#111827'}}>Adicionar Lead</DialogTitle></DialogHeader>
-                    <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
-                      <input placeholder="Nome completo *" required value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
-                      <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade *" required value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
-                      
-                      {/* ORIGEM */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Origem</label>
-                        <select value={newLead.origem} onChange={e => setNewLead(n => ({ ...n, origem: e.target.value }))} style={inputStyle}>
-                          <option value="">Selecionar origem...</option>
-                          {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                        {newLead.origem === 'Outro' && (
-                          <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop: '8px' }} />
-                        )}
-                      </div>
-
-                      {/* STATUS INICIAL */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
-                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel} />
-                      </div>
-
-                      {/* OBSERVAÇÕES */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Observações</label>
-                        <textarea 
-                          placeholder="Notas sobre o lead..." 
-                          value={newLead.observacoes} 
-                          onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} 
-                          style={{ ...inputStyle, height: '80px', resize: 'none' }}
-                        />
-                      </div>
-
-                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:600,cursor:'pointer',marginTop:'8px'}}>Adicionar Lead</button>
-                    </div>
+                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'4px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Add</button></DialogTrigger>
+                  <DialogContent style={{ background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'16px' }}>
+                    <DialogHeader><DialogTitle style={{ color:dark?'#fff':'#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
+                    {addLeadForm}
                   </DialogContent>
                 </Dialog>
               </>
             ) : (
               <>
-                <div style={{position:'relative'}}>
-                  <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:dark?'#71717a':'#9ca3af'}}/>
-                  <input placeholder="Buscar..." value={search} onChange={e=>{ setSearch(e.target.value); if(campanhaFiltro)setCampanhaFiltro(''); }} style={{paddingLeft:'32px',paddingRight:'12px',paddingTop:'7px',paddingBottom:'7px',borderRadius:'9px',border:`1px solid ${border}`,background:dark?'#111113':'#fff',color:dark?'#d4d4d8':'#374151',fontSize:'13px',outline:'none',width:'180px',fontFamily:'inherit'}}/>
+                <div style={{ position:'relative' }}>
+                  <Search style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', width:'14px', height:'14px', color:dark?'#71717a':'#9ca3af' }}/>
+                  <input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft:'32px', paddingRight:'12px', paddingTop:'7px', paddingBottom:'7px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#fff', color:dark?'#d4d4d8':'#374151', fontSize:'13px', outline:'none', width:'180px', fontFamily:'inherit' }}/>
                 </div>
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
-                <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
-                <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
-                <button onClick={()=>selectedIds.size>0?setShowDeleteConf(true):undefined} style={{...btnGhost,border:`1px solid ${selectedIds.size>0?'#fecaca':border}`,background:selectedIds.size>0?'#fff1f2':(dark?'#111113':'#fff'),color:selectedIds.size>0?'#dc2626':(dark?'#3f3f46':'#d1d5db'),cursor:selectedIds.size>0?'pointer':'default'}}>
-                  <Trash2 style={{width:'13px',height:'13px'}}/>{selectedIds.size>0&&` (${selectedIds.size})`}
+
+                {/* Campaign filter button */}
+                <button
+                  onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }}
+                  style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                >
+                  <Tag style={{ width:'12px', height:'12px' }}/>
+                  Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                 </button>
+
+                <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width:'13px', height:'13px' }}/></button>
+                <button onClick={exportCSV} style={btnGhost}><Download style={{ width:'13px', height:'13px' }}/></button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild><button style={{display:'flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:500,cursor:'pointer'}}><Plus style={{width:'14px',height:'14px'}}/> Adicionar</button></DialogTrigger>
-                  <DialogContent style={{background:dark?'#111113':'#fff',border:`1px solid ${border}`,borderRadius:'16px'}}>
-                    <DialogHeader><DialogTitle style={{color:dark?'#fff':'#111827'}}>Adicionar Lead</DialogTitle></DialogHeader>
-                    <div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
-                      <input placeholder="Nome completo *" required value={newLead.nome} onChange={e=>setNewLead(n=>({...n,nome:e.target.value}))} style={inputStyle}/>
-                      <PhoneInput value={newLead.whatsapp} onChange={v=>setNewLead(n=>({...n,whatsapp:v}))} style={inputStyle}/>
-                      <input placeholder="Cidade *" required value={newLead.cidade} onChange={e=>setNewLead(n=>({...n,cidade:e.target.value}))} style={inputStyle}/>
-                      
-                      {/* ORIGEM */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Origem</label>
-                        <select value={newLead.origem} onChange={e => setNewLead(n => ({ ...n, origem: e.target.value }))} style={inputStyle}>
-                          <option value="">Selecionar origem...</option>
-                          {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                        {newLead.origem === 'Outro' && (
-                          <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop: '8px' }} />
-                        )}
-                      </div>
-
-                      {/* STATUS INICIAL */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Status inicial</label>
-                        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel} />
-                      </div>
-
-                      {/* OBSERVAÇÕES */}
-                      <div>
-                        <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Observações</label>
-                        <textarea 
-                          placeholder="Notas sobre o lead..." 
-                          value={newLead.observacoes} 
-                          onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} 
-                          style={{ ...inputStyle, height: '80px', resize: 'none' }}
-                        />
-                      </div>
-
-                      <button onClick={handleAddLead} style={{padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13.5px',fontWeight:600,cursor:'pointer',marginTop:'8px'}}>Adicionar Lead</button>
-                    </div>
+                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Adicionar</button></DialogTrigger>
+                  <DialogContent style={{ background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'16px' }}>
+                    <DialogHeader><DialogTitle style={{ color:dark?'#fff':'#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
+                    {addLeadForm}
                   </DialogContent>
                 </Dialog>
               </>
@@ -805,190 +1214,220 @@ function LeadsPage() {
           </div>
         </div>
 
+        {/* Mobile search + filters */}
         {isMobile && (
-          <div style={{marginBottom:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
-            <div style={{position:'relative'}}>
-              <Search style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',width:'14px',height:'14px',color:dark?'#71717a':'#9ca3af'}}/>
-              <input placeholder="Buscar leads..." value={search} onChange={e=>{ setSearch(e.target.value); if(campanhaFiltro)setCampanhaFiltro(''); }} style={{width:'100%',paddingLeft:'32px',paddingRight:'12px',paddingTop:'10px',paddingBottom:'10px',borderRadius:'10px',border:`1px solid ${border}`,background:cardBg,color:txtHi,fontSize:'14px',outline:'none',fontFamily:'inherit'}}/>
+          <div style={{ marginBottom:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
+            <div style={{ position:'relative' }}>
+              <Search style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', width:'14px', height:'14px', color:dark?'#71717a':'#9ca3af' }}/>
+              <input placeholder="Buscar leads..." value={search} onChange={e => setSearch(e.target.value)} style={{ width:'100%', paddingLeft:'32px', paddingRight:'12px', paddingTop:'10px', paddingBottom:'10px', borderRadius:'10px', border:`1px solid ${border}`, background:cardBg, color:txtHi, fontSize:'14px', outline:'none', fontFamily:'inherit' }}/>
             </div>
             {showFilters && (
-              <div style={{display:'flex',gap:'6px',flexWrap:'wrap',padding:'10px',background:cardBg,borderRadius:'10px',border:`1px solid ${border}`}}>
+              <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', padding:'10px', background:cardBg, borderRadius:'10px', border:`1px solid ${border}` }}>
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
-                <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{width:'13px',height:'13px'}}/></button>
-                <button onClick={exportCSV} style={btnGhost}><Download style={{width:'13px',height:'13px'}}/></button>
+                <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
+                  <Tag style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
+                </button>
+                <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width:'13px', height:'13px' }}/></button>
+                <button onClick={exportCSV} style={btnGhost}><Download style={{ width:'13px', height:'13px' }}/></button>
               </div>
             )}
           </div>
         )}
 
-        {/* Chip campanha ativa */}
-        {campanhaFiltro && (
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(16,185,129,0.1)':'#f0fdf4', border:`1px solid ${dark?'rgba(16,185,129,0.25)':'#bbf7d0'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
-            <span style={{ color:dark?'#34d399':'#15803d', fontWeight:500 }}>🎯 Campanha:</span>
-            <span style={{ color:dark?'#f4f4f5':'#111827', fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{campanhaFiltro}</span>
-            <button onClick={()=>{ setCampanhaFiltro(''); setPeriodFilter('all'); }} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'14px', padding:'0 2px', lineHeight:1 }}>✕</button>
+        {/* Campaign filter chip */}
+        {selectedCampaigns.size > 0 && (
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
+            <Tag style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
+            <span style={{ color:dark?'#93c5fd':'#1d4ed8', fontWeight:500 }}>Campanhas:</span>
+            <span style={{ color:txtHi, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {Array.from(selectedCampaigns).slice(0, 3).join(', ')}{selectedCampaigns.size > 3 ? ` +${selectedCampaigns.size - 3}` : ''}
+            </span>
+            <button onClick={() => setSelectedCampaigns(new Set())} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'14px', padding:'0 2px', lineHeight:1 }}>✕</button>
+          </div>
+        )}
+        {/* Deep campaign filter chip (from Campanhas page) */}
+        {campDeepFilter && (
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
+            <Tag style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
+            <span style={{ color:dark?'#93c5fd':'#1d4ed8', fontWeight:500 }}>
+              {campDeepFilter.showRevs ? t.convertidoPlural : (campDeepFilter.type==='campaign'?'Campanha':campDeepFilter.type==='adset'?'Conjunto':'Anúncio')}:
+            </span>
+            <span style={{ color:txtHi, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {campDeepFilter.type==='campaign'
+               ? (campDeepFilter.campaignName || campDeepFilter.campaignId)
+               : campDeepFilter.type==='adset'
+               ? `${campDeepFilter.campaignName||campDeepFilter.campaignId} → ${campDeepFilter.adSetName||campDeepFilter.adSetId||''}`
+               : `${campDeepFilter.campaignName||campDeepFilter.campaignId} → ${campDeepFilter.adSetName||''} → ${campDeepFilter.adName||campDeepFilter.adId||''}`}
+            </span>
+            <button onClick={() => setCampDeepFilter(null)} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'14px', padding:'0 2px', lineHeight:1 }}>✕</button>
           </div>
         )}
 
+        {/* Custom date modal */}
         {showCustom && (
           <CustomDateModal dark={dark} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo}
-            onApply={() => { if(customFrom&&customTo){setPeriodFilter('custom');setShowCustom(false);} }}
-            onClear={() => { setCustomFrom('');setCustomTo('');setPeriodFilter('all');setShowCustom(false); }}
+            onApply={() => { if (customFrom && customTo) { setPeriodFilter('custom'); setShowCustom(false); } }}
+            onClear={() => { setCustomFrom(''); setCustomTo(''); setPeriodFilter('all'); setShowCustom(false); }}
             onClose={() => setShowCustom(false)}
           />
         )}
 
-        {!isMobile && selectedIds.size > 0 && (
-          <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 14px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'10px', marginBottom:'10px', flexWrap:'wrap' }}>
-            <span style={{ fontSize:'13px', fontWeight:500, color:dark?'#93c5fd':'#1d4ed8' }}>
-              {allSystemSelected ? `Todos os ${allLeads.length} leads selecionados` : `${selectedIds.size} lead${selectedIds.size>1?'s':''} selecionado${selectedIds.size>1?'s':''} nesta página`}
-            </span>
-            {!allSystemSelected && (<>
-              <span style={{color:dark?'rgba(147,197,253,0.3)':'#bfdbfe',fontSize:'13px'}}>·</span>
-              <button onClick={handleSelectAllSystem} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#60a5fa':'#2563eb', fontWeight:600, fontSize:'13px', padding:0, textDecoration:'underline' }}>
-                Selecionar todos os {allLeads.length} leads do sistema
-              </button>
-            </>)}
-            <button onClick={handleClearSelection} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'12px', padding:0, marginLeft:'auto' }}>Limpar seleção</button>
-          </div>
+        {/* Unified selection + actions bar */}
+        {showSelectionBar && (
+          <UnifiedSelectionBar
+            selectedCount={activeBulkCount}
+            allSystemSelected={allSystemSelected}
+            hasActiveFilters={hasActiveFilters}
+            filteredCount={filtered.length}
+            totalCount={allLeads.length}
+            allSelectedAreEvaluated={allSelectedAreEvaluated}
+            dark={dark}
+            isMobile={isMobile}
+            aprovadoLabel={t.statusConvertidoLabel}
+            onSelectAll={handleSelectAllFiltered}
+            onClearSelection={handleClearSelection}
+            onMoveStatus={status => { setPendingMoveStatus(status); setShowMoveStatusConfirm(true); }}
+            onToggleAvaliado={() => setShowAvaliarConf(true)}
+            onDelete={() => setShowDeleteConf(true)}
+          />
         )}
 
         {/* Mobile cards */}
         {isMobile ? (
-          <div style={{display:'flex',flexDirection:'column',gap:'8px',overscrollBehavior:'contain'}}>
-            {isLoading?[...Array(5)].map((_,i)=><div key={i} style={{height:'88px',borderRadius:'12px',background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)',animation:'pulse 1.5s ease-in-out infinite'}}/>)
-            :paginatedLeads.length===0?<div style={{textAlign:'center',padding:'40px 0',color:txtMid,fontSize:'13px'}}>Nenhum lead encontrado</div>
-            :paginatedLeads.map(lead=>{
-              const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id);
-              return(
-                <div key={lead.id}
-                  onTouchStart={()=>{longPressTriggered.current=false;pressTimer.current=setTimeout(()=>{longPressTriggered.current=true;setSelectedIds(prev=>{const n=new Set(prev);if(n.has(lead.id))n.delete(lead.id);else n.add(lead.id);return n;});if(window.navigator?.vibrate)window.navigator.vibrate(50);},450);}}
-                  onTouchEnd={()=>pressTimer.current&&clearTimeout(pressTimer.current)}
-                  onTouchMove={()=>pressTimer.current&&clearTimeout(pressTimer.current)}
-                  onContextMenu={e=>e.preventDefault()}
-                  onClick={()=>{if(longPressTriggered.current){longPressTriggered.current=false;return;}if(selectedIds.size>0){const n=new Set(selectedIds);if(n.has(lead.id))n.delete(lead.id);else n.add(lead.id);setSelectedIds(n);}else{handleViewLead(lead);}}}
-                  style={{background:cardBg,borderRadius:'12px',padding:'12px 14px',border:`1px solid ${sel?'#2563eb':border}`,boxShadow:sel?'0 0 0 2px rgba(37,99,235,0.2)':'0 1px 4px rgba(0,0,0,0.04)',cursor:'pointer',transition:'all 0.12s',userSelect:'none',WebkitUserSelect:'none',touchAction:'pan-y'}}
-                >
-                  <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                    {selectedIds.size>0&&<input type="checkbox" checked={sel} readOnly style={{width:'15px',height:'15px',accentColor:'#2563eb',flexShrink:0,pointerEvents:'none'}}/>}
-                    <div style={{position:'relative',flexShrink:0}}>
-                      <div style={{width:'36px',height:'36px',borderRadius:'10px',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'12px',fontWeight:700}}>{getInitials(lead.nome)}</div>
-                      <div style={{position:'absolute',top:'-4px',right:'-4px'}}><FaixaDot lead={lead} dark={dark}/></div>
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:'14px',fontWeight:600,color:txtHi,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.nome)||'Lead'}</p>
-                      <p style={{fontSize:'12px',color:txtMid,margin:'2px 0 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):''}{safeName(lead.cidade)&&lead.whatsapp?' · ':''}{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
-                      <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11px',fontWeight:600,background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
-                        <span style={{width:'5px',height:'5px',borderRadius:'50%',background:STATUS_STYLE[s]?.dot,flexShrink:0,display:'inline-block'}}/>{STATUS_LABELS[s]}
-                      </span>
-                      <span style={{fontSize:'11px',color:txtMid}}>{formatEntrada(lead.created_at)}</span>
+          <div style={{ display:'flex', flexDirection:'column', gap:'8px', overscrollBehavior:'contain' }}>
+            {isLoading ? [...Array(5)].map((_, i) => <div key={i} style={{ height:'88px', borderRadius:'12px', background:dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)', animation:'pulse 1.5s ease-in-out infinite' }}/>)
+              : paginatedLeads.length === 0 ? <div style={{ textAlign:'center', padding:'40px 0', color:txtMid, fontSize:'13px' }}>Nenhum lead encontrado</div>
+              : paginatedLeads.map(lead => {
+                const s = toStatusNum(lead.status); const sel = selectedIds.has(lead.id);
+                return (
+                  <div key={lead.id}
+                    onTouchStart={() => { longPressTriggered.current = false; pressTimer.current = setTimeout(() => { longPressTriggered.current = true; setSelectedIds(prev => { const n = new Set(prev); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); return n; }); if (window.navigator?.vibrate) window.navigator.vibrate(50); }, 450); }}
+                    onTouchEnd={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                    onTouchMove={() => pressTimer.current && clearTimeout(pressTimer.current)}
+                    onContextMenu={e => e.preventDefault()}
+                    onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } if (selectedIds.size > 0) { const n = new Set(selectedIds); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); setSelectedIds(n); } else { handleViewLead(lead); } }}
+                    style={{ background:cardBg, borderRadius:'12px', padding:'12px 14px', border:`1px solid ${sel ? '#2563eb' : border}`, boxShadow:sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)', cursor:'pointer', transition:'all 0.12s', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y' }}
+                  >
+                    <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                      {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none' }}/>}
+                      <div style={{ position:'relative', flexShrink:0 }}>
+                        <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
+                        <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <p style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</p>
+                        <p style={{ fontSize:'12px', color:txtMid, margin:'2px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : ''}{safeName(lead.cidade) && lead.whatsapp ? ' · ' : ''}{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : ''}</p>
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', flexShrink:0 }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11px', fontWeight:600, background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
+                          <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                        </span>
+                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(lead.created_at)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-            {!isLoading&&totalPages>1&&(
-              <div style={{display:'flex',justifyContent:'center',gap:'8px',padding:'8px 0'}}>
-                <button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1} style={{padding:'8px 16px',borderRadius:'8px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:currentPage===1?'default':'pointer',opacity:currentPage===1?0.4:1}}>Anterior</button>
-                <span style={{padding:'8px 12px',fontSize:'13px',color:txtMid}}>{currentPage}/{totalPages}</span>
-                <button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages} style={{padding:'8px 16px',borderRadius:'8px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:currentPage===totalPages?'default':'pointer',opacity:currentPage===totalPages?0.4:1}}>Próximo</button>
+                );
+              })}
+            {!isLoading && totalPages > 1 && (
+              <div style={{ display:'flex', justifyContent:'center', gap:'8px', padding:'8px 0' }}>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding:'8px 16px', borderRadius:'8px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:currentPage === 1 ? 'default' : 'pointer', opacity:currentPage === 1 ? 0.4 : 1 }}>Anterior</button>
+                <span style={{ padding:'8px 12px', fontSize:'13px', color:txtMid }}>{currentPage}/{totalPages}</span>
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={{ padding:'8px 16px', borderRadius:'8px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:currentPage === totalPages ? 'default' : 'pointer', opacity:currentPage === totalPages ? 0.4 : 1 }}>Próximo</button>
               </div>
             )}
           </div>
         ) : (
           <div className={`rounded-2xl border overflow-hidden ${card}`}>
-            <table className="w-full text-sm" style={{tableLayout:'fixed'}}>
+            <table className="w-full text-sm" style={{ tableLayout:'fixed' }}>
               <colgroup>
-                <col style={{width:'40px'}}/>
-                <col style={{width:'23%'}}/>
-                <col style={{width:'88px'}}/>
-                <col style={{width:'14%'}}/>
-                <col style={{width:'18%'}}/>
-                <col style={{width:'120px'}}/>
-                <col style={{width:'120px'}}/>
-                <col style={{width:'72px'}}/>
+                <col style={{ width:'40px' }}/>
+                <col style={{ width:'23%' }}/>
+                <col style={{ width:'88px' }}/>
+                <col style={{ width:'14%' }}/>
+                <col style={{ width:'18%' }}/>
+                <col style={{ width:'120px' }}/>
+                <col style={{ width:'120px' }}/>
+                <col style={{ width:'72px' }}/>
               </colgroup>
               <thead>
                 <tr className={`border-b ${divider} ${theadBg}`}>
                   <th className="pl-4 pr-2 py-3">
-                    <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.6,cursor:'pointer'}}/>
+                    <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.6, cursor:'pointer' }}/>
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
-                  <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
-                    <button onClick={()=>setSortByScore(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:sortByScore?(dark?'#60a5fa':'#2563eb'):(dark?'#71717a':'#6b7280'),background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
-                      Score {sortByScore==='asc'?'↑':'↓'}
+                  <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
+                    <button onClick={() => setSortByScore(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:sortByScore ? (dark ? '#60a5fa' : '#2563eb') : (dark ? '#71717a' : '#6b7280'), background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                      Score {sortByScore === 'asc' ? '↑' : '↓'}
                     </button>
                   </th>
-                  {(['WhatsApp','Cidade','Status'] as string[]).map(h=>(
+                  {(['WhatsApp', 'Cidade', 'Status'] as string[]).map(h => (
                     <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
-                  <th className={`text-left px-3 py-3`} style={{whiteSpace:'nowrap'}}>
-                    <button onClick={()=>setSortByDate(s=>s==='desc'?'asc':'desc')} style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em',color:dark?'#71717a':'#6b7280',background:'none',border:'none',cursor:'pointer',padding:0,fontFamily:'inherit'}}>
-                      Entrada {sortByDate==='desc'?'↓':'↑'}
+                  <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
+                    <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#71717a' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                      Entrada {sortByDate === 'desc' ? '↓' : '↑'}
                     </button>
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {isLoading?([...Array(10)].map((_,i)=>(
+                {isLoading ? ([...Array(10)].map((_, i) => (
                   <tr key={i} className={`border-b ${divider}`}>
-                    <td className="pl-4 pr-2 py-3"><div style={{width:'15px',height:'15px',borderRadius:'3px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></td>
-                    <td className="px-3 py-3"><div style={{display:'flex',alignItems:'center',gap:'7px'}}><div style={{width:'28px',height:'28px',borderRadius:'50%',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',flexShrink:0}}/><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${90+Math.floor((i*37)%70)}px`}}/></div></td>
-                    {[60,90,110,90,80].map((w,j)=>(<td key={j} className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:`${w}px`}}/></td>))}
-                    <td className="px-3 py-3"><div style={{height:'13px',borderRadius:'4px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite',width:'80px'}}/></td>
-                    <td className="px-3 py-3"><div style={{display:'flex',gap:'5px'}}><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/><div style={{width:'28px',height:'28px',borderRadius:'7px',background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',animation:'pulse 1.5s ease-in-out infinite'}}/></div></td>
+                    <td className="pl-4 pr-2 py-3"><div style={{ width:'15px', height:'15px', borderRadius:'3px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite' }}/></td>
+                    <td className="px-3 py-3"><div style={{ display:'flex', alignItems:'center', gap:'7px' }}><div style={{ width:'28px', height:'28px', borderRadius:'50%', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', flexShrink:0 }}/><div style={{ height:'13px', borderRadius:'4px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', width:`${90 + Math.floor((i * 37) % 70)}px` }}/></div></td>
+                    {[60, 90, 110, 90, 80].map((w, j) => (<td key={j} className="px-3 py-3"><div style={{ height:'13px', borderRadius:'4px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', width:`${w}px` }}/></td>))}
+                    <td className="px-3 py-3"><div style={{ height:'13px', borderRadius:'4px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', width:'80px' }}/></td>
+                    <td className="px-3 py-3"><div style={{ display:'flex', gap:'5px' }}><div style={{ width:'28px', height:'28px', borderRadius:'7px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite' }}/><div style={{ width:'28px', height:'28px', borderRadius:'7px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite' }}/></div></td>
                   </tr>
                 )))
-                :paginatedLeads.length===0?(<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
-                :paginatedLeads.map((lead,idx)=>{
-                  const s=toStatusNum(lead.status); const sel=selectedIds.has(lead.id); const obs=(lead as any).observacoes as string|null|undefined; const la=lead as any;
-                  return(
-                    <tr key={lead.id} className={`${sel?(dark?'bg-blue-950/30':'bg-blue-50/60'):idx%2===0?'':(dark?'bg-[#0f0f11]':'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={()=>handleViewLead(lead)}>
-                      <td className="pl-4 pr-2 py-3" onClick={e=>e.stopPropagation()}>
-                        <input type="checkbox" checked={sel} onChange={e=>{const n=new Set(selectedIds);e.target.checked?n.add(lead.id):n.delete(lead.id);setSelectedIds(n);if(!e.target.checked)setAllSystemSelected(false);}} onClick={e=>e.stopPropagation()} style={{width:'15px',height:'15px',accentColor:'#3b82f6',opacity:0.5,cursor:'pointer'}}/>
-                      </td>
-                      <td className="px-3 py-3" style={{overflow:'hidden'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'7px',minWidth:0}}>
-                          <div style={{position:'relative',flexShrink:0}}>
-                            <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'#4b5563',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:700}}>{getInitials(lead.nome)}</div>
-                            {toStatusNum(lead.status)===1&&!la.avaliado&&<div style={{position:'absolute',top:'-2px',right:'-2px',width:'10px',height:'10px',borderRadius:'50%',background:'#3b82f6',border:`2px solid ${dark?'#111113':'#ffffff'}`,boxShadow:'0 0 0 1px rgba(59,130,246,0.3)',zIndex:10}}/>}
+                  : paginatedLeads.length === 0 ? (<tr><td colSpan={8} className={`px-6 py-12 text-center text-sm ${muted}`}>Nenhum lead encontrado</td></tr>)
+                  : paginatedLeads.map((lead, idx) => {
+                    const s = toStatusNum(lead.status); const sel = selectedIds.has(lead.id); const obs = (lead as any).observacoes as string | null | undefined; const la = lead as any;
+                    return (
+                      <tr key={lead.id} className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : idx % 2 === 0 ? '' : (dark ? 'bg-[#0f0f11]' : 'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={() => handleViewLead(lead)}>
+                        <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
+                        </td>
+                        <td className="px-3 py-3" style={{ overflow:'hidden' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
+                            <div style={{ position:'relative', flexShrink:0 }}>
+                              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
+                            </div>
+                            <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>
+                            {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
                           </div>
-                          <span style={{fontSize:'13px',fontWeight:500,color:dark?'#f4f4f5':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{safeName(lead.nome)||'Lead'}</span>
-                          {obs&&obs.trim()&&<ObsTooltip text={obs} dark={dark}/>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3" style={{whiteSpace:'nowrap'}}>
-                        <ScoreTag score={la.score!=null?Number(la.score):null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
-                      </td>
-                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</td>
-                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12.5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{safeName(lead.cidade)?normalizeCity(safeName(lead.cidade)):'—'}</td>
-                      <td className="px-3 py-3">
-                        <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'99px',fontSize:'11.5px',fontWeight:600,whiteSpace:'nowrap',background:dark?STATUS_STYLE[s]?.darkBg:STATUS_STYLE[s]?.lightBg,color:dark?STATUS_STYLE[s]?.darkText:STATUS_STYLE[s]?.lightText}}>
-                          <span style={{width:'5px',height:'5px',borderRadius:'50%',background:STATUS_STYLE[s]?.dot,flexShrink:0,display:'inline-block'}}/>{STATUS_LABELS[s]}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3" style={{color:dark?'#71717a':'#374151',fontSize:'12px',whiteSpace:'nowrap'}}>{formatEntrada(lead.created_at)}</td>
-                      <td className="px-3 py-3">
-                        <div style={{display:'flex',alignItems:'center',gap:'5px'}} onClick={e=>e.stopPropagation()}>
-                          <button onClick={()=>{ handleWhatsApp(lead); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-green-500/15 text-green-500 hover:bg-green-500/25':'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{border:'none',cursor:lead.whatsapp?'pointer':'default',opacity:lead.whatsapp?1:0.4}}><MessageCircle className="w-3.5 h-3.5"/></button>
-                          <button onClick={()=>{setEditingLead(lead);setIsEditOpen(true);}} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark?'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25':'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
+                          <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
+                        </td>
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-3">
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
+                            <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3">
+                          <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
+                            <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
-            {!isLoading&&totalPages>1&&(
+            {!isLoading && totalPages > 1 && (
               <div className={`px-6 py-4 border-t ${divider} flex items-center justify-between`}>
-                <p className={`text-sm ${muted}`}>Mostrando {(currentPage-1)*leadsPerPage+1}–{Math.min(currentPage*leadsPerPage,filtered.length)} de {filtered.length}</p>
-                <div style={{display:'flex',gap:'4px'}}>
-                  <button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1} style={{padding:'6px 12px',borderRadius:'8px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:currentPage===1?'default':'pointer',opacity:currentPage===1?0.4:1}}>Anterior</button>
-                  <button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages} style={{padding:'6px 12px',borderRadius:'8px',border:`1px solid ${border}`,background:cardBg,color:txtMid,fontSize:'13px',cursor:currentPage===totalPages?'default':'pointer',opacity:currentPage===totalPages?0.4:1}}>Próximo</button>
+                <p className={`text-sm ${muted}`}>Mostrando {(currentPage - 1) * leadsPerPage + 1}–{Math.min(currentPage * leadsPerPage, filtered.length)} de {filtered.length}</p>
+                <div style={{ display:'flex', gap:'4px' }}>
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding:'6px 12px', borderRadius:'8px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:currentPage === 1 ? 'default' : 'pointer', opacity:currentPage === 1 ? 0.4 : 1 }}>Anterior</button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={{ padding:'6px 12px', borderRadius:'8px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:currentPage === totalPages ? 'default' : 'pointer', opacity:currentPage === totalPages ? 0.4 : 1 }}>Próximo</button>
                 </div>
               </div>
             )}
@@ -996,24 +1435,76 @@ function LeadsPage() {
         )}
       </div>
 
-      {showDeleteConf&&<DeleteConfirmDialog count={selectedIds.size} onConfirm={handleDeleteSelected} onCancel={()=>setShowDeleteConf(false)} loading={deleting} dark={dark}/>}
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {showDeleteConf && (
+        <DeleteConfirmDialog
+          count={activeBulkCount}
+          onConfirm={handleDeleteSelected}
+          onCancel={() => setShowDeleteConf(false)}
+          loading={deleting}
+          dark={dark}
+        />
+      )}
 
-      <Dialog open={isEditOpen} onOpenChange={open=>{setIsEditOpen(open);if(!open)setEditingLead(null);}}>
-        <DialogContent style={{background:dark?'#111113':'#fff',border:`1px solid ${border}`,borderRadius:'16px'}}>
-          <DialogHeader><DialogTitle style={{color:dark?'#fff':'#111827'}}>Editar Lead</DialogTitle></DialogHeader>
-          {editingLead&&(<div style={{display:'flex',flexDirection:'column',gap:'10px',marginTop:'8px'}}>
-            <input placeholder="Nome" value={editingLead.nome||''} onChange={e=>setEditingLead(l=>l&&({...l,nome:e.target.value}))} style={inputStyle}/>
-            <PhoneInput value={editingLead.whatsapp||''} onChange={v=>setEditingLead(l=>l&&({...l,whatsapp:v}))} style={inputStyle}/>
-            <input placeholder="Cidade" value={editingLead.cidade||''} onChange={e=>setEditingLead(l=>l&&({...l,cidade:e.target.value}))} style={inputStyle}/>
-            <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
-              <button onClick={handleEditLead} style={{flex:1,padding:'10px',borderRadius:'9px',border:'none',background:'#2563eb',color:'#fff',fontSize:'13px',fontWeight:500,cursor:'pointer'}}>Salvar</button>
-              <button onClick={()=>setIsEditOpen(false)} style={{flex:1,padding:'10px',borderRadius:'9px',border:`1px solid ${border}`,background:'transparent',color:txtMid,fontSize:'13px',cursor:'pointer'}}>Cancelar</button>
+      {showMoveStatusConfirm && pendingMoveStatus !== null && (
+        <ConfirmDialog
+          title={`Mover ${activeBulkCount} lead${activeBulkCount !== 1 ? 's' : ''} para "${pendingMoveStatusLabel}"?`}
+          message="Isso vai atualizar o status de todos os leads selecionados."
+          confirmText="Sim, mover"
+          onConfirm={() => handleBulkMoveStatus(pendingMoveStatus)}
+          onCancel={() => { setShowMoveStatusConfirm(false); setPendingMoveStatus(null); }}
+          loading={bulkLoading}
+          dark={dark}
+        />
+      )}
+
+      {showAvaliarConf && (
+        <ConfirmDialog
+          title={allSelectedAreEvaluated ? 'Desmarcar como avaliado?' : 'Marcar como avaliado?'}
+          message={`Isso vai ${allSelectedAreEvaluated ? 'desmarcar' : 'marcar'} ${activeBulkCount} lead${activeBulkCount !== 1 ? 's' : ''} como ${allSelectedAreEvaluated ? 'não avaliado' : 'avaliado'}.`}
+          confirmText={allSelectedAreEvaluated ? 'Sim, desmarcar' : 'Sim, marcar'}
+          onConfirm={handleToggleAvaliado}
+          onCancel={() => setShowAvaliarConf(false)}
+          loading={bulkLoading}
+          dark={dark}
+        />
+      )}
+
+      {showCampaignModal && (
+        <CampaignFilterModal
+          dark={dark}
+          campaigns={campaignOptions}
+          pendingSelected={pendingCampaigns}
+          onToggle={name => {
+            const n = new Set(pendingCampaigns);
+            if (n.has(name)) n.delete(name); else n.add(name);
+            setPendingCampaigns(n);
+          }}
+          onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
+          onClear={() => { setPendingCampaigns(new Set()); }}
+          onClose={() => setShowCampaignModal(false)}
+        />
+      )}
+
+      {/* Edit lead dialog */}
+      <Dialog open={isEditOpen} onOpenChange={open => { setIsEditOpen(open); if (!open) setEditingLead(null); }}>
+        <DialogContent style={{ background:dark ? '#111113' : '#fff', border:`1px solid ${border}`, borderRadius:'16px' }}>
+          <DialogHeader><DialogTitle style={{ color:dark ? '#fff' : '#111827' }}>Editar Lead</DialogTitle></DialogHeader>
+          {editingLead && (
+            <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginTop:'8px' }}>
+              <input placeholder="Nome" value={editingLead.nome || ''} onChange={e => setEditingLead(l => l && ({ ...l, nome: e.target.value }))} style={inputStyle}/>
+              <PhoneInput value={editingLead.whatsapp || ''} onChange={v => setEditingLead(l => l && ({ ...l, whatsapp: v }))} style={inputStyle}/>
+              <input placeholder="Cidade" value={editingLead.cidade || ''} onChange={e => setEditingLead(l => l && ({ ...l, cidade: e.target.value }))} style={inputStyle}/>
+              <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
+                <button onClick={handleEditLead} style={{ flex:1, padding:'10px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Salvar</button>
+                <button onClick={() => setIsEditOpen(false)} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Cancelar</button>
+              </div>
             </div>
-          </div>)}
+          )}
         </DialogContent>
       </Dialog>
 
-      <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={()=>setViewingLead(null)} onUpdate={updated=>{updateLead(updated.id,updated);setAllLeads(prev=>prev.map(l=>l.id===updated.id?updated:l));setViewingLead(updated);}}/>
+      <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={() => setViewingLead(null)} onUpdate={updated => { updateLead(updated.id, updated); setAllLeads(prev => prev.map(l => l.id === updated.id ? updated : l)); setViewingLead(updated); }}/>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </AppLayout>
   );
