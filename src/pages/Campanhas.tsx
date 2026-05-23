@@ -803,28 +803,34 @@ export default function CampanhasPage() {
 
   function saveFilterAndNavigate(filter: object) {
     if (!orgId) return;
-    console.log('[CLICK] Filtro salvo no localStorage:', filter);
-    console.log('[CLICK] Chave:', `leads_campaign_filter_${orgId}`);
+    console.log('[CLICK] Salvando filtro:', filter);
     localStorage.setItem(`leads_campaign_filter_${orgId}`, JSON.stringify(filter));
+    console.log('[CLICK] Filtro salvo, redirecionando para /leads');
     navigate('/leads');
   }
 
   function handleFilterByCampaign(campId: string, campName: string) {
+    console.log('[CLICK-CAMPAIGN] ID:', campId, 'Nome:', campName);
     saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: false });
   }
   function handleFilterByCampaignRevs(campId: string, campName: string) {
+    console.log('[CLICK-CAMPAIGN-REVS] ID:', campId, 'Nome:', campName);
     saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: true });
   }
   function handleFilterByAdSet(campId: string, campName: string, adSetId: string, adSetName: string) {
+    console.log('[CLICK-ADSET] Campaign:', campId, 'AdSet:', adSetId);
     saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: false });
   }
   function handleFilterByAdSetRevs(campId: string, campName: string, adSetId: string, adSetName: string) {
+    console.log('[CLICK-ADSET-REVS] Campaign:', campId, 'AdSet:', adSetId);
     saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: true });
   }
   function handleFilterByAd(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
+    console.log('[CLICK-AD] Campaign:', campId, 'AdSet:', adSetId, 'Ad:', adId);
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: false });
   }
   function handleFilterByAdRevs(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
+    console.log('[CLICK-AD-REVS] Campaign:', campId, 'AdSet:', adSetId, 'Ad:', adId);
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: true });
   }
 
