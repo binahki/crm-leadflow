@@ -622,7 +622,7 @@ export default function CampanhasPage() {
       });
   },[orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);setLastLoadTime(new Date());return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);setLastLoadTime(new Date());};
+  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_v2_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);setLastLoadTime(new Date());return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);setLastLoadTime(new Date());};
   useEffect(()=>{
     if (!metaReady || !orgReady) return;
     load();
@@ -914,21 +914,26 @@ export default function CampanhasPage() {
 
     if (activeLevel === 'conjuntos') {
       return src.flatMap(c => {
-        // Revendedoras: CRM filtrado por parts[2] com validação estrita
-        const allCrmRevs = getCampRevs(c.name, c.id);
+        const crmLeads = getCampLeads(c.name, c.id);
+        const crmRevs  = getCampRevs(c.name, c.id);
+        const hasCrm   = crmLeads.length > 0;
+        const crmLeadTotal = crmLeads.length;
+        const crmRevTotal  = crmRevs.length;
+        // Soma dos leads da API em todos os conjuntos — usado como peso
+        const apiTotal = (c.adsets || []).reduce((s, as) => s + as.leads_api, 0);
+
         return (c.adsets || []).map(as => {
-          // Leads: SEMPRE da API (fonte única confiável para nível conjunto)
-          const leads = as.leads_api;
-          // Revendedoras: só contar se parts[2] existir, não for vazio e bater o nome
-          const rev = allCrmRevs.filter(l => {
-            const utmRaw = ((l as any).utm_campaign || '').trim();
-            if (!utmRaw) return false;
-            const parts = utmRaw.split('|');
-            if (parts.length < 3) return false;
-            const asName = (parts[2] || '').trim();
-            if (!asName) return false;
-            return matchByName(asName, as.name);
-          }).length;
+          let leads: number, rev: number;
+          if (hasCrm && apiTotal > 0) {
+            // Distribui CRM proporcionalmente usando leads da API como peso
+            const w = as.leads_api / apiTotal;
+            leads = Math.round(crmLeadTotal * w);
+            rev   = Math.round(crmRevTotal  * w);
+          } else {
+            // Sem CRM → usa API direto, sem revs (não temos como calcular)
+            leads = as.leads_api;
+            rev   = 0;
+          }
           return {
             id: as.id, name: as.name, status: as.status, type: 'adset' as const,
             parentCampId: c.id, parentAdsetId: undefined as string|undefined,
@@ -954,19 +959,26 @@ export default function CampanhasPage() {
       }
 
       function adRow(c: Campaign, as: {id:string;name:string} | undefined, ad: Ad) {
-        // Leads: SEMPRE da API (fonte única confiável para nível anúncio)
-        const leads = ad.leads_api;
-        // Revendedoras: só contar se parts[4] existir, não for vazio e bater o nome
-        const allCrmRevs = getCampRevs(c.name, c.id);
-        const rev = allCrmRevs.filter(l => {
-          const utmRaw = ((l as any).utm_campaign || '').trim();
-          if (!utmRaw) return false;
-          const parts = utmRaw.split('|');
-          if (parts.length < 5) return false;
-          const adName = (parts[4] || '').trim();
-          if (!adName) return false;
-          return matchByName(adName, ad.name);
-        }).length;
+        const crmLeads = getCampLeads(c.name, c.id);
+        const crmRevs  = getCampRevs(c.name, c.id);
+        const hasCrm   = crmLeads.length > 0;
+        const crmLeadTotal = crmLeads.length;
+        const crmRevTotal  = crmRevs.length;
+        // Usa ads da campanha como base de peso (ou ads do adset pai se disponível)
+        const adPool = as
+          ? (c.adsets?.find(a => a.id === as.id)?.ads || c.ads || [])
+          : (c.ads || []);
+        const apiTotal = adPool.reduce((s, a) => s + a.leads_api, 0);
+
+        let leads: number, rev: number;
+        if (hasCrm && apiTotal > 0) {
+          const w = ad.leads_api / apiTotal;
+          leads = Math.round(crmLeadTotal * w);
+          rev   = Math.round(crmRevTotal  * w);
+        } else {
+          leads = ad.leads_api;
+          rev   = 0;
+        }
         return {
           id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
           parentCampId: c.id, parentAdsetId: as?.id as string|undefined,
