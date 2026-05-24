@@ -878,11 +878,12 @@ export default function CampanhasPage() {
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: true });
   }
 
-  // Cruzamento de CRM por nome de adset/ad — retorna false se qualquer parte for vazia
+  // Cruzamento de CRM por nome — false se qualquer parte for vazia ou inválida
   function matchByName(utmPart: string, targetName: string): boolean {
     const a = utmPart.toLowerCase().trim();
     const b = targetName.toLowerCase().trim();
-    if (!a || !b) return false;
+    if (!a || a.length === 0) return false;
+    if (!b || b.length === 0) return false;
     return a === b || a.includes(b) || b.includes(a);
   }
 
@@ -913,35 +914,21 @@ export default function CampanhasPage() {
 
     if (activeLevel === 'conjuntos') {
       return src.flatMap(c => {
-        const allCrmLeads = getCampLeads(c.name, c.id);
-        const allCrmRevs  = getCampRevs(c.name, c.id);
-        const campHasCrm  = allCrmLeads.length > 0;
-
+        // Revendedoras: CRM filtrado por parts[2] com validação estrita
+        const allCrmRevs = getCampRevs(c.name, c.id);
         return (c.adsets || []).map(as => {
-          let leads: number, rev: number, fromApi: boolean;
-
-          if (!campHasCrm) {
-            // Campanha sem CRM → usa API em todos os conjuntos (consistente)
-            leads = as.leads_api; rev = 0; fromApi = true;
-          } else {
-            // Campanha tem CRM → tenta distribuir pelo nome do conjunto (parts[2])
-            const pipeLeads = allCrmLeads.filter(l => {
-              const parts = ((l as any).utm_campaign || '').split('|');
-              return parts.length >= 3 && matchByName(parts[2] || '', as.name);
-            });
-            const pipeRevs = allCrmRevs.filter(l => {
-              const parts = ((l as any).utm_campaign || '').split('|');
-              return parts.length >= 3 && matchByName(parts[2] || '', as.name);
-            });
-            if (pipeLeads.length > 0) {
-              // Tem leads com UTM pipe-delimitado → usa CRM distribuído
-              leads = pipeLeads.length; rev = pipeRevs.length; fromApi = false;
-            } else {
-              // Leads da campanha não têm adset no UTM → usa API para este conjunto
-              leads = as.leads_api; rev = 0; fromApi = true;
-            }
-          }
-
+          // Leads: SEMPRE da API (fonte única confiável para nível conjunto)
+          const leads = as.leads_api;
+          // Revendedoras: só contar se parts[2] existir, não for vazio e bater o nome
+          const rev = allCrmRevs.filter(l => {
+            const utmRaw = ((l as any).utm_campaign || '').trim();
+            if (!utmRaw) return false;
+            const parts = utmRaw.split('|');
+            if (parts.length < 3) return false;
+            const asName = (parts[2] || '').trim();
+            if (!asName) return false;
+            return matchByName(asName, as.name);
+          }).length;
           return {
             id: as.id, name: as.name, status: as.status, type: 'adset' as const,
             parentCampId: c.id, parentAdsetId: undefined as string|undefined,
@@ -951,7 +938,6 @@ export default function CampanhasPage() {
             rev, cpr: rev > 0 && as.spend > 0 ? as.spend / rev : 0,
             score: undefined as number|undefined,
             impressions: as.impressions, clicks: as.clicks, ctr: as.ctr, cpm: 0,
-            fromApi,
           };
         });
       });
@@ -968,29 +954,19 @@ export default function CampanhasPage() {
       }
 
       function adRow(c: Campaign, as: {id:string;name:string} | undefined, ad: Ad) {
-        const allCrmLeads = getCampLeads(c.name, c.id);
-        const allCrmRevs  = getCampRevs(c.name, c.id);
-        const campHasCrm  = allCrmLeads.length > 0;
-        let leads: number, rev: number, fromApi: boolean;
-
-        if (!campHasCrm) {
-          leads = ad.leads_api; rev = 0; fromApi = true;
-        } else {
-          const pipeLeads = allCrmLeads.filter(l => {
-            const parts = ((l as any).utm_campaign || '').split('|');
-            return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
-          });
-          const pipeRevs = allCrmRevs.filter(l => {
-            const parts = ((l as any).utm_campaign || '').split('|');
-            return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
-          });
-          if (pipeLeads.length > 0) {
-            leads = pipeLeads.length; rev = pipeRevs.length; fromApi = false;
-          } else {
-            leads = ad.leads_api; rev = 0; fromApi = true;
-          }
-        }
-
+        // Leads: SEMPRE da API (fonte única confiável para nível anúncio)
+        const leads = ad.leads_api;
+        // Revendedoras: só contar se parts[4] existir, não for vazio e bater o nome
+        const allCrmRevs = getCampRevs(c.name, c.id);
+        const rev = allCrmRevs.filter(l => {
+          const utmRaw = ((l as any).utm_campaign || '').trim();
+          if (!utmRaw) return false;
+          const parts = utmRaw.split('|');
+          if (parts.length < 5) return false;
+          const adName = (parts[4] || '').trim();
+          if (!adName) return false;
+          return matchByName(adName, ad.name);
+        }).length;
         return {
           id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
           parentCampId: c.id, parentAdsetId: as?.id as string|undefined,
@@ -999,7 +975,6 @@ export default function CampanhasPage() {
           rev, cpr: rev > 0 && ad.spend > 0 ? ad.spend / rev : 0,
           score: undefined as number|undefined,
           impressions: 0, clicks: 0, ctr: ad.ctr, cpm: 0,
-          fromApi,
         };
       }
 
@@ -2177,8 +2152,8 @@ export default function CampanhasPage() {
                                   case 'leads': return (
                                     <div key={col} onClick={()=>{
                                       if(row.leads<=0)return;
-                                      if((row as any).fromApi){
-                                        toast('Leads rastreados via Meta API — sem correspondência no CRM para filtrar');
+                                      if(row.type==='campaign'&&(row as any).fromApi){
+                                        toast('Leads rastreados via Meta API — sem UTM correspondente no CRM');
                                         return;
                                       }
                                       if(row.type==='campaign')handleFilterByCampaign(row.id,row.name);
@@ -2187,7 +2162,7 @@ export default function CampanhasPage() {
                                     }} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:500, cursor:row.leads>0?'pointer':'default', gap:'4px'}}>
                                       {row.leads>0?row.leads:'—'}
                                       {row.type==='campaign'&&row.leads>0&&!(row as any).fromApi&&<TrendingUp size={12}/>}
-                                      {(row as any).fromApi&&row.leads>0&&<span title="Leads via Meta API" style={{fontSize:'9px',color:'#6b7280',fontWeight:400,marginLeft:'2px'}}>API</span>}
+                                      {row.type==='campaign'&&(row as any).fromApi&&row.leads>0&&<span title="Leads via Meta API" style={{fontSize:'9px',color:'#6b7280',fontWeight:400,marginLeft:'2px'}}>API</span>}
                                     </div>
                                   );
                                   case 'cpl': return <div key={col} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:400}}>{row.cpl>0?`R$ ${row.cpl.toFixed(2)}`:'—'}</div>;
