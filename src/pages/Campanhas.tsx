@@ -878,10 +878,11 @@ export default function CampanhasPage() {
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: true });
   }
 
-  // Cruzamento de CRM por nome de adset/ad (partes do utm_campaign)
+  // Cruzamento de CRM por nome de adset/ad — retorna false se qualquer parte for vazia
   function matchByName(utmPart: string, targetName: string): boolean {
     const a = utmPart.toLowerCase().trim();
     const b = targetName.toLowerCase().trim();
+    if (!a || !b) return false;
     return a === b || a.includes(b) || b.includes(a);
   }
 
@@ -890,7 +891,8 @@ export default function CampanhasPage() {
     if (activeLevel === 'campanhas') {
       return displayedCampaigns.map(c => {
         const crmLeads = getCampLeads(c.name, c.id);
-        const leads = crmLeads.length > 0 ? crmLeads.length : c.leads_api;
+        const hasCrm = crmLeads.length > 0;
+        const leads = hasCrm ? crmLeads.length : c.leads_api;
         const rev = getCampRevs(c.name, c.id).length;
         return {
           id: c.id, name: c.name, status: c.status, type: 'campaign' as const,
@@ -901,6 +903,7 @@ export default function CampanhasPage() {
           rev, cpr: rev > 0 && c.spend > 0 ? c.spend / rev : 0,
           score: campScores.get(c.id) ?? 50,
           impressions: c.impressions, clicks: c.clicks, ctr: c.ctr, cpm: c.cpm,
+          fromApi: !hasCrm,
         };
       });
     }
@@ -912,18 +915,33 @@ export default function CampanhasPage() {
       return src.flatMap(c => {
         const allCrmLeads = getCampLeads(c.name, c.id);
         const allCrmRevs  = getCampRevs(c.name, c.id);
+        const campHasCrm  = allCrmLeads.length > 0;
+
         return (c.adsets || []).map(as => {
-          // Filtrar leads CRM pelo nome do conjunto (parts[2] do utm_campaign)
-          const crmLeadsAs = allCrmLeads.filter(l => {
-            const parts = ((l as any).utm_campaign || '').split('|');
-            return parts.length >= 3 && matchByName(parts[2] || '', as.name);
-          });
-          const crmRevsAs = allCrmRevs.filter(l => {
-            const parts = ((l as any).utm_campaign || '').split('|');
-            return parts.length >= 3 && matchByName(parts[2] || '', as.name);
-          });
-          const leads = crmLeadsAs.length > 0 ? crmLeadsAs.length : as.leads_api;
-          const rev   = crmRevsAs.length;
+          let leads: number, rev: number, fromApi: boolean;
+
+          if (!campHasCrm) {
+            // Campanha sem CRM → usa API em todos os conjuntos (consistente)
+            leads = as.leads_api; rev = 0; fromApi = true;
+          } else {
+            // Campanha tem CRM → tenta distribuir pelo nome do conjunto (parts[2])
+            const pipeLeads = allCrmLeads.filter(l => {
+              const parts = ((l as any).utm_campaign || '').split('|');
+              return parts.length >= 3 && matchByName(parts[2] || '', as.name);
+            });
+            const pipeRevs = allCrmRevs.filter(l => {
+              const parts = ((l as any).utm_campaign || '').split('|');
+              return parts.length >= 3 && matchByName(parts[2] || '', as.name);
+            });
+            if (pipeLeads.length > 0) {
+              // Tem leads com UTM pipe-delimitado → usa CRM distribuído
+              leads = pipeLeads.length; rev = pipeRevs.length; fromApi = false;
+            } else {
+              // Leads da campanha não têm adset no UTM → usa API para este conjunto
+              leads = as.leads_api; rev = 0; fromApi = true;
+            }
+          }
+
           return {
             id: as.id, name: as.name, status: as.status, type: 'adset' as const,
             parentCampId: c.id, parentAdsetId: undefined as string|undefined,
@@ -933,6 +951,7 @@ export default function CampanhasPage() {
             rev, cpr: rev > 0 && as.spend > 0 ? as.spend / rev : 0,
             score: undefined as number|undefined,
             impressions: as.impressions, clicks: as.clicks, ctr: as.ctr, cpm: 0,
+            fromApi,
           };
         });
       });
@@ -951,16 +970,27 @@ export default function CampanhasPage() {
       function adRow(c: Campaign, as: {id:string;name:string} | undefined, ad: Ad) {
         const allCrmLeads = getCampLeads(c.name, c.id);
         const allCrmRevs  = getCampRevs(c.name, c.id);
-        const crmLeadsAd = allCrmLeads.filter(l => {
-          const parts = ((l as any).utm_campaign || '').split('|');
-          return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
-        });
-        const crmRevsAd = allCrmRevs.filter(l => {
-          const parts = ((l as any).utm_campaign || '').split('|');
-          return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
-        });
-        const leads = crmLeadsAd.length > 0 ? crmLeadsAd.length : ad.leads_api;
-        const rev   = crmRevsAd.length;
+        const campHasCrm  = allCrmLeads.length > 0;
+        let leads: number, rev: number, fromApi: boolean;
+
+        if (!campHasCrm) {
+          leads = ad.leads_api; rev = 0; fromApi = true;
+        } else {
+          const pipeLeads = allCrmLeads.filter(l => {
+            const parts = ((l as any).utm_campaign || '').split('|');
+            return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
+          });
+          const pipeRevs = allCrmRevs.filter(l => {
+            const parts = ((l as any).utm_campaign || '').split('|');
+            return parts.length >= 5 && matchByName(parts[4] || '', ad.name);
+          });
+          if (pipeLeads.length > 0) {
+            leads = pipeLeads.length; rev = pipeRevs.length; fromApi = false;
+          } else {
+            leads = ad.leads_api; rev = 0; fromApi = true;
+          }
+        }
+
         return {
           id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
           parentCampId: c.id, parentAdsetId: as?.id as string|undefined,
@@ -969,6 +999,7 @@ export default function CampanhasPage() {
           rev, cpr: rev > 0 && ad.spend > 0 ? ad.spend / rev : 0,
           score: undefined as number|undefined,
           impressions: 0, clicks: 0, ctr: ad.ctr, cpm: 0,
+          fromApi,
         };
       }
 
@@ -2146,11 +2177,17 @@ export default function CampanhasPage() {
                                   case 'leads': return (
                                     <div key={col} onClick={()=>{
                                       if(row.leads<=0)return;
+                                      if((row as any).fromApi){
+                                        toast('Leads rastreados via Meta API — sem correspondência no CRM para filtrar');
+                                        return;
+                                      }
                                       if(row.type==='campaign')handleFilterByCampaign(row.id,row.name);
                                       else if(row.type==='adset'){const cn=displayedCampaigns.find(c=>c.id===row.parentCampId);if(cn)handleFilterByAdSet(row.parentCampId!,cn.name,row.id,row.name);}
                                       else{const cn=displayedCampaigns.find(c=>c.id===row.parentCampId);const as_=cn?.adsets?.find(a=>a.id===row.parentAdsetId);if(cn)handleFilterByAd(row.parentCampId!,cn.name,row.parentAdsetId||'',as_?.name||'',row.id,row.name);}
                                     }} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:500, cursor:row.leads>0?'pointer':'default', gap:'4px'}}>
-                                      {row.leads>0?row.leads:'—'}{row.type==='campaign'&&row.leads>0&&<TrendingUp size={12}/>}
+                                      {row.leads>0?row.leads:'—'}
+                                      {row.type==='campaign'&&row.leads>0&&!(row as any).fromApi&&<TrendingUp size={12}/>}
+                                      {(row as any).fromApi&&row.leads>0&&<span title="Leads via Meta API" style={{fontSize:'9px',color:'#6b7280',fontWeight:400,marginLeft:'2px'}}>API</span>}
                                     </div>
                                   );
                                   case 'cpl': return <div key={col} style={{...cellStyle, fontSize:'13px', color:'#10b981', justifyContent:'flex-end', fontWeight:400}}>{row.cpl>0?`R$ ${row.cpl.toFixed(2)}`:'—'}</div>;
