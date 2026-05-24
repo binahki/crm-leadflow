@@ -773,7 +773,7 @@ function LeadsPage() {
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
-        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
         .order('ultimo_status_change', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
@@ -798,7 +798,7 @@ function LeadsPage() {
 
     const { data, error } = await supabase
       .from('leads')
-      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
+      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
       .order('ultimo_status_change', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
@@ -867,18 +867,35 @@ function LeadsPage() {
     }
     if (campDeepFilter) {
       console.log('[FILTRO-DEEP] ========== APLICANDO FILTRO ==========');
-      console.log('[FILTRO-DEEP] Filtro ativo:', campDeepFilter);
+      console.log('[FILTRO-DEEP] Tipo de filtro:', campDeepFilter.type);
       console.log('[FILTRO-DEEP] Total leads ANTES:', r.length);
+      console.log('[FILTRO-DEEP] Filtro COMPLETO:', {
+        type: campDeepFilter.type,
+        campaignId: campDeepFilter.campaignId,
+        campaignName: campDeepFilter.campaignName,
+        adSetId: campDeepFilter.adSetId,
+        adSetName: campDeepFilter.adSetName,
+        adId: campDeepFilter.adId,
+        adName: campDeepFilter.adName,
+        showRevs: campDeepFilter.showRevs,
+      });
 
       const filterCampaignId = String(campDeepFilter.campaignId || '').trim();
-      const filterAdSetId    = String(campDeepFilter.adSetId    || '').trim();
-      const filterAdId       = String(campDeepFilter.adId       || '').trim();
+      const filterCampaignName = String(campDeepFilter.campaignName || '').trim().toLowerCase();
+      const hasAdSetFilter = !!(campDeepFilter.adSetId || campDeepFilter.adSetName);
 
       r = r.filter((lead, index) => {
         const utmRaw = ((lead as any).utm_campaign || '').trim();
+        const utmMediumRaw = ((lead as any).utm_medium || '').trim();
+        const utmContentRaw = ((lead as any).utm_content || '').trim();
 
         if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index}:`, { nome: (lead as any).nome, utm_campaign: utmRaw });
+          console.log(`[FILTRO-DEEP] Lead ${index}:`, {
+            nome: lead.nome,
+            utm_campaign: utmRaw,
+            utm_medium: utmMediumRaw,
+            utm_content: utmContentRaw,
+          });
         }
 
         if (!utmRaw) {
@@ -892,28 +909,40 @@ function LeadsPage() {
           console.log(`[FILTRO-DEEP] Lead ${index} parts (${parts.length}):`, parts);
         }
 
+        const leadCampaignName = parts[0].toLowerCase().trim();
         const leadCampaignId = String(parts[1] || '').trim();
-        const leadAdSetId    = String(parts[3] || '').trim();
-        const leadAdId       = String(parts[5] || '').trim();
 
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} IDs extraídos:`, { leadCampaignId, leadAdSetId, leadAdId });
-          console.log(`[FILTRO-DEEP] Lead ${index} Filtro IDs:`, { filterCampaignId, filterAdSetId, filterAdId, type: campDeepFilter.type });
+        let matchCampaign = false;
+
+        if (leadCampaignId && filterCampaignId) {
+          matchCampaign = leadCampaignId === filterCampaignId;
+          if (index < 5) {
+            console.log(`[FILTRO-DEEP] Lead ${index} tentativa match por ID:`, matchCampaign, `(${leadCampaignId} === ${filterCampaignId})`);
+          }
         }
 
-        if (!leadCampaignId) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: utm_campaign sem Campaign ID válido`);
-          return false;
-        }
+        if (!matchCampaign && filterCampaignName) {
+          const cleanLeadName = leadCampaignName
+            .replace(/\s*-\s*\[cbo\]/gi, '')
+            .replace(/\s*-\s*\[abo\]/gi, '')
+            .replace(/\s*\[leads?\]/gi, '')
+            .trim();
 
-        const matchCampaign = leadCampaignId === filterCampaignId;
+          const cleanFilterName = filterCampaignName
+            .replace(/\s*-\s*\[cbo\]/gi, '')
+            .replace(/\s*-\s*\[abo\]/gi, '')
+            .replace(/\s*\[leads?\]/gi, '')
+            .trim();
 
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} matchCampaign:`, matchCampaign);
+          matchCampaign = cleanLeadName === cleanFilterName;
+
+          if (index < 5) {
+            console.log(`[FILTRO-DEEP] Lead ${index} tentativa match por NOME:`, matchCampaign, `("${cleanLeadName}" === "${cleanFilterName}")`);
+          }
         }
 
         if (!matchCampaign) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Campaign ID não match (${leadCampaignId} !== ${filterCampaignId})`);
+          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Campaign não match`);
           return false;
         }
 
@@ -922,20 +951,46 @@ function LeadsPage() {
           return true;
         }
 
-        if (!leadAdSetId) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: utm_campaign sem AdSet ID`);
-          return false;
+        let leadAdSetName = '';
+        let leadAdSetId = '';
+        if (parts.length >= 4) {
+          leadAdSetName = parts[2].toLowerCase().trim();
+          leadAdSetId = String(parts[3] || '').trim();
+        } else if (utmMediumRaw) {
+          const mParts = utmMediumRaw.split('|').map((p: string) => p.trim());
+          leadAdSetName = mParts[0].toLowerCase().trim();
+          leadAdSetId = String(mParts[1] || '').trim();
         }
-
-        const matchAdSet = leadAdSetId === filterAdSetId;
 
         if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} matchAdSet:`, matchAdSet);
+          console.log(`[FILTRO-DEEP] Lead ${index} adset extraído:`, { leadAdSetName, leadAdSetId });
         }
 
-        if (!matchAdSet) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: AdSet ID não match (${leadAdSetId} !== ${filterAdSetId})`);
-          return false;
+        if (hasAdSetFilter) {
+          const filterAdSetId = String(campDeepFilter.adSetId || '').trim();
+          const filterAdSetName = String(campDeepFilter.adSetName || '').trim().toLowerCase();
+          let matchAdSet = false;
+
+          if (leadAdSetId && filterAdSetId) {
+            matchAdSet = leadAdSetId === filterAdSetId;
+            if (index < 5) {
+              console.log(`[FILTRO-DEEP] Lead ${index} match adset por ID:`, matchAdSet, `(${leadAdSetId} === ${filterAdSetId})`);
+            }
+          }
+
+          if (!matchAdSet && filterAdSetName && leadAdSetName) {
+            matchAdSet = leadAdSetName === filterAdSetName;
+            if (index < 5) {
+              console.log(`[FILTRO-DEEP] Lead ${index} match adset por NOME:`, matchAdSet, `("${leadAdSetName}" === "${filterAdSetName}")`);
+            }
+          }
+
+          if (!matchAdSet) {
+            if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: AdSet não match`);
+            return false;
+          }
+        } else if (index < 5) {
+          console.log(`[FILTRO-DEEP] Lead ${index}: sem filtro adset — pulando check`);
         }
 
         if (campDeepFilter.type === 'adset') {
@@ -943,19 +998,50 @@ function LeadsPage() {
           return true;
         }
 
-        if (!leadAdId) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: utm_campaign sem Ad ID`);
-          return false;
+        let leadAdName = '';
+        let leadAdId = '';
+        if (parts.length >= 6) {
+          leadAdName = parts[4].toLowerCase().trim();
+          leadAdId = String(parts[5] || '').trim();
+        } else if (utmContentRaw) {
+          const cParts = utmContentRaw.split('|').map((p: string) => p.trim());
+          leadAdName = cParts[0].toLowerCase().trim();
+          leadAdId = String(cParts[1] || '').trim();
         }
 
-        const matchAd = leadAdId === filterAdId;
+        const filterAdId = String(campDeepFilter.adId || '').trim();
+        const filterAdName = String(campDeepFilter.adName || '').trim().toLowerCase();
 
         if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} matchAd:`, matchAd);
+          console.log(`[FILTRO-DEEP] Lead ${index} FILTRO AD:`, {
+            filterAdId,
+            filterAdName,
+            leadAdId,
+            leadAdName,
+          });
+        }
+
+        let matchAd = false;
+
+        if (leadAdId && filterAdId) {
+          matchAd = leadAdId === filterAdId;
+          if (index < 5) {
+            console.log(`[FILTRO-DEEP] Lead ${index} match ad por ID:`, matchAd, `(${leadAdId} === ${filterAdId})`);
+          }
+        }
+
+        if (!matchAd && filterAdName && leadAdName) {
+          matchAd = leadAdName === filterAdName;
+          if (!matchAd) {
+            matchAd = leadAdName.includes(filterAdName) || filterAdName.includes(leadAdName);
+          }
+          if (index < 5) {
+            console.log(`[FILTRO-DEEP] Lead ${index} match ad por NOME:`, matchAd, `("${leadAdName}" vs "${filterAdName}")`);
+          }
         }
 
         if (!matchAd) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Ad ID não match (${leadAdId} !== ${filterAdId})`);
+          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Ad não match`);
           return false;
         }
 
