@@ -17,7 +17,8 @@
       "Bash(supabase:*)",
       "Skill(impeccable)",
       "Bash(git rm *)",
-      "Bash(grep -v 'CSS\\\\|class=\"plan-cta\"$')"
+      "Bash(grep -v 'CSS\\\\|class=\"plan-cta\"$')",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

@@ -264,30 +264,23 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
     return parseInt(actions?.find((a: any) => LEAD_ACTIONS.includes(a.action_type))?.value || '0');
   }
   try {
-    console.log('[FETCH] Buscando campanhas para período:', dp);
-
     const campUrl = new URL(`${base}/act_${account}/campaigns`);
     campUrl.searchParams.set('fields', `id,name,status,daily_budget,lifetime_budget,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
     campUrl.searchParams.set('limit', '50');
     campUrl.searchParams.set('access_token', tok);
     const campData = await (await fetch(campUrl.toString())).json();
-    if (!campData.data?.length) { console.log('[FETCH] Nenhuma campanha retornada'); return []; }
-    console.log('[FETCH] Campanhas retornadas:', campData.data.length);
+    if (!campData.data?.length) return [];
 
     const asUrl = new URL(`${base}/act_${account}/adsets`);
     asUrl.searchParams.set('fields', `id,name,status,campaign_id,daily_budget,lifetime_budget,insights.date_preset(${dp}){spend,impressions,clicks,ctr,actions}`);
     asUrl.searchParams.set('limit', '200');
     asUrl.searchParams.set('access_token', tok);
     const asData = await (await fetch(asUrl.toString())).json();
-    console.log('[FETCH] Conjuntos retornados:', asData.data?.length || 0);
-
     const adUrl = new URL(`${base}/act_${account}/ads`);
     adUrl.searchParams.set('fields', `id,name,status,campaign_id,adset_id,creative{thumbnail_url},insights.date_preset(${dp}){spend,ctr,actions}`);
     adUrl.searchParams.set('limit', '500');
     adUrl.searchParams.set('access_token', tok);
     const adData = await (await fetch(adUrl.toString())).json();
-    console.log('[FETCH] Anúncios retornados:', adData.data?.length || 0);
-
     const adsetsByCampaign: Record<string, AdSet[]> = {};
     for (const as of (asData.data || []) as any[]) {
       const cid = as.campaign_id; if (!cid) continue;
@@ -331,7 +324,6 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
       const ads = (adsByCampaign[c.id] || []).sort((a, b) => b.leads_api - a.leads_api || (a.cpl || 999) - (b.cpl || 999));
 
       const leadsFromAdsets = adsets.reduce((sum, as) => sum + as.leads_api, 0);
-      console.log(`[VALIDAÇÃO] Campanha ${c.name}: api=${leadsApi} adsets_soma=${leadsFromAdsets} spend=${spend} conjuntos=${adsets.length}`);
 
       results.push({
         id: c.id, name: c.name, status: c.status, spend,
@@ -466,6 +458,137 @@ function TooltipIcon({ text, dark }: { text: string; dark: boolean }) {
   );
 }
 
+// ── Distribui `total` inteiros entre N itens usando maior resto ────────────
+// Garante que sum(resultado) === total e nunca perde leads por Math.round.
+function distributeProportional(total: number, weights: number[]): number[] {
+  if (!total || !weights.length) return weights.map(() => 0);
+  const sum = weights.reduce((s, w) => s + w, 0);
+  if (!sum) {
+    const base = Math.floor(total / weights.length);
+    const rem = total - base * weights.length;
+    return weights.map((_, i) => base + (i < rem ? 1 : 0));
+  }
+  const exact = weights.map(w => (w / sum) * total);
+  const floored = exact.map(Math.floor);
+  let rem = total - floored.reduce((s, v) => s + v, 0);
+  exact.map((v, i) => ({ diff: v - floored[i], i }))
+    .sort((a, b) => b.diff - a.diff)
+    .slice(0, rem)
+    .forEach(({ i }) => floored[i]++);
+  return floored;
+}
+
+// ── Extrai adset e ad das UTMs de um lead ─────────────────────────────────
+function extractUtmAdset(lead: any): { id: string; name: string } {
+  const parts = (lead.utm_campaign || '').trim().split('|').map((p: string) => p.trim());
+  if (parts.length >= 4 && (parts[3] || parts[2])) {
+    return { id: parts[3] || '', name: parts[2].toLowerCase() };
+  }
+  const med = (lead.utm_medium || '').trim();
+  if (med) {
+    const mp = med.split('|').map((p: string) => p.trim());
+    return { id: mp[1] || '', name: mp[0].toLowerCase() };
+  }
+  return { id: '', name: '' };
+}
+
+function extractUtmAd(lead: any): { id: string; name: string } {
+  const parts = (lead.utm_campaign || '').trim().split('|').map((p: string) => p.trim());
+  if (parts.length >= 6 && (parts[5] || parts[4])) {
+    return { id: parts[5] || '', name: parts[4].toLowerCase() };
+  }
+  const cont = (lead.utm_content || '').trim();
+  if (cont) {
+    const cp = cont.split('|').map((p: string) => p.trim());
+    return { id: cp[1] || '', name: cp[0].toLowerCase() };
+  }
+  return { id: '', name: '' };
+}
+
+// ── Distribui leads de uma campanha pelos adsets usando UTM direto + proporcional
+function buildAdsetCounts(
+  crmLeads: any[], crmRevs: any[], adsets: AdSet[]
+): { leads: Map<string, number>; revs: Map<string, number> } {
+  const leadsMap = new Map<string, number>(adsets.map(as => [as.id, 0]));
+  const revsMap  = new Map<string, number>(adsets.map(as => [as.id, 0]));
+  if (!adsets.length) return { leads: leadsMap, revs: revsMap };
+
+  const matchAdset = (lead: any): AdSet | null => {
+    const { id, name } = extractUtmAdset(lead);
+    if (id) { const a = adsets.find(as => as.id === id); if (a) return a; }
+    if (name) { const a = adsets.find(as => as.name.toLowerCase().trim() === name); if (a) return a; }
+    return null;
+  };
+
+  let unmatched = 0, unmatchedRevs = 0;
+  for (const l of crmLeads) {
+    const t = matchAdset(l);
+    if (t) leadsMap.set(t.id, (leadsMap.get(t.id) || 0) + 1);
+    else unmatched++;
+  }
+  for (const l of crmRevs) {
+    const t = matchAdset(l);
+    if (t) revsMap.set(t.id, (revsMap.get(t.id) || 0) + 1);
+    else unmatchedRevs++;
+  }
+
+  if (unmatched > 0 || unmatchedRevs > 0) {
+    const apiTotal = adsets.reduce((s, as) => s + as.leads_api, 0);
+    const weights = apiTotal > 0 ? adsets.map(as => as.leads_api) : adsets.map(() => 1);
+    if (unmatched > 0) {
+      const dist = distributeProportional(unmatched, weights);
+      adsets.forEach((as, i) => leadsMap.set(as.id, (leadsMap.get(as.id) || 0) + dist[i]));
+    }
+    if (unmatchedRevs > 0) {
+      const dist = distributeProportional(unmatchedRevs, weights);
+      adsets.forEach((as, i) => revsMap.set(as.id, (revsMap.get(as.id) || 0) + dist[i]));
+    }
+  }
+  return { leads: leadsMap, revs: revsMap };
+}
+
+// ── Distribui leads de uma campanha pelos ads usando UTM direto + proporcional
+function buildAdCounts(
+  crmLeads: any[], crmRevs: any[], ads: Ad[]
+): { leads: Map<string, number>; revs: Map<string, number> } {
+  const leadsMap = new Map<string, number>(ads.map(ad => [ad.id, 0]));
+  const revsMap  = new Map<string, number>(ads.map(ad => [ad.id, 0]));
+  if (!ads.length) return { leads: leadsMap, revs: revsMap };
+
+  const matchAd = (lead: any): Ad | null => {
+    const { id, name } = extractUtmAd(lead);
+    if (id) { const a = ads.find(ad => ad.id === id); if (a) return a; }
+    if (name) { const a = ads.find(ad => ad.name.toLowerCase().trim() === name); if (a) return a; }
+    return null;
+  };
+
+  let unmatched = 0, unmatchedRevs = 0;
+  for (const l of crmLeads) {
+    const t = matchAd(l);
+    if (t) leadsMap.set(t.id, (leadsMap.get(t.id) || 0) + 1);
+    else unmatched++;
+  }
+  for (const l of crmRevs) {
+    const t = matchAd(l);
+    if (t) revsMap.set(t.id, (revsMap.get(t.id) || 0) + 1);
+    else unmatchedRevs++;
+  }
+
+  if (unmatched > 0 || unmatchedRevs > 0) {
+    const apiTotal = ads.reduce((s, ad) => s + ad.leads_api, 0);
+    const weights = apiTotal > 0 ? ads.map(ad => ad.leads_api) : ads.map(() => 1);
+    if (unmatched > 0) {
+      const dist = distributeProportional(unmatched, weights);
+      ads.forEach((ad, i) => leadsMap.set(ad.id, (leadsMap.get(ad.id) || 0) + dist[i]));
+    }
+    if (unmatchedRevs > 0) {
+      const dist = distributeProportional(unmatchedRevs, weights);
+      ads.forEach((ad, i) => revsMap.set(ad.id, (revsMap.get(ad.id) || 0) + dist[i]));
+    }
+  }
+  return { leads: leadsMap, revs: revsMap };
+}
+
 export default function CampanhasPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
@@ -575,7 +698,7 @@ export default function CampanhasPage() {
       case 'this_month':since=today.slice(0,7)+'-01T00:00:00-03:00'; break;
     }
     supabase.from('leads')
-      .select('id,utm_campaign,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
+      .select('id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
       .eq('org_id',orgId).order('ultimo_status_change',{ascending:false}).limit(3000)
       .then(({data}:any)=>{ if(data) setAllLeads(data); });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
@@ -641,8 +764,8 @@ export default function CampanhasPage() {
     };
     return allLeads.filter(l => {
       if (Number((l as any).status) !== 3) return false;
-      // usa ultimo_status_change como fonte principal
-      const ref = (l as any).ultimo_status_change || (l as any).created_at;
+      // usa created_at para consistência com filterLeadsByPreset e com a página de Leads
+      const ref = (l as any).created_at;
       switch(datePreset) {
         case 'today':      return ok(ref, today, today);
         case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(ref, y, y); }
@@ -847,34 +970,27 @@ export default function CampanhasPage() {
 
   function saveFilterAndNavigate(filter: object) {
     if (!orgId) return;
-    console.log('[CLICK] Salvando filtro:', filter);
-    localStorage.setItem(`leads_campaign_filter_${orgId}`, JSON.stringify(filter));
-    console.log('[CLICK] Filtro salvo, redirecionando para /leads');
+    const payload = { ...filter, datePreset };
+    localStorage.setItem(`leads_campaign_filter_${orgId}`, JSON.stringify(payload));
     navigate('/leads');
   }
 
   function handleFilterByCampaign(campId: string, campName: string) {
-    console.log('[CLICK-CAMPAIGN] ID:', campId, 'Nome:', campName);
     saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: false });
   }
   function handleFilterByCampaignRevs(campId: string, campName: string) {
-    console.log('[CLICK-CAMPAIGN-REVS] ID:', campId, 'Nome:', campName);
     saveFilterAndNavigate({ type: 'campaign', campaignId: campId, campaignName: campName, showRevs: true });
   }
   function handleFilterByAdSet(campId: string, campName: string, adSetId: string, adSetName: string) {
-    console.log('[CLICK-ADSET] Campaign:', campId, 'AdSet:', adSetId);
     saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: false });
   }
   function handleFilterByAdSetRevs(campId: string, campName: string, adSetId: string, adSetName: string) {
-    console.log('[CLICK-ADSET-REVS] Campaign:', campId, 'AdSet:', adSetId);
     saveFilterAndNavigate({ type: 'adset', campaignId: campId, campaignName: campName, adSetId, adSetName, showRevs: true });
   }
   function handleFilterByAd(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
-    console.log('[CLICK-AD] Campaign:', campId, 'AdSet:', adSetId, 'Ad:', adId);
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: false });
   }
   function handleFilterByAdRevs(campId: string, campName: string, adSetId: string, adSetName: string, adId: string, adName: string) {
-    console.log('[CLICK-AD-REVS] Campaign:', campId, 'AdSet:', adSetId, 'Ad:', adId);
     saveFilterAndNavigate({ type: 'ad', campaignId: campId, campaignName: campName, adSetId, adSetName, adId, adName, showRevs: true });
   }
 
@@ -916,24 +1032,30 @@ export default function CampanhasPage() {
       return src.flatMap(c => {
         const crmLeads = getCampLeads(c.name, c.id);
         const crmRevs  = getCampRevs(c.name, c.id);
+        const adsets   = c.adsets || [];
         const hasCrm   = crmLeads.length > 0;
-        const crmLeadTotal = crmLeads.length;
-        const crmRevTotal  = crmRevs.length;
-        // Soma dos leads da API em todos os conjuntos — usado como peso
-        const apiTotal = (c.adsets || []).reduce((s, as) => s + as.leads_api, 0);
 
-        return (c.adsets || []).map(as => {
-          let leads: number, rev: number;
-          if (hasCrm && apiTotal > 0) {
-            // Distribui CRM proporcionalmente usando leads da API como peso
-            const w = as.leads_api / apiTotal;
-            leads = Math.round(crmLeadTotal * w);
-            rev   = Math.round(crmRevTotal  * w);
-          } else {
-            // Sem CRM → usa API direto, sem revs (não temos como calcular)
-            leads = as.leads_api;
-            rev   = 0;
-          }
+        if (!hasCrm) {
+          // Sem leads no CRM: usa API diretamente
+          return adsets.map(as => ({
+            id: as.id, name: as.name, status: as.status, type: 'adset' as const,
+            parentCampId: c.id, parentAdsetId: undefined as string|undefined,
+            thumbnail_url: undefined as string|null|undefined,
+            budget: as.daily_budget ?? as.lifetime_budget ?? 0,
+            spend: as.spend, leads: as.leads_api,
+            cpl: as.leads_api > 0 && as.spend > 0 ? as.spend / as.leads_api : 0,
+            rev: 0, cpr: 0,
+            score: undefined as number|undefined,
+            impressions: as.impressions, clicks: as.clicks, ctr: as.ctr, cpm: 0,
+          }));
+        }
+
+        // Com leads no CRM: match direto UTM + proporcional para não-atribuídos
+        const { leads: leadsMap, revs: revsMap } = buildAdsetCounts(crmLeads, crmRevs, adsets);
+
+        return adsets.map(as => {
+          const leads = leadsMap.get(as.id) ?? 0;
+          const rev   = revsMap.get(as.id)  ?? 0;
           return {
             id: as.id, name: as.name, status: as.status, type: 'adset' as const,
             parentCampId: c.id, parentAdsetId: undefined as string|undefined,
@@ -958,46 +1080,54 @@ export default function CampanhasPage() {
         });
       }
 
-      function adRow(c: Campaign, as: {id:string;name:string} | undefined, ad: Ad) {
+      // Para cada campanha, pré-computa os counts de ads uma única vez
+      const buildRowsForCampaign = (c: Campaign, adsToRender: Ad[]) => {
         const crmLeads = getCampLeads(c.name, c.id);
         const crmRevs  = getCampRevs(c.name, c.id);
         const hasCrm   = crmLeads.length > 0;
-        const crmLeadTotal = crmLeads.length;
-        const crmRevTotal  = crmRevs.length;
-        // Usa ads da campanha como base de peso (ou ads do adset pai se disponível)
-        const adPool = as
-          ? (c.adsets?.find(a => a.id === as.id)?.ads || c.ads || [])
-          : (c.ads || []);
-        const apiTotal = adPool.reduce((s, a) => s + a.leads_api, 0);
+        const allAds   = c.ads || [];
 
-        let leads: number, rev: number;
-        if (hasCrm && apiTotal > 0) {
-          const w = ad.leads_api / apiTotal;
-          leads = Math.round(crmLeadTotal * w);
-          rev   = Math.round(crmRevTotal  * w);
-        } else {
-          leads = ad.leads_api;
-          rev   = 0;
+        if (!hasCrm) {
+          return adsToRender.map(ad => ({
+            id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
+            parentCampId: c.id, parentAdsetId: c.adsets?.find(as => as.ads?.some(a => a.id === ad.id))?.id as string|undefined,
+            thumbnail_url: ad.thumbnail_url,
+            budget: 0, spend: ad.spend, leads: ad.leads_api,
+            cpl: ad.leads_api > 0 && ad.spend > 0 ? ad.spend / ad.leads_api : 0,
+            rev: 0, cpr: 0,
+            score: undefined as number|undefined,
+            impressions: 0, clicks: 0, ctr: ad.ctr, cpm: 0,
+          }));
         }
-        return {
-          id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
-          parentCampId: c.id, parentAdsetId: as?.id as string|undefined,
-          thumbnail_url: ad.thumbnail_url,
-          budget: 0, spend: ad.spend, leads, cpl: leads > 0 && ad.spend > 0 ? ad.spend / leads : 0,
-          rev, cpr: rev > 0 && ad.spend > 0 ? ad.spend / rev : 0,
-          score: undefined as number|undefined,
-          impressions: 0, clicks: 0, ctr: ad.ctr, cpm: 0,
-        };
-      }
+
+        // Calcula os counts usando TODOS os ads da campanha como denominador
+        const { leads: leadsMap, revs: revsMap } = buildAdCounts(crmLeads, crmRevs, allAds);
+
+        return adsToRender.map(ad => {
+          const leads = leadsMap.get(ad.id) ?? 0;
+          const rev   = revsMap.get(ad.id)  ?? 0;
+          const parentAdsetId = c.adsets?.find(as => as.ads?.some(a => a.id === ad.id))?.id;
+          return {
+            id: ad.id, name: ad.name, status: ad.status, type: 'ad' as const,
+            parentCampId: c.id, parentAdsetId: parentAdsetId as string|undefined,
+            thumbnail_url: ad.thumbnail_url,
+            budget: 0, spend: ad.spend, leads, cpl: leads > 0 && ad.spend > 0 ? ad.spend / leads : 0,
+            rev, cpr: rev > 0 && ad.spend > 0 ? ad.spend / rev : 0,
+            score: undefined as number|undefined,
+            impressions: 0, clicks: 0, ctr: ad.ctr, cpm: 0,
+          };
+        });
+      };
 
       if (validSelectedAdsetIds.size > 0) {
-        return src.flatMap(c =>
-          (c.adsets || [])
+        return src.flatMap(c => {
+          const adsToRender = (c.adsets || [])
             .filter(as => validSelectedAdsetIds.has(as.id))
-            .flatMap(as => (as.ads || []).map(ad => adRow(c, as, ad)))
-        );
+            .flatMap(as => as.ads || []);
+          return buildRowsForCampaign(c, adsToRender);
+        });
       }
-      return src.flatMap(c => (c.ads || []).map(ad => adRow(c, undefined, ad)));
+      return src.flatMap(c => buildRowsForCampaign(c, c.ads || []));
     }
     return [];
   }, [activeLevel, displayedCampaigns, selectedCampIds, selectedAdsetIds, campScores, getCampLeads, getCampRevs]);

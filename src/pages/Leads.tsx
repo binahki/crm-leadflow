@@ -100,8 +100,8 @@ function filterByPeriod(leads: Lead[], period: string, customFrom?: string, cust
   if (period === 'all') return leads;
   const today = todayBR();
   const getDateRef = (l: Lead): string | null | undefined => {
-    const la = l as any;
-    return la.ultimo_status_change || l.created_at;
+    // Usa created_at para consistência com a página de Campanhas
+    return l.created_at;
   };
   const ok = (l: Lead, from: string, to: string) => {
     const d = leadDateBR(getDateRef(l));
@@ -664,6 +664,7 @@ function LeadsPage() {
     adId?: string;
     adName?: string;
     showRevs: boolean;
+    datePreset?: string;
   } | null>(null);
 
   const [targetLeadId, setTargetLeadId] = useState<string | null>(null);
@@ -717,17 +718,19 @@ function LeadsPage() {
     deepFilterApplied.current = true;
     try {
       const raw = localStorage.getItem(`leads_campaign_filter_${orgId}`);
-      console.log('[FILTRO-DEEP] localStorage raw:', raw);
       if (raw) {
         const df = JSON.parse(raw);
-        console.log('[FILTRO-DEEP] Filtro parseado:', df);
-        console.log('[FILTRO-DEEP] Type:', df.type);
-        console.log('[FILTRO-DEEP] Campaign ID:', df.campaignId);
-        console.log('[FILTRO-DEEP] AdSet ID:', df.adSetId);
-        console.log('[FILTRO-DEEP] Ad ID:', df.adId);
-        console.log('[FILTRO-DEEP] Show Revs:', df.showRevs);
         setCampDeepFilter(df);
         localStorage.removeItem(`leads_campaign_filter_${orgId}`);
+        // Aplica o mesmo período que estava na página de Campanhas
+        if (df.datePreset) {
+          const periodMap: Record<string, string> = {
+            today: 'today', yesterday: 'yesterday',
+            last_7d: '7days', last_30d: '30days', this_month: 'month',
+          };
+          const mapped = periodMap[df.datePreset];
+          if (mapped) setPeriodFilter(mapped);
+        }
         // Toast com nomes legíveis
         const campNm = df.campaignName || df.campaignId || 'Campanha';
         const asNm = df.adSetName || df.adSetId || '';
@@ -744,7 +747,6 @@ function LeadsPage() {
           toast(`Filtrando por: ${campNm} → ${asNm} → ${adNm}`);
         }
       } else {
-        console.log('[FILTRO-DEEP] Nenhum filtro encontrado no localStorage');
       }
     } catch (err) {
       console.error('[FILTRO-DEEP] Erro ao ler filtro:', err);
@@ -866,61 +868,36 @@ function LeadsPage() {
       r = r.filter(l => selectedCampaigns.has(extractCampaignName((l as any).utm_campaign)));
     }
     if (campDeepFilter) {
-      console.log('[FILTRO-DEEP] ========== APLICANDO FILTRO ==========');
-      console.log('[FILTRO-DEEP] Tipo de filtro:', campDeepFilter.type);
-      console.log('[FILTRO-DEEP] Total leads ANTES:', r.length);
-      console.log('[FILTRO-DEEP] Filtro COMPLETO:', {
-        type: campDeepFilter.type,
-        campaignId: campDeepFilter.campaignId,
-        campaignName: campDeepFilter.campaignName,
-        adSetId: campDeepFilter.adSetId,
-        adSetName: campDeepFilter.adSetName,
-        adId: campDeepFilter.adId,
-        adName: campDeepFilter.adName,
-        showRevs: campDeepFilter.showRevs,
-      });
 
       const filterCampaignId = String(campDeepFilter.campaignId || '').trim();
       const filterCampaignName = String(campDeepFilter.campaignName || '').trim().toLowerCase();
       const hasAdSetFilter = !!(campDeepFilter.adSetId || campDeepFilter.adSetName);
 
-      r = r.filter((lead, index) => {
+      r = r.filter((lead) => {
         const utmRaw = ((lead as any).utm_campaign || '').trim();
         const utmMediumRaw = ((lead as any).utm_medium || '').trim();
         const utmContentRaw = ((lead as any).utm_content || '').trim();
 
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index}:`, {
-            nome: lead.nome,
-            utm_campaign: utmRaw,
-            utm_medium: utmMediumRaw,
-            utm_content: utmContentRaw,
-          });
-        }
-
-        if (!utmRaw) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: SEM utm_campaign`);
-          return false;
-        }
+        if (!utmRaw) return false;
 
         const parts = utmRaw.split('|').map((p: string) => p.trim());
-
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} parts (${parts.length}):`, parts);
-        }
 
         const leadCampaignName = parts[0].toLowerCase().trim();
         const leadCampaignId = String(parts[1] || '').trim();
 
         let matchCampaign = false;
 
+        // 1) Match por ID na posição parts[1]
         if (leadCampaignId && filterCampaignId) {
           matchCampaign = leadCampaignId === filterCampaignId;
-          if (index < 5) {
-            console.log(`[FILTRO-DEEP] Lead ${index} tentativa match por ID:`, matchCampaign, `(${leadCampaignId} === ${filterCampaignId})`);
-          }
         }
 
+        // 2) Match quando utm_campaign é só o ID numérico (sem separador)
+        if (!matchCampaign && filterCampaignId && !leadCampaignId) {
+          matchCampaign = leadCampaignName === filterCampaignId.toLowerCase();
+        }
+
+        // 3) Match por nome (limpo de sufixos CBO/ABO/LEAD)
         if (!matchCampaign && filterCampaignName) {
           const cleanLeadName = leadCampaignName
             .replace(/\s*-\s*\[cbo\]/gi, '')
@@ -935,21 +912,11 @@ function LeadsPage() {
             .trim();
 
           matchCampaign = cleanLeadName === cleanFilterName;
-
-          if (index < 5) {
-            console.log(`[FILTRO-DEEP] Lead ${index} tentativa match por NOME:`, matchCampaign, `("${cleanLeadName}" === "${cleanFilterName}")`);
-          }
         }
 
-        if (!matchCampaign) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Campaign não match`);
-          return false;
-        }
+        if (!matchCampaign) return false;
 
-        if (campDeepFilter.type === 'campaign') {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: PASSOU (filtro campaign-only)`);
-          return true;
-        }
+        if (campDeepFilter.type === 'campaign') return true;
 
         let leadAdSetName = '';
         let leadAdSetId = '';
@@ -962,41 +929,28 @@ function LeadsPage() {
           leadAdSetId = String(mParts[1] || '').trim();
         }
 
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} adset extraído:`, { leadAdSetName, leadAdSetId });
-        }
-
         if (hasAdSetFilter) {
           const filterAdSetId = String(campDeepFilter.adSetId || '').trim();
           const filterAdSetName = String(campDeepFilter.adSetName || '').trim().toLowerCase();
           let matchAdSet = false;
 
+          // Match adset por ID (parts[3]) ou por ID puro em parts[2]
           if (leadAdSetId && filterAdSetId) {
             matchAdSet = leadAdSetId === filterAdSetId;
-            if (index < 5) {
-              console.log(`[FILTRO-DEEP] Lead ${index} match adset por ID:`, matchAdSet, `(${leadAdSetId} === ${filterAdSetId})`);
-            }
+          }
+          if (!matchAdSet && filterAdSetId && !leadAdSetId && leadAdSetName) {
+            matchAdSet = leadAdSetName === filterAdSetId.toLowerCase();
           }
 
+          // Match adset por nome exato
           if (!matchAdSet && filterAdSetName && leadAdSetName) {
             matchAdSet = leadAdSetName === filterAdSetName;
-            if (index < 5) {
-              console.log(`[FILTRO-DEEP] Lead ${index} match adset por NOME:`, matchAdSet, `("${leadAdSetName}" === "${filterAdSetName}")`);
-            }
           }
 
-          if (!matchAdSet) {
-            if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: AdSet não match`);
-            return false;
-          }
-        } else if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index}: sem filtro adset — pulando check`);
+          if (!matchAdSet) return false;
         }
 
-        if (campDeepFilter.type === 'adset') {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: PASSOU (filtro adset)`);
-          return true;
-        }
+        if (campDeepFilter.type === 'adset') return true;
 
         let leadAdName = '';
         let leadAdId = '';
@@ -1012,53 +966,30 @@ function LeadsPage() {
         const filterAdId = String(campDeepFilter.adId || '').trim();
         const filterAdName = String(campDeepFilter.adName || '').trim().toLowerCase();
 
-        if (index < 5) {
-          console.log(`[FILTRO-DEEP] Lead ${index} FILTRO AD:`, {
-            filterAdId,
-            filterAdName,
-            leadAdId,
-            leadAdName,
-          });
-        }
-
         let matchAd = false;
 
+        // Match ad por ID exato
         if (leadAdId && filterAdId) {
           matchAd = leadAdId === filterAdId;
-          if (index < 5) {
-            console.log(`[FILTRO-DEEP] Lead ${index} match ad por ID:`, matchAd, `(${leadAdId} === ${filterAdId})`);
-          }
         }
-
+        // Match ad por ID puro em leadAdName
+        if (!matchAd && filterAdId && !leadAdId && leadAdName) {
+          matchAd = leadAdName === filterAdId.toLowerCase();
+        }
+        // Match ad por nome (exato primeiro, depois substring)
         if (!matchAd && filterAdName && leadAdName) {
           matchAd = leadAdName === filterAdName;
           if (!matchAd) {
             matchAd = leadAdName.includes(filterAdName) || filterAdName.includes(leadAdName);
           }
-          if (index < 5) {
-            console.log(`[FILTRO-DEEP] Lead ${index} match ad por NOME:`, matchAd, `("${leadAdName}" vs "${filterAdName}")`);
-          }
         }
 
-        if (!matchAd) {
-          if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: Ad não match`);
-          return false;
-        }
-
-        if (index < 5) console.log(`[FILTRO-DEEP] Lead ${index}: PASSOU (filtro ad)`);
-        return true;
+        return matchAd;
       });
 
-      console.log('[FILTRO-DEEP] Total leads APÓS filtro:', r.length);
-
       if (campDeepFilter.showRevs) {
-        console.log('[FILTRO-DEEP] Aplicando filtro showRevs (status = 3)');
-        const beforeRevs = r.length;
         r = r.filter(l => toStatusNum(l.status) === 3);
-        console.log(`[FILTRO-DEEP] Leads após filtro revs: ${beforeRevs} → ${r.length}`);
       }
-
-      console.log('[FILTRO-DEEP] ========== FIM DO FILTRO ==========');
     }
     if (search.trim()) {
       const q = search.toLowerCase();
