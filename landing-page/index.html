@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>Floow — CRM para quem vende semijoia no consignado</title>
+  <title>Floow: CRM para quem vende semijoia no consignado</title>
   <meta name="description"
     content="O Floow organiza cada lead do anúncio até a aprovação no consignado. Saiba qual campanha trouxe revendedora, não só cadastro.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1689,6 +1689,109 @@
       }
     }
 
+    /* ========================== Before/After ========================== */
+    .beforeafter {
+      background: var(--paper-4);
+      padding: 64px 0;
+      border-top: 1px solid #ebe9e4;
+      border-bottom: 1px solid #ebe9e4;
+    }
+
+    .beforeafter-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .ba-card {
+      border-radius: var(--radius-lg);
+      padding: 36px;
+    }
+
+    .ba-before {
+      background: #fff1f0;
+      border: 1px solid #ffd6d3;
+    }
+
+    .ba-after {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+    }
+
+    .ba-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .ba-before .ba-label { color: var(--red); }
+    .ba-after .ba-label { color: #16a34a; }
+
+    .ba-title {
+      font-family: "Inter Tight", "Inter", sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--ink);
+      margin: 0 0 20px;
+    }
+
+    .ba-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, .06);
+    }
+
+    .ba-row:last-child { border-bottom: none; }
+
+    .ba-num {
+      font-family: "Inter Tight", "Inter", sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      min-width: 64px;
+    }
+
+    .ba-before .ba-num { color: var(--red); }
+    .ba-after .ba-num { color: #16a34a; }
+
+    .ba-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    .ba-arrow {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--blue);
+      padding: 8px 0;
+    }
+
+    @media (min-width: 720px) {
+      .beforeafter-grid {
+        grid-template-columns: 1fr auto 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .ba-arrow { padding: 0 8px; }
+    }
+
+    @media (min-width: 900px) {
+      .beforeafter { padding: 120px 0; }
+    }
+
+    @media (max-width: 768px) {
+      .beforeafter { padding: 60px 0; }
+    }
+
     /* Reveal */
     .reveal {
       opacity: 0;
@@ -2147,7 +2250,7 @@
   <!-- NAV DESKTOP -->
   <header class="header-desktop">
     <div class="container nav-inner">
-      <a href="#top" class="nav-logo" aria-label="Floow — início">
+      <a href="#top" class="nav-logo" aria-label="Floow">
         <img src="./logo.png" alt="Floow">
       </a>
       <nav class="nav-links" aria-label="Principal">
@@ -2198,12 +2301,12 @@
         Integração nativa com Meta Ads
       </div>
       <h1 class="hero-title">
-        Você anuncia, recebe leads.<br>
-        <span class="hero-title-accent">Mas quantas viraram revendedoras?</span>
+        Você anuncia, recebe dezenas de interessadas.<br>
+        <span class="hero-title-accent">Mas quantas realmente têm perfil para virar revendedora?</span>
       </h1>
       <p class="hero-sub">
-        O Floow organiza cada lead do anúncio até a aprovação no consignado — e mostra qual campanha traz revendedora de
-        verdade, não só cadastro.
+        O Floow filtra automaticamente quem tem potencial antes do WhatsApp. Você para de perder tempo com curiosas e
+        começa a falar só com quem realmente pode entrar no consignado.
       </p>
       <div class="hero-ctas">
         <a class="btn btn-primary btn-lg" href="#funcionalidades">Ver como funciona</a>
@@ -2268,9 +2371,10 @@
               </path>
             </svg>
           </div>
-          <h3 class="pain-card-title">Leads que somem sem virar nada</h3>
-          <p class="pain-card-text">A pessoa responde o quiz, entra no WhatsApp, demonstra interesse — e some. Sem
-            retorno, sem explicação. Você nem sabe quantas estão nessa situação porque não tem como acompanhar.</p>
+          <h3 class="pain-card-title">Curiosas lotando o comercial</h3>
+          <p class="pain-card-text">Você investe em anúncios, chegam dezenas de interessadas, mas metade não tem perfil.
+            Sem reserva, sem disponibilidade, sem interesse real. Sua equipe perde tempo filtrando manualmente o que o
+            Floow separa sozinho.</p>
         </article>
 
         <article class="pain-card reveal">
@@ -2281,10 +2385,9 @@
               </path>
             </svg>
           </div>
-          <h3 class="pain-card-title">Você não sabe o que está funcionando nos seus anúncios</h3>
-          <p class="pain-card-text">Você vê o custo por lead no gerenciador, mas o que importa mesmo é: qual campanha
-            trouxe revendedora que assinou o contrato e recebeu o monstruário? Sem essa resposta, você está no escuro.
-          </p>
+          <h3 class="pain-card-title">Você não sabe quem vale atenção</h3>
+          <p class="pain-card-text">Todas entram iguais. O comercial atende por ordem de chegada, mas não sabe quem
+            realmente tem potencial para virar revendedora.</p>
         </article>
 
         <article class="pain-card reveal">
@@ -2294,17 +2397,16 @@
               <path d="M4 3h16v18H4V3Zm2 2v4h12V5H6Zm0 6v4h12v-4H6Zm0 6v2h12v-2H6Z" fill="currentColor"></path>
             </svg>
           </div>
-          <h3 class="pain-card-title">Centenas de leads numa planilha sem dono</h3>
-          <p class="pain-card-text">Todo mundo vê, ninguém cuida. Você não sabe quem já foi para reunião, quem foi
-            aprovada, quem desistiu. Cada vez que alguém entra na planilha é uma loteria — o lead quente está misturado
-            com quem desistiu há 3 meses.</p>
+          <h3 class="pain-card-title">Você anuncia sem clareza</h3>
+          <p class="pain-card-text">Você vê leads entrando todos os dias, mas não sabe quais campanhas trazem
+            revendedoras e quais só geram volume.</p>
         </article>
 
       </div>
 
       <div class="pain-badge">
         <span class="pain-badge-dot"></span>
-        Isso tem nome: <strong>falta de processo</strong>. E tem solução.
+        O problema não é falta de lead. É <strong>falta de filtro</strong>.
       </div>
     </div>
   </section>
@@ -2313,23 +2415,23 @@
   <section class="features" id="funcionalidades">
     <div class="container">
       <div class="section-head">
-        <h2 class="section-title">Veja na prática</h2>
-        <p class="section-sub">Cada parte do Floow resolve um problema real do dia a dia de quem vende semijoia no
-          consignado.</p>
+        <h2 class="section-title">Como o Floow separa curiosa de futura revendedora</h2>
+        <p class="section-sub">Do anúncio até a aprovação, cada etapa existe para filtrar, organizar e mostrar quem
+          realmente tem potencial.</p>
       </div>
 
-      <!-- Feature 1 — Leads -->
+      <!-- Feature 1 — Filtro -->
       <div class="feature-row">
         <div class="feature-copy reveal">
-          <span class="feature-tag tag-green">GESTÃO DE LEADS</span>
-          <h3 class="feature-title">Todo lead num lugar só — do anúncio até o contrato.</h3>
-          <p class="feature-text">Cada lead entra com status claro: quem está em atendimento, quem já foi pra reunião de
-            onboarding, quem foi aprovada, quem desistiu. Sua equipe sabe exatamente o que fazer — e nenhum lead some
-            sem acompanhamento.</p>
+          <span class="feature-tag tag-green">FILTRO INTELIGENTE</span>
+          <h3 class="feature-title">Descubra quem tem perfil ANTES de chegar no comercial</h3>
+          <p class="feature-text">Antes da interessada entrar no WhatsApp ela passa pelo filtro do Floow. O sistema
+            identifica perfil, organiza respostas e mostra quem merece atenção primeiro.</p>
           <ul class="feature-list">
-            <li><span class="check"></span>Status do lead em cada etapa do processo</li>
-            <li><span class="check"></span>Histórico completo de cada contato</li>
-            <li><span class="check"></span>Filtros por pontuação, status e origem</li>
+            <li><span class="check"></span>Pontuação automática por perfil</li>
+            <li><span class="check"></span>Separação entre curiosas e candidatas</li>
+            <li><span class="check"></span>Ranking das melhores interessadas</li>
+            <li><span class="check"></span>Comercial focado nas melhores oportunidades</li>
           </ul>
         </div>
         <div class="feature-shot reveal">
@@ -2348,14 +2450,14 @@
       <div class="feature-row feature-row-rev">
         <div class="feature-copy reveal">
           <span class="feature-tag tag-blue">CAMPANHAS</span>
-          <h3 class="feature-title">Qual anúncio trouxe revendedora — qual só trouxe cadastro.</h3>
-          <p class="feature-text">Conecta direto com o Meta Ads. Você vê quantos leads vieram de cada campanha, e mais
-            importante: quantas dessas viraram revendedoras aprovadas. Pela primeira vez você tem o custo real por
-            revendedora, não só por cadastro.</p>
+          <h3 class="feature-title">Descubra quais campanhas realmente trazem revendedoras</h3>
+          <p class="feature-text">Pare de analisar apenas leads. Veja quais anúncios geram aprovadas, acompanhe custo
+            por revendedora e entenda o que realmente funciona.</p>
           <ul class="feature-list">
-            <li><span class="check"></span>Dados em tempo real via Meta Ads</li>
-            <li><span class="check"></span>Custo por lead e custo por revendedora aprovada</li>
-            <li><span class="check"></span>Ranking das campanhas que realmente convertem</li>
+            <li><span class="check"></span>Custo por revendedora</li>
+            <li><span class="check"></span>Ranking automático de campanhas</li>
+            <li><span class="check"></span>Histórico completo</li>
+            <li><span class="check"></span>Performance real por origem</li>
           </ul>
         </div>
         <div class="feature-shot reveal">
@@ -2370,18 +2472,18 @@
         </div>
       </div>
 
-      <!-- Feature 3 — Quiz -->
+      <!-- Feature 3 — Acompanhamento -->
       <div class="feature-row">
         <div class="feature-copy reveal">
-          <span class="feature-tag tag-purple">QUALIFICAÇÃO AUTOMÁTICA</span>
-          <h3 class="feature-title">Só chega no seu time quem tem perfil de revendedora.</h3>
-          <p class="feature-text">Antes do lead entrar no WhatsApp, ele já passou pelo quiz. Respondeu se tem reserva,
-            se aceita as regras do consignado, qual a situação financeira. Quem não encaixa, você já sabe antes — sem
-            precisar marcar reunião pra descobrir.</p>
+          <span class="feature-tag tag-purple">ACOMPANHAMENTO</span>
+          <h3 class="feature-title">Seu comercial recebe clareza, não volume</h3>
+          <p class="feature-text">O Floow mostra quem iniciou, quem avançou, onde parou e quem realmente merece
+            prioridade.</p>
           <ul class="feature-list">
-            <li><span class="check"></span>Quiz personalizado para o seu negócio</li>
-            <li><span class="check"></span>Pontuação automática por perfil de resposta</li>
-            <li><span class="check"></span>Modelo validado para semijoia no consignado</li>
+            <li><span class="check"></span>Histórico completo do funil</li>
+            <li><span class="check"></span>Gargalos automáticos</li>
+            <li><span class="check"></span>Leads quentes destacados</li>
+            <li><span class="check"></span>Jornada visual completa</li>
           </ul>
         </div>
         <div class="feature-shot reveal">
@@ -2399,6 +2501,64 @@
     </div>
   </section>
 
+  <!-- ============================================================ ANTES/DEPOIS ============================================================ -->
+  <section class="beforeafter">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">O que muda com o Floow</h2>
+        <p class="section-sub">A mesma quantidade de leads. Resultado completamente diferente.</p>
+      </div>
+      <div class="beforeafter-grid reveal">
+        <div class="ba-card ba-before">
+          <div class="ba-label">Sem o Floow</div>
+          <h3 class="ba-title">Antes</h3>
+          <div class="ba-row">
+            <span class="ba-num">120</span>
+            <span class="ba-desc">interessadas chegam</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num">85</span>
+            <span class="ba-desc">curiosas sem perfil</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num">35</span>
+            <span class="ba-desc">avaliadas manualmente</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num" style="font-size:18px">caos</span>
+            <span class="ba-desc">comercial sobrecarregado</span>
+          </div>
+        </div>
+        <div class="ba-arrow" aria-hidden="true">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="ba-card ba-after">
+          <div class="ba-label">Com o Floow</div>
+          <h3 class="ba-title">Depois</h3>
+          <div class="ba-row">
+            <span class="ba-num">120</span>
+            <span class="ba-desc">interessadas chegam</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num">38</span>
+            <span class="ba-desc">qualificadas pelo filtro</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num">15</span>
+            <span class="ba-desc">aprovadas no consignado</span>
+          </div>
+          <div class="ba-row">
+            <span class="ba-num" style="font-size:18px">100%</span>
+            <span class="ba-desc">comercial focado em quem tem perfil</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================================================ PARA QUEM ============================================================ -->
   <section class="audience" id="para-quem">
     <div class="container">
@@ -2412,9 +2572,9 @@
               <path d="M3 10v4h2l5 4V6L5 10H3Zm14-3v10c2-1 3-3 3-5s-1-4-3-5Z" fill="currentColor"></path>
             </svg>
           </div>
-          <h3 class="aud-title">Você anuncia no Meta Ads todo mês</h3>
-          <p class="aud-text">Investe em anúncios para trazer leads, mas não sabe quais campanhas estão trazendo
-            revendedoras que realmente recebem o monstruário e ficam ativas.</p>
+          <h3 class="aud-title">Você investe e não sabe de onde vêm as melhores revendedoras</h3>
+          <p class="aud-text">Anúncios rodam todos os dias, mas falta clareza sobre quais campanhas realmente geram
+            aprovadas.</p>
         </article>
 
         <article class="aud-card reveal">
@@ -2425,9 +2585,9 @@
                 fill="currentColor"></path>
             </svg>
           </div>
-          <h3 class="aud-title">Você recebe centenas de leads e perde o controle</h3>
-          <p class="aud-text">Entre o quiz, o WhatsApp, a reunião de onboarding e a aprovação no consignado, é fácil
-            perder o fio da meada. O Floow organiza tudo isso num lugar só.</p>
+          <h3 class="aud-title">Sua equipe perde tempo com quem nunca vai entrar</h3>
+          <p class="aud-text">O comercial atende curiosas, responde dúvidas e gasta energia sem saber quem tem
+            potencial.</p>
         </article>
 
         <article class="aud-card reveal">
@@ -2436,9 +2596,8 @@
               <path d="M3 21V3h2v16h16v2H3Zm4-4v-6l4-4 4 4 5-5 1.4 1.4L15 12l-4-4-4 4v5H7Z" fill="currentColor"></path>
             </svg>
           </div>
-          <h3 class="aud-title">Você quer crescer sem virar caos</h3>
-          <p class="aud-text">Quer escalar a operação — mais anúncios, mais leads, mais revendedoras — sem precisar
-            contratar mais uma pessoa só pra cuidar de planilha.</p>
+          <h3 class="aud-title">Você quer crescer sem aumentar o caos</h3>
+          <p class="aud-text">Mais leads não resolvem. Clareza resolve.</p>
         </article>
       </div>
 
