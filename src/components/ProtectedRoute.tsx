@@ -17,16 +17,28 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isExempt = EXEMPT_PATHS.includes(location.pathname);
   const isAdmin = user?.email === ADMIN_EMAIL;
 
-  const [gestorAtivo, setGestorAtivo] = useState<boolean | null>(null);
+  // Initialize from sessionStorage so redirect fires on the same render as auth resolving
+  const [gestorAtivo, setGestorAtivo] = useState<boolean | null>(() => {
+    if (!user || isAdmin) return null;
+    const v = sessionStorage.getItem(`gestor_${user.id}`);
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return null;
+  });
 
   useEffect(() => {
     if (!user || isAdmin) { setGestorAtivo(false); return; }
+    const cacheKey = `gestor_${user.id}`;
     supabase
       .from('gestores')
       .select('id, ativo')
       .eq('user_id', user.id)
       .maybeSingle()
-      .then(({ data }) => setGestorAtivo(data?.ativo === true ? true : false));
+      .then(({ data }) => {
+        const isAtivo = data?.ativo === true;
+        sessionStorage.setItem(cacheKey, isAtivo ? '1' : '0');
+        setGestorAtivo(isAtivo);
+      });
   }, [user?.id]);
 
   // Timeout de segurança: se loading não resolver em 5s, o refresh_token provavelmente

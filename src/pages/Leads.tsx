@@ -1256,7 +1256,7 @@ function LeadsPage() {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
-          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({filtered.length})</span></h1>
+          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({hasActiveFilters ? filtered.length : totalCount})</span></h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
@@ -1287,6 +1287,11 @@ function LeadsPage() {
                   Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                 </button>
 
+                {hasActiveFilters && (
+                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
+                    <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
+                  </button>
+                )}
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width:'13px', height:'13px' }}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{ width:'13px', height:'13px' }}/></button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -1315,6 +1320,11 @@ function LeadsPage() {
                 <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
                   <Tag style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
                 </button>
+                {hasActiveFilters && (
+                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
+                    <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
+                  </button>
+                )}
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width:'13px', height:'13px' }}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{ width:'13px', height:'13px' }}/></button>
               </div>
