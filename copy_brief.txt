@@ -1,0 +1,338 @@
+LINE 276
+- tanto o https://www.floowcrm.online/ e https://app.floowcrm.online/login estão redirecionando para a página de vendas, quando eu clico em algum botão de entrar e etc, ele carrega o "app." mas fica na página de vendas. (os domínios de redirecionamento já estão configurados na vercel)
+
+- Veja se TODOS OS LINKS QUE ESTÃO DENTRO DO CRM, NÃO ESTÃO REDIRECIONANDO PARA A PÁGINA DE VENDAS, por exemplo o link do quiz, deverá ser app.floowcrm.online/quiz/nome da loja, manter o jeito que está, porém com o domínio app.
+
+- 
+
+
+Perfeito. Aqui está o prompt completo pra mandar pra IA refatorar a página inteira mantendo o design e alterando somente posicionamento/copy/estrutura estratégica. **Não alterar o gestor de tráfego do plano Starter**.
+
+---
+
+**PROMPT:**
+
+Quero refatorar a copy e posicionamento da landing page inteira do Floow.
+
+IMPORTANTE:
+
+* Manter o visual, identidade e design atual.
+* NÃO alterar layout principal, somente textos, posicionamento e estrutura de comunicação.
+* Remover TODOS os travessões “--” da página.
+* O Floow NÃO é um CRM genérico.
+* O Floow NÃO é para quem vende semijoias.
+* O Floow é desenvolvido EXCLUSIVAMENTE para EMPRESAS DE SEMIJOIAS NO CONSIGNADO que captam revendedoras.
+
+O maior problema que resolvemos NÃO é CRM.
+
+É:
+
+**FILTRAR LEADS.**
+
+O mercado hoje faz:
+
+Meta Ads → WhatsApp → curiosas → comercial sobrecarregado → tempo perdido → caos.
+
+O Floow faz:
+
+Meta Ads → Quiz/Filtro → separa curiosa de candidata → comercial recebe só quem tem perfil.
+
+Essa é a principal promessa.
+
+Toda a copy precisa ser reconstruída baseada nisso.
+
+---
+
+# HERO SECTION
+
+Trocar headline atual.
+
+NOVO TÍTULO:
+
+**Você anuncia, recebe dezenas de interessadas.
+Mas quantas realmente têm perfil para virar revendedora?**
+
+SUBTÍTULO:
+
+O Floow filtra automaticamente quem tem potencial antes do WhatsApp. Você para de perder tempo com curiosas e começa a falar só com quem realmente pode entrar no consignado.
+
+CTA permanece.
+
+Objetivo do hero:
+
+Vender FILTRO.
+
+Não CRM.
+
+Não rastreamento.
+
+---
+
+# SEÇÃO DE DORES
+
+Hoje existe um card falando algo parecido com:
+
+“Lead respondeu quiz, entrou no WhatsApp e sumiu”
+
+REMOVER.
+
+Está errado.
+
+Nosso mercado normalmente faz tráfego direto para WhatsApp.
+
+Criar novos cards focados em dores REAIS.
+
+CARD 1
+
+Título:
+
+Curiosas lotando o comercial
+
+Texto:
+
+Você investe em anúncios, chegam dezenas de interessadas, mas metade não tem perfil. Sem reserva, sem disponibilidade, sem interesse real. Sua equipe perde tempo filtrando manualmente o que o Floow separa sozinho.
+
+CARD 2
+
+Título:
+
+Você não sabe quem vale atenção
+
+Texto:
+
+Todas entram iguais. O comercial atende por ordem de chegada, mas não sabe quem realmente tem potencial para virar revendedora.
+
+CARD 3
+
+Título:
+
+Você anuncia sem clareza
+
+Texto:
+
+Você vê leads entrando todos os dias, mas não sabe quais campanhas trazem revendedoras e quais só geram volume.
+
+---
+
+# BLOCO “VEJA NA PRÁTICA”
+
+REMOVER texto atual.
+
+NOVO:
+
+Título:
+
+**Como o Floow separa curiosa de futura revendedora**
+
+Sub:
+
+Do anúncio até a aprovação, cada etapa existe para filtrar, organizar e mostrar quem realmente tem potencial.
+
+---
+
+# FEATURE 1
+
+Hoje:
+
+“Todo lead num lugar só”
+
+ALTERAR COMPLETAMENTE.
+
+Novo título:
+
+**Descubra quem tem perfil ANTES de chegar no comercial**
+
+Texto:
+
+Antes da interessada entrar no WhatsApp ela passa pelo filtro do Floow. O sistema identifica perfil, organiza respostas e mostra quem merece atenção primeiro.
+
+Bullets:
+
+✓ Pontuação automática por perfil
+
+✓ Separação entre curiosas e candidatas
+
+✓ Ranking das melhores interessadas
+
+✓ Comercial focado nas melhores oportunidades
+
+---
+
+# FEATURE 2
+
+Manter ideia de rastrear campanha.
+
+Novo título:
+
+**Descubra quais campanhas realmente trazem revendedoras**
+
+Texto:
+
+Pare de analisar apenas leads. Veja quais anúncios geram aprovadas, acompanhe custo por revendedora e entenda o que realmente funciona.
+
+Bullets:
+
+✓ Custo por revendedora
+
+✓ Ranking automático de campanhas
+
+✓ Histórico completo
+
+✓ Performance real por origem
+
+---
+
+# FEATURE 3
+
+Novo título:
+
+**Seu comercial recebe clareza, não volume**
+
+Texto:
+
+O Floow mostra quem iniciou, quem avançou, onde parou e quem realmente merece prioridade.
+
+Bullets:
+
+✓ Histórico completo do funil
+
+✓ Gargalos automáticos
+
+✓ Leads quentes destacados
+
+✓ Jornada visual completa
+
+---
+
+# NOVA SEÇÃO DE PROVA
+
+Criar bloco visual novo.
+
+Título:
+
+**Antes do Floow**
+
+Exemplo visual:
+
+120 interessadas
+
+85 curiosas
+
+35 avaliadas manualmente
+
+Comercial sobrecarregado
+
+↓
+
+Título:
+
+**Depois do Floow**
+
+120 interessadas
+
+38 qualificadas
+
+15 aprovadas
+
+Comercial focado apenas em quem tem perfil
+
+Essa seção precisa parecer transformação.
+
+---
+
+# SEÇÃO “FEITO PARA QUEM”
+
+Substituir cards atuais.
+
+CARD 1
+
+Título:
+
+Você investe e não sabe de onde vêm as melhores revendedoras
+
+Texto:
+
+Anúncios rodam todos os dias, mas falta clareza sobre quais campanhas realmente geram aprovadas.
+
+CARD 2
+
+Título:
+
+Sua equipe perde tempo com quem nunca vai entrar
+
+Texto:
+
+O comercial atende curiosas, responde dúvidas e gasta energia sem saber quem tem potencial.
+
+CARD 3
+
+Título:
+
+Você quer crescer sem aumentar o caos
+
+Texto:
+
+Mais leads não resolvem. Clareza resolve.
+
+---
+
+# ESTRUTURA ESTRATÉGICA
+
+A página inteira deve seguir:
+
+1. Dor
+
+Curiosas / lead ruim / comercial cansado
+
+2. Solução
+
+Filtro e qualificação
+
+3. Clareza
+
+Campanhas e métricas
+
+4. Organização
+
+CRM e acompanhamento
+
+5. Escala
+
+Mais revendedoras com menos desperdício
+
+---
+
+# IMPORTANTE
+
+A landing inteira deve comunicar:
+
+“Pare de atender curiosas”
+
+“Separe o joio do trigo”
+
+“Fale só com quem tem perfil”
+
+“Descubra quais campanhas trazem revendedoras”
+
+“Seu comercial recebe clareza”
+
+---
+
+# NÃO ALTERAR
+
+* Design
+* Estrutura visual
+* Layout
+* Planos
+* Gestor de tráfego do Starter
+* Identidade visual
+
+Alterar SOMENTE:
+
+Copy, posicionamento, títulos, textos e comunicação.
+
+Objetivo final:
+
+A pessoa dona da empresa ler e pensar:
+
+“Esse sistema resolve exatamente meu problema.”
