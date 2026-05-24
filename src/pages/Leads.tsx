@@ -35,6 +35,7 @@ const STATUS_OPTIONS = [
   { label: 'Reunião',        value: '2', dot: STATUS_CONFIG[2]?.dot },
   { label: 'Contrato/App',   value: '5', dot: STATUS_CONFIG[5]?.dot },
   { label: 'Aprovado',       value: '3', dot: STATUS_CONFIG[3]?.dot },
+  { label: 'Sem Retorno',    value: '6', dot: STATUS_CONFIG[6]?.dot },
   { label: 'Reprovado',      value: '4', dot: STATUS_CONFIG[4]?.dot },
 ];
 
@@ -262,6 +263,7 @@ function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:numb
     { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
     { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
     { value: 3, label: aprovadoLabel || 'Aprovado', dot: STATUS_CONFIG[3].dot },
+    { value: 6, label: 'Sem Retorno',   dot: STATUS_CONFIG[6].dot },
     { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
   ];
   const selected = options.find(o => o.value === value) || options[0];
@@ -775,7 +777,7 @@ function LeadsPage() {
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
-        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
         .order('ultimo_status_change', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
@@ -800,7 +802,7 @@ function LeadsPage() {
 
     const { data, error } = await supabase
       .from('leads')
-      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, org_id, wa_sent, avaliado`)
+      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
       .order('ultimo_status_change', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
@@ -1052,7 +1054,7 @@ function LeadsPage() {
   async function handleBulkMoveStatus(newStatus: number) {
     setBulkLoading(true);
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const tsField: Record<number, string> = { 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
     const updates: any = { status: newStatus, ultimo_status_change: now };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
 
@@ -1164,7 +1166,7 @@ function LeadsPage() {
     const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus };
     if (originalLead && Number(originalLead.status) !== Number(newStatus)) {
       const now = new Date().toISOString();
-      const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at' };
+      const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at', 6:'status_sem_retorno_at' };
       updates.ultimo_status_change = now;
       if (tsField[Number(newStatus)]) updates[tsField[Number(newStatus)]] = now;
     }

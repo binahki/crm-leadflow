@@ -43,6 +43,7 @@ export function filtrarStatusPorPeriodo(
     2: 'status_reuniao_at',
     5: 'status_contrato_at',
     3: 'status_aprovado_at',
+    6: 'status_sem_retorno_at',
   };
   return leads.filter(l => {
     if (Number(l.status) !== status) return false;
@@ -104,6 +105,7 @@ export const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
   2: 'status_reuniao_at',
   5: 'status_contrato_at',
   3: 'status_aprovado_at',
+  6: 'status_sem_retorno_at',
 };
 
 /** Retorna o patch de timestamp a ser salvo junto com uma mudança de status */

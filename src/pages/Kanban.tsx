@@ -26,7 +26,7 @@ const COLUMNS = STATUS_SEQUENCE.map(status => ({
   bg: `${STATUS_CONFIG[status].dot}10`
 }));
 
-const MOTIVOS = ['Sem retorno','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Desistiu','Outro'];
+const MOTIVOS = ['Desistiu','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Outro'];
 const AVATAR_COLORS = ['#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#ec4899','#8b5cf6'];
 
 function avatarColor(name: string) { return !name ? AVATAR_COLORS[0] : AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
@@ -341,7 +341,7 @@ export default function KanbanPage() {
 
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
     const patch: any = { status: newStatus, ultimo_status_change: now };
     if (tsField[newStatus]) patch[tsField[newStatus]] = now;
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;

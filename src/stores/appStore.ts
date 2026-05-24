@@ -165,9 +165,10 @@ export const STATUS_CONFIG: Record<number, { label: string; lightBg: string; lig
   3: { label: 'Aprovado', lightBg:'#ecfdf5', lightText:'#059669', darkBg:'#064e3b', darkText:'#34d399', dot:'#10b981' },
   4: { label: 'Reprovado', lightBg:'#fff1f2', lightText:'#e11d48', darkBg:'#881337', darkText:'#fb7185', dot:'#f43f5e' },
   5: { label: 'Contrato/App', lightBg:'#fffbeb', lightText:'#d97706', darkBg:'#78350f', darkText:'#fbbf24', dot:'#f59e0b' },
+  6: { label: 'Sem Retorno', lightBg:'#f4f4f5', lightText:'#52525b', darkBg:'rgba(113,113,122,0.15)', darkText:'#a1a1aa', dot:'#71717a' },
 };
 
-export const STATUS_SEQUENCE = [1, 2, 5, 3, 4];
+export const STATUS_SEQUENCE = [1, 2, 5, 3, 6, 4];
 
 export const STATUS_LABELS = [
   'Em atendimento', // 0
@@ -176,6 +177,7 @@ export const STATUS_LABELS = [
   'Aprovado',       // 3
   'Reprovado',      // 4
   'Contrato/App',   // 5
+  'Sem Retorno',    // 6
 ];
 
 export const STATUS_COLORS = [
@@ -185,6 +187,7 @@ export const STATUS_COLORS = [
   { bg: 'bg-emerald-50',text: 'text-emerald-600',dot: 'bg-emerald-400'}, // 3
   { bg: 'bg-rose-50',   text: 'text-rose-600',   dot: 'bg-rose-400'   }, // 4
   { bg: 'bg-amber-50',  text: 'text-amber-600',  dot: 'bg-amber-400'  }, // 5
+  { bg: 'bg-zinc-100',  text: 'text-zinc-600',   dot: 'bg-zinc-400'   }, // 6
 ];
 
 interface AppState {

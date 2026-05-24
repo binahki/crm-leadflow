@@ -117,6 +117,7 @@ export function getStatusLabel(status: number, t: Terminology): string {
     3: t.statusConvertidoLabel,
     4: 'Reprovada',
     5: 'Aguardando retorno',
+    6: 'Sem Retorno',
   };
   return labels[status] ?? String(status);
 }

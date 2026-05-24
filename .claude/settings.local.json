@@ -18,7 +18,11 @@
       "Skill(impeccable)",
       "Bash(git rm *)",
       "Bash(grep -v 'CSS\\\\|class=\"plan-cta\"$')",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(dir \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\landing-page\")",
+      "Bash(dir \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" /b)",
+      "Bash(dir /s /b \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\.vercel\")",
+      "Bash(dir /s /b \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\landing-page\\\\.vercel\")"
     ]
   }
 }

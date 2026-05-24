@@ -21,7 +21,7 @@ interface LeadDrawerProps {
   onUpdate: (lead: Lead) => void;
 }
 
-const STATUS_SEQUENCE = [1, 2, 5, 3, 4];
+const STATUS_SEQUENCE = [1, 2, 5, 3, 6, 4];
 
 const STATUS = STATUS_SEQUENCE.map(idx => {
   const s = STATUS_CONFIG[idx];
@@ -37,7 +37,7 @@ const STATUS = STATUS_SEQUENCE.map(idx => {
   };
 });
 
-const MOTIVOS = ['Sem retorno/Desistiu', 'Região não atendida', 'Perfil não elegível', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Outro'];
+const MOTIVOS = ['Desistiu', 'Região não atendida', 'Perfil não elegível', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Outro'];
 
 const GRADIENTS = [
   ['#a78bfa', '#60a5fa'], ['#f472b6', '#fb923c'],
@@ -399,10 +399,11 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     setStatus(newStatus);
     setAvaliado(true);
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
     const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
+    if (newStatus === 6) updates.motivo_reprovacao = null;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); setAvaliado(avaliado); toast.error('Erro ao atualizar status'); }
     else { onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
@@ -411,6 +412,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   function handleStatus(i: number) {
     if (!lead) return;
     if (i === 4) { setPendingStatus(4); setShowMotivo(true); return; }
+    if (i === 6) { applyStatus(6); return; }
     if (status === i) return;
     applyStatus(i);
   }
