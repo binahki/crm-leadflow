@@ -26,7 +26,9 @@
       "Bash(grep -o '\"text\":\"[^\"]*dezenas[^\"]*\"' \"C:\\\\Users\\\\Murilo\\\\.claude\\\\projects\\\\c--Users-Murilo-leadflow-dashboard\\\\8d792c88-bd00-4fba-9cb6-919d0495d247.jsonl\" | head -5)",
       "Read(//c/Users/Murilo/.claude/projects/c--Users-Murilo-leadflow-dashboard/**)",
       "Bash(python -u -c ' *)",
-      "Bash(Remove-Item \"C:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\copy_brief.txt\" -Force)"
+      "Bash(Remove-Item \"C:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\copy_brief.txt\" -Force)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }
