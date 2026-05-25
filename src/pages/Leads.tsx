@@ -97,15 +97,12 @@ function subDays(dateStr: string, n: number): string {
   } catch { return dateStr; }
 }
 
-function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string): Lead[] {
+function filterByPeriod(leads: Lead[], period: string, customFrom?: string, customTo?: string, getRef?: (l: Lead) => string | null | undefined): Lead[] {
   if (period === 'all') return leads;
   const today = todayBR();
-  const getDateRef = (l: Lead): string | null | undefined => {
-    // Usa created_at para consistência com a página de Campanhas
-    return l.created_at;
-  };
+  const dateRef = getRef ?? ((l: Lead) => l.created_at);
   const ok = (l: Lead, from: string, to: string) => {
-    const d = leadDateBR(getDateRef(l));
+    const d = leadDateBR(dateRef(l));
     return !!d && d >= from && d <= to;
   };
   switch (period) {
@@ -867,7 +864,24 @@ function LeadsPage() {
   // ── Filtered leads (all active filters, AND logic) ────────────────────────
   const filtered = useMemo(() => {
     let r = [...allLeads];
-    r = filterByPeriod(r, periodFilter, customFrom, customTo);
+
+    // Escolhe a data de referência para o filtro de período baseado no status selecionado:
+    // cada status tem seu próprio timestamp de quando o lead foi movido para aquele status.
+    const statusNum = (statusFilter !== 'all' && statusFilter !== 'novo') ? parseInt(statusFilter) : null;
+    const getRef = (l: Lead): string | null | undefined => {
+      const la = l as any;
+      switch (statusNum) {
+        case 1: return la.status_atendimento_at || la.ultimo_status_change || l.created_at;
+        case 2: return la.status_reuniao_at     || la.ultimo_status_change || l.created_at;
+        case 3: return la.status_aprovado_at    || la.ultimo_status_change || l.created_at;
+        case 4: return la.ultimo_status_change  || l.created_at;
+        case 5: return la.status_contrato_at    || la.ultimo_status_change || l.created_at;
+        case 6: return la.status_sem_retorno_at || la.ultimo_status_change || l.created_at;
+        default: return l.created_at; // sem filtro de status: usa data de entrada
+      }
+    };
+
+    r = filterByPeriod(r, periodFilter, customFrom, customTo, getRef);
     if (statusFilter === 'novo') r = r.filter(l => toStatusNum(l.status) === 1 && !l.avaliado);
     else if (statusFilter !== 'all') r = r.filter(l => toStatusNum(l.status) === parseInt(statusFilter));
     if (selectedCampaigns.size > 0) {
