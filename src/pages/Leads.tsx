@@ -619,7 +619,7 @@ function LeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const bgCancelRef = useRef(false);
+  const bgCancelRef = useRef(0);
   const INITIAL_SIZE = 200;
   const PAGE_SIZE = 100;
 
@@ -770,19 +770,23 @@ function LeadsPage() {
 
   // ── Data loading ──────────────────────────────────────────────────────────
   const loadRestInBackground = useCallback(async (total: number, loaded: number) => {
-    bgCancelRef.current = false;
+    const gen = ++bgCancelRef.current;
     let from = loaded;
     while (from < total) {
-      if (bgCancelRef.current) break;
+      if (bgCancelRef.current !== gen) break;
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
         .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
-        .order('ultimo_status_change', { ascending: false })
+        .order('created_at', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
-      if (bgCancelRef.current) break;
-      if (data?.length) setAllLeads(prev => [...prev, ...(data as unknown as Lead[])]);
+      if (bgCancelRef.current !== gen) break;
+      if (data?.length) setAllLeads(prev => {
+        const seen = new Set(prev.map(l => l.id));
+        const fresh = (data as unknown as Lead[]).filter(l => !seen.has(l.id));
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
       from += PAGE_SIZE;
       await new Promise(r => setTimeout(r, 200));
     }
@@ -790,7 +794,7 @@ function LeadsPage() {
 
   const fetchLeads = useCallback(async () => {
     if (!orgReady || !orgId) return;
-    bgCancelRef.current = true;
+    bgCancelRef.current++;
     setIsLoading(true);
     setAllLeads([]);
 
@@ -803,7 +807,7 @@ function LeadsPage() {
     const { data, error } = await supabase
       .from('leads')
       .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
-      .order('ultimo_status_change', { ascending: false })
+      .order('created_at', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
 
@@ -1288,7 +1292,7 @@ function LeadsPage() {
                 </button>
 
                 {hasActiveFilters && (
-                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
+                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
                     <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
                   </button>
                 )}
@@ -1321,7 +1325,7 @@ function LeadsPage() {
                   <Tag style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
                 </button>
                 {hasActiveFilters && (
-                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
+                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
                     <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
                   </button>
                 )}
