@@ -380,23 +380,33 @@ export default function Dashboard() {
     if (!orgId) { setLoading(false); return []; }
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('ultimo_status_change', { ascending: false })
-      .limit(6000);
+    let all: Lead[] = [];
+    let from = 0;
+    const PAGE = 1000;
 
-    if (error) { 
-      console.error('[Dashboard]', error.message);
-      setLoading(false);
-      return [];
+    while (true) {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('org_id', orgId)
+        .order('ultimo_status_change', { ascending: false })
+        .range(from, from + PAGE - 1);
+
+      if (error) {
+        console.error('[Dashboard]', error.message);
+        setLoading(false);
+        return [];
+      }
+
+      const batch = (data || []) as Lead[];
+      all = [...all, ...batch];
+      if (batch.length < PAGE) break;
+      from += PAGE;
     }
 
-    const fetchedLeads = (data || []) as Lead[];
-    setAllLeads(fetchedLeads);
+    setAllLeads(all);
     setLoading(false);
-    return fetchedLeads;
+    return all;
   };
   function getMetaCacheKey(period: string, from?: string, to?: string) {
     if (period === 'custom' && from && to) return `meta_dash_${orgId}_custom_${from}_${to}`;
@@ -568,13 +578,12 @@ export default function Dashboard() {
     }).length;
   }, [allLeads, selectedPeriod, customFrom, customTo]);
   const approvedThisMonth = useMemo(() => {
-    const today = todayBR();
-    const firstDay = today.slice(0, 7) + '-01';
+    const currentMonth = new Date().toISOString().slice(0, 7);
     return allLeads.filter(l => {
       if (toNum(l.status) !== 3) return false;
-      const changeDate = (l as any).ultimo_status_change || l.created_at;
-      const d = leadDateBR(changeDate);
-      return !!d && d >= firstDay && d <= today;
+      const ref = (l as any).ultimo_status_change || (l as any).status_aprovado_at || l.created_at;
+      if (!ref) return false;
+      return String(ref).slice(0, 7) === currentMonth;
     }).length;
   }, [allLeads]);
   const convRate = totalLeads>0 ? safe((approved/totalLeads)*100).toFixed(1) : '0.0';

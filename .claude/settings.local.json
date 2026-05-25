@@ -28,7 +28,9 @@
       "Bash(python -u -c ' *)",
       "Bash(Remove-Item \"C:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\copy_brief.txt\" -Force)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(npx kill-port 8080 2>$null)",
+      "PowerShell(npm run dev)"
     ]
   }
 }
