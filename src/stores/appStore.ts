@@ -127,8 +127,10 @@ export function calcularFaixa(
 
   if (lead.score != null) {
     const score = Number(lead.score);
-    if (score < 25) faixaCalculada = 'vermelho';
-    else if (score >= 35) faixaCalculada = 'verde';
+    const corteVerde = (config as any)?.score_corte_verde ?? 35;
+    const corteAmarelo = (config as any)?.score_corte_amarelo ?? 25;
+    if (score < corteAmarelo) faixaCalculada = 'vermelho';
+    else if (score >= corteVerde) faixaCalculada = 'verde';
     else faixaCalculada = 'amarelo';
   } else if (lead.faixa) {
     // Sem score: usa faixa salva no banco como fallback

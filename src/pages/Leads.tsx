@@ -641,7 +641,7 @@ function LeadsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
   const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status:1, observacoes:'' });
-  const ORIGENS = ['Indicação', 'Outro'];
+  const ORIGENS = ['Indicação', 'Tráfego Pago', 'Instagram Orgânico', 'Outro'];
 
   // ── Selection ─────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1145,25 +1145,21 @@ function LeadsPage() {
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
 
-    const { data: quizData } = await supabase
-      .from('quizzes')
-      .select('corte_verde')
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    const scoreMinVerde = quizData?.corte_verde || 35;
-
     const { data, error } = await supabase.from('leads').insert({
       nome: newLead.nome.trim(),
       whatsapp: phoneClean,
       cidade: cidadeNorm,
       status: newLead.status,
-      score: scoreMinVerde,
-      faixa: 'verde',
+      score: null,
+      faixa: null,
       observacoes: newLead.observacoes || null,
-      utm_source: newLead.origem === 'Outro' ? (newLead.origemCustom || 'Outro') : (newLead.origem || null),
+      utm_source: newLead.origem === 'Outro'
+        ? (newLead.origemCustom || 'Outro')
+        : newLead.origem === 'Tráfego Pago'
+        ? 'fb'
+        : newLead.origem === 'Instagram Orgânico'
+        ? 'instagram_organico'
+        : (newLead.origem || null),
       utm_campaign: null, utm_medium: null, utm_content: null, utm_term: null, utm_id: null,
       org_id: orgId,
       created_at: new Date().toISOString(),
@@ -1181,7 +1177,7 @@ function LeadsPage() {
     const cidadeNorm = normalizeCity(editingLead.cidade || '');
     const originalLead = allLeads.find(l => l.id === editingLead.id);
     const newStatus = editingLead.status ?? 0;
-    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus };
+    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus, utm_source: (editingLead as any).utm_source || null };
     if (originalLead && Number(originalLead.status) !== Number(newStatus)) {
       const now = new Date().toISOString();
       const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at', 6:'status_sem_retorno_at' };
@@ -1610,6 +1606,35 @@ function LeadsPage() {
               <input placeholder="Nome" value={editingLead.nome || ''} onChange={e => setEditingLead(l => l && ({ ...l, nome: e.target.value }))} style={inputStyle}/>
               <PhoneInput value={editingLead.whatsapp || ''} onChange={v => setEditingLead(l => l && ({ ...l, whatsapp: v }))} style={inputStyle}/>
               <input placeholder="Cidade" value={editingLead.cidade || ''} onChange={e => setEditingLead(l => l && ({ ...l, cidade: e.target.value }))} style={inputStyle}/>
+              <div>
+                <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Origem</label>
+                <select
+                  value={
+                    ['Indicação','Tráfego Pago','Instagram Orgânico','Retorno','Manual','Outro']
+                      .includes((editingLead as any).utm_source || '')
+                      ? ((editingLead as any).utm_source || '')
+                      : (editingLead as any).utm_source ? 'Outro' : ''
+                  }
+                  onChange={e => {
+                    const val = e.target.value;
+                    setEditingLead(l => l && ({
+                      ...l,
+                      utm_source: val === 'Tráfego Pago' ? 'FB'
+                        : val === 'Instagram Orgânico' ? 'instagram_organico'
+                        : val
+                    }));
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="">Sem origem definida</option>
+                  <option value="Indicação">Indicação</option>
+                  <option value="Tráfego Pago">Tráfego Pago</option>
+                  <option value="Instagram Orgânico">Instagram Orgânico</option>
+                  <option value="Retorno">Retorno</option>
+                  <option value="Manual">Manual</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
               <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
                 <button onClick={handleEditLead} style={{ flex:1, padding:'10px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Salvar</button>
                 <button onClick={() => setIsEditOpen(false)} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Cancelar</button>

@@ -6,6 +6,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { getAdminViewingOrg, clearAdminViewingOrg, useOrgId } from '@/hooks/useOrgId';
 import { TrialBanner } from './TrialBanner';
 import { TutorialPopup } from './TutorialPopup';
+import { supabase } from '@/integrations/supabase/client';
+import { useAppStore } from '@/stores/appStore';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -16,7 +18,28 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { orgId } = useOrgId();
+  const { setConfiguracoes } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Carrega configurações da org (campos_perfil, faixas_score, cortes de score)
+  useEffect(() => {
+    if (!orgId) return;
+    supabase
+      .from('organizations')
+      .select('configuracoes, score_corte_verde, score_corte_amarelo, usa_quiz_externo')
+      .eq('id', orgId)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        const base = (data as any).configuracoes ?? { campos_perfil: [], faixas_score: { travas: [], vermelho_se_todas: false } };
+        setConfiguracoes({
+          ...base,
+          score_corte_verde: (data as any).score_corte_verde ?? 35,
+          score_corte_amarelo: (data as any).score_corte_amarelo ?? 25,
+          usa_quiz_externo: (data as any).usa_quiz_externo ?? false,
+        });
+      });
+  }, [orgId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [isMobile, setIsMobile] = useState(false);
   const [adminOrg, setAdminOrg] = useState<{ orgId: string; orgName: string } | null>(null);
   const location = useLocation();

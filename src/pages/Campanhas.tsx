@@ -699,8 +699,25 @@ export default function CampanhasPage() {
     }
     supabase.from('leads')
       .select('id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
-      .eq('org_id',orgId).order('ultimo_status_change',{ascending:false}).limit(3000)
-      .then(({data}:any)=>{ if(data) setAllLeads(data); });
+      .eq('org_id', orgId)
+      .eq('status', 3)
+      .not('status_aprovado_at', 'is', null)
+      .gte('status_aprovado_at', since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00'))
+      .order('status_aprovado_at', { ascending: false })
+      .limit(500)
+      .then(({ data: revsData }: any) => {
+        supabase.from('leads')
+          .select('id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
+          .eq('org_id', orgId)
+          .neq('status', 3)
+          .gte('created_at', since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00'))
+          .order('created_at', { ascending: false })
+          .limit(2500)
+          .then(({ data: leadsData }: any) => {
+            const combined = [...(revsData || []), ...(leadsData || [])];
+            if (combined.length) setAllLeads(combined);
+          });
+      });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
 
   // Realtime: atualiza allLeads ao receber novos leads (filtrado por org)
@@ -764,8 +781,10 @@ export default function CampanhasPage() {
     };
     return allLeads.filter(l => {
       if (Number((l as any).status) !== 3) return false;
-      // usa created_at para consistência com filterLeadsByPreset e com a página de Leads
-      const ref = (l as any).created_at;
+      // Usa status_aprovado_at como referência — quando foi aprovada de fato
+      const ref = (l as any).status_aprovado_at
+        || (l as any).ultimo_status_change
+        || l.created_at;
       switch(datePreset) {
         case 'today':      return ok(ref, today, today);
         case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(ref, y, y); }
@@ -1184,16 +1203,28 @@ export default function CampanhasPage() {
   const leadsCRMTotal = useMemo(()=>
     filteredLeads.filter(l=>{
       const la=l as any;
-      return (la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0;
+      const source = (la.utm_source||'').toUpperCase();
+      const hasCampaign = (la.utm_campaign||'').trim().length>0;
+      return source === 'FB' || source === 'INSTAGRAM_ORGANICO' || hasCampaign;
     }).length
   ,[filteredLeads]);
   // Revendedoras aprovadas no período (status_aprovado_at) via Meta Ads
   const revsCRMTotal = useMemo(()=>
     filteredRevs.filter(l=>{
       const la=l as any;
-      return (la.utm_source||'').toUpperCase()==='FB' || (la.utm_campaign||'').trim().length>0;
+      const source = (la.utm_source||'').toUpperCase();
+      const hasCampaign = (la.utm_campaign||'').trim().length>0;
+      return source === 'FB' || source === 'INSTAGRAM_ORGANICO' || hasCampaign;
     }).length
   ,[filteredRevs]);
+  console.log('[revsCRMTotal]', revsCRMTotal, 'de filteredRevs:', filteredRevs.length,
+    'sem fonte:', filteredRevs.filter(l => {
+      const la = l as any;
+      const source = (la.utm_source||'').toUpperCase();
+      const hasCampaign = (la.utm_campaign||'').trim().length>0;
+      return source !== 'FB' && source !== 'INSTAGRAM_ORGANICO' && !hasCampaign;
+    }).map(l => ({ id: (l as any).id, utm_source: (l as any).utm_source, utm_campaign: (l as any).utm_campaign }))
+  );
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
