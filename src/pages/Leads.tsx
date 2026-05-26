@@ -1140,7 +1140,6 @@ function LeadsPage() {
     if (!newLead.whatsapp.trim()) { toast.error('WhatsApp obrigatório'); return; }
     if (!newLead.cidade.trim()) { toast.error('Cidade obrigatória'); return; }
     if (!newLead.origem || (newLead.origem === 'Outro' && !newLead.origemCustom.trim())) { toast.error('Origem obrigatória'); return; }
-    if (!newLead.observacoes.trim()) { toast.error('Observações obrigatórias'); return; }
 
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
@@ -1156,7 +1155,7 @@ function LeadsPage() {
       utm_source: newLead.origem === 'Outro'
         ? (newLead.origemCustom || 'Outro')
         : newLead.origem === 'Tráfego Pago'
-        ? 'fb'
+        ? 'FB'
         : newLead.origem === 'Instagram Orgânico'
         ? 'instagram_organico'
         : (newLead.origem || null),

@@ -697,27 +697,29 @@ export default function CampanhasPage() {
       case 'last_30d':  since=subDaysCamp(today,29)+'T00:00:00-03:00'; break;
       case 'this_month':since=today.slice(0,7)+'-01T00:00:00-03:00'; break;
     }
-    supabase.from('leads')
-      .select('id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
-      .eq('org_id', orgId)
-      .eq('status', 3)
-      .not('status_aprovado_at', 'is', null)
-      .gte('status_aprovado_at', since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00'))
-      .order('status_aprovado_at', { ascending: false })
-      .limit(500)
-      .then(({ data: revsData }: any) => {
-        supabase.from('leads')
-          .select('id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change')
-          .eq('org_id', orgId)
-          .neq('status', 3)
-          .gte('created_at', since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00'))
-          .order('created_at', { ascending: false })
-          .limit(2500)
-          .then(({ data: leadsData }: any) => {
-            const combined = [...(revsData || []), ...(leadsData || [])];
-            if (combined.length) setAllLeads(combined);
-          });
-      });
+    const fallback = since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00');
+    const fields = 'id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change';
+    Promise.all([
+      // Revendedoras com status_aprovado_at preenchido — filtro preciso por data de aprovação
+      supabase.from('leads').select(fields).eq('org_id', orgId)
+        .eq('status', 3).not('status_aprovado_at', 'is', null)
+        .gte('status_aprovado_at', fallback)
+        .order('status_aprovado_at', { ascending: false }).limit(500),
+      // Revendedoras sem status_aprovado_at — leads aprovados manualmente (adicionados direto como aprovado)
+      supabase.from('leads').select(fields).eq('org_id', orgId)
+        .eq('status', 3).is('status_aprovado_at', null)
+        .gte('created_at', fallback)
+        .order('created_at', { ascending: false }).limit(200),
+      // Demais leads (não aprovados) — filtro por created_at
+      supabase.from('leads').select(fields).eq('org_id', orgId)
+        .neq('status', 3).gte('created_at', fallback)
+        .order('created_at', { ascending: false }).limit(2500),
+    ]).then(([{ data: revsData }, { data: revsFallback }, { data: leadsData }]: any[]) => {
+      console.log('[allLeads fetch] revsData:', revsData?.length, 'revsFallback:', revsFallback?.length, 'leadsData:', leadsData?.length);
+      console.log('[allLeads fetch] revsData items:', revsData?.map((l: any) => ({ id: l.id, utm_source: l.utm_source, status_aprovado_at: l.status_aprovado_at })));
+      const combined = [...(revsData || []), ...(revsFallback || []), ...(leadsData || [])];
+      if (combined.length) setAllLeads(combined);
+    });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
 
   // Realtime: atualiza allLeads ao receber novos leads (filtrado por org)
@@ -779,7 +781,7 @@ export default function CampanhasPage() {
       const d = leadDateBRCamp(ref);
       return !!d && d >= a && d <= b;
     };
-    return allLeads.filter(l => {
+    const result = allLeads.filter(l => {
       if (Number((l as any).status) !== 3) return false;
       // Usa status_aprovado_at como referência — quando foi aprovada de fato
       const ref = (l as any).status_aprovado_at
@@ -794,6 +796,14 @@ export default function CampanhasPage() {
         default: return Number((l as any).status) === 3;
       }
     });
+    console.log('[filteredRevs FB sem campanha]',
+      result.filter(l => (l as any).utm_source?.toUpperCase() === 'FB' && !(l as any).utm_campaign?.trim()).length
+    );
+    console.log('[allLeads FB sem campanha]',
+      allLeads.filter(l => (l as any).utm_source?.toUpperCase() === 'FB' && !(l as any).utm_campaign?.trim())
+        .map(l => ({ id: (l as any).id, status: (l as any).status, status_aprovado_at: (l as any).status_aprovado_at, utm_source: (l as any).utm_source }))
+    );
+    return result;
   }, [allLeads, datePreset]);
 
   // ── Mapeamento Único: Garante que um lead pertença a apenas 1 campanha
@@ -2672,6 +2682,7 @@ export default function CampanhasPage() {
 function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0 }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  const t = useTerminology();
 
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
