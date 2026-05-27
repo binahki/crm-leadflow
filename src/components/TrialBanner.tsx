@@ -8,62 +8,73 @@ const ADMIN_EMAIL = 'admin@floow.com';
 const STRIPE_URL = 'https://buy.stripe.com/aFacN5812gQm3fQcxe87K00';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const UMA_HORA = 3600000;
+const LIMITE_MENSAL = 50;
+const AVISO_A_PARTIR_DE = 40; // 80% do limite
+
+function inicioMesBR(): string {
+  const br = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const y = br.getUTCFullYear();
+  const m = String(br.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01T00:00:00-03:00`;
+}
 
 export function TrialBanner() {
   const { user } = useAuth();
   const { orgId, ready } = useOrgId();
-  const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
+  const [leadsNoMes, setLeadsNoMes] = useState<number | null>(null);
   const [visivel, setVisivel] = useState(false);
 
   useEffect(() => {
     if (user?.email === ADMIN_EMAIL) return;
     if (!ready || !orgId) return;
 
-    // Verifica se foi fechado há menos de 1h
-    const key = `trial_banner_${orgId}`;
+    const key = `lead_limit_banner_${orgId}`;
     const fechadoEm = sessionStorage.getItem(key);
     if (fechadoEm && Date.now() - parseInt(fechadoEm) < UMA_HORA) return;
 
     supabase
       .from('subscriptions')
-      .select('status, trial_ends_at')
+      .select('status')
       .eq('org_id', orgId)
-      .single()
-      .then(({ data }) => {
-        if (!data || data.status !== 'trialing' || !data.trial_ends_at) return;
-        const dias = Math.ceil(
-          (new Date(data.trial_ends_at).getTime() - Date.now()) / 86400000
-        );
-        if (dias >= 0 && dias <= 7) {
-          setDiasRestantes(dias);
-          setVisivel(true);
-        }
+      .maybeSingle()
+      .then(({ data: sub }) => {
+        if (sub?.status === 'active') return; // plano pago — sem limite
+
+        supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .gte('created_at', inicioMesBR())
+          .then(({ count }) => {
+            const total = count ?? 0;
+            if (total >= AVISO_A_PARTIR_DE && total < LIMITE_MENSAL) {
+              setLeadsNoMes(total);
+              setVisivel(true);
+            }
+          });
       });
   }, [orgId, ready, user?.email]);
 
   function fechar() {
-    if (orgId) sessionStorage.setItem(`trial_banner_${orgId}`, String(Date.now()));
+    if (orgId) sessionStorage.setItem(`lead_limit_banner_${orgId}`, String(Date.now()));
     setVisivel(false);
   }
 
-  if (!visivel || diasRestantes === null) return null;
+  if (!visivel || leadsNoMes === null) return null;
 
-  const urgente = diasRestantes <= 2;
+  const restantes = LIMITE_MENSAL - leadsNoMes;
 
   return (
     <div style={{
-      background: urgente
-        ? 'linear-gradient(90deg, #ef4444, #dc2626)'
-        : 'linear-gradient(90deg, #f59e0b, #d97706)',
+      background: 'linear-gradient(90deg, #f59e0b, #d97706)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '0 44px', height: '44px', flexShrink: 0,
       position: 'relative', fontFamily: FONT,
-      boxShadow: urgente ? '0 2px 12px rgba(239,68,68,0.35)' : '0 2px 12px rgba(245,158,11,0.35)',
+      boxShadow: '0 2px 12px rgba(245,158,11,0.35)',
     }}>
       <span style={{ fontSize: '13px', fontWeight: 500, color: '#fff', textAlign: 'center', lineHeight: 1.4 }}>
-        ⏳ Teste termina em{' '}
-        <strong>{diasRestantes === 0 ? 'hoje' : `${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}`}</strong>
-        {'  ·  '}
+        ⚠️ Você usou <strong>{leadsNoMes} dos {LIMITE_MENSAL} leads</strong> do plano gratuito este mês.{' '}
+        {restantes > 0 && `Restam ${restantes}. `}
         <button
           onClick={() => window.open(STRIPE_URL, '_blank')}
           style={{
@@ -72,7 +83,7 @@ export function TrialBanner() {
             textDecoration: 'underline', fontFamily: FONT, padding: 0,
           }}
         >
-          Regularizar pagamento
+          Fazer upgrade
         </button>
       </span>
       <button

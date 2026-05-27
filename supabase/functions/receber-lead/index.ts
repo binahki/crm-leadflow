@@ -82,6 +82,45 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Verifica limite mensal de leads (plano gratuito = 50/mês) ──
+    const orgId = config?.org_id ?? null;
+    if (orgId) {
+      // Só bloqueia se não tiver plano ativo (pago)
+      const subRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/subscriptions?select=status&org_id=eq.${orgId}&limit=1`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      const subs = await subRes.json();
+      const isPago = subs?.[0]?.status === "active";
+
+      if (!isPago) {
+        const br = new Date(Date.now() - 3 * 60 * 60 * 1000);
+        const inicioMes = `${br.getUTCFullYear()}-${String(br.getUTCMonth() + 1).padStart(2, "0")}-01T00:00:00-03:00`;
+
+        const countRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?select=id&org_id=eq.${orgId}&created_at=gte.${encodeURIComponent(inicioMes)}`,
+          {
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+              Prefer: "count=exact",
+              Range: "0-0",
+            },
+          }
+        );
+        const contentRange = countRes.headers.get("Content-Range") ?? "";
+        const total = parseInt(contentRange.split("/")[1] ?? "0", 10) || 0;
+
+        if (total >= 50) {
+          await salvarLog("limite_atingido", { org_id: orgId, total }, "error");
+          return new Response(
+            JSON.stringify({ ok: false, erro: "Limite mensal de 50 leads atingido. Faça upgrade do seu plano." }),
+            { status: 429, headers: CORS }
+          );
+        }
+      }
+    }
+
     // ── Insere lead ───────────────────────────────────────────
     const leadRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",

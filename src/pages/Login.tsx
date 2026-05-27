@@ -135,7 +135,7 @@ export default function LoginPage() {
       if (!res.ok || !data.ok) {
         toast.error(data.erro || 'Erro ao criar conta. Tente novamente.');
       } else {
-        toast.success('Conta criada! Trial de 7 dias ativado.');
+        toast.success('Conta criada! Plano gratuito ativado.');
         const { error: loginError } = await signIn(cadEmail, cadSenha);
         if (!loginError) {
           try {
@@ -172,7 +172,7 @@ export default function LoginPage() {
   }
 
   const title = mode === 'login' ? 'Entrar no Floow' : mode === 'cadastro' ? 'Criar conta grátis' : 'Recuperar senha';
-  const subtitle = mode === 'login' ? 'CRM para gestão de revendedoras' : mode === 'cadastro' ? '7 dias grátis, sem cartão agora' : 'Insira seu email para receber o link';
+  const subtitle = mode === 'login' ? 'CRM para gestão de revendedoras' : mode === 'cadastro' ? 'Gratuito, sem cartão' : 'Insira seu email para receber o link';
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#090909', padding: '24px', fontFamily: FONT }}>

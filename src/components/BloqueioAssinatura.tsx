@@ -7,13 +7,23 @@ const ADMIN_EMAIL = 'admin@floow.com';
 const STRIPE_URL = 'https://buy.stripe.com/aFacN5812gQm3fQcxe87K00';
 const WA_SUPORTE = 'https://wa.me/5519993929168';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
+const LIMITE_MENSAL = 50;
+
+function inicioMesBR(): string {
+  const br = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const y = br.getUTCFullYear();
+  const m = String(br.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01T00:00:00-03:00`;
+}
+
+type EstadoBloqueio = 'limite' | 'inativo' | false;
 
 export function BloqueioAssinatura() {
   const { user, signOut } = useAuth();
   const { orgId, ready } = useOrgId();
-  const [bloqueado, setBloqueado] = useState(false);
+  const [bloqueado, setBloqueado] = useState<EstadoBloqueio>(false);
 
-  async function checkSubscription() {
+  async function checkStatus() {
     if (!orgId) return;
     try {
       // Verifica se a org ainda existe
@@ -23,30 +33,40 @@ export function BloqueioAssinatura() {
         .eq('id', orgId)
         .maybeSingle();
 
-      // Org foi deletada — faz logout e redireciona
       if (!org || orgError) {
         await supabase.auth.signOut();
         window.location.href = '/login';
         return;
       }
 
-      // Verifica assinatura normalmente
-      const { data } = await supabase
+      // Verifica assinatura
+      const { data: sub } = await supabase
         .from('subscriptions')
-        .select('status, trial_ends_at')
+        .select('status')
         .eq('org_id', orgId)
         .maybeSingle();
 
-      if (!data) {
+      // Plano ativo (pago) — sem restrição
+      if (sub?.status === 'active') {
         setBloqueado(false);
         return;
       }
 
-      const ativo =
-        data.status === 'active' ||
-        (data.status === 'trialing' &&
-          (!data.trial_ends_at || new Date(data.trial_ends_at).getTime() > Date.now() - (24 * 60 * 60 * 1000)));
-      setBloqueado(!ativo);
+      // Assinatura cancelada/inativa (era pago, parou) — bloquear por pagamento
+      const statusInativos = ['canceled', 'past_due', 'unpaid', 'incomplete_expired'];
+      if (sub && statusInativos.includes(sub.status)) {
+        setBloqueado('inativo');
+        return;
+      }
+
+      // Plano gratuito (sem sub, ou status trialing/free) — verificar limite de leads
+      const { count } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .gte('created_at', inicioMesBR());
+
+      setBloqueado((count ?? 0) >= LIMITE_MENSAL ? 'limite' : false);
     } catch {
       // Em caso de erro de rede, não bloqueia
     }
@@ -56,7 +76,7 @@ export function BloqueioAssinatura() {
     if (user?.email === ADMIN_EMAIL) return;
     if (!ready || !orgId) return;
 
-    checkSubscription();
+    checkStatus();
 
     const channel = supabase
       .channel(`sub-status-${orgId}`)
@@ -65,16 +85,19 @@ export function BloqueioAssinatura() {
         schema: 'public',
         table: 'subscriptions',
         filter: `org_id=eq.${orgId}`,
-      }, () => {
-        checkSubscription();
-      })
+      }, () => { checkStatus(); })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'leads',
+        filter: `org_id=eq.${orgId}`,
+      }, () => { checkStatus(); })
       .on('postgres_changes', {
         event: 'DELETE',
         schema: 'public',
         table: 'organizations',
         filter: `id=eq.${orgId}`,
       }, async () => {
-        // Org deletada — logout imediato
         await supabase.auth.signOut();
         window.location.href = '/login';
       })
@@ -84,6 +107,8 @@ export function BloqueioAssinatura() {
   }, [orgId, ready, user?.email]); // eslint-disable-line
 
   if (!bloqueado) return null;
+
+  const isLimite = bloqueado === 'limite';
 
   return (
     <div style={{
@@ -106,24 +131,28 @@ export function BloqueioAssinatura() {
         animation: 'bl-up 0.22s cubic-bezier(0.32,0.72,0,1)',
         position: 'relative',
       }}>
-        <div style={{ fontSize: '40px', marginBottom: '16px' }}>🔒</div>
+        <div style={{ fontSize: '40px', marginBottom: '16px' }}>
+          {isLimite ? '📊' : '🔒'}
+        </div>
         <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f4f4f5', margin: '0 0 10px', letterSpacing: '-0.02em' }}>
-          Acesso suspenso
+          {isLimite ? 'Limite mensal atingido' : 'Acesso suspenso'}
         </h2>
         <p style={{ fontSize: '14px', color: '#a1a1aa', lineHeight: 1.6, margin: '0 0 24px' }}>
-          Sua assinatura está inativa. Regularize seu pagamento para continuar acessando o Floow.
+          {isLimite
+            ? `Você atingiu o limite de ${LIMITE_MENSAL} leads do plano gratuito este mês. Faça upgrade para continuar captando leads.`
+            : 'Sua assinatura está inativa. Regularize seu pagamento para continuar acessando o Floow.'}
         </p>
 
         <button
           onClick={() => window.open(STRIPE_URL, '_blank')}
           style={{
             width: '100%', padding: '12px', borderRadius: '10px', border: 'none',
-            background: '#16a34a', color: '#fff',
+            background: isLimite ? '#2563eb' : '#16a34a', color: '#fff',
             fontSize: '14px', fontWeight: 600, cursor: 'pointer',
             marginBottom: '12px', fontFamily: FONT,
           }}
         >
-          Regularizar pagamento
+          {isLimite ? 'Fazer upgrade do plano' : 'Regularizar pagamento'}
         </button>
 
         <p style={{ fontSize: '12.5px', color: '#52525b', margin: '0 0 6px' }}>
