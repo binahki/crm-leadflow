@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useNavigate } from 'react-router-dom';
+import { Tag } from '@/hooks/useTags';
 
 const COLUMNS = STATUS_SEQUENCE.map(status => ({
   status,
@@ -123,9 +124,10 @@ function ObsBadge({ text }: { text: string }) {
 }
 
 // ── Draggable Card ────────────────────────────────────────────
-function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile }: {
+function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile, leadTags }: {
   lead: Lead; onCardClick: ()=>void;
   onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void; isMobile: boolean;
+  leadTags?: Tag[];
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
   const { configuracoes } = useAppStore();
@@ -197,6 +199,18 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile 
       {statusNum === 4 && motivo && (
         <div style={{ marginTop:'7px' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'2px 8px', borderRadius:'99px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.2)', fontSize:'11px', color:'#ef4444', fontWeight:500, maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>✕ {motivo}</span>
+        </div>
+      )}
+
+      {/* Tags */}
+      {leadTags && leadTags.length > 0 && (
+        <div style={{ marginTop:'7px', display:'flex', flexWrap:'wrap', gap:'4px' }}>
+          {leadTags.slice(0, 2).map(tag => (
+            <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+          ))}
+          {leadTags.length > 2 && (
+            <span title={leadTags.slice(2).map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{leadTags.length - 2}</span>
+          )}
         </div>
       )}
 
@@ -274,6 +288,7 @@ export default function KanbanPage() {
       window.open(`https://wa.me/${phone}`, '_blank');
     }
   }, [navigate, hasWA]);
+  const [leadTagsMap, setLeadTagsMap] = useState<Map<string, Tag[]>>(new Map());
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
   const [viewingLead, setViewingLead] = useState<Lead | null>(null);
@@ -308,6 +323,25 @@ export default function KanbanPage() {
       setLeads(allData);
     })();
   }, [orgId, orgReady]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
+      if (!tagsData?.length) { setLeadTagsMap(new Map()); return; }
+      const tagIds = tagsData.map((t: any) => t.id);
+      const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
+      const tagById = new Map(tagsData.map((t: any) => [t.id, t]));
+      const result = new Map<string, Tag[]>();
+      for (const row of (lt || [])) {
+        const tag = tagById.get(row.tag_id);
+        if (!tag) continue;
+        if (!result.has(row.lead_id)) result.set(row.lead_id, []);
+        result.get(row.lead_id)!.push(tag as Tag);
+      }
+      setLeadTagsMap(result);
+    })();
+  }, [orgId]); // eslint-disable-line
 
   useEffect(() => {
     if (!orgReady || !orgId) return;
@@ -433,6 +467,7 @@ export default function KanbanPage() {
                           onCardClick={() => setViewingLead(lead)}
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
+                          leadTags={leadTagsMap.get(lead.id)}
                         />
                       ))}
                     </DroppableColumn>
@@ -452,6 +487,7 @@ export default function KanbanPage() {
                           onCardClick={() => setViewingLead(lead)}
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
+                          leadTags={leadTagsMap.get(lead.id)}
                         />
                       ))}
                     </DroppableColumn>

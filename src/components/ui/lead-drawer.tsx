@@ -6,8 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
-  MessageCircle,
+  MessageCircle, Monitor,
 } from 'lucide-react';
+import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { useTheme } from '@/hooks/useTheme';
@@ -276,6 +277,23 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<Array<{ ordem: number; texto: string }>>([]);
 
+  // ── Tags ──────────────────────────────────────────────────────
+  const { tags: orgTags, createTag: createOrgTag, updateTag: updateOrgTag, deleteTag: deleteOrgTag } = useTags(orgId);
+  const [leadTags, setLeadTags] = useState<Tag[]>([]);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+  const [newTagNome, setNewTagNome] = useState('');
+  const [newTagCor, setNewTagCor] = useState(CORES_TAGS[0]);
+  const [creatingTag, setCreatingTag] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [mgr_editId, setMgrEditId] = useState<string | null>(null);
+  const [mgr_editNome, setMgrEditNome] = useState('');
+  const [mgr_editCor, setMgrEditCor] = useState('');
+  const [mgr_deleteId, setMgrDeleteId] = useState<string | null>(null);
+  const [mgr_newNome, setMgrNewNome] = useState('');
+  const [mgr_newCor, setMgrNewCor] = useState(CORES_TAGS[0]);
+  const [mgr_creating, setMgrCreating] = useState(false);
+
   useEffect(() => {
     const raw = fullLead?.quiz_respostas || (lead as any)?.quiz_respostas;
     if (!raw) return;
@@ -393,6 +411,17 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     }
   }, [lead?.id]);
 
+  useEffect(() => {
+    if (!lead?.id) { setLeadTags([]); return; }
+    (supabase as any)
+      .from('lead_tags')
+      .select('tag_id, tags(id, org_id, nome, cor, created_at)')
+      .eq('lead_id', lead.id)
+      .then(({ data }: any) => {
+        setLeadTags((data || []).map((r: any) => r.tags).filter(Boolean));
+      });
+  }, [lead?.id]); // eslint-disable-line
+
   async function applyStatus(newStatus: number, motivo?: string) {
     if (!lead) return;
     const prev = status;
@@ -438,6 +467,50 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     setDeleting(false);
     if (error) { toast.error('Erro ao excluir'); setShowDel(false); }
     else { toast.success('Lead excluído'); setShowDel(false); onClose(); }
+  }
+
+  async function addLeadTag(tagId: string) {
+    if (!lead) return;
+    const tag = orgTags.find(t => t.id === tagId);
+    if (!tag || leadTags.find(t => t.id === tagId)) return;
+    setLeadTags(prev => [...prev, tag]);
+    await (supabase as any).from('lead_tags').upsert({ lead_id: lead.id, tag_id: tagId }, { onConflict: 'lead_id,tag_id' });
+  }
+
+  async function removeLeadTag(tagId: string) {
+    if (!lead) return;
+    setLeadTags(prev => prev.filter(t => t.id !== tagId));
+    await (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
+  }
+
+  async function handleCreateAndAddTag() {
+    if (!newTagNome.trim()) return;
+    setCreatingTag(true);
+    const tag = await createOrgTag(newTagNome.trim(), newTagCor);
+    if (tag) { await addLeadTag(tag.id); setNewTagNome(''); setNewTagCor(CORES_TAGS[0]); }
+    setCreatingTag(false);
+  }
+
+  async function handleMgrCreate() {
+    if (!mgr_newNome.trim()) return;
+    setMgrCreating(true);
+    await createOrgTag(mgr_newNome.trim(), mgr_newCor);
+    setMgrNewNome(''); setMgrNewCor(CORES_TAGS[0]);
+    setMgrCreating(false);
+  }
+
+  async function handleMgrSaveEdit() {
+    if (!mgr_editId || !mgr_editNome.trim()) return;
+    await updateOrgTag(mgr_editId, { nome: mgr_editNome.trim(), cor: mgr_editCor });
+    setLeadTags(prev => prev.map(t => t.id === mgr_editId ? { ...t, nome: mgr_editNome.trim(), cor: mgr_editCor } : t));
+    setMgrEditId(null);
+  }
+
+  async function handleMgrDelete() {
+    if (!mgr_deleteId) return;
+    await deleteOrgTag(mgr_deleteId);
+    setLeadTags(prev => prev.filter(t => t.id !== mgr_deleteId));
+    setMgrDeleteId(null);
   }
 
   if (!isOpen || !lead) return null;
@@ -546,6 +619,30 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
+        {/* Tags */}
+        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', fontFamily: FONT }}>Tags</span>
+            <button onClick={() => setShowTagManager(true)} style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>Gerenciar tags</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', position: 'relative' }}>
+            {leadTags.map(tag => (
+              <span key={tag.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: tag.cor, background: tag.cor + '20', border: `1px solid ${tag.cor}40`, whiteSpace: 'nowrap' }}>
+                {tag.nome}
+                <button onClick={() => removeLeadTag(tag.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                  <X style={{ width: '10px', height: '10px' }} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => { setShowTagDropdown(v => !v); setTagSearch(''); setNewTagNome(''); setNewTagCor(CORES_TAGS[0]); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: dark ? '#71717a' : '#9ca3af', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, cursor: 'pointer', fontFamily: FONT }}
+            >+ Adicionar</button>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+
         {/* Conteúdo rolável */}
         <div style={{ overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch' }}>
           <div style={{ padding: '4px 22px 8px' }}>
@@ -600,6 +697,36 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
               );
             })()}
 
+            {/* Reunião de Onboarding */}
+            {(() => {
+              let respostas: Record<string, unknown> | null = null;
+              try {
+                const raw = l.quiz_reuniao_respostas;
+                if (raw) respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              } catch { respostas = null; }
+              if (!respostas) return null;
+              const REUNIAO_LABELS: Record<string, string> = {
+                quantos_anos_de_garantia: 'Anos de garantia das peças',
+                aplicativo: 'Conhece o aplicativo',
+                quanto_tempo_pra_vender: 'Tempo para começar a vender',
+                valor_minimo: 'Valor mínimo para começar',
+                perguntas: 'Observações / Perguntas',
+              };
+              const campos = Object.entries(respostas).filter(([k, v]) => v !== null && v !== undefined && v !== '' && REUNIAO_LABELS[k]);
+              if (campos.length === 0) return null;
+              return (
+                <Section openKey="reuniao" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
+                  icon={<Monitor style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Reunião de Onboarding">
+                  <div style={{ marginBottom: '4px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>✓ Participou</span>
+                  </div>
+                  {campos.map(([k, v]) => (
+                    <Field key={k} label={REUNIAO_LABELS[k]} value={formatValue(v)} dark={dark} />
+                  ))}
+                </Section>
+              );
+            })()}
+
             {/* Origem do Lead / Tráfego */}
             {(hasTraffic || (l.utm_source && !l.utm_campaign)) && (
               <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
@@ -645,6 +772,155 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
         @keyframes ld-fade { from{opacity:0}to{opacity:1} }
         @keyframes ld-up { from{opacity:0;transform:translate(-50%,-48%) scale(0.96)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
       `}</style>
+
+      {/* Tag dropdown portal */}
+      {showTagDropdown && createPortal(
+        <>
+          <div onClick={() => setShowTagDropdown(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '18px 18px 0 0', padding: '16px', width: '100%', maxWidth: '480px', maxHeight: '72vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 32px rgba(0,0,0,0.25)', fontFamily: FONT }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827' }}>Adicionar tag</span>
+              <button onClick={() => setShowTagDropdown(false)} style={{ width: '26px', height: '26px', borderRadius: '50%', border: 'none', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dark ? '#71717a' : '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X style={{ width: '12px', height: '12px' }} />
+              </button>
+            </div>
+            <input
+              autoFocus
+              placeholder="Buscar tag..."
+              value={tagSearch}
+              onChange={e => setTagSearch(e.target.value)}
+              style={{ padding: '8px 10px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f8fafc', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT, marginBottom: '8px' }}
+            />
+            <div style={{ overflow: 'auto', flex: 1, marginBottom: '10px' }}>
+              {orgTags.filter(t => !tagSearch || t.nome.toLowerCase().includes(tagSearch.toLowerCase())).map(tag => {
+                const applied = !!leadTags.find(lt => lt.id === tag.id);
+                return (
+                  <button key={tag.id} onClick={() => applied ? removeLeadTag(tag.id) : addLeadTag(tag.id)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '9px', border: 'none', background: applied ? (dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)') : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: FONT, transition: 'background 0.1s' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: tag.cor, flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', color: dark ? '#f4f4f5' : '#111827', flex: 1 }}>{tag.nome}</span>
+                    {applied && <Check style={{ width: '13px', height: '13px', color: '#10b981', flexShrink: 0 }} />}
+                  </button>
+                );
+              })}
+              {orgTags.filter(t => !tagSearch || t.nome.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                <p style={{ textAlign: 'center', fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', padding: '16px 0', margin: 0 }}>Nenhuma tag encontrada</p>
+              )}
+            </div>
+            <div style={{ borderTop: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Criar nova tag</p>
+              <input
+                placeholder="Nome da tag..."
+                value={newTagNome}
+                onChange={e => setNewTagNome(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newTagNome.trim()) handleCreateAndAddTag(); }}
+                style={{ padding: '8px 10px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f8fafc', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT }}
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                {CORES_TAGS.map(c => (
+                  <button key={c} onClick={() => setNewTagCor(c)}
+                    style={{ width: '18px', height: '18px', borderRadius: '50%', background: c, border: newTagCor === c ? `3px solid ${dark ? '#fff' : '#111'}` : '3px solid transparent', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                  />
+                ))}
+              </div>
+              <button onClick={handleCreateAndAddTag} disabled={!newTagNome.trim() || creatingTag}
+                style={{ padding: '9px', borderRadius: '9px', border: 'none', background: newTagNome.trim() ? '#3b82f6' : (dark ? '#27272a' : '#e5e7eb'), color: newTagNome.trim() ? '#fff' : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 600, cursor: newTagNome.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
+                {creatingTag ? 'Criando...' : 'Criar e adicionar'}
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Tag manager modal */}
+      {showTagManager && createPortal(
+        <>
+          <div onClick={() => { setShowTagManager(false); setMgrEditId(null); setMgrDeleteId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', borderRadius: '18px', border: `1px solid ${dark ? '#27272a' : 'rgba(0,0,0,0.08)'}`, width: '90%', maxWidth: '420px', maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', fontFamily: FONT }}>
+            <div style={{ padding: '18px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: dark ? '#f4f4f5' : '#111827' }}>Gerenciar Tags</h3>
+              <button onClick={() => { setShowTagManager(false); setMgrEditId(null); setMgrDeleteId(null); }} style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dark ? '#71717a' : '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X style={{ width: '13px', height: '13px' }} />
+              </button>
+            </div>
+            <div style={{ overflow: 'auto', flex: 1, padding: '12px' }}>
+              {/* Nova tag */}
+              <div style={{ padding: '12px', borderRadius: '10px', background: dark ? '#18181b' : '#f8fafc', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nova tag</p>
+                <input
+                  placeholder="Nome da tag..."
+                  value={mgr_newNome}
+                  onChange={e => setMgrNewNome(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && mgr_newNome.trim()) handleMgrCreate(); }}
+                  style={{ padding: '8px 10px', borderRadius: '8px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#111113' : '#fff', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT }}
+                />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                  {CORES_TAGS.map(c => (
+                    <button key={c} onClick={() => setMgrNewCor(c)}
+                      style={{ width: '20px', height: '20px', borderRadius: '50%', background: c, border: mgr_newCor === c ? `3px solid ${dark ? '#fff' : '#111'}` : '3px solid transparent', cursor: 'pointer', padding: 0 }}
+                    />
+                  ))}
+                </div>
+                <button onClick={handleMgrCreate} disabled={!mgr_newNome.trim() || mgr_creating}
+                  style={{ padding: '8px', borderRadius: '8px', border: 'none', background: mgr_newNome.trim() ? '#3b82f6' : (dark ? '#27272a' : '#e5e7eb'), color: mgr_newNome.trim() ? '#fff' : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 600, cursor: mgr_newNome.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
+                  {mgr_creating ? 'Criando...' : 'Criar tag'}
+                </button>
+              </div>
+              {/* Tags existentes */}
+              {orgTags.length === 0 ? (
+                <p style={{ textAlign: 'center', fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', padding: '20px 0', margin: 0 }}>Nenhuma tag criada ainda.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {orgTags.map(tag => {
+                    const isEditing = mgr_editId === tag.id;
+                    const isDeleting = mgr_deleteId === tag.id;
+                    return (
+                      <div key={tag.id} style={{ padding: '10px 12px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#18181b' : '#fafafa', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {isEditing ? (
+                          <>
+                            <input value={mgr_editNome} onChange={e => setMgrEditNome(e.target.value)}
+                              style={{ padding: '7px 10px', borderRadius: '8px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#111113' : '#fff', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT }} />
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {CORES_TAGS.map(c => (
+                                <button key={c} onClick={() => setMgrEditCor(c)}
+                                  style={{ width: '18px', height: '18px', borderRadius: '50%', background: c, border: mgr_editCor === c ? `3px solid ${dark ? '#fff' : '#111'}` : '3px solid transparent', cursor: 'pointer', padding: 0 }}
+                                />
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={handleMgrSaveEdit} style={{ flex: 1, padding: '7px', borderRadius: '7px', border: 'none', background: '#10b981', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Salvar</button>
+                              <button onClick={() => setMgrEditId(null)} style={{ flex: 1, padding: '7px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: dark ? '#a1a1aa' : '#6b7280', fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : isDeleting ? (
+                          <>
+                            <p style={{ margin: 0, fontSize: '12.5px', color: dark ? '#f4f4f5' : '#111827' }}>Excluir <strong>{tag.nome}</strong> de todos os leads? Esta ação não pode ser desfeita.</p>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={handleMgrDelete} style={{ flex: 1, padding: '7px', borderRadius: '7px', border: 'none', background: '#ef4444', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Excluir</button>
+                              <button onClick={() => setMgrDeleteId(null)} style={{ flex: 1, padding: '7px', borderRadius: '7px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: dark ? '#a1a1aa' : '#6b7280', fontSize: '12px', cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: tag.cor, flexShrink: 0 }} />
+                            <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: dark ? '#f4f4f5' : '#111827' }}>{tag.nome}</span>
+                            <button onClick={() => { setMgrEditId(tag.id); setMgrEditNome(tag.nome); setMgrEditCor(tag.cor); setMgrDeleteId(null); }}
+                              style={{ fontSize: '12px', color: dark ? '#71717a' : '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: '5px', fontFamily: FONT }}>Editar</button>
+                            <button onClick={() => { setMgrDeleteId(tag.id); setMgrEditId(null); }}
+                              style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: '5px', fontFamily: FONT }}>Excluir</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
     </>
   );
 }

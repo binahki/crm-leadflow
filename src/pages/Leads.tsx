@@ -8,6 +8,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
+import { useTags, Tag as OrgTag } from '@/hooks/useTags';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -635,6 +636,12 @@ function LeadsPage() {
   const [sortByScore, setSortByScore] = useState<'asc'|'desc'|null>(null);
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
 
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const { tags: orgTags } = useTags(orgId);
+  const [leadTagsMap, setLeadTagsMap] = useState<Map<string, OrgTag[]>>(new Map());
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [showTagFilter, setShowTagFilter] = useState(false);
+
   // ── Lead actions ──────────────────────────────────────────────────────────
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -839,6 +846,25 @@ function LeadsPage() {
   }, [orgId, orgReady]);
 
   useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
+      if (!tagsData?.length) { setLeadTagsMap(new Map()); return; }
+      const tagIds = tagsData.map((t: any) => t.id);
+      const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
+      const tagById = new Map(tagsData.map((t: any) => [t.id, t]));
+      const result = new Map<string, OrgTag[]>();
+      for (const row of (lt || [])) {
+        const tag = tagById.get(row.tag_id);
+        if (!tag) continue;
+        if (!result.has(row.lead_id)) result.set(row.lead_id, []);
+        result.get(row.lead_id)!.push(tag as OrgTag);
+      }
+      setLeadTagsMap(result);
+    })();
+  }, [orgId]); // eslint-disable-line
+
+  useEffect(() => {
     if (!targetLeadId || isLoading) return;
     const lead = allLeads.find(l => String(l.id) === String(targetLeadId));
     if (lead) { handleViewLead(lead); setTargetLeadId(null); }
@@ -1015,6 +1041,12 @@ function LeadsPage() {
       const q = search.toLowerCase();
       r = r.filter(l => { const la = l as any; return l.nome?.toLowerCase().includes(q) || l.whatsapp?.includes(search) || l.cidade?.toLowerCase().includes(q) || safeName((la.utm_campaign || '')).toLowerCase().includes(q); });
     }
+    if (selectedTagIds.size > 0) {
+      r = r.filter(l => {
+        const lt = leadTagsMap.get(l.id);
+        return lt ? lt.some(t => selectedTagIds.has(t.id)) : false;
+      });
+    }
     if (sortByScore) {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
@@ -1046,7 +1078,7 @@ function LeadsPage() {
     setSelectedIds(n);
   }
 
-  const hasActiveFilters = periodFilter !== 'all' || statusFilter !== 'all' || selectedCampaigns.size > 0 || !!search.trim() || !!campDeepFilter;
+  const hasActiveFilters = periodFilter !== 'all' || statusFilter !== 'all' || selectedCampaigns.size > 0 || !!search.trim() || !!campDeepFilter || selectedTagIds.size > 0;
 
   function handleSelectAllFiltered() {
     if (filtered.length <= 1000) {
@@ -1300,8 +1332,43 @@ function LeadsPage() {
                   Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                 </button>
 
+                {/* Tag filter button */}
+                {orgTags.length > 0 && (
+                  <div style={{ position:'relative' }}>
+                    <button
+                      onClick={() => setShowTagFilter(v => !v)}
+                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                    >
+                      🏷 Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
+                    </button>
+                    {showTagFilter && (
+                      <>
+                        <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
+                        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>
+                          {orgTags.map(tag => {
+                            const active = selectedTagIds.has(tag.id);
+                            return (
+                              <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); active ? n.delete(tag.id) : n.add(tag.id); setSelectedTagIds(n); }}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'8px', border:'none', background:active?(dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'):'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                                <span style={{ width:'9px', height:'9px', borderRadius:'50%', background:tag.cor, flexShrink:0 }} />
+                                <span style={{ fontSize:'12.5px', color:dark?'#f4f4f5':'#111827', flex:1 }}>{tag.nome}</span>
+                                {active && <Check style={{ width:'12px', height:'12px', color:'#8b5cf6', flexShrink:0 }} />}
+                              </button>
+                            );
+                          })}
+                          {selectedTagIds.size > 0 && (
+                            <button onClick={() => setSelectedTagIds(new Set())} style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:'none', background:'transparent', color:dark?'#f87171':'#ef4444', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', textAlign:'left', marginTop:'4px', borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}` }}>
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {hasActiveFilters && (
-                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
+                  <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); setSelectedTagIds(new Set()); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
                     <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
                   </button>
                 )}
@@ -1508,6 +1575,21 @@ function LeadsPage() {
                             </div>
                             <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>
                             {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
+                            {(() => {
+                              const lt = leadTagsMap.get(lead.id) || [];
+                              if (!lt.length) return null;
+                              const vis = lt.slice(0, 3); const rest = lt.slice(3);
+                              return (
+                                <div style={{ display:'flex', gap:'3px', flexShrink:0 }}>
+                                  {vis.map(tag => (
+                                    <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                                  ))}
+                                  {rest.length > 0 && (
+                                    <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
