@@ -23,7 +23,6 @@ interface Webhook {
   nome: string;
   token: string;
   ativo: boolean;
-  tipo: 'receber_lead' | 'atualizar_status';
   created_at: string;
   isPrincipal?: boolean;
 }
@@ -45,7 +44,6 @@ export default function WebhookPage() {
   const [loadingWebhooks, setLoadingWebhooks] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newNome, setNewNome] = useState('');
-  const [newTipo, setNewTipo] = useState<'receber_lead' | 'atualizar_status'>('receber_lead');
   const [creating, setCreating] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -96,14 +94,13 @@ export default function WebhookPage() {
   async function createWebhook() {
     if (!orgId || !newNome.trim()) return;
     setCreating(true);
-    const { error } = await (supabase as any).from('webhooks').insert({ org_id: orgId, nome: newNome.trim(), tipo: newTipo });
+    const { error } = await (supabase as any).from('webhooks').insert({ org_id: orgId, nome: newNome.trim() });
     if (error) {
       toast.error('Erro ao criar webhook');
     } else {
       toast.success('Webhook criado!');
       setShowCreateModal(false);
       setNewNome('');
-      setNewTipo('receber_lead');
       fetchWebhooks();
     }
     setCreating(false);
@@ -266,21 +263,6 @@ export default function WebhookPage() {
                           </div>
                         ) : (
                           <span style={{ fontSize: '15px', fontWeight: 600, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wh.nome}</span>
-                        )}
-                        {!isEditing && (
-                          <span style={{
-                            flexShrink: 0,
-                            fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em',
-                            padding: '3px 8px', borderRadius: '99px',
-                            background: wh.tipo === 'receber_lead'
-                              ? (dark ? 'rgba(37,99,235,0.18)' : '#eff6ff')
-                              : (dark ? 'rgba(126,59,235,0.18)' : '#f5f3ff'),
-                            color: wh.tipo === 'receber_lead'
-                              ? (dark ? '#93c5fd' : '#2563eb')
-                              : (dark ? '#c4b5fd' : '#7e3beb'),
-                          }}>
-                            {wh.tipo === 'receber_lead' ? 'Receber Lead' : 'Atualizar Status'}
-                          </span>
                         )}
                       </div>
 
@@ -456,21 +438,6 @@ export default function WebhookPage() {
                     autoFocus
                     style={inputStyle}
                   />
-                </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '8px' }}>Tipo</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {([
-                      { value: 'receber_lead' as const, label: 'Receber Lead', desc: 'Cria um novo lead no CRM.', color: '#3b82f6' },
-                      { value: 'atualizar_status' as const, label: 'Atualizar Status', desc: 'Busca o lead pelo WhatsApp e move para Contrato/App.', color: '#8b5cf6' },
-                    ]).map(opt => (
-                      <div key={opt.value} onClick={() => setNewTipo(opt.value)}
-                        style={{ padding: '12px 14px', borderRadius: '10px', cursor: 'pointer', border: `2px solid ${newTipo === opt.value ? opt.color : border}`, background: newTipo === opt.value ? `${opt.color}14` : 'transparent', transition: 'all 0.15s' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: newTipo === opt.value ? opt.color : txt }}>{opt.label}</div>
-                        <div style={{ fontSize: '12px', color: txtMid, marginTop: '2px' }}>{opt.desc}</div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
                   <button onClick={() => setShowCreateModal(false)}

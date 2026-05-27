@@ -25,13 +25,12 @@ Deno.serve(async (req) => {
     const token = url.searchParams.get("token") || "";
 
     let orgId: string | null = null;
-    let tipo = "receber_lead";
     let webhookNome = "Principal";
 
     // ── 1. Search webhooks table by token ──────────────────────
     if (token) {
       const wRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/webhooks?select=id,org_id,ativo,tipo,nome&token=eq.${encodeURIComponent(token)}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/webhooks?select=id,org_id,ativo,nome&token=eq.${encodeURIComponent(token)}&limit=1`,
         { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
       );
       const wRows = await wRes.json();
@@ -43,7 +42,6 @@ Deno.serve(async (req) => {
           return new Response(JSON.stringify({ ok: false, erro: "Webhook inativo" }), { status: 403, headers: CORS });
         }
         orgId = webhook.org_id;
-        tipo = webhook.tipo || "receber_lead";
         webhookNome = webhook.nome || "Webhook";
       } else {
         // Not found in webhooks — try configuracoes_whatsapp by token
@@ -85,39 +83,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: false, erro: "body inválido" }), { status: 400, headers: CORS });
     }
 
-    // ── 3. tipo: atualizar_status ──────────────────────────────
-    if (tipo === "atualizar_status") {
-      const whatsapp = String(body.phone || body.whatsapp || body.celular || body.Phone || "");
-      if (!whatsapp) {
-        await salvarLog("payload_incompleto", body, "error", orgId ?? undefined);
-        return new Response(JSON.stringify({ ok: false, erro: "campo de telefone não encontrado no payload" }), { status: 422, headers: CORS });
-      }
-      if (!orgId) return new Response(JSON.stringify({ ok: false, erro: "org_id não encontrado" }), { status: 500, headers: CORS });
-
-      const sufixo = whatsapp.replace(/\D/g, "").slice(-8);
-      const lRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?select=id,status&org_id=eq.${orgId}&whatsapp=ilike.*${sufixo}&limit=1`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-      );
-      const lRows = await lRes.json();
-      const lead = lRows?.[0] ?? null;
-
-      if (lead) {
-        const now = new Date().toISOString();
-        await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`, {
-          method: "PATCH",
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-          body: JSON.stringify({ status: 3, status_contrato_at: now, ultimo_status_change: now }),
-        });
-        await salvarLog("status_atualizado", { whatsapp, lead_id: lead.id, webhook: webhookNome }, "success", orgId);
-        return new Response(JSON.stringify({ ok: true, mensagem: "Status atualizado para contrato" }), { status: 200, headers: CORS });
-      } else {
-        await salvarLog("lead_nao_encontrado", { whatsapp, sufixo, webhook: webhookNome }, "error", orgId);
-        return new Response(JSON.stringify({ ok: false, erro: "Lead não encontrado pelo WhatsApp" }), { status: 404, headers: CORS });
-      }
-    }
-
-    // ── 4. tipo: receber_lead ──────────────────────────────────
+    // ── 3. receber_lead ────────────────────────────────────────
     const nome = String(body.nome || "");
     const whatsapp = String(body.whatsapp || body.telefone || "");
     const cidade = String(body.cidade || "");
