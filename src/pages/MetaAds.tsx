@@ -613,7 +613,8 @@ export default function MetaAdsPage() {
                   </div>
                 )}
             </div>
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva === true ? 1 : 0.5, pointerEvents: ravenaAtiva === true ? 'auto' : 'none' }}>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva === true ? 1 : 0.5, pointerEvents: ravenaAtiva === true ? 'auto' : 'none' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={lbl}>Investimento mensal</label>
@@ -682,6 +683,7 @@ export default function MetaAdsPage() {
                   ⚠️ Modo agressivo pode pausar campanhas e escalar budgets rapidamente. Monitore diariamente.
                 </div>
               )}
+            </div>
               <button onClick={handleSaveRavena} disabled={savingRavena}
                 style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: savingRavena ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: savingRavena ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: savingRavena ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}>
                 <Save style={{ width: '14px', height: '14px' }} />
