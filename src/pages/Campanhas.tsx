@@ -715,8 +715,6 @@ export default function CampanhasPage() {
         .neq('status', 3).gte('created_at', fallback)
         .order('created_at', { ascending: false }).limit(2500),
     ]).then(([{ data: revsData }, { data: revsFallback }, { data: leadsData }]: any[]) => {
-      console.log('[allLeads fetch] revsData:', revsData?.length, 'revsFallback:', revsFallback?.length, 'leadsData:', leadsData?.length);
-      console.log('[allLeads fetch] revsData items:', revsData?.map((l: any) => ({ id: l.id, utm_source: l.utm_source, status_aprovado_at: l.status_aprovado_at })));
       const combined = [...(revsData || []), ...(revsFallback || []), ...(leadsData || [])];
       if (combined.length) setAllLeads(combined);
     });
@@ -764,7 +762,7 @@ export default function CampanhasPage() {
       });
   },[orgId, orgReady]); // eslint-disable-line
 
-  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_v2_${orgId}_${datePreset}`;const cached=getMetaCache(key);if(cached){setCampaigns(cached);setLoading(false);setError(false);setLastLoadTime(new Date());return;}setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);}setCampaigns(data);setLoading(false);setLastLoadTime(new Date());};
+  const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_v2_${orgId}_${datePreset}`;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);setCampaigns(data);}setLoading(false);setLastLoadTime(new Date());};
   useEffect(()=>{
     if (!metaReady || !orgReady) return;
     load();
@@ -796,13 +794,6 @@ export default function CampanhasPage() {
         default: return Number((l as any).status) === 3;
       }
     });
-    console.log('[filteredRevs FB sem campanha]',
-      result.filter(l => (l as any).utm_source?.toUpperCase() === 'FB' && !(l as any).utm_campaign?.trim()).length
-    );
-    console.log('[allLeads FB sem campanha]',
-      allLeads.filter(l => (l as any).utm_source?.toUpperCase() === 'FB' && !(l as any).utm_campaign?.trim())
-        .map(l => ({ id: (l as any).id, status: (l as any).status, status_aprovado_at: (l as any).status_aprovado_at, utm_source: (l as any).utm_source }))
-    );
     return result;
   }, [allLeads, datePreset]);
 
@@ -1227,14 +1218,6 @@ export default function CampanhasPage() {
       return source === 'FB' || source === 'INSTAGRAM_ORGANICO' || hasCampaign;
     }).length
   ,[filteredRevs]);
-  console.log('[revsCRMTotal]', revsCRMTotal, 'de filteredRevs:', filteredRevs.length,
-    'sem fonte:', filteredRevs.filter(l => {
-      const la = l as any;
-      const source = (la.utm_source||'').toUpperCase();
-      const hasCampaign = (la.utm_campaign||'').trim().length>0;
-      return source !== 'FB' && source !== 'INSTAGRAM_ORGANICO' && !hasCampaign;
-    }).map(l => ({ id: (l as any).id, utm_source: (l as any).utm_source, utm_campaign: (l as any).utm_campaign }))
-  );
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 

@@ -15,7 +15,8 @@ const DELETAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/
 const CRIAR_GESTOR_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-gestor';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
-const PLANOS = ['basic', 'pro'];
+const PLANOS = ['gratuito', 'starter', 'pro'];
+const PLANO_LABELS: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro' };
 
 interface Org {
   id: string;
@@ -43,14 +44,12 @@ export default function AdminPage() {
   const [modalEmail, setModalEmail] = useState('');
   const [modalSenha, setModalSenha] = useState('');
   const [modalPlano, setModalPlano] = useState('starter');
-  const [modalTrialDias, setModalTrialDias] = useState(14);
   const [creating, setCreating] = useState(false);
 
   // ── Edit modal state ──────────────────────────────────────────
   const [editOrg, setEditOrg] = useState<Org | null>(null);
   const [editPlano, setEditPlano] = useState('starter');
-  const [editStatus, setEditStatus] = useState('trialing');
-  const [editTrialDias, setEditTrialDias] = useState(0);
+  const [editStatus, setEditStatus] = useState('free');
   const [editEmail, setEditEmail] = useState('');
   const [editSenha, setEditSenha] = useState('');
   const [editSaving, setEditSaving] = useState(false);
@@ -221,7 +220,7 @@ export default function AdminPage() {
     }
     const startStr = start.toISOString().split('T')[0];
 
-    const TICKETS: Record<string, number> = { basic: 497, pro: 997 };
+    const TICKETS: Record<string, number> = { gratuito: 0, starter: 497, pro: 997 };
 
     const { data: orgsData } = await supabase
       .from('organizations')
@@ -244,18 +243,10 @@ export default function AdminPage() {
     const churn = ativas.length + canceladas.length > 0
       ? Math.round((canceladas.length / (ativas.length + canceladas.length)) * 100) : 0;
 
-    const in7days = new Date(Date.now() + 7 * 86400000);
-    const trialsExpirando = all.filter((o: any) => {
-      const sub = o.subscriptions?.[0];
-      if (sub?.status !== 'trialing' || !sub?.trial_ends_at) return false;
-      const ends = new Date(sub.trial_ends_at);
-      return ends <= in7days && ends > new Date();
-    });
-
     setDashData({
       mrr, lucro, ativas: ativas.length, churn,
       novos: novos.length, totalLeads: totalLeads || 0,
-      ravenaAtiva: ravenaCount || 0, trialsExpirando,
+      ravenaAtiva: ravenaCount || 0,
     });
     setDashLoading(false);
   }
@@ -326,7 +317,6 @@ export default function AdminPage() {
         .single();
 
       if (newOrg?.id) {
-        const trialEndsAt = new Date(Date.now() + modalTrialDias * 86400000).toISOString();
         // 3. Atualiza plano na org
         await supabase.from('organizations').update({ plano: modalPlano }).eq('id', newOrg.id);
         // 4. Cria/atualiza subscription
@@ -336,23 +326,16 @@ export default function AdminPage() {
           .eq('org_id', newOrg.id)
           .limit(1);
         if (existingSub && existingSub.length > 0) {
-          await supabase.from('subscriptions').update({
-            status: 'trialing',
-            trial_ends_at: trialEndsAt,
-          }).eq('id', existingSub[0].id);
+          await supabase.from('subscriptions').update({ status: 'free' }).eq('id', existingSub[0].id);
         } else {
-          await supabase.from('subscriptions').insert({
-            org_id: newOrg.id,
-            status: 'trialing',
-            trial_ends_at: trialEndsAt,
-          });
+          await supabase.from('subscriptions').insert({ org_id: newOrg.id, status: 'free' });
         }
       }
 
-      toast.success(`"${modalNome}" criada! Trial de ${modalTrialDias} dias.`);
+      toast.success(`"${modalNome}" criada com sucesso!`);
       setShowModal(false);
       setModalNome(''); setModalEmail(''); setModalSenha('');
-      setModalPlano('starter'); setModalTrialDias(14);
+      setModalPlano('starter');
       fetchOrgs();
     } catch { toast.error('Erro de conexão'); }
     setCreating(false);
@@ -362,8 +345,7 @@ export default function AdminPage() {
   function openEdit(org: Org) {
     setEditOrg(org);
     setEditPlano(org.plano || 'starter');
-    setEditStatus(org.status || 'trialing');
-    setEditTrialDias(0);
+    setEditStatus(org.status || 'free');
     setEditEmail('');
     setEditSenha('');
   }
@@ -430,17 +412,10 @@ export default function AdminPage() {
     setEditSaving(true);
     try {
       // 1. Salva plano + status
-      const ativo = ['active', 'trialing'].includes(editStatus);
+      const ativo = ['active', 'free'].includes(editStatus);
       await supabase.from('organizations').update({ plano: editPlano, ativo }).eq('id', editOrg.id);
 
-      let trialEndsAt: string | null = editOrg.trial_ends_at || null;
-      if (editTrialDias > 0) {
-        const base = new Date();
-        base.setDate(base.getDate() + editTrialDias);
-        trialEndsAt = base.toISOString();
-      }
       const subPayload: any = { status: editStatus };
-      if (editStatus === 'trialing' && trialEndsAt) subPayload.trial_ends_at = trialEndsAt;
       if (editOrg.sub_id) {
         await supabase.from('subscriptions').update(subPayload).eq('id', editOrg.sub_id);
       } else {
@@ -521,7 +496,6 @@ export default function AdminPage() {
   // ── Métricas ──────────────────────────────────────────────────
   const total = orgs.length;
   const ativas = orgs.filter(o => o.status === 'active').length;
-  const trials = orgs.filter(o => o.status === 'trialing').length;
   const mrr = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // ── Estilos ───────────────────────────────────────────────────
@@ -534,10 +508,11 @@ export default function AdminPage() {
 
   function StatusBadge({ status }: { status?: string | null }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
+      free: { label: 'Gratuito', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
       active: { label: 'Ativo', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-      trialing: { label: 'Trial', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
       inactive: { label: 'Inativo', color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
       canceled: { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+      past_due: { label: 'Inadimplente', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
     };
     const s = map[status || ''] || { label: '—', color: '#71717a', bg: 'rgba(113,113,122,0.12)' };
     return (
@@ -647,7 +622,6 @@ export default function AdminPage() {
             {[
               { label: 'Total de orgs', value: String(total), color: '#3b82f6' },
               { label: 'Ativas', value: String(ativas), color: '#10b981' },
-              { label: 'Em trial', value: String(trials), color: '#f59e0b' },
               { label: 'MRR estimado', value: mrr, color: '#a855f7' },
             ].map(m => (
               <div key={m.label} style={card}>
@@ -681,7 +655,7 @@ export default function AdminPage() {
                       <tr key={org.id} style={{ borderTop: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.05)'}`, background: i % 2 === 0 ? 'transparent' : (dark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)') }}>
                         <td style={{ padding: '12px 16px', color: txt, fontWeight: 500, whiteSpace: 'nowrap' }}>{org.nome}</td>
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.email_admin}</td>
-                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{org.plano}</td>
+                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{PLANO_LABELS[org.plano] ?? org.plano}</td>
                         <td style={{ padding: '12px 16px' }}><StatusBadge status={org.status} /></td>
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
@@ -734,21 +708,6 @@ export default function AdminPage() {
                   }}>{p.label}</button>
                 ))}
               </div>
-
-              {/* Alerta trials expirando */}
-              {dashData?.trialsExpirando?.length > 0 && (
-                <div style={{ padding: '12px 16px', borderRadius: '12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>⚠️</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: dark ? '#fcd34d' : '#92400e' }}>
-                      {dashData.trialsExpirando.length} trial{dashData.trialsExpirando.length !== 1 ? 's' : ''} expira{dashData.trialsExpirando.length !== 1 ? 'm' : ''} em 7 dias
-                    </p>
-                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: dark ? '#fbbf24' : '#b45309' }}>
-                      Considere entrar em contato para converter em plano pago.
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {dashLoading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: txtMid, fontSize: '13px' }}>Carregando métricas…</div>
@@ -922,15 +881,8 @@ export default function AdminPage() {
               <div>
                 <label style={lbl}>Plano</label>
                 <select style={inp} value={modalPlano} onChange={e => setModalPlano(e.target.value)}>
-                  {PLANOS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+                  {PLANOS.map(p => <option key={p} value={p}>{PLANO_LABELS[p] ?? p}</option>)}
                 </select>
-              </div>
-              <div>
-                <label style={lbl}>Dias de trial</label>
-                <input style={inp} type="number" min={0} max={365} value={modalTrialDias} onChange={e => setModalTrialDias(Number(e.target.value))} />
-                <p style={{ fontSize: '11.5px', color: txtMid, margin: '4px 0 0' }}>
-                  Trial expira em: <strong style={{ color: txt }}>{new Date(Date.now() + modalTrialDias * 86400000).toLocaleDateString('pt-BR')}</strong>
-                </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button type="button" onClick={() => setShowModal(false)}
@@ -966,28 +918,17 @@ export default function AdminPage() {
               <div>
                 <label style={lbl}>Plano</label>
                 <select style={inp} value={editPlano} onChange={e => setEditPlano(e.target.value)}>
-                  {PLANOS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
+                  {PLANOS.map(p => <option key={p} value={p}>{PLANO_LABELS[p] ?? p}</option>)}
                 </select>
               </div>
               <div>
                 <label style={lbl}>Status da assinatura</label>
                 <select style={inp} value={editStatus} onChange={e => setEditStatus(e.target.value)}>
-                  <option value="trialing">Trial</option>
+                  <option value="free">Gratuito</option>
                   <option value="active">Ativo</option>
                   <option value="past_due">Inadimplente</option>
                 </select>
               </div>
-              {editStatus === 'trialing' && (
-                <div>
-                  <label style={lbl}>Dias de trial (a partir de hoje)</label>
-                  <input style={inp} type="number" min={0} max={365} value={editTrialDias} onChange={e => setEditTrialDias(Number(e.target.value))} placeholder="0 = mantém data atual" />
-                  {editTrialDias > 0 && (
-                    <p style={{ fontSize: '11.5px', color: txtMid, margin: '4px 0 0' }}>
-                      Novo trial expira em: <strong style={{ color: '#10b981' }}>{(() => { const d = new Date(); d.setDate(d.getDate() + editTrialDias); return d.toLocaleDateString('pt-BR'); })()}</strong>
-                    </p>
-                  )}
-                </div>
-              )}
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button type="button" onClick={() => setEditOrg(null)}
                   style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>
