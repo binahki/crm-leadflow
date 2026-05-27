@@ -7,7 +7,13 @@ import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 
-const BASE_URL = `https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead`;
+const URL_RECEBER_LEAD = `https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead`;
+const URL_WEBHOOK      = `https://obguidmfvfjaekaskgob.functions.supabase.co/webhook`;
+
+function getWebhookUrl(nome: string, token: string | null): string {
+  const base = nome === 'Principal' ? URL_RECEBER_LEAD : URL_WEBHOOK;
+  return token ? `${base}?token=${token}` : base;
+}
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 interface WebhookLog {
@@ -122,8 +128,8 @@ export default function WebhookPage() {
     setEditingId(null);
   }
 
-  function copyWebhookUrl(id: string, token: string | null) {
-    const u = token ? `${BASE_URL}?token=${token}` : BASE_URL;
+  function copyWebhookUrl(id: string, token: string | null, nome: string) {
+    const u = getWebhookUrl(nome, token);
     navigator.clipboard.writeText(u);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -216,7 +222,7 @@ export default function WebhookPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {webhooks.map(wh => {
-                const whUrl = wh.token ? `${BASE_URL}?token=${wh.token}` : BASE_URL;
+                const whUrl = getWebhookUrl(wh.nome, wh.token);
                 const isEditing  = editingId === wh.id;
                 const isCopied   = copiedId === wh.id;
                 const isToggling = togglingId === wh.id;
@@ -278,7 +284,7 @@ export default function WebhookPage() {
                           {whUrl}
                         </span>
                         <button
-                          onClick={() => copyWebhookUrl(wh.id, wh.token)}
+                          onClick={() => copyWebhookUrl(wh.id, wh.token, wh.nome)}
                           style={{
                             flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px',
                             padding: '4px 10px', borderRadius: '6px',
