@@ -24,7 +24,6 @@ interface Webhook {
   token: string;
   ativo: boolean;
   created_at: string;
-  isPrincipal?: boolean;
 }
 
 export default function WebhookPage() {
@@ -34,7 +33,6 @@ export default function WebhookPage() {
   const { orgId, ready: orgReady } = useOrgId();
 
   const [logs, setLogs] = useState<WebhookLog[]>([]);
-  const [webhookToken, setWebhookToken] = useState<string | null>(null);
   const [usaQuizExterno, setUsaQuizExterno] = useState(false);
   const [scoreVerde, setScoreVerde] = useState(35);
   const [scoreAmarelo, setScoreAmarelo] = useState(25);
@@ -53,9 +51,6 @@ export default function WebhookPage() {
 
   useEffect(() => {
     if (!orgReady || !orgId) return;
-
-    supabase.from('configuracoes_whatsapp').select('webhook_token').eq('org_id', orgId).single()
-      .then(({ data }) => { if (data) setWebhookToken((data as any).webhook_token || null); });
 
     supabase.from('organizations').select('usa_quiz_externo, score_corte_verde, score_corte_amarelo').eq('id', orgId).single()
       .then(({ data }) => {
@@ -168,16 +163,6 @@ export default function WebhookPage() {
     boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.06)',
   };
 
-  // ── Webhook list ───────────────────────────────────────────
-  const principalItem: Webhook | null = webhookToken !== undefined ? {
-    id: 'principal', nome: 'Principal', token: webhookToken || '',
-    ativo: true, tipo: 'receber_lead', created_at: '', isPrincipal: true,
-  } : null;
-  const allWebhooks: Webhook[] = [
-    ...(principalItem ? [principalItem] : []),
-    ...webhooks.map(w => ({ ...w, isPrincipal: false })),
-  ];
-
   function fmtData(d: string) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -202,9 +187,9 @@ export default function WebhookPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <h2 style={{ fontSize: '14px', fontWeight: 600, color: txt, margin: 0, letterSpacing: '-0.01em' }}>
               Meus Webhooks
-              {!loadingWebhooks && allWebhooks.length > 0 && (
+              {!loadingWebhooks && webhooks.length > 0 && (
                 <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 500, color: txtMid, background: dark ? '#27272a' : '#f4f4f5', padding: '2px 7px', borderRadius: '99px' }}>
-                  {allWebhooks.length}
+                  {webhooks.length}
                 </span>
               )}
             </h2>
@@ -224,13 +209,13 @@ export default function WebhookPage() {
                 <div key={i} style={{ height: '108px', borderRadius: '12px', background: dark ? '#18181b' : '#f8fafc', border: `1px solid ${border}`, animation: 'wh-pulse 1.5s ease-in-out infinite' }} />
               ))}
             </div>
-          ) : allWebhooks.length === 0 ? (
+          ) : webhooks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', background: dark ? '#111113' : '#fff', border: `1px solid ${border}`, borderRadius: '12px' }}>
               <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>Nenhum webhook. Clique em "Criar novo webhook" para começar.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {allWebhooks.map(wh => {
+              {webhooks.map(wh => {
                 const whUrl = wh.token ? `${BASE_URL}?token=${wh.token}` : BASE_URL;
                 const isEditing  = editingId === wh.id;
                 const isCopied   = copiedId === wh.id;
@@ -268,13 +253,13 @@ export default function WebhookPage() {
 
                       {/* Right: toggle */}
                       <button
-                        onClick={() => !wh.isPrincipal && !isToggling && toggleWebhook(wh)}
-                        disabled={!!wh.isPrincipal || isToggling}
-                        title={wh.isPrincipal ? 'Webhook principal sempre ativo' : (wh.ativo ? 'Pausar' : 'Ativar')}
+                        onClick={() => !isToggling && toggleWebhook(wh)}
+                        disabled={isToggling}
+                        title={wh.ativo ? 'Pausar' : 'Ativar'}
                         style={{
                           flexShrink: 0, width: '36px', height: '20px', borderRadius: '99px', border: 'none',
                           background: wh.ativo ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'),
-                          position: 'relative', cursor: wh.isPrincipal ? 'default' : 'pointer',
+                          position: 'relative', cursor: 'pointer',
                           transition: 'background 0.2s', opacity: isToggling ? 0.6 : 1,
                         }}
                       >
@@ -318,7 +303,7 @@ export default function WebhookPage() {
                         Criado em {fmtData(wh.created_at)}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {!wh.isPrincipal && !isEditing && (
+                        {!isEditing && (
                           <button
                             onClick={() => { setEditingId(wh.id); setEditNome(wh.nome); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: '7px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}
@@ -328,18 +313,16 @@ export default function WebhookPage() {
                           </button>
                         )}
                         <button
-                          onClick={() => !wh.isPrincipal && setDeleteId(wh.id)}
-                          disabled={!!wh.isPrincipal}
-                          title={wh.isPrincipal ? 'Webhook principal não pode ser excluído' : 'Excluir webhook'}
+                          onClick={() => setDeleteId(wh.id)}
+                          title="Excluir webhook"
                           style={{
                             display: 'flex', alignItems: 'center', gap: '5px',
                             padding: '5px 10px', borderRadius: '7px',
-                            border: `1px solid ${wh.isPrincipal ? border : 'rgba(239,68,68,0.3)'}`,
+                            border: '1px solid rgba(239,68,68,0.3)',
                             background: 'transparent',
-                            color: wh.isPrincipal ? txtMid : '#ef4444',
+                            color: '#ef4444',
                             fontSize: '12px', fontWeight: 500,
-                            cursor: wh.isPrincipal ? 'not-allowed' : 'pointer',
-                            opacity: wh.isPrincipal ? 0.4 : 1,
+                            cursor: 'pointer',
                             fontFamily: FONT,
                           }}
                         >
