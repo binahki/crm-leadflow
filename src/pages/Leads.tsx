@@ -1748,12 +1748,12 @@ function LeadsPage() {
               <div>
                 <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Origem</label>
                 <select
-                  value={
-                    ['Indicação','Tráfego Pago','Instagram Orgânico','Retorno','Manual','Outro']
-                      .includes((editingLead as any).utm_source || '')
-                      ? ((editingLead as any).utm_source || '')
-                      : (editingLead as any).utm_source ? 'Outro' : ''
-                  }
+                  value={(() => {
+                    const src = (editingLead as any).utm_source || '';
+                    if (src === 'FB') return 'Tráfego Pago';
+                    if (src === 'instagram_organico') return 'Instagram Orgânico';
+                    return ['Indicação','Tráfego Pago','Instagram Orgânico','Retorno','Manual','Outro'].includes(src) ? src : src ? 'Outro' : '';
+                  })()}
                   onChange={e => {
                     const val = e.target.value;
                     setEditingLead(l => l && ({
