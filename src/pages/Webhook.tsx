@@ -33,7 +33,7 @@ interface Webhook {
 }
 
 export default function WebhookPage() {
-  const { leads } = useAppStore();
+  const { leads, setConfiguracoes, configuracoes } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { orgId, ready: orgReady } = useOrgId();
@@ -144,8 +144,13 @@ export default function WebhookPage() {
       score_corte_amarelo: scoreAmarelo,
     }).eq('id', orgId);
     setSavingScore(false);
-    if (error) toast.error('Erro ao salvar configurações');
-    else toast.success('Configurações salvas!');
+    if (error) {
+      toast.error('Erro ao salvar configurações');
+    } else {
+      const base = configuracoes || { campos_perfil: [], faixas_score: { travas: [], vermelho_se_todas: false } };
+      setConfiguracoes({ ...base, score_corte_verde: scoreVerde, score_corte_amarelo: scoreAmarelo } as any);
+      toast.success('Configurações salvas!');
+    }
   };
 
   // ── Style tokens ───────────────────────────────────────────

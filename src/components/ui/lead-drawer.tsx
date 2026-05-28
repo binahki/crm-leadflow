@@ -748,23 +748,26 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 if (raw) respostas = typeof raw === 'string' ? JSON.parse(raw) : raw;
               } catch { respostas = null; }
               if (!respostas) return null;
-              const REUNIAO_LABELS: Record<string, string> = {
-                quantos_anos_de_garantia: 'Anos de garantia das peças',
-                aplicativo: 'Conhece o aplicativo',
-                quanto_tempo_pra_vender: 'Tempo para começar a vender',
-                valor_minimo: 'Valor mínimo para começar',
-                perguntas: 'Observações / Perguntas',
-              };
-              const campos = Object.entries(respostas).filter(([k, v]) => v !== null && v !== undefined && v !== '' && REUNIAO_LABELS[k]);
-              if (campos.length === 0) return null;
+              // Formato esperado: { key: { pergunta: "Label", resposta: "Valor" } }
+              const entries = Object.entries(respostas)
+                .filter(([, v]) => {
+                  if (!v || typeof v !== 'object') return false;
+                  const obj = v as any;
+                  return obj.resposta !== null && obj.resposta !== undefined && String(obj.resposta).trim() !== '';
+                })
+                .map(([k, v]) => {
+                  const obj = v as any;
+                  return { key: k, pergunta: String(obj.pergunta || k), resposta: String(obj.resposta) };
+                });
+              if (entries.length === 0) return null;
               return (
                 <Section openKey="reuniao" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                   icon={<Monitor style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Reunião de Onboarding">
                   <div style={{ marginBottom: '4px' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>✓ Participou</span>
                   </div>
-                  {campos.map(([k, v]) => (
-                    <Field key={k} label={REUNIAO_LABELS[k]} value={formatValue(v)} dark={dark} />
+                  {entries.map(({ key, pergunta, resposta }) => (
+                    <Field key={key} label={pergunta} value={resposta} dark={dark} />
                   ))}
                 </Section>
               );
