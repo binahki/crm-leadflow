@@ -1017,19 +1017,7 @@ function LeadsPage() {
     if (!orgId) return;
     (async () => {
       const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
-      if (!tagsData?.length) { setLeadTagsMap(new Map()); orgTagsRef.current = []; return; }
-      orgTagsRef.current = tagsData as OrgTag[];
-      const tagIds = tagsData.map((t: any) => t.id);
-      const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
-      const tagById = new Map(tagsData.map((t: any) => [t.id, t]));
-      const result = new Map<string, OrgTag[]>();
-      for (const row of (lt || [])) {
-        const tag = tagById.get(row.tag_id);
-        if (!tag) continue;
-        if (!result.has(row.lead_id)) result.set(row.lead_id, []);
-        result.get(row.lead_id)!.push(tag as OrgTag);
-      }
-      setLeadTagsMap(result);
+      orgTagsRef.current = (tagsData || []) as OrgTag[];
     })();
   }, [orgId]); // eslint-disable-line
 
