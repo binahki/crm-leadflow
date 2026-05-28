@@ -33,6 +33,27 @@ export function useTags(orgId: string | null) {
 
   useEffect(() => { fetchTags(); }, [orgId]); // eslint-disable-line
 
+  // Realtime: keep all hook instances in sync when tags are created/updated/deleted
+  useEffect(() => {
+    if (!orgId) return;
+    const ch = (supabase as any)
+      .channel(`tags-org-${orgId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tags', filter: `org_id=eq.${orgId}` }, (p: any) => {
+        const newTag = p.new as Tag;
+        setTags(prev => prev.find(t => t.id === newTag.id) ? prev : [...prev, newTag]);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tags', filter: `org_id=eq.${orgId}` }, (p: any) => {
+        const updated = p.new as Tag;
+        setTags(prev => prev.map(t => t.id === updated.id ? updated : t));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tags' }, (p: any) => {
+        const deletedId = (p.old as { id: string }).id;
+        setTags(prev => prev.filter(t => t.id !== deletedId));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [orgId]); // eslint-disable-line
+
   async function createTag(nome: string, cor: string): Promise<Tag | null> {
     if (!orgId) return null;
     const { data, error } = await (supabase as any)
@@ -41,7 +62,8 @@ export function useTags(orgId: string | null) {
       .select('*')
       .single();
     if (error || !data) return null;
-    setTags(prev => [...prev, data]);
+    // Realtime INSERT will update state; optimistic update for responsiveness
+    setTags(prev => prev.find(t => t.id === data.id) ? prev : [...prev, data]);
     return data as Tag;
   }
 
@@ -52,6 +74,7 @@ export function useTags(orgId: string | null) {
 
   async function deleteTag(id: string) {
     const { error } = await (supabase as any).from('tags').delete().eq('id', id);
+    // Realtime DELETE will update all instances; optimistic update for responsiveness
     if (!error) setTags(prev => prev.filter(t => t.id !== id));
   }
 

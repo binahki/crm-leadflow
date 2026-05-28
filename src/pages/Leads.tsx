@@ -1032,13 +1032,8 @@ function LeadsPage() {
     return () => { supabase.removeChannel(ch); };
   }, [orgId, orgReady]);
 
-  useEffect(() => {
-    if (!orgId) return;
-    (async () => {
-      const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
-      orgTagsRef.current = (tagsData || []) as OrgTag[];
-    })();
-  }, [orgId]); // eslint-disable-line
+  // Keep orgTagsRef in sync with orgTags state (which is updated via realtime in useTags)
+  useEffect(() => { orgTagsRef.current = orgTags; }, [orgTags]);
 
   useEffect(() => {
     if (!orgId) return;

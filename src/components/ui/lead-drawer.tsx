@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
-  MessageCircle, Monitor,
+  MessageCircle, Monitor, Trash2,
 } from 'lucide-react';
 import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
@@ -566,6 +566,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
+          <button onClick={() => setShowDel(true)} style={{ position: 'absolute', top: '16px', right: '50px', width: '26px', height: '26px', background: dark ? 'rgba(220,38,38,0.15)' : '#fee2e2', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(220,38,38,0.25)' : '#fcd5d5')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(220,38,38,0.15)' : '#fee2e2')} title="Excluir Lead">
+            <Trash2 style={{ width: '12px', height: '12px', color: '#ef4444' }} />
+          </button>
           <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', width: '26px', height: '26px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)')}>
             <X style={{ width: '12px', height: '12px', color: dark ? '#52525b' : '#6b7280' }} />
           </button>
