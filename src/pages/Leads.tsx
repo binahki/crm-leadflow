@@ -444,65 +444,138 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
 }
 
 // ── Bulk Tag Modal ────────────────────────────────────────────────────────────
-function BulkTagModal({ dark, tags, selectedCount, onApply, onClose }: {
+type BulkTagOp  = { tagId: string; leadIds: string[] };
+type BulkTagOps = { add: BulkTagOp[]; remove: BulkTagOp[] };
+
+function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, onClose }: {
   dark: boolean;
   tags: OrgTag[];
+  ids: string[];
+  leadTagsMap: Map<string, OrgTag[]>;
   selectedCount: number;
-  onApply: (tagIds: string[]) => Promise<void>;
+  onApply: (ops: BulkTagOps) => Promise<void>;
   onClose: () => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [applying, setApplying] = useState(false);
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#71717a' : '#6b7280';
   const bg = dark ? '#111113' : '#fff';
 
-  function toggle(id: string) {
-    const n = new Set(selected);
-    n.has(id) ? n.delete(id) : n.add(id);
-    setSelected(n);
+  // Computed once on mount: for each tag, how many selected leads currently have it
+  const origState = useMemo(() => {
+    const m = new Map<string, 'all' | 'some' | 'none'>();
+    tags.forEach(tag => {
+      const count = ids.filter(id => (leadTagsMap.get(id) || []).some(t => t.id === tag.id)).length;
+      m.set(tag.id, count === 0 ? 'none' : count === ids.length ? 'all' : 'some');
+    });
+    return m;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // desired: null = unchanged | true = add to all | false = remove from all
+  const [desired, setDesired] = useState<Map<string, boolean | null>>(() => new Map());
+  const [applying, setApplying] = useState(false);
+
+  function getVisual(tagId: string, prev: Map<string, boolean | null>): 'checked' | 'indeterminate' | 'unchecked' {
+    const d = prev.get(tagId) ?? null;
+    if (d === true) return 'checked';
+    if (d === false) return 'unchecked';
+    const orig = origState.get(tagId) ?? 'none';
+    if (orig === 'all') return 'checked';
+    if (orig === 'some') return 'indeterminate';
+    return 'unchecked';
   }
 
+  function clickTag(tagId: string) {
+    setDesired(prev => {
+      const n = new Map(prev);
+      const vis = getVisual(tagId, prev);
+      const orig = origState.get(tagId) ?? 'none';
+      if (vis === 'checked') {
+        n.set(tagId, orig === 'none' ? null : false);  // checked → unchecked
+      } else {
+        n.set(tagId, orig === 'all' ? null : true);    // indet/unchecked → checked
+      }
+      return n;
+    });
+  }
+
+  const hasChanges = Array.from(desired.values()).some(v => v !== null);
+
   async function handleApply() {
+    const add: BulkTagOp[] = [];
+    const remove: BulkTagOp[] = [];
+    tags.forEach(tag => {
+      const d = desired.get(tag.id) ?? null;
+      if (d === null) return;
+      if (d === true) {
+        const missing = ids.filter(id => !(leadTagsMap.get(id) || []).some(t => t.id === tag.id));
+        if (missing.length) add.push({ tagId: tag.id, leadIds: missing });
+      } else {
+        const having = ids.filter(id => (leadTagsMap.get(id) || []).some(t => t.id === tag.id));
+        if (having.length) remove.push({ tagId: tag.id, leadIds: having });
+      }
+    });
     setApplying(true);
-    await onApply(Array.from(selected));
+    await onApply({ add, remove });
     setApplying(false);
   }
 
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }}/>
-      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'16px', width:'90%', maxWidth:'380px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.6)':'0 12px 40px rgba(0,0,0,0.15)', fontFamily:'inherit', overflow:'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'16px', width:'90%', maxWidth:'400px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.6)':'0 12px 40px rgba(0,0,0,0.15)', fontFamily:'inherit', overflow:'hidden' }}>
         <div style={{ padding:'16px 20px', borderBottom:`1px solid ${border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
             <Tag style={{ width:'16px', height:'16px', color:'#8b5cf6' }}/>
-            <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Aplicar tags em {selectedCount} lead{selectedCount !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Tags — {selectedCount} lead{selectedCount !== 1 ? 's' : ''}</span>
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
         </div>
+
         {tags.length === 0 ? (
-          <div style={{ padding:'32px', textAlign:'center', color:txtMid, fontSize:'13px' }}>Nenhuma tag criada. Crie tags no perfil de um lead.</div>
+          <div style={{ padding:'32px', textAlign:'center', color:txtMid, fontSize:'13px' }}>Nenhuma tag criada.</div>
         ) : (
-          <div style={{ padding:'14px 16px', display:'flex', flexWrap:'wrap', gap:'8px', maxHeight:'240px', overflowY:'auto' }}>
+          <div style={{ padding:'8px', maxHeight:'300px', overflowY:'auto' }}>
             {tags.map(tag => {
-              const active = selected.has(tag.id);
+              const vis = getVisual(tag.id, desired);
+              const orig = origState.get(tag.id) ?? 'none';
+              const d = desired.get(tag.id) ?? null;
+              const countWith = ids.filter(id => (leadTagsMap.get(id) || []).some(t => t.id === tag.id)).length;
+              const isActive = vis !== 'unchecked';
               return (
-                <button key={tag.id} onClick={() => toggle(tag.id)}
-                  style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'6px 12px', borderRadius:'99px', border:`2px solid ${active ? tag.cor : (dark ? '#3f3f46' : '#d1d5db')}`, background:active ? tag.cor + '22' : 'transparent', color:active ? tag.cor : txtMid, fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.12s' }}>
-                  {active && <Check style={{ width:'11px', height:'11px' }}/>}
-                  <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
-                  {tag.nome}
+                <button key={tag.id} onClick={() => clickTag(tag.id)}
+                  style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'9px', border:'none', background:isActive?(dark?'rgba(139,92,246,0.08)':'#f5f3ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'2px' }}>
+                  <div style={{ width:'16px', height:'16px', borderRadius:'4px', border:`2px solid ${isActive?'#8b5cf6':(dark?'#3f3f46':'#d1d5db')}`, background:isActive?'#8b5cf6':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.12s' }}>
+                    {vis === 'checked'       && <Check style={{ width:'10px', height:'10px', color:'#fff' }}/>}
+                    {vis === 'indeterminate' && <div style={{ width:'8px', height:'2px', background:'#fff', borderRadius:'1px' }}/>}
+                  </div>
+                  <span style={{ flex:1, display:'flex', alignItems:'center', gap:'6px', minWidth:0 }}>
+                    <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
+                    <span style={{ fontSize:'13px', fontWeight:600, color:isActive?(dark?'#c4b5fd':'#7c3aed'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{tag.nome}</span>
+                  </span>
+                  <span style={{ fontSize:'11px', flexShrink:0, whiteSpace:'nowrap',
+                    color: d !== null ? (d ? '#8b5cf6' : '#ef4444') : txtMid }}>
+                    {d !== null
+                      ? (d ? '+ todos' : '− todos')
+                      : orig === 'some' ? `${countWith}/${ids.length}`
+                      : orig === 'all'  ? 'todos'
+                      : ''}
+                  </span>
                 </button>
               );
             })}
           </div>
         )}
-        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, display:'flex', gap:'8px' }}>
+
+        <div style={{ padding:'8px 14px 0', display:'flex', alignItems:'center', gap:'12px', fontSize:'10.5px', color:txtMid }}>
+          <span>✓ todos</span><span>— alguns</span><span>□ nenhum</span>
+        </div>
+
+        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, marginTop:'8px', display:'flex', gap:'8px' }}>
           <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
-          <button onClick={handleApply} disabled={selected.size === 0 || applying}
-            style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:selected.size === 0 ? (dark?'#27272a':'#e5e7eb') : '#8b5cf6', color:selected.size === 0 ? txtMid : '#fff', fontSize:'13px', fontWeight:500, cursor:selected.size === 0 ? 'default' : 'pointer', fontFamily:'inherit' }}>
-            {applying ? 'Aplicando…' : selected.size > 0 ? `Aplicar ${selected.size} tag${selected.size !== 1 ? 's' : ''}` : 'Selecione tags'}
+          <button onClick={handleApply} disabled={applying}
+            style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:hasChanges?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:hasChanges?'#fff':txtMid, fontSize:'13px', fontWeight:500, cursor:applying?'not-allowed':'pointer', fontFamily:'inherit' }}>
+            {applying ? 'Aplicando…' : hasChanges ? 'Confirmar' : 'Sem alterações'}
           </button>
         </div>
       </div>
@@ -1279,31 +1352,51 @@ function LeadsPage() {
     }
   }
 
-  async function handleBulkTag(tagIds: string[]) {
-    if (!tagIds.length) return;
-    const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+  async function handleBulkTag(ops: BulkTagOps) {
+    if (ops.add.length === 0 && ops.remove.length === 0) { setShowBulkTagModal(false); return; }
     setBulkLoading(true);
     try {
-      const rows = ids.flatMap(leadId => tagIds.map(tagId => ({ lead_id: leadId, tag_id: tagId })));
-      const CHUNK = 500;
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        await (supabase as any).from('lead_tags').upsert(rows.slice(i, i + CHUNK), { onConflict: 'lead_id,tag_id' });
+      for (const { tagId, leadIds } of ops.add) {
+        if (!leadIds.length) continue;
+        const rows = leadIds.map(leadId => ({ lead_id: leadId, tag_id: tagId }));
+        const CHUNK = 500;
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await (supabase as any).from('lead_tags').upsert(rows.slice(i, i + CHUNK), { onConflict: 'lead_id,tag_id' });
+        }
       }
-      const tagObjs = orgTags.filter(t => tagIds.includes(t.id));
+      for (const { tagId, leadIds } of ops.remove) {
+        if (!leadIds.length) continue;
+        await (supabase as any).from('lead_tags').delete().in('lead_id', leadIds).eq('tag_id', tagId);
+      }
       setLeadTagsMap(prev => {
         const next = new Map(prev);
-        ids.forEach(leadId => {
-          const existing = next.get(leadId) || [];
-          const toAdd = tagObjs.filter(t => !existing.find(e => e.id === t.id));
-          if (toAdd.length) next.set(leadId, [...existing, ...toAdd]);
-        });
+        for (const { tagId, leadIds } of ops.add) {
+          const tagObj = orgTags.find(t => t.id === tagId);
+          if (!tagObj) continue;
+          leadIds.forEach(leadId => {
+            const existing = next.get(leadId) || [];
+            if (!existing.find(t => t.id === tagId)) next.set(leadId, [...existing, tagObj]);
+          });
+        }
+        for (const { tagId, leadIds } of ops.remove) {
+          leadIds.forEach(leadId => {
+            const existing = next.get(leadId);
+            if (!existing) return;
+            const updated = existing.filter(t => t.id !== tagId);
+            if (updated.length === 0) next.delete(leadId); else next.set(leadId, updated);
+          });
+        }
         return next;
       });
-      toast.success(`Tags aplicadas em ${ids.length} lead${ids.length !== 1 ? 's' : ''}!`);
+      const a = ops.add.length, r = ops.remove.length;
+      const parts: string[] = [];
+      if (a) parts.push(`${a} tag${a !== 1 ? 's' : ''} adicionada${a !== 1 ? 's' : ''}`);
+      if (r) parts.push(`${r} tag${r !== 1 ? 's' : ''} removida${r !== 1 ? 's' : ''}`);
+      toast.success(parts.join(' e ') + '!');
       setSelectedIds(new Set());
       setAllSystemSelected(false);
     } catch {
-      toast.error('Erro ao aplicar tags');
+      toast.error('Erro ao atualizar tags');
     } finally {
       setBulkLoading(false);
       setShowBulkTagModal(false);
@@ -1829,6 +1922,8 @@ function LeadsPage() {
         <BulkTagModal
           dark={dark}
           tags={orgTags}
+          ids={allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds)}
+          leadTagsMap={leadTagsMap}
           selectedCount={activeBulkCount}
           onApply={handleBulkTag}
           onClose={() => setShowBulkTagModal(false)}
