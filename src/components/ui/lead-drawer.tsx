@@ -276,6 +276,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const [showMotivo, setShowMotivo] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<Array<{ ordem: number; texto: string }>>([]);
 
   // ── Tags ──────────────────────────────────────────────────────
@@ -406,6 +407,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       setShowMotivo(false);
       setPendingStatus(null);
       setActiveSection(null);
+      setStatusOpen(false);
     }
   }, [lead?.id]);
 
@@ -433,7 +435,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     if (newStatus === 6) updates.motivo_reprovacao = null;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); setAvaliado(avaliado); toast.error('Erro ao atualizar status'); }
-    else { onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
+    else { setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
   }
 
   function handleStatus(i: number) {
@@ -588,55 +590,64 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
-        {/* Status + Tags */}
-        <div style={{ padding: '12px 22px', flexShrink: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-          {/* Status list */}
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px', fontFamily: FONT }}>Status</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {/* Tags — livres, logo após avaliado */}
+        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {leadTags.map(tag => (
+              <span key={tag.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '3px 9px', borderRadius: '99px', fontSize: '11.5px', fontWeight: 600, color: tag.cor, background: tag.cor + '20', border: `1px solid ${tag.cor}40`, whiteSpace: 'nowrap' }}>
+                {tag.nome}
+                <button onClick={() => removeLeadTag(tag.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center', opacity: 0.6 }}>
+                  <X style={{ width: '9px', height: '9px' }} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => { setShowTagDropdown(true); setTagSearch(''); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '3px 9px', borderRadius: '99px', fontSize: '11.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? '#3f3f46' : '#d1d5db'}`, cursor: 'pointer', fontFamily: FONT }}
+            >+ tag</button>
+            <button
+              onClick={() => setShowTagManager(true)}
+              style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: '2px 0' }}
+            >Gerenciar</button>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
+
+        {/* Status — accordion */}
+        <div style={{ padding: '8px 22px', flexShrink: 0 }}>
+          {/* Trigger: mostra status atual */}
+          <button
+            onClick={() => setStatusOpen(v => !v)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', cursor: 'pointer', fontFamily: FONT, transition: 'background 0.15s' }}
+          >
+            {(() => { const s = STATUS.find(s => s.id === status); return s ? <>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: dark ? s.darkText : s.text, textAlign: 'left' }}>{s.label}</span>
+            </> : null; })()}
+            <ChevronDown style={{ width: '14px', height: '14px', color: dark ? '#52525b' : '#9ca3af', transform: statusOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
+          </button>
+          {/* Lista expandida */}
+          {statusOpen && (
+            <div style={{ marginTop: '4px', padding: '4px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' }}>
               {STATUS.map(s => {
                 const active = status === s.id;
                 return (
-                  <button key={s.id} onClick={() => handleStatus(s.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: `1px solid ${active ? (dark ? 'rgba(255,255,255,0.1)' : s.border) : 'transparent'}`, background: active ? (dark ? s.darkBg : s.bg) : 'transparent', color: active ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280'), fontSize: '12.5px', fontWeight: active ? 600 : 400, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, transition: 'all 0.15s', width: '100%' }}>
+                  <button key={s.id} onClick={() => handleStatus(s.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 10px', borderRadius: '8px', border: 'none', background: active ? (dark ? s.darkBg : s.bg) : 'transparent', color: active ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280'), fontSize: '13px', fontWeight: active ? 600 : 400, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, transition: 'all 0.13s' }}>
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
                     <span style={{ flex: 1 }}>{s.label}</span>
-                    {active && <Check style={{ width: '11px', height: '11px', strokeWidth: 2.5, flexShrink: 0 }} />}
+                    {active && <Check style={{ width: '12px', height: '12px', strokeWidth: 2.5, flexShrink: 0 }} />}
                   </button>
                 );
               })}
             </div>
-            {status === 4 && lead.motivo_reprovacao && (
-              <div style={{ marginTop: '6px', padding: '6px 10px', borderRadius: '7px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
-                <span style={{ fontSize: '11.5px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div style={{ width: '1px', alignSelf: 'stretch', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', flexShrink: 0 }} />
-
-          {/* Tags */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
-              <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0, fontFamily: FONT }}>Tags</p>
-              <button onClick={() => setShowTagManager(true)} style={{ marginLeft: 'auto', fontSize: '10.5px', color: dark ? '#52525b' : '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: 0 }}>Gerenciar</button>
+          )}
+          {status === 4 && lead.motivo_reprovacao && (
+            <div style={{ marginTop: '6px', padding: '6px 10px', borderRadius: '7px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
+              <span style={{ fontSize: '11.5px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-              {leadTags.map(tag => (
-                <span key={tag.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: tag.cor, background: tag.cor + '20', border: `1px solid ${tag.cor}40`, whiteSpace: 'nowrap' }}>
-                  {tag.nome}
-                  <button onClick={() => removeLeadTag(tag.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center', opacity: 0.7 }}>
-                    <X style={{ width: '9px', height: '9px' }} />
-                  </button>
-                </span>
-              ))}
-              <button
-                onClick={() => { setShowTagDropdown(v => !v); setTagSearch(''); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: dark ? '#71717a' : '#9ca3af', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, cursor: 'pointer', fontFamily: FONT }}
-              >+ Add</button>
-            </div>
-          </div>
+          )}
         </div>
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
@@ -771,13 +782,13 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         @keyframes ld-up { from{opacity:0;transform:translate(-50%,-48%) scale(0.96)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
       `}</style>
 
-      {/* Tag dropdown portal */}
+      {/* Tag dropdown portal — modal centralizado */}
       {showTagDropdown && createPortal(
         <>
-          <div onClick={() => setShowTagDropdown(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
-          <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '18px 18px 0 0', padding: '16px', width: '100%', maxWidth: '480px', maxHeight: '72vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 32px rgba(0,0,0,0.25)', fontFamily: FONT }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827' }}>Adicionar tag</span>
+          <div onClick={() => setShowTagDropdown(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '16px', padding: '16px', width: 'calc(100vw - 48px)', maxWidth: '360px', maxHeight: '60vh', display: 'flex', flexDirection: 'column', boxShadow: dark ? '0 24px 60px rgba(0,0,0,0.6)' : '0 12px 40px rgba(0,0,0,0.15)', fontFamily: FONT }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '13.5px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827' }}>Adicionar tag</span>
               <button onClick={() => setShowTagDropdown(false)} style={{ width: '26px', height: '26px', borderRadius: '50%', border: 'none', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dark ? '#71717a' : '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X style={{ width: '12px', height: '12px' }} />
               </button>
@@ -787,7 +798,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
               placeholder="Buscar tag..."
               value={tagSearch}
               onChange={e => setTagSearch(e.target.value)}
-              style={{ padding: '8px 10px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f8fafc', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT, marginBottom: '8px' }}
+              style={{ padding: '8px 10px', borderRadius: '9px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f8fafc', color: dark ? '#f4f4f5' : '#111827', fontSize: '13px', outline: 'none', fontFamily: FONT, marginBottom: '8px', flexShrink: 0 }}
             />
             <div style={{ overflow: 'auto', flex: 1 }}>
               {orgTags.filter(t => !tagSearch || t.nome.toLowerCase().includes(tagSearch.toLowerCase())).map(tag => {
@@ -803,7 +814,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
               })}
               {orgTags.filter(t => !tagSearch || t.nome.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
                 <p style={{ textAlign: 'center', fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', padding: '16px 0', margin: 0 }}>
-                  {orgTags.length === 0 ? 'Nenhuma tag criada. Use "Gerenciar tags" para criar.' : 'Nenhuma tag encontrada'}
+                  {orgTags.length === 0 ? 'Nenhuma tag. Use "Gerenciar" para criar.' : 'Nenhuma tag encontrada'}
                 </p>
               )}
             </div>
