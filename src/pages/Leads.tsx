@@ -1763,7 +1763,7 @@ function LeadsPage() {
         </DialogContent>
       </Dialog>
 
-      <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={() => setViewingLead(null)} onUpdate={updated => { updateLead(updated.id, updated); setAllLeads(prev => prev.map(l => l.id === updated.id ? updated : l)); setViewingLead(updated); }}/>
+      <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={() => setViewingLead(null)} onUpdate={updated => { updateLead(updated.id, updated); setAllLeads(prev => prev.map(l => l.id === updated.id ? updated : l)); setViewingLead(updated); }} onTagsChange={(leadId, tags) => setLeadTagsMap(prev => { const next = new Map(prev); if (tags.length === 0) next.delete(leadId); else next.set(leadId, tags); return next; })}/>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     </AppLayout>
   );

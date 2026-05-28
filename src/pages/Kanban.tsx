@@ -546,6 +546,7 @@ export default function KanbanPage() {
 
       <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={() => setViewingLead(null)}
         onUpdate={updated => { updateLead(updated.id, updated); setViewingLead(updated); }}
+        onTagsChange={(leadId, tags) => setLeadTagsMap(prev => { const next = new Map(prev); if (tags.length === 0) next.delete(leadId); else next.set(leadId, tags); return next; })}
       />
 
       <style>{`

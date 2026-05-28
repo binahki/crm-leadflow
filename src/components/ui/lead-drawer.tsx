@@ -20,6 +20,7 @@ interface LeadDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (lead: Lead) => void;
+  onTagsChange?: (leadId: string, tags: Tag[]) => void;
 }
 
 const STATUS_SEQUENCE = [1, 2, 5, 3, 6, 4];
@@ -219,7 +220,7 @@ function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m
   );
 }
 
-export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps) {
+export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: LeadDrawerProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { updateLead, configuracoes } = useAppStore();
@@ -473,13 +474,17 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate }: LeadDrawerProps)
     if (!lead) return;
     const tag = orgTags.find(t => t.id === tagId);
     if (!tag || leadTags.find(t => t.id === tagId)) return;
-    setLeadTags(prev => [...prev, tag]);
+    const next = [...leadTags, tag];
+    setLeadTags(next);
+    onTagsChange?.(lead.id, next);
     await (supabase as any).from('lead_tags').upsert({ lead_id: lead.id, tag_id: tagId }, { onConflict: 'lead_id,tag_id' });
   }
 
   async function removeLeadTag(tagId: string) {
     if (!lead) return;
-    setLeadTags(prev => prev.filter(t => t.id !== tagId));
+    const next = leadTags.filter(t => t.id !== tagId);
+    setLeadTags(next);
+    onTagsChange?.(lead.id, next);
     await (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
   }
 
