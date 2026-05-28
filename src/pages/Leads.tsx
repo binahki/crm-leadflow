@@ -443,8 +443,75 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
   );
 }
 
+// ── Bulk Tag Modal ────────────────────────────────────────────────────────────
+function BulkTagModal({ dark, tags, selectedCount, onApply, onClose }: {
+  dark: boolean;
+  tags: OrgTag[];
+  selectedCount: number;
+  onApply: (tagIds: string[]) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#71717a' : '#6b7280';
+  const bg = dark ? '#111113' : '#fff';
+
+  function toggle(id: string) {
+    const n = new Set(selected);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setSelected(n);
+  }
+
+  async function handleApply() {
+    setApplying(true);
+    await onApply(Array.from(selected));
+    setApplying(false);
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }}/>
+      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'16px', width:'90%', maxWidth:'380px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.6)':'0 12px 40px rgba(0,0,0,0.15)', fontFamily:'inherit', overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+            <Tag style={{ width:'16px', height:'16px', color:'#8b5cf6' }}/>
+            <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Aplicar tags em {selectedCount} lead{selectedCount !== 1 ? 's' : ''}</span>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
+        </div>
+        {tags.length === 0 ? (
+          <div style={{ padding:'32px', textAlign:'center', color:txtMid, fontSize:'13px' }}>Nenhuma tag criada. Crie tags no perfil de um lead.</div>
+        ) : (
+          <div style={{ padding:'14px 16px', display:'flex', flexWrap:'wrap', gap:'8px', maxHeight:'240px', overflowY:'auto' }}>
+            {tags.map(tag => {
+              const active = selected.has(tag.id);
+              return (
+                <button key={tag.id} onClick={() => toggle(tag.id)}
+                  style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'6px 12px', borderRadius:'99px', border:`2px solid ${active ? tag.cor : (dark ? '#3f3f46' : '#d1d5db')}`, background:active ? tag.cor + '22' : 'transparent', color:active ? tag.cor : txtMid, fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.12s' }}>
+                  {active && <Check style={{ width:'11px', height:'11px' }}/>}
+                  <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
+                  {tag.nome}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, display:'flex', gap:'8px' }}>
+          <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+          <button onClick={handleApply} disabled={selected.size === 0 || applying}
+            style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:selected.size === 0 ? (dark?'#27272a':'#e5e7eb') : '#8b5cf6', color:selected.size === 0 ? txtMid : '#fff', fontSize:'13px', fontWeight:500, cursor:selected.size === 0 ? 'default' : 'pointer', fontFamily:'inherit' }}>
+            {applying ? 'Aplicando…' : selected.size > 0 ? `Aplicar ${selected.size} tag${selected.size !== 1 ? 's' : ''}` : 'Selecione tags'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Unified Selection + Actions Bar ───────────────────────────────────────────
-function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilters, filteredCount, totalCount, allSelectedAreEvaluated, dark, isMobile, aprovadoLabel, onSelectAll, onClearSelection, onMoveStatus, onToggleAvaliado, onDelete }: {
+function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilters, filteredCount, totalCount, allSelectedAreEvaluated, dark, isMobile, aprovadoLabel, onSelectAll, onClearSelection, onMoveStatus, onToggleAvaliado, onBulkTag, onDelete }: {
   selectedCount: number;
   allSystemSelected: boolean;
   hasActiveFilters: boolean;
@@ -458,6 +525,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
   onClearSelection: () => void;
   onMoveStatus: (status: number) => void;
   onToggleAvaliado: () => void;
+  onBulkTag: () => void;
   onDelete: () => void;
 }) {
   const [showStatusDrop, setShowStatusDrop] = useState(false);
@@ -542,6 +610,11 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
           {allSelectedAreEvaluated
             ? <><X style={{ width:'12px', height:'12px' }}/> Desavaliar</>
             : <><Check style={{ width:'12px', height:'12px' }}/> Avaliar</>}
+        </button>
+
+        {/* Tag em massa */}
+        <button onClick={onBulkTag} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 10px', borderRadius:'8px', border:`1px solid ${btnBorder}`, background:btnBg, color:'#8b5cf6', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+          <Tag style={{ width:'12px', height:'12px' }}/> Tag
         </button>
 
         {/* Excluir */}
@@ -662,6 +735,7 @@ function LeadsPage() {
   const [pendingMoveStatus, setPendingMoveStatus] = useState<number|null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [showAvaliarConf, setShowAvaliarConf] = useState(false);
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
   const [campDeepFilter, setCampDeepFilter] = useState<{
     type: 'campaign'|'adset'|'ad';
     campaignId: string;
@@ -1205,9 +1279,41 @@ function LeadsPage() {
     }
   }
 
+  async function handleBulkTag(tagIds: string[]) {
+    if (!tagIds.length) return;
+    const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+    setBulkLoading(true);
+    try {
+      const rows = ids.flatMap(leadId => tagIds.map(tagId => ({ lead_id: leadId, tag_id: tagId })));
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        await (supabase as any).from('lead_tags').upsert(rows.slice(i, i + CHUNK), { onConflict: 'lead_id,tag_id' });
+      }
+      const tagObjs = orgTags.filter(t => tagIds.includes(t.id));
+      setLeadTagsMap(prev => {
+        const next = new Map(prev);
+        ids.forEach(leadId => {
+          const existing = next.get(leadId) || [];
+          const toAdd = tagObjs.filter(t => !existing.find(e => e.id === t.id));
+          if (toAdd.length) next.set(leadId, [...existing, ...toAdd]);
+        });
+        return next;
+      });
+      toast.success(`Tags aplicadas em ${ids.length} lead${ids.length !== 1 ? 's' : ''}!`);
+      setSelectedIds(new Set());
+      setAllSystemSelected(false);
+    } catch {
+      toast.error('Erro ao aplicar tags');
+    } finally {
+      setBulkLoading(false);
+      setShowBulkTagModal(false);
+    }
+  }
+
   const handleDeleteSelected = async () => {
     setDeleting(true);
     const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+    await (supabase as any).from('lead_tags').delete().in('lead_id', ids);
     await supabase.from('quiz_sessoes').update({ lead_id: null }).in('lead_id', ids);
     const { error } = await supabase.from('leads').delete().in('id', ids);
     setDeleting(false);
@@ -1524,6 +1630,7 @@ function LeadsPage() {
             onClearSelection={handleClearSelection}
             onMoveStatus={status => { setPendingMoveStatus(status); setShowMoveStatusConfirm(true); }}
             onToggleAvaliado={() => setShowAvaliarConf(true)}
+            onBulkTag={() => setShowBulkTagModal(true)}
             onDelete={() => setShowDeleteConf(true)}
           />
         )}
@@ -1717,6 +1824,16 @@ function LeadsPage() {
           onCancel={() => setShowAvaliarConf(false)}
           loading={bulkLoading}
           dark={dark}
+        />
+      )}
+
+      {showBulkTagModal && (
+        <BulkTagModal
+          dark={dark}
+          tags={orgTags}
+          selectedCount={activeBulkCount}
+          onApply={handleBulkTag}
+          onClose={() => setShowBulkTagModal(false)}
         />
       )}
 
