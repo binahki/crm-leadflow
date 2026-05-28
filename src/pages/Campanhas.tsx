@@ -256,6 +256,18 @@ function filterLeadsByPreset(leads: any[], preset: string) {
   }
 }
 
+// Returns true if the lead should be counted as paid-traffic origin.
+// Matches: utm_source = 'FB' (manually added as "Tráfego Pago"), any 'TRÁFEGO PAGO' variant
+// (accent-normalized), 'INSTAGRAM_ORGANICO', or any utm_campaign present.
+function isPaidTraffic(la: any): boolean {
+  const src = (la.utm_source || '').trim();
+  const srcNorm = src.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  return src.toUpperCase() === 'FB'
+    || src.toUpperCase() === 'INSTAGRAM_ORGANICO'
+    || srcNorm === 'TRAFEGO PAGO'
+    || (la.utm_campaign || '').trim().length > 0;
+}
+
 // ── Fetch campanhas ───────────────────────────────────────────
 async function fetchCampaignsWithChildren(datePreset: string, token: string, account: string): Promise<Campaign[]> {
   const tok = token; const base = 'https://graph.facebook.com/v18.0'; const dp = datePreset;
@@ -801,28 +813,29 @@ export default function CampanhasPage() {
   const campLeadsMap = useMemo(() => {
     const map = new Map<string, any[]>();
     campaigns.forEach(c => map.set(c.id, []));
+    const unmatchedLeads: any[] = [];
 
     for (const l of filteredLeads) {
       const la = l as any;
+      if (!isPaidTraffic(la)) continue;
+
       const utmRaw = (la.utm_campaign || '').trim();
-      if (!utmRaw) continue;
-
-      const utm = utmRaw.toLowerCase().split('|')[0].trim();
       let bestMatch: string | null = null;
-      let maxMatchLen = 0;
+      if (utmRaw) {
+        const utm = utmRaw.toLowerCase().split('|')[0].trim();
+        let maxMatchLen = 0;
 
-      for (const c of campaigns) {
-        if (utm === c.id) { bestMatch = c.id; break; }
-        const cn = c.name.toLowerCase().split('|')[0].trim();
-        if (!cn || cn.length < 3) continue;
-        if (utm === cn) { bestMatch = c.id; break; }
+        for (const c of campaigns) {
+          if (utm === c.id) { bestMatch = c.id; break; }
+          const cn = c.name.toLowerCase().split('|')[0].trim();
+          if (!cn || cn.length < 3) continue;
+          if (utm === cn) { bestMatch = c.id; break; }
 
-        if (utm.includes(cn.slice(0, 20))) {
-          // Em caso de nomes similares (ex: "Vendas", "Vendas V2"),
-          // atribui à campanha com o nome mais longo (mais específico)
-          if (cn.length > maxMatchLen) {
-            maxMatchLen = cn.length;
-            bestMatch = c.id;
+          if (utm.includes(cn.slice(0, 20))) {
+            if (cn.length > maxMatchLen) {
+              maxMatchLen = cn.length;
+              bestMatch = c.id;
+            }
           }
         }
       }
@@ -831,37 +844,83 @@ export default function CampanhasPage() {
         const arr = map.get(bestMatch) || [];
         arr.push(l);
         map.set(bestMatch, arr);
+      } else {
+        unmatchedLeads.push(l);
       }
     }
+
+    if (unmatchedLeads.length > 0 && campaigns.length > 0) {
+      const weights = campaigns.map(c => c.leads_api > 0 ? c.leads_api : 1);
+      const dist = distributeProportional(unmatchedLeads.length, weights);
+      const remaining = [...unmatchedLeads];
+      campaigns.forEach((c, i) => {
+        const count = dist[i];
+        if (count > 0) {
+          const arr = map.get(c.id) || [];
+          const slice = remaining.splice(0, count);
+          arr.push(...slice);
+          map.set(c.id, arr);
+        }
+      });
+    }
+
     return map;
   }, [filteredLeads, campaigns]);
 
-  // Mapeamento de revendedoras por campanha (usa filteredRevs → status_aprovado_at)
   const campRevsMap = useMemo(() => {
     const map = new Map<string, any[]>();
     campaigns.forEach(c => map.set(c.id, []));
+    const unmatchedRevs: any[] = [];
+
     for (const l of filteredRevs) {
       const la = l as any;
+      if (!isPaidTraffic(la)) continue;
+
       const utmRaw = (la.utm_campaign || '').trim();
-      if (!utmRaw) continue;
-      const utm = utmRaw.toLowerCase().split('|')[0].trim();
       let bestMatch: string | null = null;
-      let maxMatchLen = 0;
-      for (const c of campaigns) {
-        if (utm === c.id) { bestMatch = c.id; break; }
-        const cn = c.name.toLowerCase().split('|')[0].trim();
-        if (!cn || cn.length < 3) continue;
-        if (utm === cn) { bestMatch = c.id; break; }
-        if (utm.includes(cn.slice(0, 20))) {
-          if (cn.length > maxMatchLen) { maxMatchLen = cn.length; bestMatch = c.id; }
+      if (utmRaw) {
+        const utm = utmRaw.toLowerCase().split('|')[0].trim();
+        let maxMatchLen = 0;
+
+        for (const c of campaigns) {
+          if (utm === c.id) { bestMatch = c.id; break; }
+          const cn = c.name.toLowerCase().split('|')[0].trim();
+          if (!cn || cn.length < 3) continue;
+          if (utm === cn) { bestMatch = c.id; break; }
+
+          if (utm.includes(cn.slice(0, 20))) {
+            if (cn.length > maxMatchLen) {
+              maxMatchLen = cn.length;
+              bestMatch = c.id;
+            }
+          }
         }
       }
+
       if (bestMatch) {
         const arr = map.get(bestMatch) || [];
         arr.push(l);
         map.set(bestMatch, arr);
+      } else {
+        unmatchedRevs.push(l);
       }
     }
+
+    if (unmatchedRevs.length > 0 && campaigns.length > 0) {
+      const weights = campaigns.map(c => c.leads_api > 0 ? c.leads_api : 1);
+      const dist = distributeProportional(unmatchedRevs.length, weights);
+      const remaining = [...unmatchedRevs];
+      campaigns.forEach((c, i) => {
+        const count = dist[i];
+        if (count > 0) {
+          const arr = map.get(c.id) || [];
+          const slice = remaining.splice(0, count);
+          arr.push(...slice);
+          map.set(c.id, arr);
+        }
+      });
+    }
+
     return map;
   }, [filteredRevs, campaigns]);
 
@@ -1200,23 +1259,12 @@ export default function CampanhasPage() {
     return items.sort((a,b)=>{const o={red:0,yellow:1,green:2};return o[a.type]-o[b.type];}).slice(0,5);
   },[filtered,getCampLeads,avgCPL,loading]); // eslint-disable-line
 
-  // Cards: leads criados no período (created_at) via Meta Ads
   const leadsCRMTotal = useMemo(()=>
-    filteredLeads.filter(l=>{
-      const la=l as any;
-      const source = (la.utm_source||'').toUpperCase();
-      const hasCampaign = (la.utm_campaign||'').trim().length>0;
-      return source === 'FB' || source === 'INSTAGRAM_ORGANICO' || hasCampaign;
-    }).length
+    filteredLeads.filter(l => isPaidTraffic(l as any)).length
   ,[filteredLeads]);
   // Revendedoras aprovadas no período (status_aprovado_at) via Meta Ads
   const revsCRMTotal = useMemo(()=>
-    filteredRevs.filter(l=>{
-      const la=l as any;
-      const source = (la.utm_source||'').toUpperCase();
-      const hasCampaign = (la.utm_campaign||'').trim().length>0;
-      return source === 'FB' || source === 'INSTAGRAM_ORGANICO' || hasCampaign;
-    }).length
+    filteredRevs.filter(l => isPaidTraffic(l as any)).length
   ,[filteredRevs]);
   const cplCard = leadsCRMTotal>0&&totalSpend>0 ? totalSpend/leadsCRMTotal : 0;
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;

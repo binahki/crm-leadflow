@@ -1083,23 +1083,43 @@ function LeadsPage() {
     }
   }, [targetLeadId, isLoading, allLeads]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Campaign options (derived from period-filtered leads) ─────────────────
+  // ── Campaign options ───────────────────────────────────────────────────────
+  // Active/inactive based on Meta Ads status (independent of period).
+  // With Meta Ads: ALL campaigns appear (active = ACTIVE status, regardless of
+  //   whether they have leads in the current period). Count is period-filtered.
+  // Without Meta Ads: only campaigns that have leads in the current period, all marked active.
   const campaignOptions = useMemo(() => {
     const leadsForPeriod = filterByPeriod(allLeads, periodFilter, customFrom, customTo);
-    const map = new Map<string, number>();
+    const countMap = new Map<string, number>();
     leadsForPeriod.forEach(l => {
       const name = extractCampaignName((l as any).utm_campaign);
-      if (name) map.set(name, (map.get(name) || 0) + 1);
+      if (name) countMap.set(name, (countMap.get(name) || 0) + 1);
     });
-    const metaStatusByName = new Map<string, string>();
-    storeCampaigns.forEach(c => metaStatusByName.set(c.name, c.status));
+
     const hasMetaData = storeCampaigns.length > 0;
-    return Array.from(map.entries())
-      .map(([name, count]) => ({
-        name,
-        count,
-        isActive: hasMetaData ? metaStatusByName.get(name) === 'ACTIVE' : true,
-      }))
+
+    if (!hasMetaData) {
+      return Array.from(countMap.entries())
+        .map(([name, count]) => ({ name, count, isActive: true }))
+        .sort((a, b) => b.count - a.count);
+    }
+
+    // Merge Meta Ads campaigns (all of them) with historical leads-derived ones
+    const allNames = new Set<string>([
+      ...storeCampaigns.map(c => c.name),
+      ...countMap.keys(),
+    ]);
+    const metaByName = new Map(storeCampaigns.map(c => [c.name, c]));
+
+    return Array.from(allNames)
+      .map(name => {
+        const meta = metaByName.get(name);
+        return {
+          name,
+          count: countMap.get(name) || 0,
+          isActive: meta ? meta.status === 'ACTIVE' : true,
+        };
+      })
       .sort((a, b) => {
         if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
         return b.count - a.count;
