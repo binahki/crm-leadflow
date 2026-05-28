@@ -277,6 +277,17 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [exitingTagIds, setExitingTagIds] = useState<Set<string>>(new Set());
+  const statusBtnRef = useRef<HTMLButtonElement>(null);
+  const [statusDropPos, setStatusDropPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
   const [perguntasOrdenadas, setPerguntasOrdenadas] = useState<Array<{ ordem: number; texto: string }>>([]);
 
   // ── Tags ──────────────────────────────────────────────────────
@@ -482,9 +493,21 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   async function removeLeadTag(tagId: string) {
     if (!lead) return;
     const next = leadTags.filter(t => t.id !== tagId);
-    setLeadTags(next);
     onTagsChange?.(lead.id, next);
-    await (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
+    (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
+    setExitingTagIds(prev => new Set([...prev, tagId]));
+    setTimeout(() => {
+      setLeadTags(prev => prev.filter(t => t.id !== tagId));
+      setExitingTagIds(prev => { const n = new Set(prev); n.delete(tagId); return n; });
+    }, 140);
+  }
+
+  function handleStatusOpen() {
+    if (statusBtnRef.current) {
+      const r = statusBtnRef.current.getBoundingClientRect();
+      setStatusDropPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 200) });
+    }
+    setStatusOpen(v => !v);
   }
 
   async function handleMgrCreate() {
@@ -527,7 +550,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         document.body
       )}
 
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.24s cubic-bezier(0.32, 0.72, 0, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.32s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
@@ -562,92 +585,88 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
-        {/* Avaliação manual — discreto, acima do status */}
-        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
+        {/* Linha 1: Avaliado (esquerda) + Status (direita) */}
+        <div style={{ padding: '10px 22px', flexShrink: 0, display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: '8px' }}>
+
+          {/* Checkbox avaliado */}
           <div
             onClick={async (e) => {
               e.stopPropagation();
               if (!lead) return;
               const novoValor = !avaliado;
               const { error } = await supabase.from('leads').update({ avaliado: novoValor }).eq('id', lead.id);
-              if (error) {
-                toast.error(`Erro ao salvar: ${error.message}`);
-                return;
-              }
+              if (error) { toast.error(`Erro ao salvar: ${error.message}`); return; }
               setAvaliado(novoValor);
               onUpdate({ ...lead, avaliado: novoValor });
             }}
-            style={{ padding: '10px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'all 0.15s' }}
+            style={{ flex: isMobile ? 'none' : 1, padding: '9px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', transition: 'all 0.15s' }}
           >
-            <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#52525b' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
-              {avaliado && <Check size={10} color="#fff" strokeWidth={3} />}
+            <div style={{ width: '15px', height: '15px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#52525b' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+              {avaliado && <Check size={9} color="#fff" strokeWidth={3} />}
             </div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#52525b' : '#9ca3af'), fontFamily: FONT }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#52525b' : '#9ca3af'), fontFamily: FONT, whiteSpace: 'nowrap' }}>
               {avaliado ? 'Perfil avaliado' : 'Marcar como avaliado'}
             </span>
           </div>
+
+          {/* Status select */}
+          {(() => {
+            const s = STATUS.find(s => s.id === status);
+            return (
+              <button
+                ref={statusBtnRef}
+                onClick={handleStatusOpen}
+                style={{ flexShrink: 0, width: isMobile ? '100%' : '178px', display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${s ? (dark ? 'rgba(255,255,255,0.1)' : s.border) : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, background: s ? (dark ? s.darkBg : s.bg) : 'transparent', cursor: 'pointer', fontFamily: FONT, transition: 'opacity 0.15s', textAlign: 'left' }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {s && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />}
+                <span style={{ flex: 1, fontSize: '12.5px', fontWeight: 600, color: s ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280') }}>{s?.label}</span>
+                <ChevronDown style={{ width: '13px', height: '13px', color: s ? (dark ? s.darkText : s.text) : (dark ? '#52525b' : '#9ca3af'), transform: statusOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s cubic-bezier(0.16,1,0.3,1)', flexShrink: 0, opacity: 0.7 }} />
+              </button>
+            );
+          })()}
         </div>
+
+        {status === 4 && lead.motivo_reprovacao && (
+          <div style={{ margin: '0 22px 8px', padding: '6px 10px', borderRadius: '7px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
+            <span style={{ fontSize: '11.5px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
+          </div>
+        )}
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
 
-        {/* Tags — livres, logo após avaliado */}
-        <div style={{ padding: '10px 22px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {leadTags.map(tag => (
-              <span key={tag.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '3px 9px', borderRadius: '99px', fontSize: '11.5px', fontWeight: 600, color: tag.cor, background: tag.cor + '20', border: `1px solid ${tag.cor}40`, whiteSpace: 'nowrap' }}>
-                {tag.nome}
-                <button onClick={() => removeLeadTag(tag.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center', opacity: 0.6 }}>
-                  <X style={{ width: '9px', height: '9px' }} />
-                </button>
-              </span>
-            ))}
+        {/* Linha 2: Tags */}
+        <div style={{ padding: '9px 22px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+            {/* + tag primeiro */}
             <button
               onClick={() => { setShowTagDropdown(true); setTagSearch(''); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '3px 9px', borderRadius: '99px', fontSize: '11.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? '#3f3f46' : '#d1d5db'}`, cursor: 'pointer', fontFamily: FONT }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? '#3f3f46' : '#d1d5db'}`, cursor: 'pointer', fontFamily: FONT, transition: 'border-color 0.15s, color 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = dark ? '#71717a' : '#9ca3af'; e.currentTarget.style.color = dark ? '#a1a1aa' : '#6b7280'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = dark ? '#3f3f46' : '#d1d5db'; e.currentTarget.style.color = dark ? '#52525b' : '#9ca3af'; }}
             >+ tag</button>
+            {/* Pills */}
+            {leadTags.map(tag => {
+              const exiting = exitingTagIds.has(tag.id);
+              return (
+                <span key={tag.id} className="ld-tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: exiting ? 'tagExit 0.14s ease-in forwards' : 'tagEnter 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+                  {tag.nome}
+                  <button onClick={() => removeLeadTag(tag.id)} className="ld-tag-x" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 1px', color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                    <X style={{ width: '9px', height: '9px' }} />
+                  </button>
+                </span>
+              );
+            })}
+            {/* Gerenciar à direita */}
             <button
               onClick={() => setShowTagManager(true)}
-              style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: '2px 0' }}
+              style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: '4px 0', transition: 'color 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.color = dark ? '#71717a' : '#9ca3af')}
+              onMouseLeave={e => (e.currentTarget.style.color = dark ? '#3f3f46' : '#d1d5db')}
             >Gerenciar</button>
           </div>
-        </div>
-
-        <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
-
-        {/* Status — accordion */}
-        <div style={{ padding: '8px 22px', flexShrink: 0 }}>
-          {/* Trigger: mostra status atual */}
-          <button
-            onClick={() => setStatusOpen(v => !v)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', cursor: 'pointer', fontFamily: FONT, transition: 'background 0.15s' }}
-          >
-            {(() => { const s = STATUS.find(s => s.id === status); return s ? <>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: dark ? s.darkText : s.text, textAlign: 'left' }}>{s.label}</span>
-            </> : null; })()}
-            <ChevronDown style={{ width: '14px', height: '14px', color: dark ? '#52525b' : '#9ca3af', transform: statusOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
-          </button>
-          {/* Lista expandida */}
-          {statusOpen && (
-            <div style={{ marginTop: '4px', padding: '4px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' }}>
-              {STATUS.map(s => {
-                const active = status === s.id;
-                return (
-                  <button key={s.id} onClick={() => handleStatus(s.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 10px', borderRadius: '8px', border: 'none', background: active ? (dark ? s.darkBg : s.bg) : 'transparent', color: active ? (dark ? s.darkText : s.text) : (dark ? '#71717a' : '#6b7280'), fontSize: '13px', fontWeight: active ? 600 : 400, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, transition: 'all 0.13s' }}>
-                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1 }}>{s.label}</span>
-                    {active && <Check style={{ width: '12px', height: '12px', strokeWidth: 2.5, flexShrink: 0 }} />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {status === 4 && lead.motivo_reprovacao && (
-            <div style={{ marginTop: '6px', padding: '6px 10px', borderRadius: '7px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
-              <span style={{ fontSize: '11.5px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
-            </div>
-          )}
         </div>
 
         <div style={{ height: '1px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)', flexShrink: 0 }} />
@@ -779,8 +798,35 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
       <style>{`
         @keyframes ld-fade { from{opacity:0}to{opacity:1} }
-        @keyframes ld-up { from{opacity:0;transform:translate(-50%,-48%) scale(0.96)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+        @keyframes ld-up { from{opacity:0;transform:translate(-50%,-46%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+        @keyframes dropdownIn { from{opacity:0;transform:translateY(-6px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes tagEnter { from{opacity:0;transform:scale(0.78)} to{opacity:1;transform:scale(1)} }
+        @keyframes tagExit { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.78)} }
+        .ld-tag-pill { transition: filter 0.15s ease, transform 0.15s ease; }
+        .ld-tag-pill:hover { filter: brightness(1.1); transform: scale(1.03); }
+        .ld-tag-x { opacity: 0.5; transition: opacity 0.1s ease; }
+        .ld-tag-pill:hover .ld-tag-x { opacity: 0.9; }
       `}</style>
+
+      {/* Status dropdown portal */}
+      {statusOpen && createPortal(
+        <>
+          <div onClick={() => setStatusOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9996 }} />
+          <div style={{ position: 'fixed', top: statusDropPos.top, left: statusDropPos.left, width: statusDropPos.width, zIndex: 9997, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '11px', padding: '4px', boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 28px rgba(0,0,0,0.12)', animation: 'dropdownIn 0.18s cubic-bezier(0.16,1,0.3,1)', fontFamily: FONT }}>
+            {STATUS.map(s => {
+              const active = status === s.id;
+              return (
+                <button key={s.id} onClick={() => handleStatus(s.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 10px', borderRadius: '8px', border: 'none', background: active ? (dark ? s.darkBg : s.bg) : 'transparent', color: active ? (dark ? s.darkText : s.text) : (dark ? '#a1a1aa' : '#374151'), fontSize: '13px', fontWeight: active ? 600 : 400, cursor: 'pointer', textAlign: 'left', fontFamily: FONT, transition: 'background 0.1s' }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{s.label}</span>
+                  {active && <Check style={{ width: '12px', height: '12px', strokeWidth: 2.5, flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* Tag dropdown portal — modal centralizado */}
       {showTagDropdown && createPortal(
