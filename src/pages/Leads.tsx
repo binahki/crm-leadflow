@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
+import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
 
@@ -336,8 +337,8 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   );
 }
 
-// ── Campaign Filter Modal ─────────────────────────────────────────────────────
-function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose }: {
+// ── Campaign Filter Dropdown ──────────────────────────────────────────────────
+function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose }: {
   dark: boolean;
   campaigns: { name: string; count: number; isActive: boolean }[];
   pendingSelected: Set<string>;
@@ -348,7 +349,7 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
 }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
-  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const border = dark ? '#27272a' : '#e5e7eb';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#71717a' : '#6b7280';
   const bg = dark ? '#111113' : '#fff';
@@ -358,32 +359,26 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
   const inactiveCamps = campaigns.filter(c => !c.isActive);
   const hasInactive   = inactiveCamps.length > 0;
   const q = search.trim().toLowerCase();
-
   const visibleActive   = activeCamps.filter(c => !q || c.name.toLowerCase().includes(q));
   const visibleInactive = inactiveCamps.filter(c => !q || c.name.toLowerCase().includes(q));
-
-  const selectedLeadCount = campaigns
-    .filter(c => pendingSelected.has(c.name))
-    .reduce((sum, c) => sum + c.count, 0);
-
+  const selectedLeadCount = campaigns.filter(c => pendingSelected.has(c.name)).reduce((s, c) => s + c.count, 0);
   const hasSelection = pendingSelected.size > 0;
 
   function CampRow({ camp }: { camp: { name: string; count: number; isActive: boolean } }) {
-    const isSelected = pendingSelected.has(camp.name);
+    const isSel = pendingSelected.has(camp.name);
     return (
       <button
-        key={camp.name}
         onClick={() => onToggle(camp.name)}
-        style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'9px', border:'none', background:isSelected?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'2px' }}
+        style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}
       >
-        <div style={{ width:'16px', height:'16px', borderRadius:'4px', border:`2px solid ${isSelected?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSelected?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.12s' }}>
-          {isSelected && <Check style={{ width:'10px', height:'10px', color:'#fff' }}/>}
+        <div style={{ width:'14px', height:'14px', borderRadius:'3px', border:`2px solid ${isSel?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSel?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.1s' }}>
+          {isSel && <Check style={{ width:'9px', height:'9px', color:'#fff' }}/>}
         </div>
-        <span style={{ flex:1, fontSize:'13px', fontWeight:500, color:isSelected?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' }}>
-          {hasInactive && camp.isActive && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
+        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
+          {hasInactive && camp.isActive && <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
           {camp.name || 'Sem campanha'}
         </span>
-        <span style={{ fontSize:'12px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>
+        <span style={{ fontSize:'11px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'1px 6px', borderRadius:'99px', flexShrink:0 }}>
           {camp.count}
         </span>
       </button>
@@ -392,53 +387,38 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
 
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }}/>
-      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'16px', width:'90%', maxWidth:'420px', boxShadow:dark?'0 24px 60px rgba(0,0,0,0.6)':'0 12px 40px rgba(0,0,0,0.15)', fontFamily:'inherit', display:'flex', flexDirection:'column', maxHeight:'80vh' }}>
-        {/* Header */}
-        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${border}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-            <Megaphone style={{ width:'16px', height:'16px', color:'#2563eb' }}/>
-            <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Filtrar por campanhas</span>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
-        </div>
-
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:40 }} />
+      <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:bg, border:`1px solid ${border}`, borderRadius:'12px', width:'264px', maxHeight:'370px', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
         {/* Search */}
-        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${border}`, flexShrink:0 }}>
+        <div style={{ padding:'8px', borderBottom:`1px solid ${border}`, flexShrink:0 }}>
           <div style={{ position:'relative' }}>
-            <Search style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', width:'13px', height:'13px', color:txtMid }}/>
+            <Search style={{ position:'absolute', left:'8px', top:'50%', transform:'translateY(-50%)', width:'12px', height:'12px', color:txtMid }}/>
             <input
               autoFocus
               placeholder="Buscar campanha..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width:'100%', paddingLeft:'32px', paddingRight:'12px', paddingTop:'8px', paddingBottom:'8px', borderRadius:'9px', border:`1px solid ${border}`, background:rowBg, color:txtHi, fontSize:'13px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any }}
+              style={{ width:'100%', paddingLeft:'28px', paddingRight:'8px', paddingTop:'6px', paddingBottom:'6px', borderRadius:'7px', border:`1px solid ${border}`, background:rowBg, color:txtHi, fontSize:'12.5px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any }}
             />
           </div>
         </div>
 
         {/* List */}
-        <div style={{ overflowY:'auto', flex:1, padding:'8px' }}>
+        <div style={{ overflowY:'auto', flex:1, padding:'6px' }}>
           {campaigns.length === 0 && (
-            <div style={{ textAlign:'center', padding:'32px 0', color:txtMid, fontSize:'13px' }}>
-              Nenhuma campanha encontrada no período
-            </div>
-          )}
-          {visibleActive.length === 0 && !hasInactive && campaigns.length > 0 && (
-            <div style={{ textAlign:'center', padding:'32px 0', color:txtMid, fontSize:'13px' }}>
-              Nenhuma campanha corresponde à busca
+            <div style={{ textAlign:'center', padding:'20px 0', color:txtMid, fontSize:'12px' }}>
+              Nenhuma campanha encontrada
             </div>
           )}
           {visibleActive.map(camp => <CampRow key={camp.name} camp={camp} />)}
-
           {hasInactive && (
             <>
               <button
                 onClick={() => setShowInactive(v => !v)}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'7px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', color:txtMid, fontSize:'12px', fontFamily:'inherit', textAlign:'left', marginTop:'4px' }}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:'4px', padding:'5px 8px', borderRadius:'6px', border:'none', background:'transparent', cursor:'pointer', color:txtMid, fontSize:'11.5px', fontFamily:'inherit', textAlign:'left', marginTop:'2px' }}
               >
-                <ChevronDown style={{ width:'12px', height:'12px', transform:showInactive?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.15s' }}/>
-                {showInactive ? 'Ocultar campanhas desativadas' : `Mostrar campanhas desativadas (${inactiveCamps.length})`}
+                <ChevronDown style={{ width:'11px', height:'11px', transform:showInactive?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.15s' }}/>
+                {showInactive ? 'Ocultar desativadas' : `Desativadas (${inactiveCamps.length})`}
               </button>
               {showInactive && visibleInactive.map(camp => <CampRow key={camp.name} camp={camp} />)}
             </>
@@ -446,17 +426,15 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
         </div>
 
         {/* Footer */}
-        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
-          <button onClick={onClear} style={{ padding:'8px 14px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
+        <div style={{ padding:'7px 8px', borderTop:`1px solid ${border}`, display:'flex', gap:'6px', flexShrink:0 }}>
+          <button onClick={onClear} style={{ padding:'5px 10px', borderRadius:'7px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'12px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
             Limpar
           </button>
           <button
             onClick={onApply}
-            style={{ flex:1, padding:'9px 14px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}
+            style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#2563eb', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}
           >
-            {hasSelection
-              ? `Aplicar filtro (${selectedLeadCount} lead${selectedLeadCount !== 1 ? 's' : ''})`
-              : 'Aplicar'}
+            {hasSelection ? `Aplicar (${selectedLeadCount})` : 'Aplicar'}
           </button>
         </div>
       </div>
@@ -753,7 +731,8 @@ function ConfirmDialog({ title, message, confirmText = 'Confirmar', cancelText =
 // ── Main Page ─────────────────────────────────────────────────────────────────
 function LeadsPage() {
   const navigate = useNavigate();
-  const { updateLead, configuracoes, campaigns: storeCampaigns } = useAppStore();
+  const { updateLead, configuracoes, campaigns: storeCampaigns, setCampaigns: setStoreCampaigns } = useAppStore();
+  const { metaToken, metaAccount } = useMetaConfig();
   const { theme } = useTheme();
   const { user } = useAuth();
   const { orgId, ready: orgReady } = useOrgId();
@@ -1018,6 +997,25 @@ function LeadsPage() {
     fetchLeads();
   }, [orgId, orgReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch real-time campaign statuses from Meta Ads API
+  useEffect(() => {
+    if (!metaToken || !metaAccount) return;
+    const normId = metaAccount.startsWith('act_') ? metaAccount : `act_${metaAccount}`;
+    const url = `https://graph.facebook.com/v18.0/${normId}/campaigns?fields=id,name,status&limit=100&access_token=${metaToken}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.data) {
+          setStoreCampaigns(data.data.map((c: any) => ({
+            id: c.id, name: c.name, status: c.status,
+            objective: '', budget: 0, budget_type: 'daily',
+            spend: 0, impressions: 0, clicks: 0, ctr: 0, cpm: 0, roas: 0, leads_api: 0, reach: 0,
+          })));
+        }
+      })
+      .catch(() => {}); // silently ignore — fallback to UTM-only list
+  }, [metaToken, metaAccount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleViewLead = useCallback(async (lead: Lead) => {
     setViewingLead(lead);
     const { data } = await supabase.from('leads').select('*').eq('id', lead.id).single();
@@ -1096,28 +1094,26 @@ function LeadsPage() {
       if (name) countMap.set(name, (countMap.get(name) || 0) + 1);
     });
 
-    const hasMetaData = storeCampaigns.length > 0;
+    // Base list: only UTM-derived campaign names (campaigns that actually have leads)
+    const utmEntries = Array.from(countMap.entries());
 
-    if (!hasMetaData) {
-      return Array.from(countMap.entries())
+    if (storeCampaigns.length === 0) {
+      // No Meta Ads connection: no way to know status, show all as active
+      return utmEntries
         .map(([name, count]) => ({ name, count, isActive: true }))
         .sort((a, b) => b.count - a.count);
     }
 
-    // Merge Meta Ads campaigns (all of them) with historical leads-derived ones
-    const allNames = new Set<string>([
-      ...storeCampaigns.map(c => c.name),
-      ...countMap.keys(),
-    ]);
+    // Meta Ads connected: status from API. Unknown names (old/deleted campaigns) → inactive.
     const metaByName = new Map(storeCampaigns.map(c => [c.name, c]));
 
-    return Array.from(allNames)
-      .map(name => {
+    return utmEntries
+      .map(([name, count]) => {
         const meta = metaByName.get(name);
         return {
           name,
-          count: countMap.get(name) || 0,
-          isActive: meta ? meta.status === 'ACTIVE' : true,
+          count,
+          isActive: meta ? meta.status === 'ACTIVE' : false,
         };
       })
       .sort((a, b) => {
@@ -1303,6 +1299,12 @@ function LeadsPage() {
     setSelectedIds(new Set());
     setAllSystemSelected(false);
   }, [periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, selectedTagIds]);
+
+  // Lock body scroll when any filter dropdown is open
+  useEffect(() => {
+    document.body.style.overflow = (showTagFilter || showCampaignModal) ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showTagFilter, showCampaignModal]);
 
   const totalPages = Math.ceil(filtered.length / leadsPerPage);
   const paginatedLeads = useMemo(() => filtered.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage), [filtered, currentPage]);
@@ -1613,13 +1615,26 @@ function LeadsPage() {
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
 
                 {/* Campaign filter button */}
-                <button
-                  onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }}
-                  style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
-                >
-                  <Megaphone style={{ width:'12px', height:'12px' }}/>
-                  Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
-                </button>
+                <div style={{ position:'relative' }}>
+                  <button
+                    onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                  >
+                    <Megaphone style={{ width:'12px', height:'12px' }}/>
+                    Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
+                  </button>
+                  {showCampaignModal && (
+                    <CampFilterDropdown
+                      dark={dark}
+                      campaigns={campaignOptions}
+                      pendingSelected={pendingCampaigns}
+                      onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }}
+                      onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
+                      onClear={() => { setPendingCampaigns(new Set()); }}
+                      onClose={() => setShowCampaignModal(false)}
+                    />
+                  )}
+                </div>
 
                 {/* Tag filter button */}
                 {orgTags.length > 0 && (
@@ -1691,9 +1706,22 @@ function LeadsPage() {
               <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', padding:'10px', background:cardBg, borderRadius:'10px', border:`1px solid ${border}` }}>
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
-                <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
-                  <Megaphone style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
-                </button>
+                <div style={{ position:'relative' }}>
+                  <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
+                    <Megaphone style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
+                  </button>
+                  {showCampaignModal && (
+                    <CampFilterDropdown
+                      dark={dark}
+                      campaigns={campaignOptions}
+                      pendingSelected={pendingCampaigns}
+                      onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }}
+                      onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
+                      onClear={() => { setPendingCampaigns(new Set()); }}
+                      onClose={() => setShowCampaignModal(false)}
+                    />
+                  )}
+                </div>
                 {hasActiveFilters && (
                   <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
                     <X style={{ width:'12px', height:'12px' }}/> Limpar filtros
@@ -1966,22 +1994,6 @@ function LeadsPage() {
           selectedCount={activeBulkCount}
           onApply={handleBulkTag}
           onClose={() => setShowBulkTagModal(false)}
-        />
-      )}
-
-      {showCampaignModal && (
-        <CampaignFilterModal
-          dark={dark}
-          campaigns={campaignOptions}
-          pendingSelected={pendingCampaigns}
-          onToggle={name => {
-            const n = new Set(pendingCampaigns);
-            if (n.has(name)) n.delete(name); else n.add(name);
-            setPendingCampaigns(n);
-          }}
-          onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
-          onClear={() => { setPendingCampaigns(new Set()); }}
-          onClose={() => setShowCampaignModal(false)}
         />
       )}
 

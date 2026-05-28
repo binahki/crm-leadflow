@@ -121,7 +121,11 @@ export function useMetaAds() {
 
       // Usa leads da API se disponível, senão usa Supabase
       // Total leads captured in our system originating from Facebook (utm_source = "FB")
-      const totalLeadsFB = (leadsData || []).filter((l: any) => l.utm_source && l.utm_source.toUpperCase() === 'FB').length;
+      const totalLeadsFB = (leadsData || []).filter((l: any) => {
+        if (!l.utm_source) return false;
+        const src = l.utm_source.toUpperCase();
+        return src === 'FB' || src === 'TRÁFEGO PAGO' || src === 'TRAFEGO PAGO';
+      }).length;
       
       // Use API leads if available, otherwise fall back to DB count (including all sources)
       const totalLeads = totalLeadsAds > 0 ? totalLeadsAds : totalLeadsDB;

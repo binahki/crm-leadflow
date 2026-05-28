@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -8,7 +8,10 @@ import { useDraggable } from '@dnd-kit/core';
 import { AppLayout } from '@/components/AppLayout';
 import { useAppStore, Lead, calcularFaixa, STATUS_CONFIG, STATUS_SEQUENCE } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import {
+  MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check,
+  Search, X, Tag as TagIcon, Megaphone, ChevronDown,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName, safeInitials } from '@/utils/safeName';
@@ -17,8 +20,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useNavigate } from 'react-router-dom';
+import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { Tag } from '@/hooks/useTags';
 
+// ── Constants ─────────────────────────────────────────────────────────────────
 const COLUMNS = STATUS_SEQUENCE.map(status => ({
   status,
   label: STATUS_CONFIG[status].label,
@@ -29,7 +34,19 @@ const COLUMNS = STATUS_SEQUENCE.map(status => ({
 
 const MOTIVOS = ['Desistiu','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Outro'];
 const AVATAR_COLORS = ['#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#ec4899','#8b5cf6'];
+const COL_PAGE = 50;
 
+const PERIOD_OPTIONS = [
+  { label: 'Todos', value: 'all' },
+  { label: 'Hoje', value: 'today' },
+  { label: 'Ontem', value: 'yesterday' },
+  { label: '7 dias', value: '7days' },
+  { label: '30 dias', value: '30days' },
+  { label: 'Este mês', value: 'month' },
+  { label: 'Personalizado', value: 'custom' },
+];
+
+// ── Date Utilities ────────────────────────────────────────────────────────────
 function avatarColor(name: string) { return !name ? AVATAR_COLORS[0] : AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(name: string) { return safeInitials(name); }
 
@@ -49,6 +66,182 @@ function getDias(lead: Lead): number {
   const ms = parseDateMs(ref);
   if (!ms) return 0;
   return Math.floor((Date.now() - ms) / 86400000);
+}
+
+function parseLeadDate(str?: string | null): Date {
+  if (!str) return new Date(0);
+  if (str.includes('T')) return new Date(str.replace(/(\.\d{3})\d+/, '$1'));
+  if (/^\d{4}-\d{2}-\d{2} /.test(str)) return new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace(/(\.\d{3})\d+/, '$1'));
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+  if (m) {
+    const [, d, mo, y, h = '0', mi = '0'] = m;
+    return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`);
+  }
+  return new Date(str.replace(/(\.\d{3})\d+/, '$1'));
+}
+
+function todayBR(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function subDays(dateStr: string, n: number): string {
+  try {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    if (isNaN(d.getTime())) return dateStr;
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().split('T')[0];
+  } catch { return dateStr; }
+}
+
+function leadDateBR(str?: string | null): string {
+  try {
+    const d = parseLeadDate(str);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  } catch { return ''; }
+}
+
+function filterByPeriod(items: Lead[], period: string, customFrom?: string, customTo?: string, getRef?: (l: Lead) => string | null | undefined): Lead[] {
+  if (period === 'all') return items;
+  const today = todayBR();
+  const ok = (l: Lead, from: string, to: string) => { const d = leadDateBR(getRef ? getRef(l) : l.created_at); return !!d && d >= from && d <= to; };
+  switch (period) {
+    case 'today':     return items.filter(l => ok(l, today, today));
+    case 'yesterday': { const y = subDays(today, 1); return items.filter(l => ok(l, y, y)); }
+    case '7days':     return items.filter(l => ok(l, subDays(today, 6), today));
+    case '30days':    return items.filter(l => ok(l, subDays(today, 29), today));
+    case 'month':     return items.filter(l => ok(l, today.slice(0, 7) + '-01', today));
+    case 'custom':    if (!customFrom || !customTo) return items; return items.filter(l => ok(l, customFrom, customTo));
+    default: return items;
+  }
+}
+
+function extractCampaignName(utmCampaign: string | null | undefined): string {
+  if (!utmCampaign) return '';
+  return String(utmCampaign).split('|')[0].trim();
+}
+
+// ── Filter Dropdown ───────────────────────────────────────────────────────────
+function FilterDropdown({ value, options, onChange, dark }: {
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (v: string) => void;
+  dark: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(o => o.value === value) || options[0];
+  const border = dark ? '#27272a' : '#e5e7eb';
+  const txtHi  = dark ? '#f4f4f5' : '#111827';
+  const bg     = dark ? '#111113' : '#fff';
+  const rowBg  = dark ? '#1a1a1e' : '#f9fafb';
+  return (
+    <div style={{ position:'relative' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txtHi, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+      >
+        {selected?.label}
+        <ChevronDown style={{ width:'11px', height:'11px', color:dark?'#71717a':'#9ca3af', flexShrink:0, transform:open?'rotate(180deg)':'', transition:'transform 0.15s' }}/>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+          <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:41, background:bg, border:`1px solid ${border}`, borderRadius:'10px', minWidth:'140px', overflow:'hidden', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
+            {options.map(o => (
+              <button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }}
+                style={{ width:'100%', display:'block', textAlign:'left', padding:'8px 12px', border:'none', background:o.value===value?rowBg:bg, color:o.value===value?'#2563eb':txtHi, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' }}
+              >{o.label}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Campaign Filter Dropdown ──────────────────────────────────────────────────
+function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose, align = 'left' }: {
+  dark: boolean;
+  campaigns: { name: string; count: number; isActive: boolean }[];
+  pendingSelected: Set<string>;
+  onToggle: (name: string) => void;
+  onApply: () => void;
+  onClear: () => void;
+  onClose: () => void;
+  align?: 'left' | 'right';
+}) {
+  const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const border  = dark ? '#27272a' : '#e5e7eb';
+  const txtHi   = dark ? '#f4f4f5' : '#111827';
+  const txtMid  = dark ? '#71717a' : '#6b7280';
+  const bg      = dark ? '#111113' : '#fff';
+  const rowBg   = dark ? '#1a1a1e' : '#f9fafb';
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const activeCamps   = campaigns.filter(c => c.isActive);
+  const inactiveCamps = campaigns.filter(c => !c.isActive);
+  const hasInactive   = inactiveCamps.length > 0;
+  const q = search.trim().toLowerCase();
+  const visibleActive   = activeCamps.filter(c => !q || c.name.toLowerCase().includes(q));
+  const visibleInactive = inactiveCamps.filter(c => !q || c.name.toLowerCase().includes(q));
+  const selectedLeadCount = campaigns.filter(c => pendingSelected.has(c.name)).reduce((s, c) => s + c.count, 0);
+  const hasSelection = pendingSelected.size > 0;
+
+  function CampRow({ camp }: { camp: { name: string; count: number; isActive: boolean } }) {
+    const isSel = pendingSelected.has(camp.name);
+    return (
+      <button onClick={() => onToggle(camp.name)} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}>
+        <div style={{ width:'14px', height:'14px', borderRadius:'3px', border:`2px solid ${isSel?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSel?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.1s' }}>
+          {isSel && <Check style={{ width:'9px', height:'9px', color:'#fff' }}/>}
+        </div>
+        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
+          {hasInactive && camp.isActive && <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
+          {camp.name || 'Sem campanha'}
+        </span>
+        <span style={{ fontSize:'11px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'1px 6px', borderRadius:'99px', flexShrink:0 }}>{camp.count}</span>
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:40 }} />
+      <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 6px)', ...(align === 'right' ? { right:0 } : { left:0 }), zIndex:41, background:bg, border:`1px solid ${border}`, borderRadius:'12px', width:'264px', maxHeight:'370px', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
+        <div style={{ padding:'8px', borderBottom:`1px solid ${border}`, flexShrink:0 }}>
+          <div style={{ position:'relative' }}>
+            <Search style={{ position:'absolute', left:'8px', top:'50%', transform:'translateY(-50%)', width:'12px', height:'12px', color:txtMid }}/>
+            <input autoFocus placeholder="Buscar campanha..." value={search} onChange={e => setSearch(e.target.value)} style={{ width:'100%', paddingLeft:'28px', paddingRight:'8px', paddingTop:'6px', paddingBottom:'6px', borderRadius:'7px', border:`1px solid ${border}`, background:rowBg, color:txtHi, fontSize:'12.5px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' as any }}/>
+          </div>
+        </div>
+        <div style={{ overflowY:'auto', flex:1, padding:'6px' }}>
+          {campaigns.length === 0 && <div style={{ textAlign:'center', padding:'20px 0', color:txtMid, fontSize:'12px' }}>Nenhuma campanha</div>}
+          {visibleActive.map(camp => <CampRow key={camp.name} camp={camp} />)}
+          {hasInactive && (
+            <>
+              <button onClick={() => setShowInactive(v => !v)} style={{ width:'100%', display:'flex', alignItems:'center', gap:'4px', padding:'5px 8px', borderRadius:'6px', border:'none', background:'transparent', cursor:'pointer', color:txtMid, fontSize:'11.5px', fontFamily:'inherit', textAlign:'left', marginTop:'2px' }}>
+                <ChevronDown style={{ width:'11px', height:'11px', transform:showInactive?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.15s' }}/>
+                {showInactive ? 'Ocultar desativadas' : `Desativadas (${inactiveCamps.length})`}
+              </button>
+              {showInactive && visibleInactive.map(camp => <CampRow key={camp.name} camp={camp} />)}
+            </>
+          )}
+        </div>
+        <div style={{ padding:'7px 8px', borderTop:`1px solid ${border}`, display:'flex', gap:'6px', flexShrink:0 }}>
+          <button onClick={onClear} style={{ padding:'5px 10px', borderRadius:'7px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'12px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>Limpar</button>
+          <button onClick={onApply} style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#2563eb', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
+            {hasSelection ? `Aplicar (${selectedLeadCount})` : 'Aplicar'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
 }
 
 // ── Score Tag ─────────────────────────────────────────────────
@@ -159,9 +352,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
         transition:'box-shadow 0.2s, border-color 0.2s', outline:'none',
       }}
     >
-      {/* Header: avatar + nome + score */}
       <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-        {/* Avatar — bolinha de faixa SÓ no mobile */}
         <div style={{ position:'relative', flexShrink:0 }}>
           <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
           {isMobile && faixa && faixa !== 'vermelho' && (
@@ -169,7 +360,6 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
           )}
         </div>
         <div style={{ flex:1, minWidth:0 }}>
-          {/* Nome + score com space-between */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
             <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
             {score != null && (
@@ -179,30 +369,29 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
           <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
         </div>
       </div>
-
-      {/* Cidade + tempo + obs + alerta */}
-      <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
-        {lead.cidade && <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280' }}><MapPin style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>{lead.cidade}</span>}
+      <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', overflow:'hidden' }}>
+        {lead.cidade && (
+          <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280', flex:1, minWidth:0, overflow:'hidden' }}>
+            <MapPin style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.cidade}</span>
+          </span>
+        )}
         {showAlerta ? (
-          <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:'#ef4444' }}>
-            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>⚠️ {dias}d sem contato
+          <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:'#ef4444', flexShrink:0, whiteSpace:'nowrap' }}>
+            <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>⚠️ {dias}d
           </span>
         ) : (
-          <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280' }}>
+          <span style={{ display:'flex', alignItems:'center', gap:'3px', fontSize:'11.5px', color:dark?'#9ca3af':'#6b7280', flexShrink:0, whiteSpace:'nowrap' }}>
             <Clock style={{ width:'11px', height:'11px', strokeWidth:1.8, flexShrink:0 }}/>{getRelativeTime(lead.created_at)}
           </span>
         )}
         {lead.observacoes && lead.observacoes.trim() && <ObsBadge text={lead.observacoes.trim()}/>}
       </div>
-
-      {/* Motivo reprovação */}
       {statusNum === 4 && motivo && (
         <div style={{ marginTop:'7px' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'2px 8px', borderRadius:'99px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.2)', fontSize:'11px', color:'#ef4444', fontWeight:500, maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>✕ {motivo}</span>
         </div>
       )}
-
-      {/* Tags */}
       {leadTags && leadTags.length > 0 && (
         <div style={{ marginTop:'7px', display:'flex', flexWrap:'wrap', gap:'4px' }}>
           {leadTags.slice(0, 2).map(tag => (
@@ -213,8 +402,6 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
           )}
         </div>
       )}
-
-      {/* Botões */}
       <div style={{ marginTop:'10px', display:'flex', gap:'6px' }}>
         <button style={{ flex:1, padding:'6px 0', borderRadius:'8px', border:'none', background:dark?'rgba(16,163,74,0.15)':'#f0fdf4', color:dark?'#4ade80':'#16a34a', fontSize:'12px', fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', transition:'background 0.15s' }} onPointerDown={e=>e.stopPropagation()} onClick={onWhatsApp} onMouseEnter={e=>(e.currentTarget.style.background=dark?'rgba(16,163,74,0.25)':'#dcfce7')} onMouseLeave={e=>(e.currentTarget.style.background=dark?'rgba(16,163,74,0.15)':'#f0fdf4')}>
           <MessageCircle style={{ width:'12px', height:'12px' }}/> WhatsApp
@@ -269,25 +456,30 @@ function OverlayCard({ lead }: { lead: Lead }) {
 
 // ── Main Page ─────────────────────────────────────────────────
 export default function KanbanPage() {
-  const { leads, setLeads, updateLead } = useAppStore();
+  const { leads, setLeads, updateLead, campaigns: storeCampaigns, setCampaigns: setStoreCampaigns } = useAppStore();
   const { theme } = useTheme();
   const { orgId, ready: orgReady } = useOrgId();
   const navigate = useNavigate();
   const dark = theme === 'dark';
-
+  const border = dark ? '#1e1e22' : '#e5e7eb';
   const { hasWA } = useWhatsAppAccount();
+  const { metaToken, metaAccount } = useMetaConfig();
 
-  const handleWhatsApp = useCallback((lead: Lead) => {
-    if (!lead.whatsapp) return;
-    const clean = lead.whatsapp.replace(/\D/g, '');
-    const phone = clean.startsWith('55') ? clean : `55${clean}`;
-    
-    if (hasWA) {
-      navigate(`/whatsapp?phone=${phone}`);
-    } else {
-      window.open(`https://wa.me/${phone}`, '_blank');
-    }
-  }, [navigate, hasWA]);
+  // ── Filter state ─────────────────────────────────────────────
+  const [search, setSearch] = useState('');
+  const [periodFilter, setPeriodFilter] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [showTagFilter, setShowTagFilter] = useState(false);
+  const [orgTags, setOrgTags] = useState<Tag[]>([]);
+  const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
+  const [pendingCampaigns, setPendingCampaigns] = useState<Set<string>>(new Set());
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [colLimits, setColLimits] = useState<Map<number, number>>(new Map());
+
+  // ── Other state ───────────────────────────────────────────────
   const [leadTagsMap, setLeadTagsMap] = useState<Map<string, Tag[]>>(new Map());
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [overColId, setOverColId] = useState<string | null>(null);
@@ -296,6 +488,15 @@ export default function KanbanPage() {
   const [activeColIndex, setActiveColIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [motivoCtx, setMotivoCtx] = useState<{ lead: Lead; targetStatus: number; currentStatus: number } | null>(null);
+  const orgTagsRef = useRef<Tag[]>([]);
+
+  const handleWhatsApp = useCallback((lead: Lead) => {
+    if (!lead.whatsapp) return;
+    const clean = lead.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('55') ? clean : `55${clean}`;
+    if (hasWA) navigate(`/whatsapp?phone=${phone}`);
+    else window.open(`https://wa.me/${phone}`, '_blank');
+  }, [navigate, hasWA]);
 
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
 
@@ -304,6 +505,7 @@ export default function KanbanPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
 
+  // ── Fetch all leads ──────────────────────────────────────────
   useEffect(() => {
     if (!orgReady || !orgId) return;
     setLeads([]);
@@ -315,7 +517,7 @@ export default function KanbanPage() {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, lead_tags(tag_id, tags(id, nome, cor))')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, lead_tags(tag_id, tags(id, nome, cor))')
           .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
@@ -335,14 +537,14 @@ export default function KanbanPage() {
     })();
   }, [orgId, orgReady]); // eslint-disable-line
 
-  const orgTagsRef = useRef<Tag[]>([]);
-
+  // ── Fetch org tags ──────────────────────────────────────────
   useEffect(() => {
     if (!orgId) return;
     (async () => {
       const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
-      if (!tagsData?.length) { setLeadTagsMap(new Map()); orgTagsRef.current = []; return; }
+      if (!tagsData?.length) { setLeadTagsMap(new Map()); orgTagsRef.current = []; setOrgTags([]); return; }
       orgTagsRef.current = tagsData as Tag[];
+      setOrgTags(tagsData as Tag[]);
       const tagIds = (tagsData as any[]).map((t: any) => t.id);
       const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
       const tagById = new Map((tagsData as any[]).map((t: any) => [t.id, t]));
@@ -357,6 +559,7 @@ export default function KanbanPage() {
     })();
   }, [orgId]); // eslint-disable-line
 
+  // ── Realtime: lead_tags changes ──────────────────────────────
   useEffect(() => {
     if (!orgId) return;
     const ch = (supabase as any).channel(`lead-tags-kanban-${orgId}`)
@@ -388,6 +591,7 @@ export default function KanbanPage() {
     return () => { (supabase as any).removeChannel(ch); };
   }, [orgId]); // eslint-disable-line
 
+  // ── Realtime: leads ─────────────────────────────────────────
   useEffect(() => {
     if (!orgReady || !orgId) return;
     const ch = supabase.channel(`kanban-rt-${orgId}`)
@@ -398,6 +602,84 @@ export default function KanbanPage() {
     return () => { supabase.removeChannel(ch); };
   }, [orgId, orgReady]); // eslint-disable-line
 
+  // ── Meta Ads campaign statuses ───────────────────────────────
+  useEffect(() => {
+    if (!metaToken || !metaAccount) return;
+    const normId = metaAccount.startsWith('act_') ? metaAccount : `act_${metaAccount}`;
+    const url = `https://graph.facebook.com/v18.0/${normId}/campaigns?fields=id,name,status&limit=100&access_token=${metaToken}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.data) {
+          setStoreCampaigns(data.data.map((c: any) => ({
+            id: c.id, name: c.name, status: c.status,
+            objective: '', budget: 0, budget_type: 'daily',
+            spend: 0, impressions: 0, clicks: 0, ctr: 0, cpm: 0, roas: 0, leads_api: 0, reach: 0,
+          })));
+        }
+      })
+      .catch(() => {});
+  }, [metaToken, metaAccount]); // eslint-disable-line
+
+  // ── Reset col limits on filter change ────────────────────────
+  useEffect(() => {
+    setColLimits(new Map());
+  }, [search, periodFilter, customFrom, customTo, selectedTagIds, selectedCampaigns]);
+
+  // ── Lock scroll when any filter open ────────────────────────
+  useEffect(() => {
+    document.body.style.overflow = (showTagFilter || showCampaignModal) ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [showTagFilter, showCampaignModal]);
+
+  // ── Filtered leads ───────────────────────────────────────────
+  const filteredLeads = useMemo(() => {
+    let list = leads;
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter(l => (l.nome || '').toLowerCase().includes(q) || (l.whatsapp || '').includes(q));
+    list = filterByPeriod(list, periodFilter, customFrom, customTo, l => (l as any).ultimo_status_change || l.created_at);
+    if (selectedTagIds.size > 0) {
+      list = list.filter(l => {
+        const tags = leadTagsMap.get(l.id) || [];
+        return Array.from(selectedTagIds).some(tid => tags.some(t => t.id === tid));
+      });
+    }
+    if (selectedCampaigns.size > 0) {
+      list = list.filter(l => selectedCampaigns.has(extractCampaignName((l as any).utm_campaign)));
+    }
+    return list;
+  }, [leads, search, periodFilter, customFrom, customTo, selectedTagIds, selectedCampaigns, leadTagsMap]);
+
+  // ── Campaign options ─────────────────────────────────────────
+  const campaignOptions = useMemo(() => {
+    const countMap = new Map<string, number>();
+    filteredLeads.forEach(l => {
+      const name = extractCampaignName((l as any).utm_campaign);
+      if (name) countMap.set(name, (countMap.get(name) || 0) + 1);
+    });
+    const entries = Array.from(countMap.entries());
+    if (storeCampaigns.length === 0) {
+      return entries.map(([name, count]) => ({ name, count, isActive: true })).sort((a, b) => b.count - a.count);
+    }
+    const metaByName = new Map(storeCampaigns.map(c => [c.name, c]));
+    return entries
+      .map(([name, count]) => {
+        const meta = metaByName.get(name);
+        return { name, count, isActive: meta ? meta.status === 'ACTIVE' : false };
+      })
+      .sort((a, b) => { if (a.isActive !== b.isActive) return a.isActive ? -1 : 1; return b.count - a.count; });
+  }, [filteredLeads, storeCampaigns]);
+
+  const hasActiveFilters = search.trim() || periodFilter !== 'all' || selectedTagIds.size > 0 || selectedCampaigns.size > 0;
+
+  // ── Column helpers ───────────────────────────────────────────
+  function getColLeads(status: number): Lead[] {
+    return [...filteredLeads.filter(l => {
+      let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
+      if (s === 0) s = 1;
+      return s === status;
+    })].sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
+  }
 
   function scrollToCol(index: number) {
     if (!scrollRef.current) return;
@@ -414,10 +696,7 @@ export default function KanbanPage() {
     return () => el.removeEventListener('scroll', fn);
   }, [isMobile]);
 
-  function getColLeads(status: number): Lead[] {
-    return [...leads.filter(l => { let s = l.status === null || l.status === undefined ? 1 : Number(l.status); if (s === 0) s = 1; return s === status; })].sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
-  }
-
+  // ── Status change ────────────────────────────────────────────
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
     const now = new Date().toISOString();
     const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
@@ -464,21 +743,118 @@ export default function KanbanPage() {
     await applyStatus(lead, targetStatus, currentStatus, motivo);
   }
 
+  function clearFilters() {
+    setSearch(''); setPeriodFilter('all'); setCustomFrom(''); setCustomTo('');
+    setShowCustom(false); setSelectedTagIds(new Set()); setSelectedCampaigns(new Set());
+  }
+
   const bg = dark ? '#090909' : '#f4f4f5';
+  const inputStyle: React.CSSProperties = { padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#fff', color:dark?'#f4f4f5':'#111827', fontSize:'12.5px', outline:'none', fontFamily:'inherit' };
+  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#fff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' };
 
   return (
     <AppLayout leadCount={leads.length}>
       <div style={{ padding:isMobile?'16px 16px 24px':'32px 32px 40px', background:bg, minHeight:'100vh' }}>
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', flexWrap:'wrap', gap:'12px' }}>
-          <div>
+
+        {/* Header + inline filter bar */}
+        <div style={{ marginBottom:'16px' }}>
+          {/* Row 1: title + realtime */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
             <h1 style={{ fontSize:isMobile?'20px':'22px', fontWeight:700, color:dark?'#f4f4f5':'#111827', margin:0, letterSpacing:'-0.03em' }}>Funil CRM</h1>
-            {!isMobile && <p style={{ fontSize:'13px', color:dark?'#a1a1aa':'#9ca3af', marginTop:'3px' }}>Arraste os cards para atualizar o status · Clique para ver o perfil</p>}
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#71717a':'#9ca3af' }}>
+              <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
+            </div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#71717a':'#9ca3af' }}>
-            <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
+
+          {/* Row 2: filters inline (no box) */}
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
+            {/* Search - expands to fill available space */}
+            <div style={{ position:'relative', flex:'1 1 160px', minWidth:'140px' }}>
+              <Search style={{ position:'absolute', left:'8px', top:'50%', transform:'translateY(-50%)', width:'13px', height:'13px', color:dark?'#71717a':'#9ca3af', pointerEvents:'none' }}/>
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar lead..."
+                style={{ ...inputStyle, width:'100%', paddingLeft:'28px', boxSizing:'border-box' }}
+              />
+            </div>
+
+            {/* Period */}
+            <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={v => { setPeriodFilter(v); if (v === 'custom') setShowCustom(true); else { setShowCustom(false); setCustomFrom(''); setCustomTo(''); }}} dark={dark}/>
+
+            {/* Custom date range */}
+            {showCustom && (
+              <>
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/>
+                <span style={{ color:dark?'#52525b':'#9ca3af', fontSize:'12px' }}>até</span>
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/>
+              </>
+            )}
+
+            {/* Campaign filter */}
+            <div style={{ position:'relative' }}>
+              <button
+                onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }}
+                style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(37,99,235,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#93c5fd':'#2563eb') : (dark?'#d4d4d8':'#374151') }}
+              >
+                <Megaphone style={{ width:'12px', height:'12px' }}/>
+                Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
+              </button>
+              {showCampaignModal && (
+                <CampFilterDropdown
+                  dark={dark}
+                  campaigns={campaignOptions}
+                  pendingSelected={pendingCampaigns}
+                  onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }}
+                  onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
+                  onClear={() => { setPendingCampaigns(new Set()); }}
+                  onClose={() => setShowCampaignModal(false)}
+                  align="right"
+                />
+              )}
+            </div>
+
+            {/* Tag filter */}
+            {orgTags.length > 0 && (
+              <div style={{ position:'relative' }}>
+                <button
+                  onClick={() => setShowTagFilter(v => !v)}
+                  style={{ ...btnGhost, border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark?'rgba(139,92,246,0.12)':'#f5f3ff') : (dark?'#111113':'#fff'), color:selectedTagIds.size > 0 ? (dark?'#c4b5fd':'#7c3aed') : (dark?'#d4d4d8':'#374151') }}
+                >
+                  <TagIcon style={{ width:'12px', height:'12px' }}/>
+                  Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
+                </button>
+                {showTagFilter && (
+                  <>
+                    <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
+                    <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>
+                      {orgTags.map(tag => {
+                        const sel = selectedTagIds.has(tag.id);
+                        return (
+                          <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); if (sel) n.delete(tag.id); else n.add(tag.id); setSelectedTagIds(n); }}
+                            style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:sel?(dark?`${tag.cor}18`:`${tag.cor}12`):'transparent', cursor:'pointer', fontFamily:'inherit', marginBottom:'2px' }}
+                          >
+                            <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
+                            <span style={{ flex:1, fontSize:'12.5px', color:sel?tag.cor:(dark?'#f4f4f5':'#111827'), fontWeight:sel?600:400, textAlign:'left' }}>{tag.nome}</span>
+                            {sel && <Check style={{ width:'11px', height:'11px', color:tag.cor, flexShrink:0 }}/>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Clear all */}
+            {hasActiveFilters && (
+              <button onClick={clearFilters} style={{ ...btnGhost, color:dark?'#f87171':'#ef4444', borderColor:'rgba(239,68,68,0.3)', background:dark?'rgba(239,68,68,0.08)':'rgba(239,68,68,0.05)' }}>
+                <X style={{ width:'12px', height:'12px' }}/> Limpar
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Mobile nav dots */}
         {isMobile && (
           <>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
@@ -499,15 +875,19 @@ export default function KanbanPage() {
           </>
         )}
 
+        {/* Kanban board */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={e=>setOverColId(e.over?.id?String(e.over.id):null)} onDragEnd={handleDragEnd} onDragCancel={()=>{setActiveLead(null);setOverColId(null);}}>
           {isMobile ? (
             <div ref={scrollRef} className="kanban-mobile" style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType: activeLead ? 'none' : 'x mandatory', scrollBehavior: activeLead ? 'auto' : 'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
               {COLUMNS.map(col => {
                 const colLeads = getColLeads(col.status);
+                const limit = colLimits.get(col.status) || COL_PAGE;
+                const visibleLeads = colLeads.slice(0, limit);
+                const remaining = colLeads.length - limit;
                 return (
                   <div key={col.status} style={{ scrollSnapAlign:'start', flexShrink:0, width:'calc(100vw - 48px)' }}>
                     <DroppableColumn col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={true}>
-                      {colLeads.map(lead => (
+                      {visibleLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={true}
                           onCardClick={() => setViewingLead(lead)}
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
@@ -515,6 +895,15 @@ export default function KanbanPage() {
                           leadTags={leadTagsMap.get(lead.id)}
                         />
                       ))}
+                      {remaining > 0 && (
+                        <button
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={() => setColLimits(prev => { const n = new Map(prev); n.set(col.status, limit + COL_PAGE); return n; })}
+                          style={{ width:'100%', padding:'8px', borderRadius:'9px', border:`1px dashed ${dark?'#3f3f46':'#d1d5db'}`, background:'transparent', color:dark?'#71717a':'#9ca3af', fontSize:'12px', cursor:'pointer', fontFamily:'inherit' }}
+                        >
+                          Ver mais {remaining} leads
+                        </button>
+                      )}
                     </DroppableColumn>
                   </div>
                 );
@@ -524,10 +913,13 @@ export default function KanbanPage() {
             <div className="kanban-desktop" style={{ display:'flex', gap:'14px', alignItems:'start', overflowX:'auto', paddingBottom:'12px', minWidth:0 }}>
               {COLUMNS.map(col => {
                 const colLeads = getColLeads(col.status);
+                const limit = colLimits.get(col.status) || COL_PAGE;
+                const visibleLeads = colLeads.slice(0, limit);
+                const remaining = colLeads.length - limit;
                 return (
                   <div key={col.status} style={{ flex:'0 0 260px', minWidth:'220px' }}>
                     <DroppableColumn col={col} count={colLeads.length} isOver={overColId===String(col.status)} isMobile={false}>
-                      {colLeads.map(lead => (
+                      {visibleLeads.map(lead => (
                         <DraggableCard key={lead.id} lead={lead} isMobile={false}
                           onCardClick={() => setViewingLead(lead)}
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
@@ -535,6 +927,15 @@ export default function KanbanPage() {
                           leadTags={leadTagsMap.get(lead.id)}
                         />
                       ))}
+                      {remaining > 0 && (
+                        <button
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={() => setColLimits(prev => { const n = new Map(prev); n.set(col.status, limit + COL_PAGE); return n; })}
+                          style={{ width:'100%', padding:'8px', borderRadius:'9px', border:`1px dashed ${dark?'#3f3f46':'#d1d5db'}`, background:'transparent', color:dark?'#71717a':'#9ca3af', fontSize:'12px', cursor:'pointer', fontFamily:'inherit' }}
+                        >
+                          Ver mais {remaining} leads
+                        </button>
+                      )}
                     </DroppableColumn>
                   </div>
                 );
@@ -546,7 +947,6 @@ export default function KanbanPage() {
           </DragOverlay>
         </DndContext>
       </div>
-
 
       {motivoCtx && createPortal(
         <MotivoModal dark={dark} motivoAtual={(motivoCtx.lead as any).motivo_reprovacao} onConfirm={handleMotivoConfirm} onCancel={() => setMotivoCtx(null)}/>,

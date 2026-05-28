@@ -272,7 +272,11 @@ async function fetchMetaData(period: string, from?: string, to?: string, leadsLi
       const cLeads=parseInt((ins.actions||[]).find((a:any)=>['lead','offsite_conversion.fb_pixel_lead'].includes(a.action_type))?.value||'0');
       if (cSpend>0) campaigns.push({ id:ins.campaign_id, name:ins.campaign_name, status:'ACTIVE', spend:cSpend, leads_api:cLeads });
     });
-    const totalLeadsFB = leadsList.filter(l=>l.utm_source&&l.utm_source.toUpperCase()==='FB').length;
+    const totalLeadsFB = leadsList.filter(l => {
+      if (!l.utm_source) return false;
+      const src = l.utm_source.toUpperCase();
+      return src === 'FB' || src === 'TRÁFEGO PAGO' || src === 'TRAFEGO PAGO';
+    }).length;
     return { metrics:{ spend, impressions, clicks, ctr, leads, cpl:leads>0?spend/leads:0, cplRealTime:totalLeadsFB>0?spend/totalLeadsFB:0 }, campaigns };
   } catch (e) { console.error('[Meta]',e); return empty; }
 }
