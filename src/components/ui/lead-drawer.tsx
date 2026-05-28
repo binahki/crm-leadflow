@@ -278,7 +278,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [exitingTagIds, setExitingTagIds] = useState<Set<string>>(new Set());
+  const [exitingTags, setExitingTags] = useState<Tag[]>([]);
   const statusBtnRef = useRef<HTMLButtonElement>(null);
   const [statusDropPos, setStatusDropPos] = useState({ top: 0, left: 0, width: 0 });
 
@@ -487,19 +487,31 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     const next = [...leadTags, tag];
     setLeadTags(next);
     onTagsChange?.(lead.id, next);
-    await (supabase as any).from('lead_tags').upsert({ lead_id: lead.id, tag_id: tagId }, { onConflict: 'lead_id,tag_id' });
+    const { error } = await (supabase as any).from('lead_tags').upsert({ lead_id: lead.id, tag_id: tagId }, { onConflict: 'lead_id,tag_id' });
+    if (error) {
+      toast.error('Erro ao adicionar tag');
+      setLeadTags(prev => prev.filter(t => t.id !== tagId));
+      onTagsChange?.(lead.id, leadTags);
+    }
   }
 
   async function removeLeadTag(tagId: string) {
     if (!lead) return;
+    const tag = leadTags.find(t => t.id === tagId);
+    // Remove imediatamente do estado (functional form para evitar stale closure)
+    setLeadTags(prev => prev.filter(t => t.id !== tagId));
     const next = leadTags.filter(t => t.id !== tagId);
     onTagsChange?.(lead.id, next);
-    (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
-    setExitingTagIds(prev => new Set([...prev, tagId]));
-    setTimeout(() => {
-      setLeadTags(prev => prev.filter(t => t.id !== tagId));
-      setExitingTagIds(prev => { const n = new Set(prev); n.delete(tagId); return n; });
-    }, 140);
+    // Animação de saída — puramente visual, separada do estado
+    if (tag) {
+      setExitingTags(prev => [...prev, tag]);
+      setTimeout(() => setExitingTags(prev => prev.filter(t => t.id !== tagId)), 160);
+    }
+    const { error } = await (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id).eq('tag_id', tagId);
+    if (error) {
+      toast.error('Erro ao remover tag');
+      if (tag) { setLeadTags(prev => [...prev, tag]); onTagsChange?.(lead.id, [...next, tag]); }
+    }
   }
 
   function handleStatusOpen() {
@@ -647,18 +659,21 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
               onMouseEnter={e => { e.currentTarget.style.borderColor = dark ? '#71717a' : '#9ca3af'; e.currentTarget.style.color = dark ? '#a1a1aa' : '#6b7280'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = dark ? '#3f3f46' : '#d1d5db'; e.currentTarget.style.color = dark ? '#52525b' : '#9ca3af'; }}
             >+ tag</button>
-            {/* Pills */}
-            {leadTags.map(tag => {
-              const exiting = exitingTagIds.has(tag.id);
-              return (
-                <span key={tag.id} className="ld-tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: exiting ? 'tagExit 0.14s ease-in forwards' : 'tagEnter 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
-                  {tag.nome}
-                  <button onClick={() => removeLeadTag(tag.id)} className="ld-tag-x" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 1px', color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
-                    <X style={{ width: '9px', height: '9px' }} />
-                  </button>
-                </span>
-              );
-            })}
+            {/* Pills ativas */}
+            {leadTags.map(tag => (
+              <span key={tag.id} className="ld-tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagEnter 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+                {tag.nome}
+                <button onClick={() => removeLeadTag(tag.id)} className="ld-tag-x" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 1px', color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                  <X style={{ width: '9px', height: '9px' }} />
+                </button>
+              </span>
+            ))}
+            {/* Pills saindo — apenas animação, pointerEvents off */}
+            {exitingTags.map(tag => (
+              <span key={`exit-${tag.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagExit 0.16s ease-in forwards', pointerEvents: 'none' }}>
+                {tag.nome}
+              </span>
+            ))}
             {/* Gerenciar à direita */}
             <button
               onClick={() => setShowTagManager(true)}
