@@ -782,16 +782,27 @@ function LeadsPage() {
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
-        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, lead_tags(tag_id, tags(id, nome, cor))`)
         .order('created_at', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
       if (bgCancelRef.current !== gen) break;
-      if (data?.length) setAllLeads(prev => {
-        const seen = new Set(prev.map(l => l.id));
-        const fresh = (data as unknown as Lead[]).filter(l => !seen.has(l.id));
-        return fresh.length ? [...prev, ...fresh] : prev;
-      });
+      if (data?.length) {
+        const raw = data as any[];
+        const tagBatch = new Map<string, OrgTag[]>();
+        raw.forEach(l => {
+          if (l.lead_tags?.length) {
+            const tags = (l.lead_tags as any[]).filter(lt => lt.tags).map(lt => ({ id: lt.tags.id, nome: lt.tags.nome, cor: lt.tags.cor, org_id: orgId as string, created_at: '' }) as OrgTag);
+            if (tags.length) tagBatch.set(l.id, tags);
+          }
+        });
+        if (tagBatch.size > 0) setLeadTagsMap(prev => { const next = new Map(prev); tagBatch.forEach((tags, id) => next.set(id, tags)); return next; });
+        setAllLeads(prev => {
+          const seen = new Set(prev.map(l => l.id));
+          const fresh = (raw as unknown as Lead[]).filter(l => !seen.has(l.id));
+          return fresh.length ? [...prev, ...fresh] : prev;
+        });
+      }
       from += PAGE_SIZE;
       await new Promise(r => setTimeout(r, 200));
     }
@@ -811,13 +822,22 @@ function LeadsPage() {
 
     const { data, error } = await supabase
       .from('leads')
-      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado`)
+      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, lead_tags(tag_id, tags(id, nome, cor))`)
       .order('created_at', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
 
     if (error) { toast.error('Erro ao carregar leads'); setIsLoading(false); return; }
-    setAllLeads((data || []) as unknown as Lead[]);
+    const rawLeads = (data || []) as any[];
+    const tagSeed = new Map<string, OrgTag[]>();
+    rawLeads.forEach(l => {
+      if (l.lead_tags?.length) {
+        const tags = (l.lead_tags as any[]).filter(lt => lt.tags).map(lt => ({ id: lt.tags.id, nome: lt.tags.nome, cor: lt.tags.cor, org_id: orgId as string, created_at: '' }) as OrgTag);
+        if (tags.length) tagSeed.set(l.id, tags);
+      }
+    });
+    if (tagSeed.size > 0) setLeadTagsMap(tagSeed);
+    setAllLeads(rawLeads as unknown as Lead[]);
     setIsLoading(false);
 
     if (count && count > INITIAL_SIZE) {

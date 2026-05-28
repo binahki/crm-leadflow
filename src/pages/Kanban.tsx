@@ -309,20 +309,29 @@ export default function KanbanPage() {
     setLeads([]);
     (async () => {
       let allData: Lead[] = [];
+      const allTagsMap = new Map<string, Tag[]>();
       let from = 0;
       const PAGE = 1000;
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, lead_tags(tag_id, tags(id, nome, cor))')
           .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
-        allData = [...allData, ...data as unknown as Lead[]];
+        const rawData = data as any[];
+        rawData.forEach(l => {
+          if (l.lead_tags?.length) {
+            const tags = (l.lead_tags as any[]).filter(lt => lt.tags).map(lt => ({ id: lt.tags.id, nome: lt.tags.nome, cor: lt.tags.cor, org_id: orgId, created_at: '' }) as Tag);
+            if (tags.length) allTagsMap.set(l.id, tags);
+          }
+        });
+        allData = [...allData, ...rawData as unknown as Lead[]];
         if (data.length < PAGE) break;
         from += PAGE;
       }
       setLeads(allData);
+      if (allTagsMap.size > 0) setLeadTagsMap(allTagsMap);
     })();
   }, [orgId, orgReady]); // eslint-disable-line
 
