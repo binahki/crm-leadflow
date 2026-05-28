@@ -641,6 +641,7 @@ function LeadsPage() {
   const [leadTagsMap, setLeadTagsMap] = useState<Map<string, OrgTag[]>>(new Map());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [showTagFilter, setShowTagFilter] = useState(false);
+  const orgTagsRef = useRef<OrgTag[]>([]);
 
   // ── Lead actions ──────────────────────────────────────────────────────────
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
@@ -849,7 +850,8 @@ function LeadsPage() {
     if (!orgId) return;
     (async () => {
       const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
-      if (!tagsData?.length) { setLeadTagsMap(new Map()); return; }
+      if (!tagsData?.length) { setLeadTagsMap(new Map()); orgTagsRef.current = []; return; }
+      orgTagsRef.current = tagsData as OrgTag[];
       const tagIds = tagsData.map((t: any) => t.id);
       const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
       const tagById = new Map(tagsData.map((t: any) => [t.id, t]));
@@ -862,6 +864,37 @@ function LeadsPage() {
       }
       setLeadTagsMap(result);
     })();
+  }, [orgId]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!orgId) return;
+    const ch = (supabase as any).channel(`lead-tags-leads-${orgId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_tags' }, (p: any) => {
+        const { lead_id, tag_id } = p.new;
+        const tag = orgTagsRef.current.find((t: OrgTag) => t.id === tag_id);
+        if (!tag) return;
+        setLeadTagsMap(prev => {
+          const next = new Map(prev);
+          const existing = next.get(lead_id) || [];
+          if (existing.find((t: OrgTag) => t.id === tag_id)) return prev;
+          next.set(lead_id, [...existing, tag]);
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'lead_tags' }, (p: any) => {
+        const { lead_id, tag_id } = p.old;
+        setLeadTagsMap(prev => {
+          const next = new Map(prev);
+          const existing = next.get(lead_id);
+          if (!existing) return prev;
+          const updated = existing.filter((t: OrgTag) => t.id !== tag_id);
+          if (updated.length === 0) next.delete(lead_id);
+          else next.set(lead_id, updated);
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { (supabase as any).removeChannel(ch); };
   }, [orgId]); // eslint-disable-line
 
   useEffect(() => {
@@ -1347,12 +1380,17 @@ function LeadsPage() {
                         <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>
                           {orgTags.map(tag => {
                             const active = selectedTagIds.has(tag.id);
+                            const hex = tag.cor || '#8b5cf6';
+                            const pillBg = active ? hex : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
+                            const pillColor = active ? '#fff' : (dark ? '#d4d4d8' : '#374151');
                             return (
                               <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); active ? n.delete(tag.id) : n.add(tag.id); setSelectedTagIds(n); }}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'8px', border:'none', background:active?(dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'):'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
-                                <span style={{ width:'9px', height:'9px', borderRadius:'50%', background:tag.cor, flexShrink:0 }} />
-                                <span style={{ fontSize:'12.5px', color:dark?'#f4f4f5':'#111827', flex:1 }}>{tag.nome}</span>
-                                {active && <Check style={{ width:'12px', height:'12px', color:'#8b5cf6', flexShrink:0 }} />}
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                                <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'3px 9px', borderRadius:'99px', background:pillBg, color:pillColor, fontSize:'12px', fontWeight:500, transition:'all 0.12s', border: active ? 'none' : `1px solid ${dark?'#3f3f46':'#d1d5db'}` }}>
+                                  <span style={{ width:'7px', height:'7px', borderRadius:'50%', background: active ? 'rgba(255,255,255,0.7)' : hex, flexShrink:0 }} />
+                                  {tag.nome}
+                                </span>
+                                {active && <Check style={{ width:'11px', height:'11px', color:'#8b5cf6', flexShrink:0 }} />}
                               </button>
                             );
                           })}

@@ -313,7 +313,9 @@ export default function KanbanPage() {
       const PAGE = 1000;
       while (true) {
         const { data, error } = await supabase
-          .from('leads').select('*').eq('org_id', orgId)
+          .from('leads')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado')
+          .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
         allData = [...allData, ...data as unknown as Lead[]];
@@ -324,14 +326,17 @@ export default function KanbanPage() {
     })();
   }, [orgId, orgReady]); // eslint-disable-line
 
+  const orgTagsRef = useRef<Tag[]>([]);
+
   useEffect(() => {
     if (!orgId) return;
     (async () => {
       const { data: tagsData } = await (supabase as any).from('tags').select('id, nome, cor').eq('org_id', orgId);
-      if (!tagsData?.length) { setLeadTagsMap(new Map()); return; }
-      const tagIds = tagsData.map((t: any) => t.id);
+      if (!tagsData?.length) { setLeadTagsMap(new Map()); orgTagsRef.current = []; return; }
+      orgTagsRef.current = tagsData as Tag[];
+      const tagIds = (tagsData as any[]).map((t: any) => t.id);
       const { data: lt } = await (supabase as any).from('lead_tags').select('lead_id, tag_id').in('tag_id', tagIds);
-      const tagById = new Map(tagsData.map((t: any) => [t.id, t]));
+      const tagById = new Map((tagsData as any[]).map((t: any) => [t.id, t]));
       const result = new Map<string, Tag[]>();
       for (const row of (lt || [])) {
         const tag = tagById.get(row.tag_id);
@@ -341,6 +346,37 @@ export default function KanbanPage() {
       }
       setLeadTagsMap(result);
     })();
+  }, [orgId]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!orgId) return;
+    const ch = (supabase as any).channel(`lead-tags-kanban-${orgId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_tags' }, (p: any) => {
+        const { lead_id, tag_id } = p.new;
+        const tag = orgTagsRef.current.find((t: Tag) => t.id === tag_id);
+        if (!tag) return;
+        setLeadTagsMap(prev => {
+          const next = new Map(prev);
+          const existing = next.get(lead_id) || [];
+          if (existing.find((t: Tag) => t.id === tag_id)) return prev;
+          next.set(lead_id, [...existing, tag]);
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'lead_tags' }, (p: any) => {
+        const { lead_id, tag_id } = p.old;
+        setLeadTagsMap(prev => {
+          const next = new Map(prev);
+          const existing = next.get(lead_id);
+          if (!existing) return prev;
+          const updated = existing.filter((t: Tag) => t.id !== tag_id);
+          if (updated.length === 0) next.delete(lead_id);
+          else next.set(lead_id, updated);
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { (supabase as any).removeChannel(ch); };
   }, [orgId]); // eslint-disable-line
 
   useEffect(() => {
