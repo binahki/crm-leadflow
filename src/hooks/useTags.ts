@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Tag {
@@ -18,6 +18,9 @@ export const CORES_TAGS = [
 export function useTags(orgId: string | null) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
+  // Unique per hook instance to avoid channel name collisions when multiple
+  // components use useTags with the same orgId simultaneously.
+  const channelId = useRef(`tags-${Math.random().toString(36).slice(2)}`);
 
   async function fetchTags() {
     if (!orgId) return;
@@ -37,7 +40,7 @@ export function useTags(orgId: string | null) {
   useEffect(() => {
     if (!orgId) return;
     const ch = (supabase as any)
-      .channel(`tags-org-${orgId}`)
+      .channel(channelId.current)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tags', filter: `org_id=eq.${orgId}` }, (p: any) => {
         const newTag = p.new as Tag;
         setTags(prev => prev.find(t => t.id === newTag.id) ? prev : [...prev, newTag]);
