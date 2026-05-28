@@ -9,7 +9,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useTags, Tag as OrgTag } from '@/hooks/useTags';
-import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag } from 'lucide-react';
+import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag, Megaphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { toast } from 'sonner';
@@ -339,7 +339,7 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
 // ── Campaign Filter Modal ─────────────────────────────────────────────────────
 function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose }: {
   dark: boolean;
-  campaigns: { name: string; count: number }[];
+  campaigns: { name: string; count: number; isActive: boolean }[];
   pendingSelected: Set<string>;
   onToggle: (name: string) => void;
   onApply: () => void;
@@ -347,21 +347,48 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#71717a' : '#6b7280';
   const bg = dark ? '#111113' : '#fff';
   const rowBg = dark ? '#1a1a1e' : '#f9fafb';
 
-  const visibleCampaigns = campaigns.filter(c =>
-    !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const activeCamps   = campaigns.filter(c => c.isActive);
+  const inactiveCamps = campaigns.filter(c => !c.isActive);
+  const hasInactive   = inactiveCamps.length > 0;
+  const q = search.trim().toLowerCase();
 
-  const selectedLeadCount = visibleCampaigns
+  const visibleActive   = activeCamps.filter(c => !q || c.name.toLowerCase().includes(q));
+  const visibleInactive = inactiveCamps.filter(c => !q || c.name.toLowerCase().includes(q));
+
+  const selectedLeadCount = campaigns
     .filter(c => pendingSelected.has(c.name))
     .reduce((sum, c) => sum + c.count, 0);
 
   const hasSelection = pendingSelected.size > 0;
+
+  function CampRow({ camp }: { camp: { name: string; count: number; isActive: boolean } }) {
+    const isSelected = pendingSelected.has(camp.name);
+    return (
+      <button
+        key={camp.name}
+        onClick={() => onToggle(camp.name)}
+        style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'9px', border:'none', background:isSelected?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'2px' }}
+      >
+        <div style={{ width:'16px', height:'16px', borderRadius:'4px', border:`2px solid ${isSelected?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSelected?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.12s' }}>
+          {isSelected && <Check style={{ width:'10px', height:'10px', color:'#fff' }}/>}
+        </div>
+        <span style={{ flex:1, fontSize:'13px', fontWeight:500, color:isSelected?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' }}>
+          {hasInactive && camp.isActive && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
+          {camp.name || 'Sem campanha'}
+        </span>
+        <span style={{ fontSize:'12px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>
+          {camp.count}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <>
@@ -370,7 +397,7 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
         {/* Header */}
         <div style={{ padding:'16px 20px', borderBottom:`1px solid ${border}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-            <Tag style={{ width:'16px', height:'16px', color:'#2563eb' }}/>
+            <Megaphone style={{ width:'16px', height:'16px', color:'#2563eb' }}/>
             <span style={{ fontSize:'14px', fontWeight:600, color:txtHi }}>Filtrar por campanhas</span>
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
@@ -397,31 +424,25 @@ function CampaignFilterModal({ dark, campaigns, pendingSelected, onToggle, onApp
               Nenhuma campanha encontrada no período
             </div>
           )}
-          {visibleCampaigns.length === 0 && campaigns.length > 0 && (
+          {visibleActive.length === 0 && !hasInactive && campaigns.length > 0 && (
             <div style={{ textAlign:'center', padding:'32px 0', color:txtMid, fontSize:'13px' }}>
               Nenhuma campanha corresponde à busca
             </div>
           )}
-          {visibleCampaigns.map(camp => {
-            const isSelected = pendingSelected.has(camp.name);
-            return (
+          {visibleActive.map(camp => <CampRow key={camp.name} camp={camp} />)}
+
+          {hasInactive && (
+            <>
               <button
-                key={camp.name}
-                onClick={() => onToggle(camp.name)}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:'9px 10px', borderRadius:'9px', border:'none', background:isSelected?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'2px' }}
+                onClick={() => setShowInactive(v => !v)}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'7px 10px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', color:txtMid, fontSize:'12px', fontFamily:'inherit', textAlign:'left', marginTop:'4px' }}
               >
-                <div style={{ width:'16px', height:'16px', borderRadius:'4px', border:`2px solid ${isSelected?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSelected?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.12s' }}>
-                  {isSelected && <Check style={{ width:'10px', height:'10px', color:'#fff' }}/>}
-                </div>
-                <span style={{ flex:1, fontSize:'13px', fontWeight:500, color:isSelected?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {camp.name || 'Sem campanha'}
-                </span>
-                <span style={{ fontSize:'12px', color:txtMid, background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>
-                  {camp.count}
-                </span>
+                <ChevronDown style={{ width:'12px', height:'12px', transform:showInactive?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.15s' }}/>
+                {showInactive ? 'Ocultar campanhas desativadas' : `Mostrar campanhas desativadas (${inactiveCamps.length})`}
               </button>
-            );
-          })}
+              {showInactive && visibleInactive.map(camp => <CampRow key={camp.name} camp={camp} />)}
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -732,7 +753,7 @@ function ConfirmDialog({ title, message, confirmText = 'Confirmar', cancelText =
 // ── Main Page ─────────────────────────────────────────────────────────────────
 function LeadsPage() {
   const navigate = useNavigate();
-  const { updateLead, configuracoes } = useAppStore();
+  const { updateLead, configuracoes, campaigns: storeCampaigns } = useAppStore();
   const { theme } = useTheme();
   const { user } = useAuth();
   const { orgId, ready: orgReady } = useOrgId();
@@ -1070,10 +1091,20 @@ function LeadsPage() {
       const name = extractCampaignName((l as any).utm_campaign);
       if (name) map.set(name, (map.get(name) || 0) + 1);
     });
+    const metaStatusByName = new Map<string, string>();
+    storeCampaigns.forEach(c => metaStatusByName.set(c.name, c.status));
+    const hasMetaData = storeCampaigns.length > 0;
     return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [allLeads, periodFilter, customFrom, customTo]);
+      .map(([name, count]) => ({
+        name,
+        count,
+        isActive: hasMetaData ? metaStatusByName.get(name) === 'ACTIVE' : true,
+      }))
+      .sort((a, b) => {
+        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+        return b.count - a.count;
+      });
+  }, [allLeads, periodFilter, customFrom, customTo, storeCampaigns]);
 
   // ── Filtered leads (all active filters, AND logic) ────────────────────────
   const filtered = useMemo(() => {
@@ -1251,7 +1282,7 @@ function LeadsPage() {
     setCurrentPage(1);
     setSelectedIds(new Set());
     setAllSystemSelected(false);
-  }, [periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter]);
+  }, [periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, selectedTagIds]);
 
   const totalPages = Math.ceil(filtered.length / leadsPerPage);
   const paginatedLeads = useMemo(() => filtered.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage), [filtered, currentPage]);
@@ -1566,7 +1597,7 @@ function LeadsPage() {
                   onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }}
                   style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                 >
-                  <Tag style={{ width:'12px', height:'12px' }}/>
+                  <Megaphone style={{ width:'12px', height:'12px' }}/>
                   Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                 </button>
 
@@ -1577,7 +1608,7 @@ function LeadsPage() {
                       onClick={() => setShowTagFilter(v => !v)}
                       style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                     >
-                      🏷 Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
+                      <Tag style={{ width:'12px', height:'12px' }}/> Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                     </button>
                     {showTagFilter && (
                       <>
@@ -1641,7 +1672,7 @@ function LeadsPage() {
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(true); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
-                  <Tag style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
+                  <Megaphone style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
                 </button>
                 {hasActiveFilters && (
                   <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
@@ -1658,7 +1689,7 @@ function LeadsPage() {
         {/* Campaign filter chip */}
         {selectedCampaigns.size > 0 && (
           <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
-            <Tag style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
+            <Megaphone style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
             <span style={{ color:dark?'#93c5fd':'#1d4ed8', fontWeight:500 }}>Campanhas:</span>
             <span style={{ color:txtHi, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {Array.from(selectedCampaigns).slice(0, 3).join(', ')}{selectedCampaigns.size > 3 ? ` +${selectedCampaigns.size - 3}` : ''}
