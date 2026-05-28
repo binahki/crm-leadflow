@@ -1090,7 +1090,7 @@ function LeadsPage() {
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate]);
+  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap]);
 
   useEffect(() => {
     setCurrentPage(1);
