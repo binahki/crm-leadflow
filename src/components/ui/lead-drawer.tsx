@@ -474,8 +474,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   async function handleDelete() {
     if (!lead) return;
     setDeleting(true);
-    await (supabase as any).from('lead_tags').delete().eq('lead_id', lead.id);
-    await (supabase as any).from('quiz_sessoes').update({ lead_id: null }).eq('lead_id', lead.id);
     const { error } = await supabase.from('leads').delete().eq('id', lead.id);
     setDeleting(false);
     if (error) { toast.error('Erro ao excluir'); setShowDel(false); }
