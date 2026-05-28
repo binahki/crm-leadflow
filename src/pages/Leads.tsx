@@ -1442,6 +1442,7 @@ function LeadsPage() {
   const handleDeleteSelected = async () => {
     setDeleting(true);
     const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+    await (supabase as any).from('lead_tags').delete().in('lead_id', ids);
     const { error } = await supabase.from('leads').delete().in('id', ids);
     setDeleting(false);
     if (error) { toast.error('Erro ao excluir'); return; }
