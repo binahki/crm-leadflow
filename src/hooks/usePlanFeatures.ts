@@ -5,27 +5,22 @@ import { useAuth } from '@/hooks/useAuth';
 
 const KNOWN_PLANS = ['gratuito', 'starter', 'pro', 'enterprise'] as const;
 type Plan = typeof KNOWN_PLANS[number];
-
 export type { Plan };
 
-const ADMIN_EMAIL = 'admin@floow.com';
-
-// Module-level cache — avoids redundant DB fetches within a page session
-const planCache = new Map<string, Plan>();
+const SUPER_ADMIN_EMAIL = 'admin@floow.com';
 
 export function usePlanFeatures() {
   const { orgId, ready } = useOrgId();
   const { user } = useAuth();
-
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
   const [plano, setPlano] = useState<Plan>('gratuito');
-  // loading: true until we know the real plan from DB (or admin bypass kicks in)
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Master admin: always enterprise, no fetch needed
-    if (isAdmin) {
+    console.log('[usePlanFeatures] user:', user?.email, 'orgId:', orgId, 'ready:', ready, 'isSuperAdmin:', isSuperAdmin);
+
+    if (isSuperAdmin) {
       setPlano('enterprise');
       setLoading(false);
       return;
@@ -33,49 +28,35 @@ export function usePlanFeatures() {
 
     if (!orgId || !ready) return;
 
-    // Cache hit: no need to re-fetch
-    if (planCache.has(orgId)) {
-      setPlano(planCache.get(orgId)!);
-      setLoading(false);
-      console.log('[usePlanFeatures] orgId:', orgId, 'plano (cache):', planCache.get(orgId));
-      return;
-    }
-
     setLoading(true);
+    setPlano('gratuito'); // reset before fetch
+
     (supabase as any)
       .from('organizations')
       .select('plano')
       .eq('id', orgId)
       .single()
-      .then(({ data }: any) => {
+      .then(({ data, error }: any) => {
+        console.log('[usePlanFeatures] DB result:', { data, error, orgId });
         const p: Plan =
           data?.plano && KNOWN_PLANS.includes(data.plano as Plan)
             ? (data.plano as Plan)
             : 'gratuito';
-        planCache.set(orgId, p);
         setPlano(p);
         setLoading(false);
-        console.log('[usePlanFeatures] orgId:', orgId, 'plano (db):', p);
       })
-      .catch(() => {
+      .catch((err: any) => {
+        console.error('[usePlanFeatures] erro:', err);
+        setPlano('gratuito');
         setLoading(false);
       });
-  }, [orgId, ready, isAdmin]); // eslint-disable-line
+  }, [orgId, ready, isSuperAdmin]); // eslint-disable-line
 
-  if (isAdmin) {
-    return {
-      plano: 'enterprise' as Plan,
-      orgId,
-      loading: false,
-      features: {
-        ravena: true, whatsappOficial: true, gestorTrafego: true, modeloConversao: true,
-        multiplosUsuarios: true, webhooksIlimitados: true, leadsIlimitados: true,
-        limiteLeads: Infinity, limiteQuizzes: Infinity,
-      },
-    };
-  }
-
-  const features = {
+  const features = isSuperAdmin ? {
+    ravena: true, whatsappOficial: true, gestorTrafego: true,
+    modeloConversao: true, multiplosUsuarios: true, webhooksIlimitados: true,
+    leadsIlimitados: true, limiteLeads: Infinity, limiteQuizzes: Infinity,
+  } : {
     ravena:             ['starter','pro','enterprise'].includes(plano),
     whatsappOficial:    ['starter','pro','enterprise'].includes(plano),
     gestorTrafego:      ['starter','pro','enterprise'].includes(plano),
@@ -87,17 +68,11 @@ export function usePlanFeatures() {
     limiteQuizzes:      (plano === 'gratuito' || plano === 'starter') ? 1 : 3,
   };
 
-  return { plano, orgId, loading, features };
+  return { plano: isSuperAdmin ? 'enterprise' as Plan : plano, orgId, loading, features };
 }
 
-// Feature → minimum plan required (for display in UpgradeModal)
 export const FEATURE_REQUIRED_PLAN: Record<string, 'Starter' | 'Pro' | 'Enterprise'> = {
-  ravena:             'Starter',
-  whatsappOficial:    'Starter',
-  gestorTrafego:      'Starter',
-  modeloConversao:    'Starter',
-  webhooksIlimitados: 'Starter',
-  multiplosUsuarios:  'Pro',
-  leadsIlimitados:    'Enterprise',
-  limiteQuizzes:      'Pro',
+  ravena: 'Starter', whatsappOficial: 'Starter', gestorTrafego: 'Starter',
+  modeloConversao: 'Starter', webhooksIlimitados: 'Starter',
+  multiplosUsuarios: 'Pro', leadsIlimitados: 'Enterprise', limiteQuizzes: 'Pro',
 };
