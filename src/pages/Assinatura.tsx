@@ -114,9 +114,13 @@ export default function AssinaturaPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const { plano: rawPlano } = usePlanFeatures();
+  const { plano: rawPlano, orgId, loading: loadingPlano } = usePlanFeatures();
   // Normalise unknown values (null, 'basic', 'trial', …) to 'gratuito'
   const orgPlano = KNOWN.includes(rawPlano) ? rawPlano : 'gratuito';
+
+  useEffect(() => {
+    console.log('[Assinatura] orgId:', orgId, '| plano:', orgPlano, '| loading:', loadingPlano);
+  }, [orgId, orgPlano, loadingPlano]);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -157,11 +161,12 @@ export default function AssinaturaPage() {
             marginBottom: '32px',
           }}>
             {PLANS.map(plan => {
-              const isCurrent = plan.key === orgPlano;
-              const cardOrder = PLAN_ORDER[plan.key] ?? 0;
-              const curOrder  = PLAN_ORDER[orgPlano]  ?? 0;
-              const isUpgrade   = cardOrder > curOrder;
-              const isDowngrade = cardOrder < curOrder;
+              // Don't commit to any "current" state until the plan is loaded from DB
+              const isCurrent   = !loadingPlano && plan.key === orgPlano;
+              const cardOrder   = PLAN_ORDER[plan.key] ?? 0;
+              const curOrder    = PLAN_ORDER[orgPlano]  ?? 0;
+              const isUpgrade   = !loadingPlano && cardOrder > curOrder;
+              const isDowngrade = !loadingPlano && cardOrder < curOrder;
               return (
               <div key={plan.key} style={{
                 background: cardBg,

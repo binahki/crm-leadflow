@@ -8,11 +8,9 @@ type Plan = typeof KNOWN_PLANS[number];
 
 export type { Plan };
 
-// Only the Floow master admin sees everything unlocked.
-// Gestores and regular users always see the real plan of the active org.
 const ADMIN_EMAIL = 'admin@floow.com';
 
-// Module-level cache — avoids redundant DB fetches per session
+// Module-level cache — avoids redundant DB fetches within a page session
 const planCache = new Map<string, Plan>();
 
 export function usePlanFeatures() {
@@ -21,19 +19,29 @@ export function usePlanFeatures() {
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
-  const [plano, setPlano] = useState<Plan>(() =>
-    (orgId && planCache.get(orgId)) || 'gratuito'
-  );
+  const [plano, setPlano] = useState<Plan>('gratuito');
+  // loading: true until we know the real plan from DB (or admin bypass kicks in)
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Master admin: skip plan check, they see all features
-    if (isAdmin) return;
-    if (!orgId || !ready) return;
-    if (planCache.has(orgId)) {
-      setPlano(planCache.get(orgId)!);
+    // Master admin: always enterprise, no fetch needed
+    if (isAdmin) {
+      setPlano('enterprise');
+      setLoading(false);
       return;
     }
 
+    if (!orgId || !ready) return;
+
+    // Cache hit: no need to re-fetch
+    if (planCache.has(orgId)) {
+      setPlano(planCache.get(orgId)!);
+      setLoading(false);
+      console.log('[usePlanFeatures] orgId:', orgId, 'plano (cache):', planCache.get(orgId));
+      return;
+    }
+
+    setLoading(true);
     (supabase as any)
       .from('organizations')
       .select('plano')
@@ -46,14 +54,19 @@ export function usePlanFeatures() {
             : 'gratuito';
         planCache.set(orgId, p);
         setPlano(p);
-        console.log('[usePlanFeatures] plano:', p, 'orgId:', orgId);
+        setLoading(false);
+        console.log('[usePlanFeatures] orgId:', orgId, 'plano (db):', p);
       })
-      .catch(() => {});
+      .catch(() => {
+        setLoading(false);
+      });
   }, [orgId, ready, isAdmin]); // eslint-disable-line
 
   if (isAdmin) {
     return {
       plano: 'enterprise' as Plan,
+      orgId,
+      loading: false,
       features: {
         ravena: true, whatsappOficial: true, gestorTrafego: true, modeloConversao: true,
         multiplosUsuarios: true, webhooksIlimitados: true, leadsIlimitados: true,
@@ -74,7 +87,7 @@ export function usePlanFeatures() {
     limiteQuizzes:      (plano === 'gratuito' || plano === 'starter') ? 1 : 3,
   };
 
-  return { plano, features };
+  return { plano, orgId, loading, features };
 }
 
 // Feature → minimum plan required (for display in UpgradeModal)
