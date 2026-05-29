@@ -18,9 +18,8 @@ export function usePlanFeatures() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[usePlanFeatures] user:', user?.email, 'orgId:', orgId, 'ready:', ready, 'isSuperAdmin:', isSuperAdmin);
-
-    if (isSuperAdmin) {
+    // Admin sem org selecionada (não está visualizando um cliente) → acesso total
+    if (isSuperAdmin && !orgId) {
       setPlano('enterprise');
       setLoading(false);
       return;
@@ -29,7 +28,7 @@ export function usePlanFeatures() {
     if (!orgId || !ready) return;
 
     setLoading(true);
-    setPlano('gratuito'); // reset before fetch
+    setPlano('gratuito');
 
     (supabase as any)
       .from('organizations')
@@ -37,7 +36,7 @@ export function usePlanFeatures() {
       .eq('id', orgId)
       .single()
       .then(({ data, error }: any) => {
-        console.log('[usePlanFeatures] DB result:', { data, error, orgId });
+        console.log('[usePlanFeatures] orgId:', orgId, 'plano:', data?.plano, 'error:', error);
         const p: Plan =
           data?.plano && KNOWN_PLANS.includes(data.plano as Plan)
             ? (data.plano as Plan)
@@ -45,18 +44,14 @@ export function usePlanFeatures() {
         setPlano(p);
         setLoading(false);
       })
-      .catch((err: any) => {
-        console.error('[usePlanFeatures] erro:', err);
+      .catch(() => {
         setPlano('gratuito');
         setLoading(false);
       });
   }, [orgId, ready, isSuperAdmin]); // eslint-disable-line
 
-  const features = isSuperAdmin ? {
-    ravena: true, whatsappOficial: true, gestorTrafego: true,
-    modeloConversao: true, multiplosUsuarios: true, webhooksIlimitados: true,
-    leadsIlimitados: true, limiteLeads: Infinity, limiteQuizzes: Infinity,
-  } : {
+  // Features are always derived from the real org plan (even for admin viewing a client org)
+  const features = {
     ravena:             ['starter','pro','enterprise'].includes(plano),
     whatsappOficial:    ['starter','pro','enterprise'].includes(plano),
     gestorTrafego:      ['starter','pro','enterprise'].includes(plano),
@@ -68,7 +63,7 @@ export function usePlanFeatures() {
     limiteQuizzes:      (plano === 'gratuito' || plano === 'starter') ? 1 : 3,
   };
 
-  return { plano: isSuperAdmin ? 'enterprise' as Plan : plano, orgId, loading, features };
+  return { plano, orgId, loading, features };
 }
 
 export const FEATURE_REQUIRED_PLAN: Record<string, 'Starter' | 'Pro' | 'Enterprise'> = {
