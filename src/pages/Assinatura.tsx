@@ -162,11 +162,13 @@ export default function AssinaturaPage() {
           }}>
             {PLANS.map(plan => {
               // Don't commit to any "current" state until the plan is loaded from DB
-              const isCurrent   = !loadingPlano && plan.key === orgPlano;
-              const cardOrder   = PLAN_ORDER[plan.key] ?? 0;
-              const curOrder    = PLAN_ORDER[orgPlano]  ?? 0;
-              const isUpgrade   = !loadingPlano && cardOrder > curOrder;
-              const isDowngrade = !loadingPlano && cardOrder < curOrder;
+              const isCurrent     = !loadingPlano && plan.key === orgPlano;
+              const cardOrder     = PLAN_ORDER[plan.key] ?? 0;
+              const curOrder      = PLAN_ORDER[orgPlano]  ?? 0;
+              const isUpgrade     = !loadingPlano && cardOrder > curOrder;
+              const isDowngrade   = !loadingPlano && cardOrder < curOrder;
+              // "Mais popular" só aparece para quem ainda está no gratuito
+              const mostrarPopular = plan.popular && (!loadingPlano && orgPlano === 'gratuito');
               return (
               <div key={plan.key} style={{
                 background: cardBg,
@@ -190,7 +192,7 @@ export default function AssinaturaPage() {
                     ✓ Plano atual
                   </div>
                 )}
-                {!isCurrent && plan.popular && (
+                {!isCurrent && mostrarPopular && (
                   <div style={{
                     position: 'absolute', top: '-12px', left: '50%',
                     transform: 'translateX(-50%)',

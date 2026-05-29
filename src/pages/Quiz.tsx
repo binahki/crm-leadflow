@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { useOrgId } from '@/hooks/useOrgId';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { FeatureGate } from '@/components/ui/FeatureGate';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { toast } from 'sonner';
@@ -1078,19 +1079,21 @@ export default function QuizBuilderPage() {
 
             {/* Creation Buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '48px' }}>
-              <button onClick={() => { setNomeTemplate(''); setShowNameModal(true); }} disabled={creating} style={{
-                padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`,
-                background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer',
-                fontFamily: 'inherit', textAlign: 'left', boxShadow: tokens.shadow.card, transition: tokens.transition,
-                display: 'flex', flexDirection: 'column'
-              }}
-                onMouseEnter={e => { if (!creating) { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#2563eb'; el.style.transform = 'translateY(-4px)'; el.style.boxShadow = '0 12px 24px rgba(37,99,235,0.12)'; } }}
-                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = isDark ? '#1e1e22' : '#e5e7eb'; el.style.transform = 'translateY(0)'; el.style.boxShadow = tokens.shadow.card; }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: hexRgba('#2563eb', 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', marginBottom: '16px' }}>🎯</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>Usar modelo de Alta Conversão</div>
-                <div style={{ fontSize: '13px', color: textMut, lineHeight: 1.5 }}>Modelo otimizado para revenda de semijoias com perguntas validadas e alta conversão.</div>
-                {creating && <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', fontSize: '12px', fontWeight: 600 }}><Loader2 size={14} className="animate-spin" /> Criando...</div>}
-              </button>
+              <FeatureGate feature="modeloConversao" planoNecessario="Starter">
+                <button onClick={() => { setNomeTemplate(''); setShowNameModal(true); }} disabled={creating} style={{
+                  padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`,
+                  background: isDark ? '#111113' : '#fff', color: textMain, cursor: creating ? 'default' : 'pointer',
+                  fontFamily: 'inherit', textAlign: 'left', boxShadow: tokens.shadow.card, transition: tokens.transition,
+                  display: 'flex', flexDirection: 'column', width: '100%',
+                }}
+                  onMouseEnter={e => { if (!creating) { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#2563eb'; el.style.transform = 'translateY(-4px)'; el.style.boxShadow = '0 12px 24px rgba(37,99,235,0.12)'; } }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = isDark ? '#1e1e22' : '#e5e7eb'; el.style.transform = 'translateY(0)'; el.style.boxShadow = tokens.shadow.card; }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: hexRgba('#2563eb', 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', marginBottom: '16px' }}>🎯</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>Usar modelo de Alta Conversão</div>
+                  <div style={{ fontSize: '13px', color: textMut, lineHeight: 1.5 }}>Modelo otimizado para revenda de semijoias com perguntas validadas e alta conversão.</div>
+                  {creating && <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', fontSize: '12px', fontWeight: 600 }}><Loader2 size={14} className="animate-spin" /> Criando...</div>}
+                </button>
+              </FeatureGate>
 
               <button onClick={() => handleCreateQuiz(false)} disabled={creating} style={{
                 padding: '32px 24px', borderRadius: '20px', border: `1.5px solid ${isDark ? '#1e1e22' : '#e5e7eb'}`,
