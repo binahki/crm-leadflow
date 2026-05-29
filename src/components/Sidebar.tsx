@@ -10,6 +10,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 
 const NAV_MAIN = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/', badge: false },
@@ -30,11 +32,12 @@ const NAV_MAIN = [
 const NAV_META = [
   { icon: Megaphone, label: 'Campanhas', href: '/campanhas', badge: false },
   { icon: ImageIcon, label: 'Criativos', href: '/criativos', badge: false },
-  { 
-    icon: MessageCircle, 
-    label: 'WhatsApp', 
-    href: '/whatsapp', 
+  {
+    icon: MessageCircle,
+    label: 'WhatsApp',
+    href: '/whatsapp',
     badge: false,
+    feature: 'whatsappOficial',
     children: [
       { label: 'Mensagens', href: '/whatsapp' },
       { label: 'Disparos', href: '/whatsapp/disparos' },
@@ -74,6 +77,9 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const { orgId, ready } = useOrgId();
   const isDark = theme === 'dark';
+
+  const { features } = usePlanFeatures();
+  const [lockedFeature, setLockedFeature] = useState<string | null>(null);
 
   const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
   const [waUnread, setWaUnread] = useState(0);
@@ -241,6 +247,27 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                 )}
               </div>
             );
+
+            // Feature-locked items render differently
+            const isLocked = item.feature && !(features[item.feature as keyof typeof features] as boolean);
+            if (isLocked) {
+              return (
+                <div key={item.href} style={{ position: 'relative' }} onClick={() => setLockedFeature(item.feature!)}>
+                  <div style={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>
+                    {itemContent}
+                  </div>
+                  {!isCollapsed && (
+                    <span style={{
+                      position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                      fontSize: '11px', background: 'rgba(0,0,0,0.45)', color: '#fff',
+                      padding: '2px 5px', borderRadius: '4px', pointerEvents: 'none',
+                    }}>
+                      🔒
+                    </span>
+                  )}
+                </div>
+              );
+            }
 
             return (
               <div key={item.href}>
@@ -473,6 +500,14 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           </div>
         </div>
       </div>
+
+      {lockedFeature && (
+        <UpgradeModal
+          feature={lockedFeature}
+          planoNecessario="Starter"
+          onClose={() => setLockedFeature(null)}
+        />
+      )}
     </aside>
   );
 }

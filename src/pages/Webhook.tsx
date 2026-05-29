@@ -6,6 +6,8 @@ import { Copy, CheckCircle2, Save, Settings, Plus, Pencil, Trash2, Check, X } fr
 import { toast } from 'sonner';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 
 const URL_RECEBER_LEAD = `https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead`;
 const URL_WEBHOOK      = `https://obguidmfvfjaekaskgob.functions.supabase.co/webhook`;
@@ -37,6 +39,8 @@ export default function WebhookPage() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { orgId, ready: orgReady } = useOrgId();
+  const { features } = usePlanFeatures();
+  const [showWebhookUpgrade, setShowWebhookUpgrade] = useState(false);
 
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [usaQuizExterno, setUsaQuizExterno] = useState(false);
@@ -205,12 +209,25 @@ export default function WebhookPage() {
               )}
             </h2>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                if (!features.webhooksIlimitados && webhooks.length >= 1) {
+                  setShowWebhookUpgrade(true);
+                  return;
+                }
+                setShowCreateModal(true);
+              }}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT, flexShrink: 0 }}
             >
               <Plus style={{ width: '13px', height: '13px' }} />
               Criar novo webhook
             </button>
+            {showWebhookUpgrade && (
+              <UpgradeModal
+                feature="webhooksIlimitados"
+                planoNecessario="Starter"
+                onClose={() => setShowWebhookUpgrade(false)}
+              />
+            )}
           </div>
 
           {/* Cards */}

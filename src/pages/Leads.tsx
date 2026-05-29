@@ -9,6 +9,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useTags, Tag as OrgTag } from '@/hooks/useTags';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag, Megaphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
@@ -738,6 +739,7 @@ function LeadsPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
   const dark = theme === 'dark';
+  const { plano, features } = usePlanFeatures();
 
   const statusOptions = useMemo(() => STATUS_OPTIONS.map(o =>
     o.value === '3' ? { ...o, label: t.statusConvertidoLabel } : o
@@ -1301,6 +1303,16 @@ function LeadsPage() {
     return () => { document.body.style.overflow = ''; };
   }, [showTagFilter, showCampaignModal]);
 
+  // Lead limit banner: count leads created this month
+  const leadsNoMes = useMemo(() => {
+    const start = new Date();
+    start.setDate(1); start.setHours(0, 0, 0, 0);
+    return allLeads.filter(l => parseLeadDate(l.created_at) >= start).length;
+  }, [allLeads]);
+  const PLANO_LABELS_LEAD: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
+  const limiteLeads = features.limiteLeads;
+  const showLeadLimitBanner = limiteLeads < Infinity && leadsNoMes >= limiteLeads * 0.8;
+
   const totalPages = Math.ceil(filtered.length / leadsPerPage);
   const paginatedLeads = useMemo(() => filtered.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage), [filtered, currentPage]);
 
@@ -1756,6 +1768,23 @@ function LeadsPage() {
                : `${campDeepFilter.campaignName||campDeepFilter.campaignId} → ${campDeepFilter.adSetName||''} → ${campDeepFilter.adName||campDeepFilter.adId||''}`}
             </span>
             <button onClick={() => setCampDeepFilter(null)} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b7280':'#9ca3af', fontSize:'14px', padding:'0 2px', lineHeight:1 }}>✕</button>
+          </div>
+        )}
+
+        {/* Lead limit banner */}
+        {showLeadLimitBanner && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', padding:'10px 16px', background:'rgba(249,115,22,0.1)', border:'1px solid rgba(249,115,22,0.3)', borderRadius:'10px', marginBottom:'12px', flexWrap:'wrap' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', flex:1, minWidth:0 }}>
+              <span style={{ fontSize:'16px', flexShrink:0 }}>⚠️</span>
+              <span style={{ fontSize:'13px', color: dark ? '#fdba74' : '#c2410c', lineHeight:1.4 }}>
+                {leadsNoMes >= limiteLeads
+                  ? `Você atingiu o limite de ${limiteLeads} leads do plano ${PLANO_LABELS_LEAD[plano] || plano}. Faça upgrade para continuar recebendo leads.`
+                  : `Você usou ${leadsNoMes} de ${limiteLeads} leads do plano ${PLANO_LABELS_LEAD[plano] || plano} este mês.`}
+              </span>
+            </div>
+            <a href="/assinatura" style={{ fontSize:'12.5px', fontWeight:600, color:'#f97316', background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.3)', padding:'5px 12px', borderRadius:'7px', textDecoration:'none', flexShrink:0, whiteSpace:'nowrap' }}>
+              Ver planos →
+            </a>
           </div>
         )}
 

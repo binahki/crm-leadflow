@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { Check } from 'lucide-react';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 
 const FONT = '"DM Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Inter, sans-serif';
 const WA_CONSULTA = 'https://wa.me/5519993929168?text=Olá!%20Preciso%20de%20um%20plano%20personalizado%20para%20minha%20operação.';
@@ -110,6 +111,7 @@ export default function AssinaturaPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
+  const { plano: orgPlano } = usePlanFeatures();
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -149,10 +151,12 @@ export default function AssinaturaPage() {
             gap: isMobile ? '16px' : '20px',
             marginBottom: '32px',
           }}>
-            {PLANS.map(plan => (
+            {PLANS.map(plan => {
+              const isCurrent = plan.key === orgPlano;
+              return (
               <div key={plan.key} style={{
                 background: cardBg,
-                border: `2px solid ${plan.popular ? plan.color : bdr}`,
+                border: `2px solid ${isCurrent ? plan.color : plan.popular ? plan.color : bdr}`,
                 borderRadius: '20px',
                 padding: isMobile ? '20px' : '28px',
                 display: 'flex',
@@ -160,7 +164,19 @@ export default function AssinaturaPage() {
                 position: 'relative',
                 boxShadow: plan.popular ? `0 8px 32px ${plan.color}20` : 'none',
               }}>
-                {plan.popular && (
+                {isCurrent && (
+                  <div style={{
+                    position: 'absolute', top: '-12px', left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: plan.color, color: '#fff',
+                    padding: '4px 14px', borderRadius: '99px',
+                    fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    ✓ Plano atual
+                  </div>
+                )}
+                {!isCurrent && plan.popular && (
                   <div style={{
                     position: 'absolute', top: '-12px', left: '50%',
                     transform: 'translateX(-50%)',
@@ -233,7 +249,7 @@ export default function AssinaturaPage() {
                 </div>
 
                 {/* CTA */}
-                {plan.ctaHref ? (
+                {plan.ctaHref && !isCurrent ? (
                   <a
                     href={plan.ctaHref}
                     target="_blank"
@@ -254,20 +270,21 @@ export default function AssinaturaPage() {
                   <button
                     style={{
                       width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
-                      background: plan.current ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
-                      color: plan.current ? txtMid : '#fff',
+                      background: isCurrent ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
+                      color: isCurrent ? txtMid : '#fff',
                       fontSize: '14px', fontWeight: 700,
-                      cursor: plan.current ? 'default' : 'pointer',
+                      cursor: isCurrent ? 'default' : 'pointer',
                       fontFamily: FONT, transition: 'all 0.2s',
                     }}
-                    onMouseEnter={e => { if (!plan.current) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    {plan.cta}
+                    {isCurrent ? 'Plano atual' : plan.cta}
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Consultation CTA */}

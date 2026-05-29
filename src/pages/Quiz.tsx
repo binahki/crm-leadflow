@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useOrgId } from '@/hooks/useOrgId';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { toast } from 'sonner';
@@ -204,6 +206,8 @@ export default function QuizBuilderPage() {
   const { orgId, ready } = useOrgId();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { features } = usePlanFeatures();
+  const [showQuizUpgrade, setShowQuizUpgrade] = useState(false);
 
   // Data
   const [loading, setLoading] = useState(true);
@@ -381,12 +385,13 @@ export default function QuizBuilderPage() {
   async function handleCreateQuiz(withSeed = false) {
     if (!orgId) return;
 
-    // Limit to 1 quiz
-    if (quizzes.length >= 1) {
-      toast.error('Limite de 1 quiz atingido. Por enquanto, você só pode ter um quiz ativo.', {
-        duration: 4000,
-        icon: '⚠️'
-      });
+    // Limit quizzes per plan
+    if (quizzes.length >= features.limiteQuizzes) {
+      if (features.limiteQuizzes === 1) {
+        setShowQuizUpgrade(true);
+      } else {
+        toast.error(`Limite de ${features.limiteQuizzes} quizzes atingido no seu plano.`, { duration: 4000, icon: '⚠️' });
+      }
       return;
     }
 
@@ -1237,6 +1242,13 @@ export default function QuizBuilderPage() {
             )}
           </div>
         </div>
+      {showQuizUpgrade && (
+        <UpgradeModal
+          feature="limiteQuizzes"
+          planoNecessario="Pro"
+          onClose={() => setShowQuizUpgrade(false)}
+        />
+      )}
       </AppLayout>
     );
   }

@@ -11,6 +11,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 import { createPortal } from 'react-dom';
+import { FeatureGate } from '@/components/ui/FeatureGate';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -1579,7 +1580,8 @@ export default function CampanhasPage() {
 
         </div>
 
-        {/* Banner Ravena */}
+        {/* Banner Ravena — gated para Starter+ */}
+        <FeatureGate feature="ravena" planoNecessario="Starter">
         {aiLog && (
           <div
             onClick={() => setShowAiPanel(true)}
@@ -1631,6 +1633,7 @@ export default function CampanhasPage() {
             </p>
           </div>
         )}
+        </FeatureGate>
 
         {/* Leads × Convertidos por Campanha — Bar Chart */}
         {!loading && chartRows.length > 0 && (
