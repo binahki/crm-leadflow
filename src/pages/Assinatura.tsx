@@ -167,18 +167,18 @@ export default function AssinaturaPage() {
               const curOrder      = PLAN_ORDER[orgPlano]  ?? 0;
               const isUpgrade     = !loadingPlano && cardOrder > curOrder;
               const isDowngrade   = !loadingPlano && cardOrder < curOrder;
-              // "Mais popular" só aparece para quem ainda está no gratuito
-              const mostrarPopular = plan.popular && (!loadingPlano && orgPlano === 'gratuito');
+              // Destaque "Mais popular" + borda colorida só quando org está no gratuito
+              const mostrarDestaque = plan.popular && (!loadingPlano && orgPlano === 'gratuito');
               return (
               <div key={plan.key} style={{
                 background: cardBg,
-                border: `2px solid ${isCurrent ? plan.color : plan.popular ? plan.color : bdr}`,
+                border: `2px solid ${isCurrent ? plan.color : mostrarDestaque ? plan.color : bdr}`,
                 borderRadius: '20px',
                 padding: isMobile ? '20px' : '28px',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
-                boxShadow: plan.popular ? `0 8px 32px ${plan.color}20` : 'none',
+                boxShadow: mostrarDestaque ? `0 8px 32px ${plan.color}20` : 'none',
               }}>
                 {isCurrent && (
                   <div style={{
@@ -192,7 +192,7 @@ export default function AssinaturaPage() {
                     ✓ Plano atual
                   </div>
                 )}
-                {!isCurrent && mostrarPopular && (
+                {!isCurrent && mostrarDestaque && (
                   <div style={{
                     position: 'absolute', top: '-12px', left: '50%',
                     transform: 'translateX(-50%)',

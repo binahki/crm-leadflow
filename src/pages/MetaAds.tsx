@@ -4,8 +4,11 @@ import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
-import { Save, BarChart3, ExternalLink, RefreshCw, Pencil, Check, X, ChevronRight, Layers } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Save, BarChart3, ExternalLink, RefreshCw, Pencil, Check, X, ChevronRight, Layers, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const META_V = 'https://graph.facebook.com/v19.0';
@@ -444,6 +447,11 @@ export default function MetaAdsPage() {
   const dark = theme === 'dark';
   const { orgId, ready: orgReady } = useOrgId();
 
+  const navigate = useNavigate();
+  const { features } = usePlanFeatures();
+  const ravenaLocked = !features.ravena;
+  const [showRavenaUpgrade, setShowRavenaUpgrade] = useState(false);
+
   const [accountId, setAccountId]   = useState('');
   const [token, setToken]           = useState('');
   const [loadingData, setLoadingData] = useState(true);
@@ -597,15 +605,27 @@ export default function MetaAdsPage() {
 
           {/* Ravena card */}
           <div style={card}>
-            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, background: dark ? '#18181b' : '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Header */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`,
+              background: ravenaAtiva && !ravenaLocked
+                ? (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(59,130,246,0.12))' : 'linear-gradient(135deg, #f5f3ff, #eff6ff)')
+                : (dark ? '#18181b' : '#fafafa'),
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              transition: 'background 0.3s',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '16px' }}>🤖</span>
+                <Sparkles style={{ width: '16px', height: '16px', color: ravenaAtiva && !ravenaLocked ? '#8b5cf6' : (dark ? '#52525b' : '#9ca3af') }} />
                 <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Ravena — IA de Tráfego</span>
               </div>
               {ravenaAtiva === null
                 ? <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: dark ? '#3f3f46' : '#d1d5db' }} />
                 : (
-                  <div onClick={() => setRavenaAtiva(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <div
+                    onClick={() => ravenaLocked ? setShowRavenaUpgrade(true) : setRavenaAtiva(v => !v)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', opacity: ravenaLocked ? 0.5 : 1, pointerEvents: ravenaLocked ? 'auto' : 'auto' }}
+                  >
                     <span style={{ fontSize: '12px', color: ravenaAtiva ? '#10b981' : txtMid, fontWeight: 600 }}>{ravenaAtiva ? 'Ativa' : 'Inativa'}</span>
                     <div style={{ width: '36px', height: '20px', borderRadius: '99px', background: ravenaAtiva ? '#10b981' : (dark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s' }}>
                       <div style={{ position: 'absolute', top: '2px', left: ravenaAtiva ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
@@ -613,8 +633,24 @@ export default function MetaAdsPage() {
                   </div>
                 )}
             </div>
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaAtiva === true ? 1 : 0.5, pointerEvents: ravenaAtiva === true ? 'auto' : 'none' }}>
+
+            {/* Upgrade banner */}
+            {ravenaLocked && (
+              <div style={{ padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', background: dark ? 'rgba(139,92,246,0.1)' : '#f5f3ff', borderBottom: `1px solid ${dark ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.15)'}` }}>
+                <span style={{ fontSize: '12.5px', color: dark ? '#c4b5fd' : '#6d28d9', fontWeight: 500 }}>
+                  🔒 Disponível no plano Starter — Faça upgrade para ativar a Ravena
+                </span>
+                <button
+                  onClick={() => navigate('/assinatura')}
+                  style={{ padding: '5px 12px', borderRadius: '7px', border: 'none', background: '#8b5cf6', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: FONT }}
+                >
+                  Ver planos
+                </button>
+              </div>
+            )}
+
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaLocked ? 0.5 : (ravenaAtiva === true ? 1 : 0.5), pointerEvents: ravenaLocked ? 'none' : (ravenaAtiva === true ? 'auto' : 'none') }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={lbl}>Investimento mensal</label>
@@ -684,13 +720,21 @@ export default function MetaAdsPage() {
                 </div>
               )}
             </div>
-              <button onClick={handleSaveRavena} disabled={savingRavena}
-                style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: savingRavena ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: savingRavena ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: savingRavena ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}>
+              <button onClick={handleSaveRavena} disabled={savingRavena || ravenaLocked}
+                style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: (savingRavena || ravenaLocked) ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: (savingRavena || ravenaLocked) ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: (savingRavena || ravenaLocked) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}>
                 <Save style={{ width: '14px', height: '14px' }} />
                 {savingRavena ? 'Salvando…' : 'Salvar configuração da Ravena'}
               </button>
             </div>
           </div>
+
+          {showRavenaUpgrade && (
+            <UpgradeModal
+              feature="ravena"
+              planoNecessario="Starter"
+              onClose={() => setShowRavenaUpgrade(false)}
+            />
+          )}
 
         </div>{/* end config grid */}
 

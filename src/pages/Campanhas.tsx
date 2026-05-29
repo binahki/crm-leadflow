@@ -11,7 +11,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getMetaCache, setMetaCache } from '@/lib/metaCache';
 import { createPortal } from 'react-dom';
-import { FeatureGate } from '@/components/ui/FeatureGate';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 
 interface AdSet {
   id: string; name: string; status: string;
@@ -609,6 +609,8 @@ export default function CampanhasPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
   const dark = theme === 'dark';
+  const { features } = usePlanFeatures();
+  const ravenaDesbotada = !features.ravena;
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
   const _initCampKey = orgId ? `meta_camp_${orgId}_today` : null;
@@ -1580,8 +1582,8 @@ export default function CampanhasPage() {
 
         </div>
 
-        {/* Banner Ravena — gated para Starter+ */}
-        <FeatureGate feature="ravena" planoNecessario="Starter">
+        {/* Banner Ravena — desbotado no gratuito, sem bloqueio */}
+        <div style={{ opacity: ravenaDesbotada ? 0.4 : 1 }}>
         {aiLog && (
           <div
             onClick={() => setShowAiPanel(true)}
@@ -1629,11 +1631,11 @@ export default function CampanhasPage() {
           }}>
             <img src="/ravena.png" alt="Ravena" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed' }}>
-              Ravena ainda não analisou hoje — próxima análise automática às 08h
+              Ative a Ravena em Integrações &gt; Meta Ads
             </p>
           </div>
         )}
-        </FeatureGate>
+        </div>
 
         {/* Leads × Convertidos por Campanha — Bar Chart */}
         {!loading && chartRows.length > 0 && (
