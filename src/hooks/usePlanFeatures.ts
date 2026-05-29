@@ -8,56 +8,31 @@ type Plan = typeof KNOWN_PLANS[number];
 
 export type { Plan };
 
+// Only the Floow master admin sees everything unlocked.
+// Gestores and regular users always see the real plan of the active org.
 const ADMIN_EMAIL = 'admin@floow.com';
 
 // Module-level cache — avoids redundant DB fetches per session
 const planCache = new Map<string, Plan>();
 
-const ALL_FEATURES_UNLOCKED = {
-  ravena: true,
-  whatsappOficial: true,
-  gestorTrafego: true,
-  modeloConversao: true,
-  multiplosUsuarios: true,
-  webhooksIlimitados: true,
-  leadsIlimitados: true,
-  limiteLeads: Infinity,
-  limiteQuizzes: Infinity,
-};
-
 export function usePlanFeatures() {
   const { orgId, ready } = useOrgId();
   const { user } = useAuth();
 
-  // isAdmin: only the master admin email — NOT based on localStorage
-  // (localStorage.getItem('admin_viewing_org') can be stale from any previous session
-  // and would incorrectly bypass plan checks for regular users)
   const isAdmin = user?.email === ADMIN_EMAIL;
 
-  // Check if user is an active gestor (async, accurate)
-  const [isGestor, setIsGestor] = useState(false);
-  useEffect(() => {
-    if (!user?.id || isAdmin) return;
-    (supabase as any)
-      .from('gestores')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('ativo', true)
-      .limit(1)
-      .then(({ data }: any) => { if (data?.length > 0) setIsGestor(true); })
-      .catch(() => {});
-  }, [user?.id, isAdmin]); // eslint-disable-line
-
-  const bypass = isAdmin || isGestor;
-
   const [plano, setPlano] = useState<Plan>(() =>
-    (!bypass && orgId && planCache.get(orgId)) || 'gratuito'
+    (orgId && planCache.get(orgId)) || 'gratuito'
   );
 
   useEffect(() => {
-    if (bypass) return;
+    // Master admin: skip plan check, they see all features
+    if (isAdmin) return;
     if (!orgId || !ready) return;
-    if (planCache.has(orgId)) { setPlano(planCache.get(orgId)!); return; }
+    if (planCache.has(orgId)) {
+      setPlano(planCache.get(orgId)!);
+      return;
+    }
 
     (supabase as any)
       .from('organizations')
@@ -71,12 +46,20 @@ export function usePlanFeatures() {
             : 'gratuito';
         planCache.set(orgId, p);
         setPlano(p);
+        console.log('[usePlanFeatures] plano:', p, 'orgId:', orgId);
       })
       .catch(() => {});
-  }, [orgId, ready, bypass]); // eslint-disable-line
+  }, [orgId, ready, isAdmin]); // eslint-disable-line
 
-  if (bypass) {
-    return { plano: 'enterprise' as Plan, features: ALL_FEATURES_UNLOCKED };
+  if (isAdmin) {
+    return {
+      plano: 'enterprise' as Plan,
+      features: {
+        ravena: true, whatsappOficial: true, gestorTrafego: true, modeloConversao: true,
+        multiplosUsuarios: true, webhooksIlimitados: true, leadsIlimitados: true,
+        limiteLeads: Infinity, limiteQuizzes: Infinity,
+      },
+    };
   }
 
   const features = {

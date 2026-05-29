@@ -107,11 +107,16 @@ const PLANS: Plan[] = [
   },
 ];
 
+const PLAN_ORDER: Record<string, number> = { gratuito: 0, starter: 1, pro: 2, enterprise: 3 };
+const KNOWN = ['gratuito', 'starter', 'pro', 'enterprise'];
+
 export default function AssinaturaPage() {
   const { leads } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const { plano: orgPlano } = usePlanFeatures();
+  const { plano: rawPlano } = usePlanFeatures();
+  // Normalise unknown values (null, 'basic', 'trial', …) to 'gratuito'
+  const orgPlano = KNOWN.includes(rawPlano) ? rawPlano : 'gratuito';
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -153,6 +158,10 @@ export default function AssinaturaPage() {
           }}>
             {PLANS.map(plan => {
               const isCurrent = plan.key === orgPlano;
+              const cardOrder = PLAN_ORDER[plan.key] ?? 0;
+              const curOrder  = PLAN_ORDER[orgPlano]  ?? 0;
+              const isUpgrade   = cardOrder > curOrder;
+              const isDowngrade = cardOrder < curOrder;
               return (
               <div key={plan.key} style={{
                 background: cardBg,
@@ -264,14 +273,20 @@ export default function AssinaturaPage() {
                     onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    {plan.cta}
+                    {isDowngrade ? 'Fazer downgrade' : plan.cta}
                   </a>
                 ) : (
                   <button
+                    disabled={isCurrent}
                     style={{
-                      width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
-                      background: isCurrent ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
-                      color: isCurrent ? txtMid : '#fff',
+                      width: '100%', padding: '13px', borderRadius: '12px',
+                      border: isDowngrade ? `1.5px solid ${dark ? '#3f3f46' : '#d1d5db'}` : 'none',
+                      background: isCurrent
+                        ? (dark ? '#27272a' : '#f1f5f9')
+                        : isDowngrade
+                        ? 'transparent'
+                        : plan.color,
+                      color: isCurrent ? txtMid : isDowngrade ? (dark ? '#a1a1aa' : '#6b7280') : '#fff',
                       fontSize: '14px', fontWeight: 700,
                       cursor: isCurrent ? 'default' : 'pointer',
                       fontFamily: FONT, transition: 'all 0.2s',
@@ -279,7 +294,7 @@ export default function AssinaturaPage() {
                     onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    {isCurrent ? 'Plano atual' : plan.cta}
+                    {isCurrent ? 'Plano atual' : isUpgrade ? 'Fazer upgrade' : 'Fazer downgrade'}
                   </button>
                 )}
               </div>
