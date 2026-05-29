@@ -15,8 +15,10 @@ const DELETAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/
 const CRIAR_GESTOR_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-gestor';
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
-const PLANOS = ['gratuito', 'starter', 'pro'];
-const PLANO_LABELS: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro' };
+const PLANOS = ['gratuito', 'starter', 'pro', 'enterprise'];
+const PLANO_LABELS: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
+const STATUS_ORG = ['ativo', 'inadimplente', 'suspenso', 'cancelado'] as const;
+type OrgStatus = typeof STATUS_ORG[number];
 
 interface Org {
   id: string;
@@ -24,8 +26,7 @@ interface Org {
   email_admin: string;
   plano: string;
   created_at: string;
-  status?: string;
-  trial_ends_at?: string;
+  status: OrgStatus;
   sub_id?: string;
 }
 
@@ -43,13 +44,13 @@ export default function AdminPage() {
   const [modalNome, setModalNome] = useState('');
   const [modalEmail, setModalEmail] = useState('');
   const [modalSenha, setModalSenha] = useState('');
-  const [modalPlano, setModalPlano] = useState('starter');
+  const [modalPlano, setModalPlano] = useState('gratuito');
   const [creating, setCreating] = useState(false);
 
   // ── Edit modal state ──────────────────────────────────────────
   const [editOrg, setEditOrg] = useState<Org | null>(null);
-  const [editPlano, setEditPlano] = useState('starter');
-  const [editStatus, setEditStatus] = useState('free');
+  const [editPlano, setEditPlano] = useState('gratuito');
+  const [editStatus, setEditStatus] = useState<OrgStatus>('ativo');
   const [editEmail, setEditEmail] = useState('');
   const [editSenha, setEditSenha] = useState('');
   const [editSaving, setEditSaving] = useState(false);
@@ -117,7 +118,7 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase
         .from('organizations')
-        .select('*, subscriptions(*)')
+        .select('*, subscriptions(id)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       const merged: Org[] = (data || []).map((org: any) => {
@@ -126,10 +127,9 @@ export default function AdminPage() {
           id: org.id,
           nome: org.nome || '—',
           email_admin: org.email_admin || '—',
-          plano: org.plano || 'starter',
+          plano: org.plano || 'gratuito',
           created_at: org.created_at,
-          status: sub?.status || null,
-          trial_ends_at: sub?.trial_ends_at || null,
+          status: (org.status as OrgStatus) || (org.ativo !== false ? 'ativo' : 'suspenso'),
           sub_id: sub?.id || null,
         };
       });
@@ -220,11 +220,11 @@ export default function AdminPage() {
     }
     const startStr = start.toISOString().split('T')[0];
 
-    const TICKETS: Record<string, number> = { gratuito: 0, starter: 497, pro: 997 };
+    const TICKETS: Record<string, number> = { gratuito: 0, starter: 497, pro: 997, enterprise: 0 };
 
     const { data: orgsData } = await supabase
       .from('organizations')
-      .select('id, plano, created_at, ravena_ativa, subscriptions(status, trial_ends_at)');
+      .select('id, plano, status, ativo, created_at, ravena_ativa');
     const { count: totalLeads } = await supabase
       .from('leads').select('*', { count: 'exact', head: true });
     const { count: ravenaCount } = await supabase
@@ -233,11 +233,13 @@ export default function AdminPage() {
       .from('contabilidade' as any).select('valor').eq('tipo', 'custo').gte('data', startStr);
 
     const all = orgsData || [];
-    const ativas = all.filter((o: any) => o.subscriptions?.[0]?.status === 'active');
-    const canceladas = all.filter((o: any) => o.subscriptions?.[0]?.status === 'canceled');
+    const ativas = all.filter((o: any) => (o.status || (o.ativo !== false ? 'ativo' : 'suspenso')) === 'ativo');
+    const canceladas = all.filter((o: any) => (o.status || '') === 'cancelado');
     const novos = all.filter((o: any) => new Date(o.created_at) >= start);
 
-    const mrr = ativas.reduce((s: number, o: any) => s + (TICKETS[o.plano] || 497), 0);
+    const mrr = ativas
+      .filter((o: any) => (o.plano || 'gratuito') !== 'gratuito')
+      .reduce((s: number, o: any) => s + (TICKETS[o.plano] || 497), 0);
     const totalCustos = ((custosPeriodo as any[]) || []).reduce((s: number, c: any) => s + Number(c.valor), 0);
     const lucro = mrr - totalCustos;
     const churn = ativas.length + canceladas.length > 0
@@ -317,19 +319,8 @@ export default function AdminPage() {
         .single();
 
       if (newOrg?.id) {
-        // 3. Atualiza plano na org
-        await supabase.from('organizations').update({ plano: modalPlano }).eq('id', newOrg.id);
-        // 4. Cria/atualiza subscription
-        const { data: existingSub } = await supabase
-          .from('subscriptions')
-          .select('id')
-          .eq('org_id', newOrg.id)
-          .limit(1);
-        if (existingSub && existingSub.length > 0) {
-          await supabase.from('subscriptions').update({ status: 'free' }).eq('id', existingSub[0].id);
-        } else {
-          await supabase.from('subscriptions').insert({ org_id: newOrg.id, status: 'free' });
-        }
+        // 3. Atualiza plano e status na org
+        await supabase.from('organizations').update({ plano: modalPlano, status: 'ativo', ativo: true }).eq('id', newOrg.id);
       }
 
       toast.success(`"${modalNome}" criada com sucesso!`);
@@ -344,8 +335,8 @@ export default function AdminPage() {
   // ── Edit org ──────────────────────────────────────────────────
   function openEdit(org: Org) {
     setEditOrg(org);
-    setEditPlano(org.plano || 'starter');
-    setEditStatus(org.status || 'free');
+    setEditPlano(org.plano || 'gratuito');
+    setEditStatus(org.status || 'ativo');
     setEditEmail('');
     setEditSenha('');
   }
@@ -411,16 +402,9 @@ export default function AdminPage() {
     if (!editOrg) return;
     setEditSaving(true);
     try {
-      // 1. Salva plano + status
-      const ativo = ['active', 'free'].includes(editStatus);
-      await supabase.from('organizations').update({ plano: editPlano, ativo }).eq('id', editOrg.id);
-
-      const subPayload: any = { status: editStatus };
-      if (editOrg.sub_id) {
-        await supabase.from('subscriptions').update(subPayload).eq('id', editOrg.sub_id);
-      } else {
-        await supabase.from('subscriptions').insert({ org_id: editOrg.id, ...subPayload });
-      }
+      // 1. Salva plano + status (ativo boolean fica em sync)
+      const ativo = editStatus === 'ativo';
+      await supabase.from('organizations').update({ plano: editPlano, status: editStatus, ativo }).eq('id', editOrg.id);
       invalidateSubscriptionCache();
       toast.success('Atualizado!');
 
@@ -495,8 +479,12 @@ export default function AdminPage() {
 
   // ── Métricas ──────────────────────────────────────────────────
   const total = orgs.length;
-  const ativas = orgs.filter(o => o.status === 'active').length;
-  const mrr = (ativas * 99.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const ativas = orgs.filter(o => o.status === 'ativo').length;
+  const TICKET: Record<string, number> = { gratuito: 0, starter: 497, pro: 997, enterprise: 0 };
+  const mrr = orgs
+    .filter(o => o.status === 'ativo' && (o.plano || 'gratuito') !== 'gratuito')
+    .reduce((s, o) => s + (TICKET[o.plano] || 497), 0)
+    .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // ── Estilos ───────────────────────────────────────────────────
   const bg = dark ? '#090909' : '#f4f4f5';
@@ -508,13 +496,12 @@ export default function AdminPage() {
 
   function StatusBadge({ status }: { status?: string | null }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
-      free: { label: 'Gratuito', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
-      active: { label: 'Ativo', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-      inactive: { label: 'Inativo', color: '#71717a', bg: 'rgba(113,113,122,0.12)' },
-      canceled: { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-      past_due: { label: 'Inadimplente', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+      ativo:        { label: 'Ativo',        color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+      inadimplente: { label: 'Inadimplente', color: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+      suspenso:     { label: 'Suspenso',     color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+      cancelado:    { label: 'Cancelado',    color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
     };
-    const s = map[status || ''] || { label: '—', color: '#71717a', bg: 'rgba(113,113,122,0.12)' };
+    const s = map[status || ''] || { label: status || '—', color: '#71717a', bg: 'rgba(113,113,122,0.12)' };
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: '99px', background: s.bg, fontSize: '11.5px', fontWeight: 600, color: s.color }}>
         <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: s.color }} />
@@ -526,14 +513,6 @@ export default function AdminPage() {
   function fmtDate(dateStr?: string | null) {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString('pt-BR');
-  }
-
-  function trialInfo(dateStr?: string | null) {
-    if (!dateStr) return '—';
-    const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
-    const date = new Date(dateStr).toLocaleDateString('pt-BR');
-    if (diff < 0) return `Expirado (${date})`;
-    return `${date} (${diff}d)`;
   }
 
   // ── Shared modal styles ───────────────────────────────────────
@@ -645,7 +624,7 @@ export default function AdminPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: dark ? '#18181b' : '#f8fafc' }}>
-                      {['Empresa', 'Email admin', 'Plano', 'Status', 'Trial', 'Criado em', ''].map(h => (
+                      {['Empresa', 'Email admin', 'Plano', 'Status', 'Criado em', ''].map(h => (
                         <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: '10.5px', fontWeight: 600, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -657,7 +636,6 @@ export default function AdminPage() {
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{org.email_admin}</td>
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap' }}>{PLANO_LABELS[org.plano] ?? org.plano}</td>
                         <td style={{ padding: '12px 16px' }}><StatusBadge status={org.status} /></td>
-                        <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{trialInfo(org.trial_ends_at)}</td>
                         <td style={{ padding: '12px 16px', color: txtMid, whiteSpace: 'nowrap', fontSize: '12px' }}>{fmtDate(org.created_at)}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ display: 'flex', gap: '6px' }}>
@@ -922,11 +900,12 @@ export default function AdminPage() {
                 </select>
               </div>
               <div>
-                <label style={lbl}>Status da assinatura</label>
-                <select style={inp} value={editStatus} onChange={e => setEditStatus(e.target.value)}>
-                  <option value="free">Gratuito</option>
-                  <option value="active">Ativo</option>
-                  <option value="past_due">Inadimplente</option>
+                <label style={lbl}>Status</label>
+                <select style={inp} value={editStatus} onChange={e => setEditStatus(e.target.value as OrgStatus)}>
+                  <option value="ativo">Ativo — acesso completo</option>
+                  <option value="inadimplente">Inadimplente — pagamento atrasado</option>
+                  <option value="suspenso">Suspenso — bloqueio total</option>
+                  <option value="cancelado">Cancelado — encerrado voluntariamente</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
@@ -1018,9 +997,7 @@ export default function AdminPage() {
                       <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.nome}</p>
                       <p style={{ margin: 0, fontSize: '11px', color: txtMid }}>{org.email_admin}</p>
                     </div>
-                    <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '99px', color: org.status === 'active' ? '#10b981' : '#f59e0b', background: org.status === 'active' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)' }}>
-                      {org.status === 'active' ? 'Ativo' : 'Trial'}
-                    </span>
+                    <StatusBadge status={org.status} />
                   </div>
                 );
               })}

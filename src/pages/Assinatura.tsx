@@ -8,8 +8,9 @@ const FONT = '"DM Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", In
 const WA_CONSULTA = 'https://wa.me/5519993929168?text=Olá!%20Preciso%20de%20um%20plano%20personalizado%20para%20minha%20operação.';
 
 type Feature = { label: string; sub?: string; enabled: boolean };
+type Plan = { key: string; name: string; price: string; period: string; description: string; color: string; features: Feature[]; cta: string; ctaHref?: string; current: boolean; popular: boolean };
 
-const PLANS = [
+const PLANS: Plan[] = [
   {
     key: 'gratuito',
     name: 'Gratuito',
@@ -82,6 +83,27 @@ const PLANS = [
     current: false,
     popular: false,
   },
+  {
+    key: 'enterprise',
+    name: 'Enterprise',
+    price: 'Sob consulta',
+    period: '',
+    description: 'Para operações multi-marca e multi-equipe',
+    color: '#0ea5e9',
+    features: [
+      { label: 'Leads ilimitados', enabled: true },
+      { label: 'Tudo do plano Pro', enabled: true },
+      { label: 'Multi-marca / multi-equipe', enabled: true },
+      { label: 'Onboarding dedicado', enabled: true },
+      { label: 'Integrações sob medida', enabled: true },
+      { label: 'SLA garantido', enabled: true },
+      { label: 'Gerente de conta exclusivo', enabled: true },
+    ] as Feature[],
+    cta: 'Falar com especialista',
+    ctaHref: WA_CONSULTA,
+    current: false,
+    popular: false,
+  },
 ];
 
 export default function AssinaturaPage() {
@@ -123,7 +145,7 @@ export default function AssinaturaPage() {
           {/* Plan Cards */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
             gap: isMobile ? '16px' : '20px',
             marginBottom: '32px',
           }}>
@@ -211,21 +233,39 @@ export default function AssinaturaPage() {
                 </div>
 
                 {/* CTA */}
-                <button
-                  style={{
-                    width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
-                    background: plan.current ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
-                    color: plan.current ? txtMid : '#fff',
-                    fontSize: '14px', fontWeight: 700,
-                    cursor: plan.current ? 'default' : 'pointer',
-                    fontFamily: FONT,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={e => { if (!plan.current) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                >
-                  {plan.cta}
-                </button>
+                {plan.ctaHref ? (
+                  <a
+                    href={plan.ctaHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'block', width: '100%', padding: '13px', borderRadius: '12px',
+                      background: plan.color, color: '#fff',
+                      fontSize: '14px', fontWeight: 700,
+                      textAlign: 'center', textDecoration: 'none',
+                      fontFamily: FONT, transition: 'all 0.2s', boxSizing: 'border-box',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    {plan.cta}
+                  </a>
+                ) : (
+                  <button
+                    style={{
+                      width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+                      background: plan.current ? (dark ? '#27272a' : '#f1f5f9') : plan.color,
+                      color: plan.current ? txtMid : '#fff',
+                      fontSize: '14px', fontWeight: 700,
+                      cursor: plan.current ? 'default' : 'pointer',
+                      fontFamily: FONT, transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => { if (!plan.current) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    {plan.cta}
+                  </button>
+                )}
               </div>
             ))}
           </div>

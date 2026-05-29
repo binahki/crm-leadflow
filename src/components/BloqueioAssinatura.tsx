@@ -26,10 +26,10 @@ export function BloqueioAssinatura() {
   async function checkStatus() {
     if (!orgId) return;
     try {
-      // Verifica se a org ainda existe
+      // Verifica se a org ainda existe + lê status e plano
       const { data: org, error: orgError } = await supabase
         .from('organizations' as any)
-        .select('id')
+        .select('id, status, plano, ativo')
         .eq('id', orgId)
         .maybeSingle();
 
@@ -39,27 +39,22 @@ export function BloqueioAssinatura() {
         return;
       }
 
-      // Verifica assinatura
-      const { data: sub } = await supabase
-        .from('subscriptions')
-        .select('status')
-        .eq('org_id', orgId)
-        .maybeSingle();
+      const orgStatus: string = (org as any).status || ((org as any).ativo !== false ? 'ativo' : 'suspenso');
+      const orgPlano: string  = (org as any).plano  || 'gratuito';
 
-      // Plano ativo (pago) — sem restrição
-      if (sub?.status === 'active') {
-        setBloqueado(false);
-        return;
-      }
-
-      // Assinatura cancelada/inativa (era pago, parou) — bloquear por pagamento
-      const statusInativos = ['canceled', 'past_due', 'unpaid', 'incomplete_expired'];
-      if (sub && statusInativos.includes(sub.status)) {
+      // Bloqueio total: suspenso, cancelado, inadimplente
+      if (['suspenso', 'cancelado', 'inadimplente'].includes(orgStatus)) {
         setBloqueado('inativo');
         return;
       }
 
-      // Plano gratuito (sem sub, ou status trialing/free) — verificar limite de leads
+      // Plano pago ativo — sem restrição
+      if (orgStatus === 'ativo' && orgPlano !== 'gratuito') {
+        setBloqueado(false);
+        return;
+      }
+
+      // Plano gratuito ativo — verificar limite mensal de leads
       const { count } = await supabase
         .from('leads')
         .select('id', { count: 'exact', head: true })
@@ -68,7 +63,7 @@ export function BloqueioAssinatura() {
 
       setBloqueado((count ?? 0) >= LIMITE_MENSAL ? 'limite' : false);
     } catch {
-      // Em caso de erro de rede, não bloqueia
+      // Erro de rede — não bloqueia para evitar falso positivo
     }
   }
 
@@ -79,12 +74,12 @@ export function BloqueioAssinatura() {
     checkStatus();
 
     const channel = supabase
-      .channel(`sub-status-${orgId}`)
+      .channel(`org-status-${orgId}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
-        table: 'subscriptions',
-        filter: `org_id=eq.${orgId}`,
+        table: 'organizations',
+        filter: `id=eq.${orgId}`,
       }, () => { checkStatus(); })
       .on('postgres_changes', {
         event: 'INSERT',
