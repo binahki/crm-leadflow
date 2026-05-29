@@ -10,23 +10,52 @@ export type { Plan };
 
 const ADMIN_EMAIL = 'admin@floow.com';
 
-// Module-level cache avoids redundant fetches when multiple components use this hook
+// Module-level cache — avoids redundant DB fetches per session
 const planCache = new Map<string, Plan>();
+
+const ALL_FEATURES_UNLOCKED = {
+  ravena: true,
+  whatsappOficial: true,
+  gestorTrafego: true,
+  modeloConversao: true,
+  multiplosUsuarios: true,
+  webhooksIlimitados: true,
+  leadsIlimitados: true,
+  limiteLeads: Infinity,
+  limiteQuizzes: Infinity,
+};
 
 export function usePlanFeatures() {
   const { orgId, ready } = useOrgId();
   const { user } = useAuth();
 
-  const isAdminOrGestor =
-    user?.email === ADMIN_EMAIL || !!localStorage.getItem('admin_viewing_org');
+  // isAdmin: only the master admin email — NOT based on localStorage
+  // (localStorage.getItem('admin_viewing_org') can be stale from any previous session
+  // and would incorrectly bypass plan checks for regular users)
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
-  const [plano, setPlano] = useState<Plan>(() => {
-    if (isAdminOrGestor) return 'enterprise';
-    return (orgId && planCache.get(orgId)) || 'gratuito';
-  });
+  // Check if user is an active gestor (async, accurate)
+  const [isGestor, setIsGestor] = useState(false);
+  useEffect(() => {
+    if (!user?.id || isAdmin) return;
+    (supabase as any)
+      .from('gestores')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('ativo', true)
+      .limit(1)
+      .then(({ data }: any) => { if (data?.length > 0) setIsGestor(true); })
+      .catch(() => {});
+  }, [user?.id, isAdmin]); // eslint-disable-line
+
+  const bypass = isAdmin || isGestor;
+
+  const [plano, setPlano] = useState<Plan>(() =>
+    (!bypass && orgId && planCache.get(orgId)) || 'gratuito'
+  );
 
   useEffect(() => {
-    if (isAdminOrGestor) { setPlano('enterprise'); return; }
+    if (bypass) return;
     if (!orgId || !ready) return;
     if (planCache.has(orgId)) { setPlano(planCache.get(orgId)!); return; }
 
@@ -44,7 +73,11 @@ export function usePlanFeatures() {
         setPlano(p);
       })
       .catch(() => {});
-  }, [orgId, ready, isAdminOrGestor]); // eslint-disable-line
+  }, [orgId, ready, bypass]); // eslint-disable-line
+
+  if (bypass) {
+    return { plano: 'enterprise' as Plan, features: ALL_FEATURES_UNLOCKED };
+  }
 
   const features = {
     ravena:             ['starter','pro','enterprise'].includes(plano),
