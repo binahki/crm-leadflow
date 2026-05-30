@@ -421,7 +421,7 @@ function DroppableColumn({ col, children, count, isOver, isMobile }: {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   return (
-    <div style={{ display:'flex', flexDirection:'column', borderRadius:'16px', borderTopWidth:'3px', borderTopStyle:'solid', borderTopColor:col.border, borderRightWidth:'1px', borderRightStyle:'solid', borderRightColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', borderBottomWidth:'1px', borderBottomStyle:'solid', borderBottomColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', borderLeftWidth:'1px', borderLeftStyle:'solid', borderLeftColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', background:dark?'#111113':'#fafafa', overflow:'hidden', boxShadow:isOver?`0 0 0 2px ${col.border}30`:dark?'0 4px 12px rgba(0,0,0,0.4)':'0 2px 8px rgba(0,0,0,0.08)', transition:'box-shadow 0.2s', width:isMobile?'calc(100vw - 48px)':'auto', minWidth:isMobile?'calc(100vw - 48px)':'auto', flexShrink:0 }}>
+    <div style={{ display:'flex', flexDirection:'column', borderRadius:'16px', borderTopWidth:'3px', borderTopStyle:'solid', borderTopColor:col.border, borderRightWidth:'1px', borderRightStyle:'solid', borderRightColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', borderBottomWidth:'1px', borderBottomStyle:'solid', borderBottomColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', borderLeftWidth:'1px', borderLeftStyle:'solid', borderLeftColor:isOver?col.border:dark?'#1e1e22':'rgba(0,0,0,0.10)', background:dark?'#111113':'#fafafa', overflow:'hidden', boxShadow:isOver?`0 0 0 2px ${col.border}30`:dark?'0 4px 12px rgba(0,0,0,0.4)':'0 2px 8px rgba(0,0,0,0.08)', transition:'box-shadow 0.2s', width:isMobile?'calc(100vw - 48px)':'auto', minWidth:isMobile?'calc(100vw - 48px)':'auto', flexShrink:0, contain:'layout style', willChange:'transform' }}>
       <div style={{ padding:'12px 14px', borderBottom:`1px solid ${dark?'#1e1e22':'rgba(0,0,0,0.05)'}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:dark?'#18181b':'#ffffff' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
           <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:col.dot, display:'inline-block' }}/>
@@ -429,7 +429,7 @@ function DroppableColumn({ col, children, count, isOver, isMobile }: {
         </div>
         <span style={{ fontSize:'12px', fontWeight:500, color:col.dot, background:`${col.dot}18`, padding:'2px 8px', borderRadius:'20px' }}>{count}</span>
       </div>
-      <div ref={setNodeRef} className="kanban-col-scroll" style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', WebkitOverflowScrolling:'touch', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden' }}>
+      <div ref={setNodeRef} className="kanban-col-scroll" style={{ flex:1, padding:'10px', display:'flex', flexDirection:'column', gap:'8px', minHeight:'120px', maxHeight:isMobile?'calc(100vh - 260px)':'72vh', overflowY:'auto', WebkitOverflowScrolling:'touch', background:isOver?col.bg:'transparent', transition:'background 0.2s', overflowX:'hidden', contain:'layout style', willChange:'transform' }}>
         {children}
         {count===0 && <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', padding:'28px 0', textAlign:'center', borderRadius:'10px', border:`2px dashed ${isOver?col.dot:'rgba(0,0,0,0.1)'}`, color:isOver?col.dot:'#d1d5db', transition:'color 0.2s,border-color 0.2s' }}>{isOver?'Solte aqui':'Sem leads'}</div>}
       </div>
@@ -510,29 +510,20 @@ export default function KanbanPage() {
     setLeads([]);
     (async () => {
       let allData: Lead[] = [];
-      const allTagsMap = new Map<string, Tag[]>();
       let from = 0;
       const PAGE = 1000;
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram, lead_tags(tag_id, tags(id, nome, cor))')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram')
           .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
-        const rawData = data as any[];
-        rawData.forEach(l => {
-          if (l.lead_tags?.length) {
-            const tags = (l.lead_tags as any[]).filter(lt => lt.tags).map(lt => ({ id: lt.tags.id, nome: lt.tags.nome, cor: lt.tags.cor, org_id: orgId, created_at: '' }) as Tag);
-            if (tags.length) allTagsMap.set(l.id, tags);
-          }
-        });
-        allData = [...allData, ...rawData as unknown as Lead[]];
+        allData = [...allData, ...data as unknown as Lead[]];
         if (data.length < PAGE) break;
         from += PAGE;
       }
       setLeads(allData);
-      if (allTagsMap.size > 0) setLeadTagsMap(allTagsMap);
     })();
   }, [orgId, orgReady]); // eslint-disable-line
 
@@ -590,12 +581,18 @@ export default function KanbanPage() {
     return () => { (supabase as any).removeChannel(ch); };
   }, [orgId]); // eslint-disable-line
 
-  // ── Realtime: leads ─────────────────────────────────────────
+  // ── Realtime: leads (com debounce 300ms) ────────────────────
+  const lastRtUpdate = useRef(0);
   useEffect(() => {
     if (!orgReady || !orgId) return;
     const ch = supabase.channel(`kanban-rt-${orgId}`)
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},(p)=>{ useAppStore.getState().addLead(p.new as unknown as Lead); })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},(p)=>{ useAppStore.getState().updateLead((p.new as unknown as Lead).id, p.new as unknown as Lead); })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},(p)=>{
+        const now = Date.now();
+        if (now - lastRtUpdate.current < 300) return;
+        lastRtUpdate.current = now;
+        useAppStore.getState().updateLead((p.new as unknown as Lead).id, p.new as unknown as Lead);
+      })
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},(p)=>{ const c=useAppStore.getState().leads; useAppStore.getState().setLeads(c.filter(l=>l.id!==(p.old as {id:string}).id)); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -671,13 +668,25 @@ export default function KanbanPage() {
 
   const hasActiveFilters = search.trim() || periodFilter !== 'all' || selectedTagIds.size > 0 || selectedCampaigns.size > 0;
 
+  // ── Column leads memoizado (7 filter+sort por render → 1 vez) ──
+  const colLeadsMap = useMemo(() => {
+    const map = new Map<number, Lead[]>();
+    for (const col of COLUMNS) {
+      const leads = filteredLeads
+        .filter(l => {
+          let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
+          if (s === 0) s = 1;
+          return s === col.status;
+        })
+        .sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
+      map.set(col.status, leads);
+    }
+    return map;
+  }, [filteredLeads]);
+
   // ── Column helpers ───────────────────────────────────────────
   function getColLeads(status: number): Lead[] {
-    return [...filteredLeads.filter(l => {
-      let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
-      if (s === 0) s = 1;
-      return s === status;
-    })].sort((a, b) => parseDateMs(b.created_at) - parseDateMs(a.created_at));
+    return colLeadsMap.get(status) || [];
   }
 
   function scrollToCol(index: number) {
