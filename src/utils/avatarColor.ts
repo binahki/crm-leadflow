@@ -7,24 +7,34 @@ const COLORS = [
   '#f3f3f2', // cinza (adaptado por tema)
 ];
 
-function hashName(name: string): number {
-  const s = name.trim().toLowerCase();
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
+// Mapa global lead ID → índice da cor (round-robin = sem repetições sequenciais)
+const colorMap = new Map<string, number>();
+let nextColor = 0;
+
+// Única função pública de cor — mesma entrada = mesma saída em TODAS as páginas
+// Usa round-robin persistente em memória: cada lead recebe a próxima cor disponível
+export function getAvatarColor(name: string, dark: boolean, id?: string): string {
+  if (!name) return COLORS[0];
+
+  if (id) {
+    if (!colorMap.has(id)) {
+      colorMap.set(id, nextColor % COLORS.length);
+      nextColor = (nextColor + 1) % COLORS.length;
+    }
+    const idx = colorMap.get(id)!;
+    const cor = COLORS[idx];
+    if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#4a4a4f';
+    return cor;
   }
+
+  // Fallback: hash do nome
+  let h = 0;
+  const s = name.trim().toLowerCase();
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   h ^= (h >>> 16);
   h = Math.imul(h, 0x45d9f3b);
   h ^= (h >>> 16);
-  return Math.abs(h);
-}
-
-// Única função pública de cor — mesma entrada = mesma saída em TODAS as páginas
-// id (UUID do lead) é usado no hash para garantir distribuição uniforme sem repetições
-export function getAvatarColor(name: string, dark: boolean, id?: string): string {
-  if (!name) return COLORS[0];
-  const hashInput = id ? `${name}|${id}` : name;
-  const cor = COLORS[hashName(hashInput) % COLORS.length];
+  const cor = COLORS[Math.abs(h) % COLORS.length];
   if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#4a4a4f';
   return cor;
 }
