@@ -331,7 +331,7 @@ export default function WebhookPage() {
                         Criado em {fmtData(wh.created_at)}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {!isEditing && (
+                        {!isEditing && wh.nome !== 'Principal' && (
                           <button
                             onClick={() => { setEditingId(wh.id); setEditNome(wh.nome); }}
                             style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', borderRadius: '7px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}
@@ -340,23 +340,22 @@ export default function WebhookPage() {
                             Editar nome
                           </button>
                         )}
-                        <button
-                          onClick={() => setDeleteId(wh.id)}
-                          title="Excluir webhook"
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '5px',
-                            padding: '5px 10px', borderRadius: '7px',
-                            border: '1px solid rgba(239,68,68,0.3)',
-                            background: 'transparent',
-                            color: '#ef4444',
-                            fontSize: '12px', fontWeight: 500,
-                            cursor: 'pointer',
-                            fontFamily: FONT,
-                          }}
-                        >
-                          <Trash2 style={{ width: '11px', height: '11px' }} />
-                          Excluir
-                        </button>
+                        {wh.nome !== 'Principal' && (
+                          <button
+                            onClick={() => setDeleteId(wh.id)}
+                            title="Excluir webhook"
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '5px',
+                              padding: '5px 10px', borderRadius: '7px',
+                              border: '1px solid rgba(239,68,68,0.3)',
+                              background: 'transparent', color: '#ef4444',
+                              fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT,
+                            }}
+                          >
+                            <Trash2 style={{ width: '11px', height: '11px' }} />
+                            Excluir
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

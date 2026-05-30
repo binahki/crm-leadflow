@@ -321,6 +321,15 @@ export default function AdminPage() {
       if (newOrg?.id) {
         // 3. Atualiza plano e status na org
         await supabase.from('organizations').update({ plano: modalPlano, status: 'ativo', ativo: true }).eq('id', newOrg.id);
+
+        // 4. Cria webhook Principal automaticamente
+        const webhookToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+        await (supabase as any).from('webhooks').insert({
+          org_id: newOrg.id,
+          nome: 'Principal',
+          token: webhookToken,
+          ativo: true,
+        });
       }
 
       toast.success(`"${modalNome}" criada com sucesso!`);
