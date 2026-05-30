@@ -13,7 +13,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { safeName, safeInitials } from '@/utils/safeName';
-import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
+import { getAvatarColorForTheme, getAvatarTextColor } from '@/utils/avatarColor';
 import { getMetaCache, setMetaCache, clearMetaCache } from '@/lib/metaCache';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
@@ -895,7 +895,7 @@ export default function Dashboard() {
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
                     <div style={{ position:'relative', flexShrink:0 }}>
-                      {(()=>{ const ac=getAvatarColor(safeNome); return <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{safeInitials(safeNome)}</div>; })()}
+                      {(()=>{ const ac=getAvatarColorForTheme(safeNome, dark); return <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{safeInitials(safeNome)}</div>; })()}
                       {(()=>{ const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>

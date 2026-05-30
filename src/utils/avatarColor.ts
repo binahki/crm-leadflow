@@ -4,7 +4,7 @@ const AVATAR_COLORS = [
   '#fd4c04', // laranja
   '#7e3beb', // roxo
   '#ff2a4c', // vermelho
-  '#f3f3f2', // cinza claro (funciona em dark e light)
+  '#f3f3f2', // cinza claro (base — adaptado por tema)
 ];
 
 export function getAvatarColor(name: string): string {
@@ -18,7 +18,14 @@ export function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-// Cores claras (verde lima e cinza) precisam de texto escuro para contraste
+// Adapta o cinza ao tema para manter contraste: claro→#141416, escuro→#f3f3f2
+export function getAvatarColorForTheme(name: string, dark: boolean): string {
+  const cor = getAvatarColor(name);
+  if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#141416';
+  return cor;
+}
+
+// Cores claras precisam de texto escuro
 export function getAvatarTextColor(bgColor: string): string {
   if (bgColor === '#b8fd2f' || bgColor === '#f3f3f2') return '#111111';
   return '#ffffff';

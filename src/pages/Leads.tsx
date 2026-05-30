@@ -18,7 +18,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
-import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
+import { getAvatarColorForTheme, getAvatarTextColor } from '@/utils/avatarColor';
 
 const STATUS_STYLE = STATUS_CONFIG;
 
@@ -1928,7 +1928,7 @@ function LeadsPage() {
                     <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
                       {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
                       <div style={{ position:'relative', flexShrink:0 }}>
-                        {(()=>{ const ac=getAvatarColor(lead.nome); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
+                        {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                         <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -2017,51 +2017,56 @@ function LeadsPage() {
                   : paginatedLeads.map((lead, idx) => {
                     const s = toStatusNum(lead.status); const sel = selectedIds.has(lead.id); const obs = (lead as any).observacoes as string | null | undefined; const la = lead as any;
                     return (
-                      <tr key={lead.id} className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : idx % 2 === 0 ? '' : (dark ? 'bg-[#0f0f11]' : 'bg-gray-50/50')} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`} onClick={() => handleViewLead(lead)}>
-                        <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
+                      <tr key={lead.id}
+                        className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? 'rgba(255,255,255,0.012)' : 'rgba(0,0,0,0.015)') }}
+                        onClick={() => handleViewLead(lead)}>
+                        <td className="pl-4 pr-2 py-2.5" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
                         </td>
-                        <td className="px-3 py-3" style={{ overflow:'hidden' }}>
-                          <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:'56px', justifyContent:'center', gap:'4px' }}>
-                            {/* Linha 1: avatar + nome + obs */}
-                            <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
-                              <div style={{ position:'relative', flexShrink:0 }}>
-                                {(()=>{ const ac=getAvatarColor(lead.nome); return <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                                {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
-                              </div>
-                              <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>
-                              {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
+                        <td className="px-3" style={{ overflow:'hidden', paddingTop:'10px', paddingBottom:'10px' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                            {/* Avatar alinhado ao topo, junto ao nome */}
+                            <div style={{ position:'relative', flexShrink:0, alignSelf:'flex-start', marginTop:'2px' }}>
+                              {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
                             </div>
-                            {/* Linha 2: tags abaixo do nome, alinhadas com o texto */}
-                            {(() => {
-                              const lt = leadTagsMap.get(lead.id) || [];
-                              if (!lt.length) return null;
-                              const vis = lt.slice(0, 3); const rest = lt.slice(3);
-                              return (
-                                <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', paddingLeft:'35px' }}>
-                                  {vis.map(tag => (
-                                    <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
-                                  ))}
-                                  {rest.length > 0 && (
-                                    <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
-                                  )}
-                                </div>
-                              );
-                            })()}
+                            {/* Coluna: nome + tags */}
+                            <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:0 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:'5px', minWidth:0 }}>
+                                <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</span>
+                                {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
+                              </div>
+                              {(() => {
+                                const lt = leadTagsMap.get(lead.id) || [];
+                                if (!lt.length) return null;
+                                const vis = lt.slice(0, 3); const rest = lt.slice(3);
+                                return (
+                                  <div style={{ display:'flex', gap:'3px', flexWrap:'wrap' }}>
+                                    {vis.map(tag => (
+                                      <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                                    ))}
+                                    {rest.length > 0 && (
+                                      <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
+                        <td className="px-3 py-2.5" style={{ whiteSpace:'nowrap' }}>
                           <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                         </td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-2.5">
                           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
                             <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                           </span>
                         </td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-2.5">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
                             <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
