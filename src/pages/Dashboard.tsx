@@ -281,6 +281,65 @@ async function fetchMetaData(period: string, from?: string, to?: string, leadsLi
   } catch (e) { console.error('[Meta]', e); return empty; }
 }
 
+function useTypewriter(text: string, speed = 60, delay = 100) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!text) { setDisplayedText(''); setDone(true); return; }
+    setDisplayedText('');
+    setDone(false);
+    let idx = 0;
+    let intervalId: ReturnType<typeof setInterval>;
+    const startTimeout = setTimeout(() => {
+      intervalId = setInterval(() => {
+        idx++;
+        setDisplayedText(text.slice(0, idx));
+        if (idx >= text.length) {
+          clearInterval(intervalId);
+          setDone(true);
+        }
+      }, speed);
+    }, delay);
+    return () => { clearTimeout(startTimeout); clearInterval(intervalId); };
+  }, [text, speed, delay]);
+  return { text: displayedText, done };
+}
+
+function AnimatedCounter({ value, duration = 800, decimals = 0 }: { value: number; duration?: number; decimals?: number }) {
+  const [count, setCount] = useState(0);
+  const prevValue = useRef(0);
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const startValue = prevValue.current;
+    const endValue = value;
+    const easeOutQuad = (t: number) => t * (2 - t);
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const easedProgress = easeOutQuad(progress);
+      const current = startValue + easedProgress * (endValue - startValue);
+      setCount(current);
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      } else {
+        prevValue.current = endValue;
+      }
+    };
+
+    window.requestAnimationFrame(step);
+  }, [value, duration]);
+
+  return (
+    <>
+      {decimals > 0
+        ? count.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+        : Math.round(count).toLocaleString('pt-BR')
+      }
+    </>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -382,36 +441,53 @@ export default function Dashboard() {
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
   useEffect(() => { function close(e: MouseEvent) { if (dropRef.current && !dropRef.current.contains(e.target as Node)) setShowDropdown(false); if (customRef.current && !customRef.current.contains(e.target as Node)) setShowCustom(false); } document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, []);
 
+  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at';
+
   const fetchLeads = async (): Promise<Lead[]> => {
     if (!orgId) { setLoading(false); return []; }
     setLoading(true);
 
-    let all: Lead[] = [];
-    let from = 0;
     const PAGE = 1000;
 
+    // 1ª página — mostra conteúdo imediatamente
+    const { data: firstData, error } = await supabase
+      .from('leads')
+      .select(DASH_FIELDS)
+      .eq('org_id', orgId)
+      .order('ultimo_status_change', { ascending: false })
+      .range(0, PAGE - 1);
+
+    if (error) {
+      console.error('[Dashboard]', error.message);
+      setLoading(false);
+      return [];
+    }
+
+    const firstBatch = (firstData || []) as Lead[];
+    setAllLeads(firstBatch);
+    setLoading(false); // dispara showContent agora
+
+    if (firstBatch.length < PAGE) return firstBatch;
+
+    // Páginas restantes em background
+    let all = [...firstBatch];
+    let from = PAGE;
     while (true) {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('leads')
-        .select('*')
+        .select(DASH_FIELDS)
         .eq('org_id', orgId)
         .order('ultimo_status_change', { ascending: false })
         .range(from, from + PAGE - 1);
 
-      if (error) {
-        console.error('[Dashboard]', error.message);
-        setLoading(false);
-        return [];
-      }
-
       const batch = (data || []) as Lead[];
+      if (!batch.length) break;
       all = [...all, ...batch];
+      setAllLeads([...all]);
       if (batch.length < PAGE) break;
       from += PAGE;
     }
 
-    setAllLeads(all);
-    setLoading(false);
     return all;
   };
   function getMetaCacheKey(period: string, from?: string, to?: string) {
@@ -649,15 +725,29 @@ export default function Dashboard() {
 
   const periodLabel = selectedPeriod === 'custom' && customFrom && customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p => p.value === selectedPeriod)?.label ?? 'Hoje';
 
-  const allLoaded = !loading && !metaLoading;
+  const greetingPrefix = `${getGreeting()}${primeiroNome ? ',' : ''}`;
+  const greetingName = primeiroNome ? `${primeiroNome}!` : '';
+  const { text: typedName, done: typingDone } = useTypewriter(greetingName, 55, 300);
+
+  const [metaTimeout, setMetaTimeout] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        setMetaTimeout(true);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  const allLoaded = !loading && (!metaLoading || metaTimeout);
   const [showContent, setShowContent] = useState(false);
   useEffect(() => {
-    if (allLoaded && !revTriggered.current) {
+    if (!loading && !revTriggered.current) {
       revTriggered.current = true;
       const t = setTimeout(() => { setCardRevKey(1); setShowContent(true); }, 50);
       return () => clearTimeout(t);
     }
-  }, [allLoaded]);
+  }, [loading]);
 
   const sk = (w = '80px', h = '26px') => (
     <div style={{ display: 'inline-block', width: w, height: h, borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />
@@ -677,9 +767,11 @@ export default function Dashboard() {
         {/* Header */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isMobile ? '14px' : '20px', gap: '8px' }}>
           <div>
-            <h1 style={{ fontSize: isMobile ? '18px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.03em', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', animation: 'greetingIn 0.5s ease-out forwards' }}>
-              {getGreeting()}{primeiroNome ? `, ${primeiroNome}` : ''}!{' '}
-              <img src="/wave.png" alt="👋" style={{ width: '22px', height: '22px', objectFit: 'contain' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            <h1 style={{ fontSize: isMobile ? '18px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.03em', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ animation: 'greetingWordIn 0.4s ease-out 0.1s both' }}>{greetingPrefix}</span>
+              <span>{typedName}</span>
+              {!typingDone && <span className="typewriter-cursor" style={{ animation: 'cursorBlink 0.7s step-end infinite', fontWeight: 100, color: txtLow }}>|</span>}
+              <img src="/wave.png" alt="👋" style={{ width: '22px', height: '22px', objectFit: 'contain', marginLeft: '4px' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             </h1>
             <p style={{ fontSize: '12px', color: txtLow, marginTop: '3px' }}>{(() => {
               try {
@@ -741,11 +833,11 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
 
           {/* Card 1: META DO MÊS — hero */}
-          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', boxShadow: '0 8px 24px rgba(37,99,235,0.25)', border: 'none', animation: cardRevKey ? `cardIn 0.35s ease-out 0ms both` : 'none' }}>
+          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', boxShadow: '0 8px 24px rgba(37,99,235,0.25)', border: 'none', animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Meta do mês</p>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginBottom: '10px' }}>
               <p style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
-                {allLoaded ? approvedThisMonth : <div style={{ display: 'inline-block', width: '56px', height: isMobile ? '28px' : '36px', borderRadius: '8px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
+                {showContent ? <AnimatedCounter value={approvedThisMonth} /> : <div style={{ display: 'inline-block', width: '56px', height: isMobile ? '28px' : '36px', borderRadius: '8px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
               </p>
               {metaOrg.revs > 0 && (
                 <span style={{ fontSize: '16px', fontWeight: 400, color: 'rgba(255,255,255,0.7)', paddingBottom: '4px' }}>
@@ -767,11 +859,11 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: cardRevKey ? `cardIn 0.35s ease-out 50ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 6px' }}>Gasto Total</p>
-            <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-              {allLoaded ? `R$ ${spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : sk('110px', isMobile ? '16px' : '26px')}
-            </p>
+            <div style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px', display: 'flex', alignItems: 'center' }}>
+              {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '16px' : '26px')}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <TrendingUp style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0 }} />
               <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
@@ -779,10 +871,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: cardRevKey ? `cardIn 0.35s ease-out 100ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>Leads</p>
             <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-              {allLoaded ? String(totalLeads) : sk('60px', isMobile ? '16px' : '26px')}
+              {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '16px' : '26px')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -798,10 +890,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: cardRevKey ? `cardIn 0.35s ease-out 150ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>{t.convertidoPlural}</p>
             <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-              {allLoaded ? String(approved) : sk('60px', isMobile ? '16px' : '26px')}
+              {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '16px' : '26px')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -844,7 +936,7 @@ export default function Dashboard() {
                     <XAxis dataKey="date" tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis allowDecimals={false} tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
                     <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '12px', color: txtHi }} formatter={(value: any) => [value, 'Leads']} />
-                    <Area type="monotoneX" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: '#3b82f6' }} animationDuration={800} />
+                    <Area type="monotoneX" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: '#3b82f6' }} animationDuration={1000} animationBegin={200} isAnimationActive={showContent} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -996,11 +1088,13 @@ export default function Dashboard() {
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
-        @keyframes cardIn{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
         @keyframes dashSkeleton{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes greetingIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes greetingWordIn{from{opacity:0}to{opacity:1}}
         @keyframes chartIn{from{opacity:0}to{opacity:1}}
         @keyframes rowSlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
       `}</style>
     </AppLayout>
   );

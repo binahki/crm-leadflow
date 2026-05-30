@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
-  MessageCircle, Monitor, Trash2,
+  MessageCircle, Monitor,
 } from 'lucide-react';
 import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
@@ -158,28 +158,7 @@ function Field({ label, value, dark }: { label: string; value?: string | null; d
   );
 }
 
-function DeleteConfirm({ name, onConfirm, onCancel, loading, dark }: { name: string; onConfirm: () => void; onCancel: () => void; loading: boolean; dark: boolean }) {
-  return (
-    <>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 62, background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(2px)' }} onClick={onCancel} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 999999, background: dark ? '#111113' : '#fff', borderRadius: '16px', padding: '24px', width: '88%', maxWidth: '340px', boxShadow: dark ? '0 20px 60px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.15)', fontFamily: FONT, animation: 'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: dark ? 'rgba(220,38,38,0.1)' : '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626' }} />
-          </div>
-          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: dark ? '#fff' : '#111827', fontFamily: FONT }}>Excluir lead?</h3>
-        </div>
-        <p style={{ fontSize: '13.5px', color: dark ? '#9ca3af' : '#6b7280', lineHeight: 1.55, margin: '0 0 20px', fontFamily: FONT }}>
-          Tem certeza que deseja excluir <strong style={{ color: dark ? '#fff' : '#111827' }}>{name}</strong>? Esta ação não pode ser desfeita.
-        </p>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: `1px solid ${dark ? '#1e1e22' : '#e5e7eb'}`, background: dark ? '#1a1a1e' : '#f9fafb', color: dark ? '#d4d4d8' : '#374151', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: FONT }}>Cancelar</button>
-          <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: loading ? 'default' : 'pointer', fontFamily: FONT, opacity: loading ? 0.7 : 1 }}>{loading ? 'Excluindo…' : 'Sim, excluir'}</button>
-        </div>
-      </div>
-    </>
-  );
-}
+// DeleteConfirm removed
 
 function MotivoModal({ onConfirm, onCancel, dark, motivoAtual }: { onConfirm: (m: string) => void; onCancel: () => void; dark: boolean; motivoAtual?: string }) {
   const outroDefault = motivoAtual && !MOTIVOS.slice(0, -1).includes(motivoAtual) ? motivoAtual : '';
@@ -270,9 +249,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const [obs, setObs] = useState('');
   const [status, setStatus] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [obsChanged, setObsChanged] = useState(false);
-  const [showDel, setShowDel] = useState(false);
   const [showMotivo, setShowMotivo] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -414,7 +391,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       if (s === 0) s = 1;
       setStatus(s);
       setObsChanged(false);
-      setShowDel(false);
       setShowMotivo(false);
       setPendingStatus(null);
       setActiveSection(null);
@@ -471,14 +447,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     else { onUpdate({ ...lead, observacoes: obs }); setObsChanged(false); toast.success('Observação salva!'); }
   }
 
-  async function handleDelete() {
-    if (!lead) return;
-    setDeleting(true);
-    const { error } = await supabase.from('leads').delete().eq('id', lead.id);
-    setDeleting(false);
-    if (error) { toast.error('Erro ao excluir'); setShowDel(false); }
-    else { toast.success('Lead excluído'); setShowDel(false); onClose(); }
-  }
+  // handleDelete removed
 
   async function addLeadTag(tagId: string) {
     if (!lead) return;
@@ -552,12 +521,11 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
   const faixa = calcularFaixa(lead, configuracoes!) || l.faixa || null;
-  const instagramValue = l.instagram ? String(l.instagram).trim() : '';
+  const instagramValue = String((lead as any)?.instagram || '').trim();
 
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.18)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', animation: 'ld-fade 0.18s ease' }} />
-      {showDel && <DeleteConfirm name={lead.nome} onConfirm={handleDelete} onCancel={() => setShowDel(false)} loading={deleting} dark={dark} />}
       {showMotivo && createPortal(
         <MotivoModal onConfirm={handleMotivoConfirm} onCancel={() => { setShowMotivo(false); setPendingStatus(null); }} dark={dark} motivoAtual={lead.motivo_reprovacao} />,
         document.body
@@ -567,9 +535,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
-          <button onClick={() => setShowDel(true)} style={{ position: 'absolute', top: '16px', right: '50px', width: '26px', height: '26px', background: dark ? 'rgba(220,38,38,0.15)' : '#fee2e2', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(220,38,38,0.25)' : '#fcd5d5')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(220,38,38,0.15)' : '#fee2e2')} title="Excluir Lead">
-            <Trash2 style={{ width: '12px', height: '12px', color: '#ef4444' }} />
-          </button>
           <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', width: '26px', height: '26px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)')}>
             <X style={{ width: '12px', height: '12px', color: dark ? '#52525b' : '#6b7280' }} />
           </button>
@@ -589,11 +554,14 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
                 <ScoreTag score={score} faixa={faixa} dark={dark} />
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
                 {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
                 {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{formatarWhatsapp(lead.whatsapp)}</span>}
-                {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
-                {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
+                {/* Instagram + horário sempre na mesma linha */}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
+                  {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
+                </span>
               </div>
             </div>
           </div>
@@ -681,9 +649,9 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             {/* Gerenciar à direita */}
             <button
               onClick={() => setShowTagManager(true)}
-              style={{ marginLeft: 'auto', fontSize: '11px', color: dark ? '#3f3f46' : '#d1d5db', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: '4px 0', transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = dark ? '#71717a' : '#9ca3af')}
-              onMouseLeave={e => (e.currentTarget.style.color = dark ? '#3f3f46' : '#d1d5db')}
+              style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 500, color: dark ? '#a1a1aa' : '#4b5563', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, padding: '4px 0', transition: 'all 0.15s', textDecoration: 'none' }}
+              onMouseEnter={e => { e.currentTarget.style.color = dark ? '#d4d4d8' : '#111827'; e.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = dark ? '#a1a1aa' : '#4b5563'; e.currentTarget.style.textDecoration = 'none'; }}
             >Gerenciar</button>
           </div>
         </div>

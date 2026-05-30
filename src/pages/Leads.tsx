@@ -200,13 +200,13 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
     setOpen(v => !v);
   }
   return (
-    <div style={{ position:'relative' }}>
+    <div>
       <button ref={btnRef} onClick={handleOpen} style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
         {selected?.dot && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:selected.dot, flexShrink:0 }}/>}
         {selected?.label}<ChevronDown style={{ width:'13px', height:'13px', transform:open?'rotate(180deg)':'', transition:'transform 0.18s' }}/>
       </button>
-      {open && (<>
-        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+      {open && createPortal(<>
+        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
         <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, background:dark?'#111113':'#ffffff', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
           {options.map(o => (<button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'7px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
             {value===o.value?<Check style={{ width:'12px', height:'12px', flexShrink:0 }}/>:<span style={{ width:'12px', flexShrink:0 }}/>}
@@ -214,7 +214,7 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
             {o.label}
           </button>))}
         </div>
-      </>)}
+      </>, document.body)}
     </div>
   );
 }
@@ -260,6 +260,8 @@ function PhoneInput({ value, onChange, style: st }: { value:string; onChange:(v:
 
 function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:number; onChange:(v:number)=>void; dark:boolean; aprovadoLabel?: string }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
   const options = [
     { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
     { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
@@ -272,16 +274,23 @@ function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:numb
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const bg = dark ? '#1a1a1e' : '#f9fafb';
   const txt = dark ? '#f4f4f5' : '#111827';
+  function handleOpen() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    setOpen(v => !v);
+  }
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" onClick={() => setOpen(!open)} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
+      <button ref={btnRef} type="button" onClick={handleOpen} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
         <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:selected.dot, flexShrink:0 }}/>
         <span style={{ flex: 1 }}>{selected.label}</span>
         <ChevronDown style={{ width:'14px', height:'14px', color:txt }}/>
       </button>
       {open && <>
-        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
-        <div style={{ position:'absolute', top:'100%', left:0, right:0, marginTop:'4px', background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', zIndex:50, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
+        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
+        <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, zIndex:9999, background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
           {options.map(o => (
             <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
               <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>
@@ -341,7 +350,7 @@ function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
 }
 
 // ── Campaign Filter Dropdown ──────────────────────────────────────────────────
-function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose }: {
+function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onApply, onClear, onClose, pos }: {
   dark: boolean;
   campaigns: { name: string; count: number; isActive: boolean }[];
   pendingSelected: Set<string>;
@@ -349,6 +358,7 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
   onApply: () => void;
   onClear: () => void;
   onClose: () => void;
+  pos?: { top: number; left: number };
 }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -388,10 +398,18 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
     );
   }
 
+  const menuWidth = 264;
+  let leftPos = pos?.left ?? 0;
+  if (leftPos + menuWidth > window.innerWidth - 8) {
+    leftPos = window.innerWidth - menuWidth - 8;
+  }
+  if (leftPos < 8) leftPos = 8;
+  const topPos = pos?.top ?? 0;
+
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:40 }} />
-      <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:bg, border:`1px solid ${border}`, borderRadius:'12px', width:'264px', maxHeight:'370px', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998 }} />
+      <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:topPos, left:leftPos, zIndex:9999, background:bg, border:`1px solid ${border}`, borderRadius:'12px', width:`${menuWidth}px`, maxHeight:'370px', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
         {/* Search */}
         <div style={{ padding:'8px', borderBottom:`1px solid ${border}`, flexShrink:0 }}>
           <div style={{ position:'relative' }}>
@@ -724,7 +742,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
           </button>
           {showStatusDrop && (
             <>
-              <div onClick={() => setShowStatusDrop(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+              <div onClick={() => setShowStatusDrop(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
               <div style={{ position:'fixed', top:dropPos.top, left:dropPos.left, width:'190px', background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.12)' }}>
                 {statusOpts.map(o => (
                   <button key={o.value} onClick={() => { onMoveStatus(o.value); setShowStatusDrop(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:'transparent', color:dark?'#d4d4d8':'#374151', fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
@@ -799,6 +817,9 @@ function LeadsPage() {
   const t = useTerminology();
   const dark = theme === 'dark';
   const { plano, features, loading: planLoading } = usePlanFeatures();
+
+  const [campDropPos, setCampDropPos] = useState({ top: 0, left: 0 });
+  const [tagDropPos, setTagDropPos] = useState({ top: 0, left: 0 });
 
   const statusOptions = useMemo(() => STATUS_OPTIONS.map(o =>
     o.value === '3' ? { ...o, label: t.statusConvertidoLabel } : o
@@ -1002,7 +1023,7 @@ function LeadsPage() {
       const to = Math.min(from + PAGE_SIZE - 1, total - 1);
       const { data } = await supabase
         .from('leads')
-        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, lead_tags(tag_id, tags(id, nome, cor))`)
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, instagram, lead_tags(tag_id, tags(id, nome, cor))`)
         .order('created_at', { ascending: false })
         .eq('org_id', orgId)
         .range(from, to);
@@ -1727,13 +1748,18 @@ function LeadsPage() {
                 {/* Campaign filter button */}
                 <div style={{ position:'relative' }}>
                   <button
-                    onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }}
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setCampDropPos({ top: r.bottom + 6, left: r.left });
+                      setPendingCampaigns(new Set(selectedCampaigns));
+                      setShowCampaignModal(v => !v);
+                    }}
                     style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                   >
                     <Megaphone style={{ width:'12px', height:'12px' }}/>
                     Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                   </button>
-                  {showCampaignModal && (
+                  {showCampaignModal && createPortal(
                     <CampFilterDropdown
                       dark={dark}
                       campaigns={campaignOptions}
@@ -1742,52 +1768,64 @@ function LeadsPage() {
                       onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
                       onClear={() => { setPendingCampaigns(new Set()); }}
                       onClose={() => setShowCampaignModal(false)}
-                    />
+                      pos={campDropPos}
+                    />,
+                    document.body
                   )}
                 </div>
 
                 {/* Tags dropdown: pills de filtro + rodapé Gerenciar */}
                 <div style={{ position:'relative' }}>
                   <button
-                    onClick={() => setShowTagFilter(v => !v)}
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setTagDropPos({ top: r.bottom + 6, left: r.left });
+                      setShowTagFilter(v => !v);
+                    }}
                     style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                   >
                     <Tag style={{ width:'12px', height:'12px' }}/> Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                   </button>
-                  {showTagFilter && (
-                    <>
-                      <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
-                      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:'190px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', gap:'1px' }}>
-                        {orgTags.length === 0 ? (
-                          <p style={{ fontSize:'12px', color:dark?'#52525b':'#9ca3af', margin:'4px 8px', padding:'8px 0' }}>Nenhuma tag criada.</p>
-                        ) : (
-                          orgTags.map(tag => {
-                            const active = selectedTagIds.has(tag.id);
-                            const hex = tag.cor || '#8b5cf6';
-                            return (
-                              <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); active ? n.delete(tag.id) : n.add(tag.id); setSelectedTagIds(n); }}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'6px 8px', borderRadius:'8px', border:'none', background:active?(dark?'rgba(139,92,246,0.1)':'#f5f3ff'):'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
-                                <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:hex, flexShrink:0 }} />
-                                <span style={{ flex:1, fontSize:'12.5px', color:active?(dark?'#c4b5fd':'#7c3aed'):(dark?'#d4d4d8':'#374151'), fontWeight:active?600:400 }}>{tag.nome}</span>
-                                {active && <Check style={{ width:'11px', height:'11px', color:'#8b5cf6', flexShrink:0 }} />}
-                              </button>
-                            );
-                          })
-                        )}
-                        {selectedTagIds.size > 0 && (
-                          <button onClick={() => setSelectedTagIds(new Set())} style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:'none', background:'transparent', color:dark?'#f87171':'#ef4444', fontSize:'11.5px', cursor:'pointer', fontFamily:'inherit', textAlign:'left', marginTop:'2px' }}>
-                            Limpar filtro
-                          </button>
-                        )}
-                        <div style={{ borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginTop:'4px', paddingTop:'6px' }}>
-                          <button onClick={() => { setShowTagFilter(false); setShowTagManagerModal(true); }}
-                            style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'none', background:'transparent', color:dark?'#71717a':'#6b7280', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
-                            <span style={{ fontSize:'13px' }}>⚙</span> Gerenciar tags
-                          </button>
+                  {showTagFilter && createPortal((() => {
+                    const tagMenuWidth = 190;
+                    let tagLeft = tagDropPos.left;
+                    if (tagLeft + tagMenuWidth > window.innerWidth - 8) tagLeft = window.innerWidth - tagMenuWidth - 8;
+                    if (tagLeft < 8) tagLeft = 8;
+                    return (
+                      <>
+                        <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:9998 }} />
+                        <div style={{ position:'fixed', top:tagDropPos.top, left:tagLeft, zIndex:9999, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:`${tagMenuWidth}px`, boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', gap:'1px' }}>
+                          {orgTags.length === 0 ? (
+                            <p style={{ fontSize:'12px', color:dark?'#52525b':'#9ca3af', margin:'4px 8px', padding:'8px 0' }}>Nenhuma tag criada.</p>
+                          ) : (
+                            orgTags.map(tag => {
+                              const active = selectedTagIds.has(tag.id);
+                              const hex = tag.cor || '#8b5cf6';
+                              return (
+                                <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); active ? n.delete(tag.id) : n.add(tag.id); setSelectedTagIds(n); }}
+                                  style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'6px 8px', borderRadius:'8px', border:'none', background:active?(dark?'rgba(139,92,246,0.1)':'#f5f3ff'):'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                                  <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:hex, flexShrink:0 }} />
+                                  <span style={{ flex:1, fontSize:'12.5px', color:active?(dark?'#c4b5fd':'#7c3aed'):(dark?'#d4d4d8':'#374151'), fontWeight:active?600:400 }}>{tag.nome}</span>
+                                  {active && <Check style={{ width:'11px', height:'11px', color:'#8b5cf6', flexShrink:0 }} />}
+                                </button>
+                              );
+                            })
+                          )}
+                          {selectedTagIds.size > 0 && (
+                            <button onClick={() => setSelectedTagIds(new Set())} style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:'none', background:'transparent', color:dark?'#f87171':'#ef4444', fontSize:'11.5px', cursor:'pointer', fontFamily:'inherit', textAlign:'left', marginTop:'2px' }}>
+                              Limpar filtro
+                            </button>
+                          )}
+                          <div style={{ borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginTop:'4px', paddingTop:'6px' }}>
+                            <button onClick={() => { setShowTagFilter(false); setShowTagManagerModal(true); }}
+                              style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'none', background:'transparent', color:dark?'#71717a':'#6b7280', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                              <span style={{ fontSize:'13px' }}>⚙</span> Gerenciar tags
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    );
+                  })(), document.body)}
                 </div>
 
                 {hasActiveFilters && (
@@ -1821,7 +1859,7 @@ function LeadsPage() {
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <div style={{ position:'relative' }}>
-                  <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
+                  <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setCampDropPos({ top: r.bottom + 6, left: r.left }); setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
                     <Megaphone style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
                   </button>
                   {showCampaignModal && (
@@ -1833,6 +1871,7 @@ function LeadsPage() {
                       onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
                       onClear={() => { setPendingCampaigns(new Set()); }}
                       onClose={() => setShowCampaignModal(false)}
+                      pos={campDropPos}
                     />
                   )}
                 </div>
