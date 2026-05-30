@@ -9,14 +9,6 @@ export type { Plan };
 
 const SUPER_ADMIN_EMAIL = 'admin@floow.com';
 
-function getCachedPlan(orgId: string): Plan | null {
-  try {
-    const cached = localStorage.getItem(`floow_plan_${orgId}`);
-    if (cached && KNOWN_PLANS.includes(cached as Plan)) return cached as Plan;
-  } catch {}
-  return null;
-}
-
 export function invalidatePlanCache(orgId: string) {
   try { localStorage.removeItem(`floow_plan_${orgId}`); } catch {}
 }
@@ -26,18 +18,23 @@ export function usePlanFeatures() {
   const { user } = useAuth();
   const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
-  // Lazy init: lê o cache de forma síncrona no primeiro render para evitar flash
-  const [plano, setPlano] = useState<Plan>(() => {
-    if (!orgId) return 'gratuito';
-    return getCachedPlan(orgId) ?? 'gratuito';
-  });
+  const getCached = (id: string | null): Plan | null => {
+    if (!id) return null;
+    try {
+      const v = localStorage.getItem(`floow_plan_${id}`);
+      if (v && KNOWN_PLANS.includes(v as Plan)) return v as Plan;
+    } catch {}
+    return null;
+  };
+
+  const [plano, setPlano] = useState<Plan>(() => getCached(orgId) ?? 'gratuito');
   const [loading, setLoading] = useState<boolean>(() => {
-    if (!orgId) return true; // orgId ainda não disponível — nunca mostrar lock
-    return getCachedPlan(orgId) === null; // sem cache = loading true; com cache = false
+    if (isSuperAdmin && !orgId) return false;   // admin sem org → enterprise imediato
+    if (orgId && getCached(orgId)) return false; // cache hit → sem loading
+    return true;                                  // sem cache/orgId → loading até o fetch
   });
 
   useEffect(() => {
-    // Admin sem org selecionada (não está visualizando um cliente) → acesso total
     if (isSuperAdmin && !orgId) {
       setPlano('enterprise');
       setLoading(false);
@@ -46,14 +43,12 @@ export function usePlanFeatures() {
 
     if (!orgId || !ready) return;
 
-    // Carrega do cache imediatamente para evitar flash de cadeado
-    const cached = getCachedPlan(orgId);
+    const cached = getCached(orgId);
     if (cached) {
       setPlano(cached);
       setLoading(false);
     } else {
-      setLoading(true);
-      setPlano('gratuito');
+      setLoading(true); // sem cache: só libera loading quando o banco responder
     }
 
     (supabase as any)
@@ -61,8 +56,7 @@ export function usePlanFeatures() {
       .select('plano')
       .eq('id', orgId)
       .single()
-      .then(({ data, error }: any) => {
-        console.log('[usePlanFeatures] orgId:', orgId, 'plano:', data?.plano, 'error:', error);
+      .then(({ data }: any) => {
         const p: Plan =
           data?.plano && KNOWN_PLANS.includes(data.plano as Plan)
             ? (data.plano as Plan)
@@ -77,7 +71,6 @@ export function usePlanFeatures() {
       });
   }, [orgId, ready, isSuperAdmin]); // eslint-disable-line
 
-  // Features are always derived from the real org plan (even for admin viewing a client org)
   const features = {
     ravena:             ['starter','pro','enterprise'].includes(plano),
     whatsappOficial:    ['starter','pro','enterprise'].includes(plano),
@@ -90,7 +83,10 @@ export function usePlanFeatures() {
     limiteQuizzes:      (plano === 'gratuito' || plano === 'starter') ? 1 : 3,
   };
 
-  return { plano, orgId, loading, features };
+  // Admin sem org visualizada sempre enxerga enterprise
+  const planoFinal: Plan = isSuperAdmin && !orgId ? 'enterprise' : plano;
+
+  return { plano: planoFinal, orgId, loading, features };
 }
 
 export const FEATURE_REQUIRED_PLAN: Record<string, 'Starter' | 'Pro' | 'Enterprise'> = {

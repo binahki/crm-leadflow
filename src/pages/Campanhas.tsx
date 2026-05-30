@@ -609,8 +609,8 @@ export default function CampanhasPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
   const dark = theme === 'dark';
-  const { features } = usePlanFeatures();
-  const ravenaDesbotada = !features.ravena;
+  const { features, loading: planLoading } = usePlanFeatures();
+  const ravenaDesbotada = !planLoading && !features.ravena;
   const semToken = metaReady && (!metaToken || !metaAccount);
   const navigate = useNavigate();
   const _initCampKey = orgId ? `meta_camp_${orgId}_today` : null;

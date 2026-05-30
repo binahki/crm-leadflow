@@ -448,8 +448,8 @@ export default function MetaAdsPage() {
   const { orgId, ready: orgReady } = useOrgId();
 
   const navigate = useNavigate();
-  const { features } = usePlanFeatures();
-  const ravenaLocked = !features.ravena;
+  const { features, loading: planLoading } = usePlanFeatures();
+  const ravenaLocked = !planLoading && !features.ravena;
   const [showRavenaUpgrade, setShowRavenaUpgrade] = useState(false);
 
   const [accountId, setAccountId]   = useState('');

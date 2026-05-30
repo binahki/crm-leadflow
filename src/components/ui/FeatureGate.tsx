@@ -16,10 +16,11 @@ export function FeatureGate({ feature, planoNecessario, children, hideContent = 
   const { features, loading } = usePlanFeatures();
   const [showModal, setShowModal] = useState(false);
 
-  const isAvailable = features[feature] as boolean;
+  // NUNCA mostrar estado bloqueado enquanto o plano está carregando
+  if (loading) return <>{children}</>;
 
-  // Nunca bloquear durante carregamento — evita flash de cadeado
-  if (loading || isAvailable) return <>{children}</>;
+  const isAvailable = features[feature] as boolean;
+  if (isAvailable) return <>{children}</>;
 
   const requiredPlan = planoNecessario ?? (FEATURE_REQUIRED_PLAN[feature] as 'Starter' | 'Pro' | 'Enterprise' | undefined) ?? 'Starter';
 
