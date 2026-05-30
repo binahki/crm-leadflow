@@ -515,7 +515,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
   if (!isOpen || !lead) return null;
 
-  const avatarCor = getAvatarColor(lead.nome, dark);
+  const avatarCor = getAvatarColor(lead.nome, dark, lead.id);
   const avatarText = getAvatarTextColor(avatarCor);
   const l = { ...fullLead, ...lead } as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;

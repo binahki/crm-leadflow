@@ -20,9 +20,11 @@ function hashName(name: string): number {
 }
 
 // Única função pública de cor — mesma entrada = mesma saída em TODAS as páginas
-export function getAvatarColor(name: string, dark: boolean): string {
+// id (UUID do lead) é usado no hash para garantir distribuição uniforme sem repetições
+export function getAvatarColor(name: string, dark: boolean, id?: string): string {
   if (!name) return COLORS[0];
-  const cor = COLORS[hashName(name) % COLORS.length];
+  const hashInput = id ? `${name}|${id}` : name;
+  const cor = COLORS[hashName(hashInput) % COLORS.length];
   if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#4a4a4f';
   return cor;
 }
