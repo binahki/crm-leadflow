@@ -26,8 +26,15 @@ export function usePlanFeatures() {
   const { user } = useAuth();
   const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
-  const [plano, setPlano] = useState<Plan>('gratuito');
-  const [loading, setLoading] = useState(true);
+  // Lazy init: lê o cache de forma síncrona no primeiro render para evitar flash
+  const [plano, setPlano] = useState<Plan>(() => {
+    if (!orgId) return 'gratuito';
+    return getCachedPlan(orgId) ?? 'gratuito';
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (!orgId) return true; // orgId ainda não disponível — nunca mostrar lock
+    return getCachedPlan(orgId) === null; // sem cache = loading true; com cache = false
+  });
 
   useEffect(() => {
     // Admin sem org selecionada (não está visualizando um cliente) → acesso total

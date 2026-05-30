@@ -65,8 +65,6 @@ export function TutorialPopup() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const tutorialKey = orgId ? `tutorial_concluido_${orgId}` : null;
-
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -82,26 +80,28 @@ export function TutorialPopup() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !orgId || !tutorialKey) return;
-    if (localStorage.getItem(tutorialKey) === 'true') return;
+    if (!ready || !orgId) return;
     // Nunca mostrar para admin ou gestor acessando conta de cliente
     if (user?.email === 'admin@floow.com') return;
     if (localStorage.getItem('admin_viewing_org')) return;
+    // Chave usa orgId diretamente — nunca null aqui
+    if (localStorage.getItem(`tutorial_concluido_${orgId}`) === 'true') return;
     const t = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(t);
-  }, [ready, orgId, tutorialKey, user?.email]); // eslint-disable-line
+  }, [ready, orgId, user?.email]); // eslint-disable-line
 
   useEffect(() => {
     if (step !== 2 || !orgId || webhookUrl) return;
-    supabase
-      .from('configuracoes_whatsapp')
-      .select('webhook_token')
+    // Busca o webhook Principal da tabela webhooks (não mais de configuracoes_whatsapp)
+    (supabase as any)
+      .from('webhooks')
+      .select('token')
       .eq('org_id', orgId)
-      .limit(1)
+      .eq('nome', 'Principal')
       .single()
-      .then(({ data }) => {
-        if ((data as any)?.webhook_token) {
-          setWebhookUrl(`${EDGE_URL}?token=${(data as any).webhook_token}`);
+      .then(({ data }: any) => {
+        if (data?.token) {
+          setWebhookUrl(`${EDGE_URL}?token=${data.token}`);
         }
       });
   }, [step, orgId, webhookUrl]);
@@ -109,7 +109,8 @@ export function TutorialPopup() {
   if (!open) return null;
 
   function close() {
-    if (tutorialKey) localStorage.setItem(tutorialKey, 'true');
+    // Salva com orgId diretamente — evita bug se orgId mudou durante o tutorial
+    if (orgId) localStorage.setItem(`tutorial_concluido_${orgId}`, 'true');
     setOpen(false);
   }
 
