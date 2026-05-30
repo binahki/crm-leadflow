@@ -1746,71 +1746,48 @@ function LeadsPage() {
                   )}
                 </div>
 
-                {/* Tags button → manager modal + filter icon */}
-                <div style={{ display:'flex', alignItems:'center', gap:'3px' }}>
+                {/* Tags dropdown: pills de filtro + rodapé Gerenciar */}
+                <div style={{ position:'relative' }}>
                   <button
-                    onClick={() => setShowTagManagerModal(true)}
-                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                    onClick={() => setShowTagFilter(v => !v)}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                   >
-                    <Tag style={{ width:'12px', height:'12px' }}/> Tags
+                    <Tag style={{ width:'12px', height:'12px' }}/> Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                   </button>
-                  <div style={{ position:'relative' }}>
-                    <button
-                      onClick={() => setShowTagFilter(v => !v)}
-                      title="Filtrar por tag"
-                      style={{ display:'flex', alignItems:'center', gap:'4px', padding:'7px 8px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), cursor:'pointer', fontFamily:'inherit' }}
-                    >
-                      <Filter style={{ width:'12px', height:'12px' }}/>{selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
-                    </button>
-                    {showTagFilter && (
-                      <>
-                        <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
-                        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>
-                          {orgTags.map(tag => {
+                  {showTagFilter && (
+                    <>
+                      <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
+                      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, borderRadius:'12px', padding:'8px', minWidth:'190px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', gap:'1px' }}>
+                        {orgTags.length === 0 ? (
+                          <p style={{ fontSize:'12px', color:dark?'#52525b':'#9ca3af', margin:'4px 8px', padding:'8px 0' }}>Nenhuma tag criada.</p>
+                        ) : (
+                          orgTags.map(tag => {
                             const active = selectedTagIds.has(tag.id);
                             const hex = tag.cor || '#8b5cf6';
-                            const pillBg = active ? hex : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)');
-                            const pillColor = active ? '#fff' : (dark ? '#d4d4d8' : '#374151');
                             return (
                               <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); active ? n.delete(tag.id) : n.add(tag.id); setSelectedTagIds(n); }}
-                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
-                                <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', padding:'3px 9px', borderRadius:'99px', background:pillBg, color:pillColor, fontSize:'12px', fontWeight:500, transition:'all 0.12s', border: active ? 'none' : `1px solid ${dark?'#3f3f46':'#d1d5db'}` }}>
-                                  <span style={{ width:'7px', height:'7px', borderRadius:'50%', background: active ? 'rgba(255,255,255,0.7)' : hex, flexShrink:0 }} />
-                                  {tag.nome}
-                                </span>
+                                style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'6px 8px', borderRadius:'8px', border:'none', background:active?(dark?'rgba(139,92,246,0.1)':'#f5f3ff'):'transparent', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                                <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:hex, flexShrink:0 }} />
+                                <span style={{ flex:1, fontSize:'12.5px', color:active?(dark?'#c4b5fd':'#7c3aed'):(dark?'#d4d4d8':'#374151'), fontWeight:active?600:400 }}>{tag.nome}</span>
                                 {active && <Check style={{ width:'11px', height:'11px', color:'#8b5cf6', flexShrink:0 }} />}
                               </button>
                             );
-                          })}
-                          {selectedTagIds.size > 0 && (
-                            <button onClick={() => setSelectedTagIds(new Set())} style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:'none', background:'transparent', color:dark?'#f87171':'#ef4444', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', textAlign:'left', marginTop:'4px', borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}` }}>
-                              Limpar
-                            </button>
-                          )}
-                          {/* Criar nova tag inline */}
-                          <div style={{ borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginTop:'6px', paddingTop:'8px', display:'flex', flexDirection:'column', gap:'6px' }}>
-                            <input
-                              value={newTagFilterName}
-                              onChange={e => setNewTagFilterName(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') handleCreateTagFilter(); e.stopPropagation(); }}
-                              placeholder="Nova tag…"
-                              style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#0d0d0f':'#f8fafc', color:dark?'#f4f4f5':'#111827', fontSize:'12px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
-                            />
-                            <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
-                              {CORES_TAGS.map(cor => (
-                                <button key={cor} onClick={() => setNewTagFilterCor(cor)}
-                                  style={{ width:'18px', height:'18px', borderRadius:'50%', background:cor, border:`2px solid ${newTagFilterCor === cor ? (dark?'#fff':'#111') : 'transparent'}`, cursor:'pointer', padding:0, flexShrink:0, outline:newTagFilterCor === cor ? `2px solid ${cor}` : 'none', outlineOffset:'1px' }} />
-                              ))}
-                            </div>
-                            <button onClick={handleCreateTagFilter} disabled={creatingTagFilter || !newTagFilterName.trim()}
-                              style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:'none', background:newTagFilterName.trim()?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:newTagFilterName.trim()?'#fff':(dark?'#52525b':'#9ca3af'), fontSize:'12px', fontWeight:500, cursor:newTagFilterName.trim()?'pointer':'default', fontFamily:'inherit' }}>
-                              {creatingTagFilter ? 'Criando…' : '+ Criar tag'}
-                            </button>
-                          </div>
+                          })
+                        )}
+                        {selectedTagIds.size > 0 && (
+                          <button onClick={() => setSelectedTagIds(new Set())} style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:'none', background:'transparent', color:dark?'#f87171':'#ef4444', fontSize:'11.5px', cursor:'pointer', fontFamily:'inherit', textAlign:'left', marginTop:'2px' }}>
+                            Limpar filtro
+                          </button>
+                        )}
+                        <div style={{ borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginTop:'4px', paddingTop:'6px' }}>
+                          <button onClick={() => { setShowTagFilter(false); setShowTagManagerModal(true); }}
+                            style={{ width:'100%', display:'flex', alignItems:'center', gap:'6px', padding:'6px 8px', borderRadius:'8px', border:'none', background:'transparent', color:dark?'#71717a':'#6b7280', fontSize:'12px', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                            <span style={{ fontSize:'13px' }}>⚙</span> Gerenciar tags
+                          </button>
                         </div>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {hasActiveFilters && (

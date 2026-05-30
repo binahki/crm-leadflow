@@ -10,19 +10,30 @@ const AVATAR_COLORS = [
 export function getAvatarColor(name: string): string {
   if (!name || typeof name !== 'string') return '#0044fd';
   const clean = name.trim().toLowerCase();
-  // djb2-xor forward
-  let hash = 5381;
+
+  // Hash primário — djb2 modificado
+  let h1 = 5381;
   for (let i = 0; i < clean.length; i++) {
-    hash = ((hash << 5) + hash) ^ clean.charCodeAt(i);
-    hash = hash >>> 0; // unsigned 32-bit
+    h1 = Math.imul(h1, 31) ^ clean.charCodeAt(i);
+    h1 = h1 >>> 0;
   }
-  // djb2-xor backward — quebra padrões de nomes sequenciais
-  let hash2 = 0;
+
+  // Hash secundário — FNV-1a simplificado (percorre ao contrário)
+  let h2 = 2166136261;
   for (let i = clean.length - 1; i >= 0; i--) {
-    hash2 = ((hash2 << 3) + hash2) ^ clean.charCodeAt(i);
-    hash2 = hash2 >>> 0;
+    h2 ^= clean.charCodeAt(i);
+    h2 = Math.imul(h2, 16777619);
+    h2 = h2 >>> 0;
   }
-  const combined = (hash ^ (hash2 << 16)) >>> 0;
+
+  // Hash terciário — posição × valor × Knuth multiplicative
+  let h3 = 0;
+  for (let i = 0; i < clean.length; i++) {
+    h3 += clean.charCodeAt(i) * (i + 1) * 2654435761;
+    h3 = h3 >>> 0;
+  }
+
+  const combined = ((h1 ^ (h2 << 11)) ^ (h3 >> 5)) >>> 0;
   return AVATAR_COLORS[combined % AVATAR_COLORS.length];
 }
 
@@ -33,7 +44,7 @@ export function getAvatarColorForTheme(name: string, dark: boolean): string {
   return cor;
 }
 
-// Cores claras (#b8fd2f, #f3f3f2) → texto escuro. Resto → texto branco.
+// Cores claras (#b8fd2f, #f3f3f2, #4a4a4f) → texto escuro. Resto → texto branco.
 export function getAvatarTextColor(bgColor: string): string {
   if (bgColor === '#b8fd2f' || bgColor === '#f3f3f2') return '#111111';
   return '#ffffff';

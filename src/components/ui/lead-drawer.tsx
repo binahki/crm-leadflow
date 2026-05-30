@@ -11,6 +11,7 @@ import {
 import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
+import { getAvatarColorForTheme, getAvatarTextColor } from '@/utils/avatarColor';
 import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -41,12 +42,6 @@ const STATUS = STATUS_SEQUENCE.map(idx => {
 
 const MOTIVOS = ['Desistiu', 'Região não atendida', 'Perfil não elegível', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Outro'];
 
-const GRADIENTS = [
-  ['#a78bfa', '#60a5fa'], ['#f472b6', '#fb923c'],
-  ['#34d399', '#60a5fa'], ['#fb923c', '#fbbf24'],
-  ['#60a5fa', '#34d399'], ['#c084fc', '#f472b6'],
-  ['#fbbf24', '#a78bfa'], ['#34d399', '#a78bfa'],
-];
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
@@ -103,7 +98,6 @@ function formatValue(val: unknown): string {
   return String(val);
 }
 
-function getGradient(name: string) { return GRADIENTS[(name?.charCodeAt(0) || 0) % GRADIENTS.length]; }
 function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
 function cleanCampaignName(raw?: string | null) { if (!raw) return null; return raw.replace(/\|\d+$/, '').trim(); }
 
@@ -552,7 +546,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
   if (!isOpen || !lead) return null;
 
-  const [g1, g2] = getGradient(lead.nome);
+  const avatarCor = getAvatarColorForTheme(lead.nome, dark);
+  const avatarText = getAvatarTextColor(avatarCor);
   const l = { ...fullLead, ...lead } as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
@@ -569,21 +564,6 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       )}
 
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {/* Skeleton overlay enquanto carrega dados completos */}
-        {fullLeadLoading && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', borderRadius: '22px', display: 'flex', flexDirection: 'column', gap: '0', padding: '22px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: dark ? '#27272a' : '#e5e7eb', animation: 'ld-skeleton 1.5s ease-in-out infinite', flexShrink: 0 }}/>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                <div style={{ width: '140px', height: '14px', borderRadius: '6px', background: dark ? '#27272a' : '#e5e7eb', animation: 'ld-skeleton 1.5s ease-in-out infinite' }}/>
-                <div style={{ width: '100px', height: '11px', borderRadius: '6px', background: dark ? '#1e1e22' : '#f0f0f0', animation: 'ld-skeleton 1.5s ease-in-out infinite 0.15s' }}/>
-              </div>
-            </div>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{ height: '44px', borderRadius: '10px', background: dark ? '#1e1e22' : '#f5f5f5', marginBottom: '8px', animation: `ld-skeleton 1.5s ease-in-out infinite ${i * 0.1}s` }}/>
-            ))}
-          </div>
-        )}
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
@@ -595,7 +575,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginRight: '36px' }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
-              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: `linear-gradient(135deg, ${g1}, ${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: '#fff', boxShadow: `0 4px 14px ${g1}60`, fontFamily: FONT }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: avatarCor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 700, color: avatarText, boxShadow: `0 4px 14px ${avatarCor}60`, fontFamily: FONT }}>
                 {initials(lead.nome)}
               </div>
               {status === 1 && !avaliado && (
@@ -754,11 +734,13 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
               return (
                 <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark} iconColor="#0044fd"
                   icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">
-                  {entries.length === 0
-                    ? <p style={{ fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontFamily: FONT }}>Nenhuma resposta do quiz disponível.</p>
-                    : entries.map(([key, val]) => (
-                        <Field key={key} label={formatKey(key)} value={formatValue(val)} dark={dark} />
-                      ))
+                  {fullLeadLoading && !l.quiz_respostas
+                    ? <div style={{ height: '32px', borderRadius: '8px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', animation: 'ld-skeleton 1.5s ease-in-out infinite' }}/>
+                    : entries.length === 0
+                      ? <p style={{ fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontFamily: FONT }}>Nenhuma resposta do quiz disponível.</p>
+                      : entries.map(([key, val]) => (
+                          <Field key={key} label={formatKey(key)} value={formatValue(val)} dark={dark} />
+                        ))
                   }
                 </Section>
               );
