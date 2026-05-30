@@ -350,6 +350,8 @@ export default function Dashboard() {
   const [metaCampaigns, setMetaCampaigns] = useState<Campaign[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState(false);
+  const [cardRevKey, setCardRevKey] = useState(0);
+  const revTriggered = useRef(false);
   const [spendThisMonth, setSpendThisMonth] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
@@ -647,6 +649,18 @@ export default function Dashboard() {
 
   const periodLabel = selectedPeriod==='custom'&&customFrom&&customTo ? `${isoToBR(customFrom)} – ${isoToBR(customTo)}` : PERIOD_FILTERS.find(p=>p.value===selectedPeriod)?.label??'Hoje';
 
+  const allLoaded = !loading && !metaLoading;
+  useEffect(() => {
+    if (allLoaded && !revTriggered.current) {
+      revTriggered.current = true;
+      setCardRevKey(1);
+    }
+  }, [allLoaded]);
+
+  const sk = (w = '80px', h = '26px') => (
+    <div style={{ display:'inline-block', width:w, height:h, borderRadius:'6px', background:dark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)', animation:'dashSkeleton 1.5s ease-in-out infinite', verticalAlign:'middle' }}/>
+  );
+
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#374151'; const txtLow=dark?'#52525b':'#6b7280';
   const gridLn=dark?'#1e1e22':'#f0f0f0'; const divCls=dark?'#1e1e22':'#f3f4f6'; const hov=dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';
@@ -725,11 +739,11 @@ export default function Dashboard() {
         <div style={{ display:'grid', gridTemplateColumns:isMobile?'1fr':'repeat(4,1fr)', gap:isMobile?'12px':'16px', marginBottom:'16px' }}>
 
           {/* Card 1: META DO MÊS — hero */}
-          <div style={{ background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius:'16px', padding:isMobile?'16px':'24px', boxShadow:'0 8px 24px rgba(37,99,235,0.25)', border:'none' }}>
+          <div style={{ background:'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius:'16px', padding:isMobile?'16px':'24px', boxShadow:'0 8px 24px rgba(37,99,235,0.25)', border:'none', animation:cardRevKey?`cardIn 0.35s ease-out 0ms both`:'none' }}>
             <p style={{ fontSize:'11px', color:'rgba(255,255,255,0.8)', margin:'0 0 8px', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600 }}>Meta do mês</p>
             <div style={{ display:'flex', alignItems:'flex-end', gap:'6px', marginBottom:'10px' }}>
               <p style={{ fontSize:isMobile?'28px':'36px', fontWeight:800, color:'#ffffff', letterSpacing:'-0.02em', margin:0 }}>
-                {loading ? '…' : approvedThisMonth}
+                {allLoaded ? approvedThisMonth : <div style={{ display:'inline-block', width:'56px', height:isMobile?'28px':'36px', borderRadius:'8px', background:'rgba(255,255,255,0.25)', animation:'dashSkeleton 1.5s ease-in-out infinite', verticalAlign:'middle' }}/>}
               </p>
               {metaOrg.revs > 0 && (
                 <span style={{ fontSize:'16px', fontWeight:400, color:'rgba(255,255,255,0.7)', paddingBottom:'4px' }}>
@@ -751,10 +765,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, animation:cardRevKey?`cardIn 0.35s ease-out 50ms both`:'none' }}>
             <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 6px' }}>Gasto Total</p>
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
-              {metaLoading ? '…' : `R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}
+              {allLoaded ? `R$ ${spend.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : sk('110px', isMobile?'16px':'26px')}
             </p>
             <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
               <TrendingUp style={{ width:'11px', height:'11px', color:'#10b981', flexShrink:0 }}/>
@@ -763,10 +777,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, animation:cardRevKey?`cardIn 0.35s ease-out 100ms both`:'none' }}>
             <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>Leads</p>
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
-              {loading ? '…' : String(totalLeads)}
+              {allLoaded ? String(totalLeads) : sk('60px', isMobile?'16px':'26px')}
             </p>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
@@ -782,10 +796,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}` }}>
+          <div style={{ background:cardBg, borderRadius:'14px', padding:isMobile?'12px':'20px', border:`1px solid ${border}`, animation:cardRevKey?`cardIn 0.35s ease-out 150ms both`:'none' }}>
             <p style={{ fontSize:'11px', color:txtLow, margin:'0 0 4px' }}>{t.convertidoPlural}</p>
             <p style={{ fontSize:isMobile?'16px':'26px', fontWeight:700, color:txtHi, letterSpacing:'-0.02em', margin:'0 0 6px' }}>
-              {loading ? '…' : String(approved)}
+              {allLoaded ? String(approved) : sk('60px', isMobile?'16px':'26px')}
             </p>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
@@ -980,6 +994,8 @@ export default function Dashboard() {
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+        @keyframes cardIn{from{opacity:0;transform:scale(0.98)}to{opacity:1;transform:scale(1)}}
+        @keyframes dashSkeleton{0%,100%{opacity:1}50%{opacity:0.4}}
       `}</style>
     </AppLayout>
   );

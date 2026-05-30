@@ -1701,7 +1701,7 @@ function LeadsPage() {
       <div style={{ padding: isMobile ? '12px' : '28px', background: bg, minHeight: '100vh' }}>
 
         {/* Header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px', animation: 'headerIn 0.3s ease-out forwards' }}>
           <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({hasActiveFilters ? filtered.length : totalCount})</span></h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
@@ -1746,16 +1746,19 @@ function LeadsPage() {
                   )}
                 </div>
 
-                {/* Tag buttons: gerenciar + filtrar */}
-                <div style={{ display:'flex', alignItems:'center', gap:'2px' }}>
-                  <button onClick={() => setShowTagManagerModal(true)}
-                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+                {/* Tags button → manager modal + filter icon */}
+                <div style={{ display:'flex', alignItems:'center', gap:'3px' }}>
+                  <button
+                    onClick={() => setShowTagManagerModal(true)}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                  >
                     <Tag style={{ width:'12px', height:'12px' }}/> Tags
                   </button>
-                <div style={{ position:'relative' }}>
+                  <div style={{ position:'relative' }}>
                     <button
                       onClick={() => setShowTagFilter(v => !v)}
-                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                      title="Filtrar por tag"
+                      style={{ display:'flex', alignItems:'center', gap:'4px', padding:'7px 8px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), cursor:'pointer', fontFamily:'inherit' }}
                     >
                       <Filter style={{ width:'12px', height:'12px' }}/>{selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                     </button>
@@ -2004,7 +2007,7 @@ function LeadsPage() {
             )}
           </div>
         ) : (
-          <div className={`rounded-2xl border overflow-hidden ${card}`}>
+          <div className={`rounded-2xl border overflow-hidden ${card}`} style={{ animation: 'tableIn 0.4s ease-out 0.1s both' }}>
             <table className="w-full text-sm" style={{ tableLayout:'fixed' }}>
               <colgroup>
                 <col style={{ width:'40px' }}/>
@@ -2298,6 +2301,8 @@ function LeadsPage() {
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes rowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes headerIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes tableIn{from{opacity:0}to{opacity:1}}
       `}</style>
     </AppLayout>
   );
