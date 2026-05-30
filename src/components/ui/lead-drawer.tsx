@@ -129,9 +129,10 @@ function WaIcon() {
   );
 }
 
-function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark }: {
+function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark, iconColor }: {
   icon: React.ReactNode; title: string; children: React.ReactNode;
   openKey: string; activeKey: string | null; setActiveKey: (k: string | null) => void; dark: boolean;
+  iconColor?: string;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
@@ -141,7 +142,7 @@ function Section({ icon, title, children, openKey, activeKey, setActiveKey, dark
     <div style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
       <button onClick={() => setActiveKey(open ? null : openKey)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, WebkitTapHighlightColor: 'transparent' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: dark ? '#52525b' : '#9ca3af', display: 'flex', alignItems: 'center' }}>{icon}</span>
+          <span style={{ color: iconColor || (dark ? '#52525b' : '#9ca3af'), display: 'flex', alignItems: 'center' }}>{icon}</span>
           <span style={{ fontSize: '13.5px', fontWeight: 500, color: dark ? '#f4f4f5' : '#1f2937', fontFamily: FONT }}>{title}</span>
         </div>
         <ChevronDown style={{ width: '14px', height: '14px', color: '#d1d5db', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)' }} />
@@ -241,13 +242,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   }, [lead, navigate, hasWA]);
 
   const [fullLead, setFullLead] = useState<any>(null);
+  const [fullLeadLoading, setFullLeadLoading] = useState(false);
 
   useEffect(() => {
     if (!lead?.id) {
       setFullLead(null);
+      setFullLeadLoading(false);
       return;
     }
     setFullLead(lead);
+    setFullLeadLoading(true);
 
     async function fetchFullLead() {
       try {
@@ -261,6 +265,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         }
       } catch (err) {
         console.error('Erro ao buscar lead completo:', err);
+      } finally {
+        setFullLeadLoading(false);
       }
     }
     fetchFullLead();
@@ -562,7 +568,22 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         document.body
       )}
 
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.32s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Skeleton overlay enquanto carrega dados completos */}
+        {fullLeadLoading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', borderRadius: '22px', display: 'flex', flexDirection: 'column', gap: '0', padding: '22px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: dark ? '#27272a' : '#e5e7eb', animation: 'ld-skeleton 1.5s ease-in-out infinite', flexShrink: 0 }}/>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ width: '140px', height: '14px', borderRadius: '6px', background: dark ? '#27272a' : '#e5e7eb', animation: 'ld-skeleton 1.5s ease-in-out infinite' }}/>
+                <div style={{ width: '100px', height: '11px', borderRadius: '6px', background: dark ? '#1e1e22' : '#f0f0f0', animation: 'ld-skeleton 1.5s ease-in-out infinite 0.15s' }}/>
+              </div>
+            </div>
+            {[1, 2, 3].map(i => (
+              <div key={i} style={{ height: '44px', borderRadius: '10px', background: dark ? '#1e1e22' : '#f5f5f5', marginBottom: '8px', animation: `ld-skeleton 1.5s ease-in-out infinite ${i * 0.1}s` }}/>
+            ))}
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
@@ -731,7 +752,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 .map(k => [k, respostas![k]] as [string, unknown])
                 .filter(([k, v]) => !deveIgnorar(k, v, !!isInternalQuiz));
               return (
-                <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
+                <Section openKey="quiz_respostas" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark} iconColor="#0044fd"
                   icon={<MessageCircle style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Respostas do Quiz">
                   {entries.length === 0
                     ? <p style={{ fontSize: '13px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontFamily: FONT }}>Nenhuma resposta do quiz disponível.</p>
@@ -764,7 +785,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 });
               if (entries.length === 0) return null;
               return (
-                <Section openKey="reuniao" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
+                <Section openKey="reuniao" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark} iconColor="#7e3beb"
                   icon={<Monitor style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Reunião de Onboarding">
                   <div style={{ marginBottom: '4px' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>✓ Participou</span>
@@ -779,7 +800,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             {/* Origem do Lead / Tráfego */}
             {(hasTraffic || (l.utm_source && !l.utm_campaign)) && (
               <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
-                icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title={!l.utm_campaign && l.utm_source ? "Origem do Lead" : "Origem do Tráfego"}>
+                iconColor="#fd4c04" icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title={!l.utm_campaign && l.utm_source ? "Origem do Lead" : "Origem do Tráfego"}>
                 {(!l.utm_campaign && l.utm_source) ? (
                   <Field label="Origem" value={l.utm_source === 'FB' ? 'Tráfego Pago' : l.utm_source === 'instagram_organico' ? 'Instagram Orgânico' : l.utm_source} dark={dark} />
                 ) : (
@@ -820,6 +841,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       <style>{`
         @keyframes ld-fade { from{opacity:0}to{opacity:1} }
         @keyframes ld-up { from{opacity:0;transform:translate(-50%,-46%) scale(0.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+        @keyframes ld-skeleton { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes dropdownIn { from{opacity:0;transform:translateY(-6px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes tagEnter { from{opacity:0;transform:scale(0.78)} to{opacity:1;transform:scale(1)} }
         @keyframes tagExit { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.78)} }

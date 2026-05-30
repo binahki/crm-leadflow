@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useAppStore, Lead, STATUS_LABELS, STATUS_CONFIG, calcularFaixa } from '@/stores/appStore';
@@ -843,7 +844,7 @@ function LeadsPage() {
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
 
   // ── Tags ──────────────────────────────────────────────────────────────────
-  const { tags: orgTags, createTag: createOrgTag } = useTags(orgId);
+  const { tags: orgTags, createTag: createOrgTag, updateTag: updateOrgTag, deleteTag: deleteOrgTag } = useTags(orgId);
   const [leadTagsMap, setLeadTagsMap] = useState<Map<string, OrgTag[]>>(new Map());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [showTagFilter, setShowTagFilter] = useState(false);
@@ -851,6 +852,15 @@ function LeadsPage() {
   const [newTagFilterCor, setNewTagFilterCor] = useState('#8b5cf6');
   const [creatingTagFilter, setCreatingTagFilter] = useState(false);
   const orgTagsRef = useRef<OrgTag[]>([]);
+  // ── Tag Manager Modal ─────────────────────────────────────────
+  const [showTagManagerModal, setShowTagManagerModal] = useState(false);
+  const [mgrEditId, setMgrEditId] = useState<string | null>(null);
+  const [mgrEditNome, setMgrEditNome] = useState('');
+  const [mgrEditCor, setMgrEditCor] = useState('');
+  const [mgrDeleteId, setMgrDeleteId] = useState<string | null>(null);
+  const [mgrNewNome, setMgrNewNome] = useState('');
+  const [mgrNewCor, setMgrNewCor] = useState(CORES_TAGS[0]);
+  const [mgrCreating, setMgrCreating] = useState(false);
 
   // ── Lead actions ──────────────────────────────────────────────────────────
   const [viewingLead, setViewingLead] = useState<Lead|null>(null);
@@ -1461,6 +1471,25 @@ function LeadsPage() {
     }
   }
 
+  function closeTagManager() { setShowTagManagerModal(false); setMgrEditId(null); setMgrDeleteId(null); }
+  async function handleMgrCreate() {
+    if (!mgrNewNome.trim()) return;
+    setMgrCreating(true);
+    await createOrgTag(mgrNewNome.trim(), mgrNewCor);
+    setMgrNewNome(''); setMgrNewCor(CORES_TAGS[0]);
+    setMgrCreating(false);
+  }
+  async function handleMgrSaveEdit() {
+    if (!mgrEditId) return;
+    await updateOrgTag(mgrEditId, { nome: mgrEditNome.trim(), cor: mgrEditCor });
+    setMgrEditId(null);
+  }
+  async function handleMgrDelete() {
+    if (!mgrDeleteId) return;
+    await deleteOrgTag(mgrDeleteId);
+    setMgrDeleteId(null);
+  }
+
   async function handleCreateTagFilter() {
     if (!newTagFilterName.trim()) return;
     setCreatingTagFilter(true);
@@ -1717,13 +1746,18 @@ function LeadsPage() {
                   )}
                 </div>
 
-                {/* Tag filter button */}
+                {/* Tag buttons: gerenciar + filtrar */}
+                <div style={{ display:'flex', alignItems:'center', gap:'2px' }}>
+                  <button onClick={() => setShowTagManagerModal(true)}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#d4d4d8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+                    <Tag style={{ width:'12px', height:'12px' }}/> Tags
+                  </button>
                 <div style={{ position:'relative' }}>
                     <button
                       onClick={() => setShowTagFilter(v => !v)}
                       style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark ? 'rgba(139,92,246,0.12)' : '#f5f3ff') : (dark ? '#111113' : '#ffffff'), color:selectedTagIds.size > 0 ? (dark ? '#c4b5fd' : '#7c3aed') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                     >
-                      <Tag style={{ width:'12px', height:'12px' }}/> Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
+                      <Filter style={{ width:'12px', height:'12px' }}/>{selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                     </button>
                     {showTagFilter && (
                       <>
@@ -1774,6 +1808,7 @@ function LeadsPage() {
                       </>
                     )}
                   </div>
+                </div>
 
                 {hasActiveFilters && (
                   <button onClick={() => { setStatusFilter('all'); setPeriodFilter('all'); setSelectedCampaigns(new Set()); setCampDeepFilter(null); setSearch(''); setShowCustom(false); setCustomFrom(''); setCustomTo(''); setSelectedTagIds(new Set()); if (orgId) { try { localStorage.setItem(`leads_filters_${orgId}`, JSON.stringify({ periodFilter: 'all', statusFilter: 'all', selectedCampaigns: [], sortByDate })); } catch {} } }} style={{ ...btnGhost, color: dark ? '#f87171' : '#ef4444', borderColor: dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.3)', background: dark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
@@ -2019,7 +2054,7 @@ function LeadsPage() {
                     return (
                       <tr key={lead.id}
                         className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
-                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#0d0d0f' : '#f5f5f5') }}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#0d0d0f' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms` }}
                         onClick={() => handleViewLead(lead)}>
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
@@ -2186,7 +2221,84 @@ function LeadsPage() {
       </Dialog>
 
       <LeadDrawer lead={viewingLead} isOpen={!!viewingLead} onClose={() => setViewingLead(null)} onUpdate={updated => { updateLead(updated.id, updated); setAllLeads(prev => prev.map(l => l.id === updated.id ? updated : l)); setViewingLead(updated); }} onTagsChange={(leadId, tags) => setLeadTagsMap(prev => { const next = new Map(prev); if (tags.length === 0) next.delete(leadId); else next.set(leadId, tags); return next; })}/>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+
+      {/* Tag Manager Modal */}
+      {showTagManagerModal && createPortal(
+        <>
+          <div onClick={closeTagManager} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)' }}/>
+          <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:9999, background:dark?'#111113':'#fff', borderRadius:'18px', border:`1px solid ${dark?'#27272a':'rgba(0,0,0,0.08)'}`, width:'90%', maxWidth:'420px', maxHeight:'82vh', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 24px 64px rgba(0,0,0,0.4)', fontFamily:'inherit' }}>
+            <div style={{ padding:'18px 20px', borderBottom:`1px solid ${dark?'#1e1e22':'rgba(0,0,0,0.06)'}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <h3 style={{ margin:0, fontSize:'15px', fontWeight:700, color:dark?'#f4f4f5':'#111827' }}>Gerenciar Tags</h3>
+              <button onClick={closeTagManager} style={{ width:'28px', height:'28px', borderRadius:'7px', border:'none', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', color:dark?'#71717a':'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <X style={{ width:'13px', height:'13px' }}/>
+              </button>
+            </div>
+            <div style={{ overflow:'auto', flex:1, padding:'12px' }}>
+              <div style={{ padding:'12px', borderRadius:'10px', background:dark?'#18181b':'#f8fafc', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginBottom:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
+                <p style={{ margin:0, fontSize:'11px', fontWeight:700, color:dark?'#52525b':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em' }}>Nova tag</p>
+                <input placeholder="Nome da tag..." value={mgrNewNome} onChange={e => setMgrNewNome(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && mgrNewNome.trim()) handleMgrCreate(); }}
+                  style={{ padding:'8px 10px', borderRadius:'8px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', fontFamily:'inherit' }}/>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:'5px' }}>
+                  {CORES_TAGS.map(c => <button key={c} onClick={() => setMgrNewCor(c)} style={{ width:'20px', height:'20px', borderRadius:'50%', background:c, border:mgrNewCor===c?`3px solid ${dark?'#fff':'#111'}`:'3px solid transparent', cursor:'pointer', padding:0 }}/>)}
+                </div>
+                <button onClick={handleMgrCreate} disabled={!mgrNewNome.trim() || mgrCreating}
+                  style={{ padding:'8px', borderRadius:'8px', border:'none', background:mgrNewNome.trim()?'#3b82f6':(dark?'#27272a':'#e5e7eb'), color:mgrNewNome.trim()?'#fff':(dark?'#52525b':'#9ca3af'), fontSize:'13px', fontWeight:600, cursor:mgrNewNome.trim()?'pointer':'default', fontFamily:'inherit' }}>
+                  {mgrCreating?'Criando...':'Criar tag'}
+                </button>
+              </div>
+              {orgTags.length === 0 ? (
+                <p style={{ textAlign:'center', fontSize:'13px', color:dark?'#52525b':'#9ca3af', padding:'20px 0', margin:0 }}>Nenhuma tag criada ainda.</p>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                  {orgTags.map(tag => {
+                    const isEditing = mgrEditId === tag.id;
+                    const isDeleting = mgrDeleteId === tag.id;
+                    return (
+                      <div key={tag.id} style={{ padding:'10px 12px', borderRadius:'10px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#18181b':'#fafafa', display:'flex', flexDirection:'column', gap:'8px' }}>
+                        {isEditing ? (
+                          <>
+                            <input value={mgrEditNome} onChange={e => setMgrEditNome(e.target.value)}
+                              style={{ padding:'7px 10px', borderRadius:'8px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', fontFamily:'inherit' }}/>
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
+                              {CORES_TAGS.map(c => <button key={c} onClick={() => setMgrEditCor(c)} style={{ width:'18px', height:'18px', borderRadius:'50%', background:c, border:mgrEditCor===c?`3px solid ${dark?'#fff':'#111'}`:'3px solid transparent', cursor:'pointer', padding:0 }}/>)}
+                            </div>
+                            <div style={{ display:'flex', gap:'6px' }}>
+                              <button onClick={handleMgrSaveEdit} style={{ flex:1, padding:'7px', borderRadius:'7px', border:'none', background:'#10b981', color:'#fff', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Salvar</button>
+                              <button onClick={() => setMgrEditId(null)} style={{ flex:1, padding:'7px', borderRadius:'7px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'12px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : isDeleting ? (
+                          <>
+                            <p style={{ margin:0, fontSize:'12.5px', color:dark?'#f4f4f5':'#111827' }}>Excluir <strong>{tag.nome}</strong> de todos os leads? Não pode ser desfeito.</p>
+                            <div style={{ display:'flex', gap:'6px' }}>
+                              <button onClick={handleMgrDelete} style={{ flex:1, padding:'7px', borderRadius:'7px', border:'none', background:'#ef4444', color:'#fff', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Excluir</button>
+                              <button onClick={() => setMgrDeleteId(null)} style={{ flex:1, padding:'7px', borderRadius:'7px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'12px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                            <span style={{ width:'10px', height:'10px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
+                            <span style={{ flex:1, fontSize:'13px', fontWeight:500, color:dark?'#f4f4f5':'#111827' }}>{tag.nome}</span>
+                            <button onClick={() => { setMgrEditId(tag.id); setMgrEditNome(tag.nome); setMgrEditCor(tag.cor); setMgrDeleteId(null); }} style={{ fontSize:'12px', color:dark?'#71717a':'#9ca3af', background:'none', border:'none', cursor:'pointer', padding:'2px 6px', borderRadius:'5px', fontFamily:'inherit' }}>Editar</button>
+                            <button onClick={() => { setMgrDeleteId(tag.id); setMgrEditId(null); }} style={{ fontSize:'12px', color:'#ef4444', background:'none', border:'none', cursor:'pointer', padding:'2px 6px', borderRadius:'5px', fontFamily:'inherit' }}>Excluir</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      <style>{`
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes rowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
     </AppLayout>
   );
 }
