@@ -13,7 +13,7 @@ export function getAvatarColor(name: string, dark: boolean, id?: string): string
   if (!name) return COLORS[0];
   let idx = 0;
   if (id) {
-    const last = id.split('-').pop() || '';
+    const last = String(id).split('-').pop() || '';
     idx = parseInt(last.slice(-8), 16) % COLORS.length;
   } else {
     let h = 0x811c9dc5;
