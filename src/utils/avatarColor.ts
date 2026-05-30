@@ -18,14 +18,14 @@ export function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-// Adapta o cinza ao tema para manter contraste: claro→#141416, escuro→#f3f3f2
+// Adapta o cinza ao tema: light→#1b1b1d (quase preto), dark→#f3f3f2 (quase branco)
 export function getAvatarColorForTheme(name: string, dark: boolean): string {
   const cor = getAvatarColor(name);
-  if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#141416';
+  if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#1b1b1d';
   return cor;
 }
 
-// Cores claras precisam de texto escuro
+// Cores claras (#b8fd2f, #f3f3f2) → texto escuro. Resto (incluindo #1b1b1d) → texto branco.
 export function getAvatarTextColor(bgColor: string): string {
   if (bgColor === '#b8fd2f' || bgColor === '#f3f3f2') return '#111111';
   return '#ffffff';

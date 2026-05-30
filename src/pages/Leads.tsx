@@ -2019,35 +2019,35 @@ function LeadsPage() {
                     return (
                       <tr key={lead.id}
                         className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
-                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? 'rgba(255,255,255,0.012)' : 'rgba(0,0,0,0.015)') }}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#0d0d0f' : '#f5f5f5') }}
                         onClick={() => handleViewLead(lead)}>
-                        <td className="pl-4 pr-2 py-2.5" onClick={e => e.stopPropagation()}>
+                        <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
                         </td>
-                        <td className="px-3" style={{ overflow:'hidden', paddingTop:'10px', paddingBottom:'10px' }}>
+                        <td className="px-3" style={{ overflow:'hidden', paddingTop:'12px', paddingBottom:'12px' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                            {/* Avatar alinhado ao topo, junto ao nome */}
-                            <div style={{ position:'relative', flexShrink:0, alignSelf:'flex-start', marginTop:'2px' }}>
-                              {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
+                            {/* Avatar centralizado verticalmente */}
+                            <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
+                              {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                               {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
                             </div>
-                            {/* Coluna: nome + tags */}
-                            <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:0 }}>
-                              <div style={{ display:'flex', alignItems:'center', gap:'5px', minWidth:0 }}>
+                            {/* Coluna: nome + tags, centralizada verticalmente */}
+                            <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:'4px', minWidth:0 }}>
                                 <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</span>
                                 {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
                               </div>
                               {(() => {
                                 const lt = leadTagsMap.get(lead.id) || [];
                                 if (!lt.length) return null;
-                                const vis = lt.slice(0, 3); const rest = lt.slice(3);
+                                const vis = lt.slice(0, 2); const rest = lt.slice(2);
                                 return (
                                   <div style={{ display:'flex', gap:'3px', flexWrap:'wrap' }}>
                                     {vis.map(tag => (
-                                      <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                                      <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.3', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
                                     ))}
                                     {rest.length > 0 && (
-                                      <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                                      <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.3', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
                                     )}
                                   </div>
                                 );
@@ -2055,18 +2055,18 @@ function LeadsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5" style={{ whiteSpace:'nowrap' }}>
+                        <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
                           <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                         </td>
-                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
-                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-3">
                           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
                             <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
                             <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
