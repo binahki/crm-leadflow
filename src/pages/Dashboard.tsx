@@ -753,11 +753,19 @@ export default function Dashboard() {
     <div style={{ display: 'inline-block', width: w, height: h, borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />
   );
 
-  const bg = dark ? '#090909' : '#f4f4f5'; const cardBg = dark ? '#111113' : '#ffffff'; const border = dark ? '#1e1e22' : '#e5e7eb';
-  const txtHi = dark ? '#f4f4f5' : '#111827'; const txtMid = dark ? '#71717a' : '#374151'; const txtLow = dark ? '#52525b' : '#6b7280';
-  const gridLn = dark ? '#1e1e22' : '#f0f0f0'; const divCls = dark ? '#1e1e22' : '#f3f4f6'; const hov = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+  const bg = dark ? '#0a0a0b' : '#f4f4f5';
+  const cardBg = dark ? '#111113' : '#ffffff';
+  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
+  // Texto: Hi=títulos, Mid=labels/subtítulos, Low=timestamps/meta (nunca abaixo de #71717a no dark)
+  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const txtMid = dark ? '#a1a1aa' : '#374151';
+  const txtLow = dark ? '#71717a' : '#6b7280';
+  const gridLn = dark ? 'rgba(255,255,255,0.04)' : '#f0f0f0';
+  const divCls = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6';
+  const hov = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
   const pad = isMobile ? '20px 16px' : '32px';
-  const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit' };
+  const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.3)' : 'none' };
   const statusClass = dark ? STATUS_DARK : STATUS_LIGHT;
 
   return (
@@ -859,7 +867,7 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 6px' }}>Gasto Total</p>
             <div style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px', display: 'flex', alignItems: 'center' }}>
               {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '16px' : '26px')}
@@ -871,7 +879,7 @@ export default function Dashboard() {
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>Leads</p>
             <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
               {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '16px' : '26px')}
@@ -890,7 +898,7 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>{t.convertidoPlural}</p>
             <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
               {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '16px' : '26px')}
@@ -912,7 +920,7 @@ export default function Dashboard() {
 
         {/* Charts */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '14px', marginBottom: '16px' }}>
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}` }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div>
                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Evolução de Leads</h3>
@@ -943,7 +951,7 @@ export default function Dashboard() {
             </>}
           </div>
 
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow, position: 'relative', overflow: 'hidden' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: '0 0 4px' }}>Funil de leads</h3>
             <p style={{ fontSize: '11px', color: txtLow, marginBottom: '16px' }}>{periodLabel}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -985,7 +993,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px', minWidth: 0, overflow: 'hidden' }}>
 
           {/* Leads Recentes */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow, minWidth: 0, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Leads Recentes</h3>
               <Link to="/leads" style={{ fontSize: '12px', color: '#2563eb', fontWeight: 500, textDecoration: 'none' }}>Ver todos</Link>
@@ -1025,7 +1033,7 @@ export default function Dashboard() {
           </div>
 
           {/* Campanhas */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow, minWidth: 0, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Campanhas</h3>

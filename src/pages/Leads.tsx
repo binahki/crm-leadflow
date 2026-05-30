@@ -1669,19 +1669,21 @@ function LeadsPage() {
   }
 
   // ── Style tokens ──────────────────────────────────────────────────────────
-  const bg = dark ? '#090909' : '#f4f4f5';
+  const bg = dark ? '#0a0a0b' : '#f4f4f5';
   const cardBg = dark ? '#111113' : '#ffffff';
-  const border = dark ? '#1e1e22' : '#e5e7eb';
+  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
+  // Texto: Hi=títulos/nomes, Mid=labels secundários (mínimo legível no dark), Low não usado aqui
   const txtHi = dark ? '#f4f4f5' : '#111827';
-  const txtMid = dark ? '#71717a' : '#6b7280';
-  const divider = dark ? 'border-[#1e1e22]' : 'border-gray-100';
+  const txtMid = dark ? '#a1a1aa' : '#6b7280';
+  const divider = dark ? 'border-[rgba(255,255,255,0.06)]' : 'border-gray-100';
   const bold = dark ? 'text-white' : 'text-gray-900';
-  const muted = dark ? 'text-gray-500' : 'text-gray-600';
+  const muted = dark ? 'text-[#a1a1aa]' : 'text-gray-600';
   const theadBg = dark ? 'bg-[#18181b]' : 'bg-gray-50';
-  const hov = dark ? 'hover:bg-[#1a1a1e]' : 'hover:bg-blue-50/50';
-  const card = dark ? 'bg-[#111113] border-[#1e1e22]' : 'bg-white border-gray-100';
-  const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#1a1a1e':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
-  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${border}`, background:dark?'#111113':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
+  const hov = dark ? 'hover:bg-[rgba(255,255,255,0.025)]' : 'hover:bg-blue-50/50';
+  const card = dark ? 'bg-[#111113] border-[rgba(255,255,255,0.07)]' : 'bg-white border-gray-100';
+  const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'#0d0d0f':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
+  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'rgba(255,255,255,0.04)':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
   const activeBulkCount = allSystemSelected ? filtered.length : selectedIds.size;
   const showSelectionBar = selectedIds.size > 0 || allSystemSelected;
@@ -2023,7 +2025,7 @@ function LeadsPage() {
             )}
           </div>
         ) : (
-          <div className={`rounded-2xl border overflow-hidden ${card}`} style={{ animation: 'tableIn 0.4s ease-out 0.1s both' }}>
+          <div className={`rounded-2xl border overflow-hidden ${card}`} style={{ animation: 'tableIn 0.4s ease-out 0.1s both', boxShadow: cardShadow }}>
             <table className="w-full text-sm" style={{ tableLayout:'fixed' }}>
               <colgroup>
                 <col style={{ width:'40px' }}/>
@@ -2112,14 +2114,14 @@ function LeadsPage() {
                         <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
                           <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                         </td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
                         <td className="px-3 py-3">
                           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
                             <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                           </span>
                         </td>
-                        <td className="px-3 py-3" style={{ color:dark ? '#71717a' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
