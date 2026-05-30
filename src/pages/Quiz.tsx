@@ -207,7 +207,7 @@ export default function QuizBuilderPage() {
   const { orgId, ready } = useOrgId();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { features } = usePlanFeatures();
+  const { features, loading: planLoading } = usePlanFeatures();
   const [showQuizUpgrade, setShowQuizUpgrade] = useState(false);
 
   // Data
@@ -387,7 +387,7 @@ export default function QuizBuilderPage() {
     if (!orgId) return;
 
     // Limit quizzes per plan
-    if (quizzes.length >= features.limiteQuizzes) {
+    if (!planLoading && quizzes.length >= features.limiteQuizzes) {
       if (features.limiteQuizzes === 1) {
         setShowQuizUpgrade(true);
       } else {

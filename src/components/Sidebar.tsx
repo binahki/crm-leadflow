@@ -78,7 +78,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const { orgId, ready } = useOrgId();
   const isDark = theme === 'dark';
 
-  const { features } = usePlanFeatures();
+  const { features, loading } = usePlanFeatures();
   const [lockedFeature, setLockedFeature] = useState<string | null>(null);
 
   const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
@@ -249,7 +249,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             );
 
             // Feature-locked items render differently
-            const isLocked = item.feature && !(features[item.feature as keyof typeof features] as boolean);
+            const isLocked = !loading && item.feature && !(features[item.feature as keyof typeof features] as boolean);
             if (isLocked) {
               return (
                 <div key={item.href} style={{ position: 'relative' }} onClick={() => setLockedFeature(item.feature!)}>

@@ -796,7 +796,7 @@ function LeadsPage() {
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
   const dark = theme === 'dark';
-  const { plano, features } = usePlanFeatures();
+  const { plano, features, loading: planLoading } = usePlanFeatures();
 
   const statusOptions = useMemo(() => STATUS_OPTIONS.map(o =>
     o.value === '3' ? { ...o, label: t.statusConvertidoLabel } : o
@@ -1371,7 +1371,7 @@ function LeadsPage() {
   }, [allLeads]);
   const PLANO_LABELS_LEAD: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
   const limiteLeads = features.limiteLeads;
-  const showLeadLimitBanner = limiteLeads < Infinity && leadsNoMes >= limiteLeads * 0.8;
+  const showLeadLimitBanner = !planLoading && limiteLeads < Infinity && leadsNoMes >= limiteLeads * 0.8;
 
   const totalPages = Math.ceil(filtered.length / leadsPerPage);
   const paginatedLeads = useMemo(() => filtered.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage), [filtered, currentPage]);

@@ -39,7 +39,7 @@ export default function WebhookPage() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { orgId, ready: orgReady } = useOrgId();
-  const { features } = usePlanFeatures();
+  const { features, loading } = usePlanFeatures();
   const [showWebhookUpgrade, setShowWebhookUpgrade] = useState(false);
 
   const [logs, setLogs] = useState<WebhookLog[]>([]);
@@ -210,7 +210,7 @@ export default function WebhookPage() {
             </h2>
             <button
               onClick={() => {
-                if (!features.webhooksIlimitados && webhooks.length >= 1) {
+                if (!loading && !features.webhooksIlimitados && webhooks.length >= 1) {
                   setShowWebhookUpgrade(true);
                   return;
                 }
