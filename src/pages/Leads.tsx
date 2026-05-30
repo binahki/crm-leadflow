@@ -18,6 +18,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
+import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 
 const STATUS_STYLE = STATUS_CONFIG;
 
@@ -1927,7 +1928,7 @@ function LeadsPage() {
                     <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
                       {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
                       <div style={{ position:'relative', flexShrink:0 }}>
-                        <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
+                        {(()=>{ const ac=getAvatarColor(lead.nome); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                         <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -2020,12 +2021,12 @@ function LeadsPage() {
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
                         </td>
-                        <td className="px-3 py-3" style={{ overflow:'hidden' }}>
-                          <div style={{ display:'flex', flexDirection:'column', minWidth:0 }}>
+                        <td className="px-3 py-3" style={{ overflow:'hidden', paddingTop:'14px', paddingBottom:'14px' }}>
+                          <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:'20px' }}>
                             {/* Linha 1: avatar + nome + obs */}
                             <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
                               <div style={{ position:'relative', flexShrink:0 }}>
-                                <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
+                                {(()=>{ const ac=getAvatarColor(lead.nome); return <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                                 {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
                               </div>
                               <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>

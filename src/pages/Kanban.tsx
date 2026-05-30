@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName, safeInitials } from '@/utils/safeName';
+import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -33,7 +34,6 @@ const COLUMNS = STATUS_SEQUENCE.map(status => ({
 }));
 
 const MOTIVOS = ['Desistiu','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Outro'];
-const AVATAR_COLORS = ['#f43f5e','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#ec4899','#8b5cf6'];
 const COL_PAGE = 50;
 
 const PERIOD_OPTIONS = [
@@ -47,7 +47,6 @@ const PERIOD_OPTIONS = [
 ];
 
 // ── Date Utilities ────────────────────────────────────────────────────────────
-function avatarColor(name: string) { return !name ? AVATAR_COLORS[0] : AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(name: string) { return safeInitials(name); }
 
 function parseDateMs(str?: string | null): number {
@@ -326,7 +325,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
   const { configuracoes } = useAppStore();
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const color = avatarColor(lead.nome);
+  const color = getAvatarColor(lead.nome);
   const statusNum = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
   const dias = getDias(lead);
   const showAlerta = statusNum === 2 && dias >= 3;
@@ -354,7 +353,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
     >
       <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
         <div style={{ position:'relative', flexShrink:0 }}>
-          <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
+          <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(color), fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
           {isMobile && faixa && faixa !== 'vermelho' && (
             <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
           )}
@@ -444,7 +443,7 @@ function OverlayCard({ lead }: { lead: Lead }) {
   return (
     <div style={{ background:dark?'#18181b':'#ffffff', borderRadius:'14px', padding:'13px', boxShadow:'0 20px 50px rgba(0,0,0,0.2)', cursor:'grabbing', width:'260px', transform:'rotate(1.5deg) scale(1.02)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-        <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:avatarColor(lead.nome), display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
+        {(()=>{ const ac=getAvatarColor(lead.nome); return <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>; })()}
         <div>
           <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0 }}>{lead.nome}</p>
           <p style={{ fontSize:'12px', color:'#9ca3af', margin:0 }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):''}</p>

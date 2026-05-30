@@ -13,6 +13,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
 import { safeName, safeInitials } from '@/utils/safeName';
+import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { getMetaCache, setMetaCache, clearMetaCache } from '@/lib/metaCache';
 
 interface Lead { id: string; nome: string; cidade: string | null; whatsapp: string | null; status: string | number | null; created_at: string; utm_source?: string | null; faixa?: string | null; [key: string]: unknown; }
@@ -42,7 +43,6 @@ const FUNNEL_CONFIG = [
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
 const STATUS_DARK: Record<number, string> = { 0: 'bg-blue-900/40 text-blue-300', 1: 'bg-blue-900/40 text-blue-300', 2: 'bg-purple-900/40 text-purple-300', 3: 'bg-emerald-900/40 text-emerald-300', 4: 'bg-rose-900/40 text-rose-300', 5: 'bg-amber-900/40 text-amber-300', 6: 'bg-zinc-800/40 text-zinc-400' };
 const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700', 6: 'bg-zinc-100 text-zinc-600' };
-const AVATAR_COLORS = ['bg-rose-400', 'bg-yellow-400', 'bg-emerald-400', 'bg-orange-400', 'bg-cyan-400', 'bg-violet-400', 'bg-pink-400'];
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -895,9 +895,7 @@ export default function Dashboard() {
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='transparent'}
                   >
                     <div style={{ position:'relative', flexShrink:0 }}>
-                      <div className={`w-7 h-7 ${AVATAR_COLORS[idx%AVATAR_COLORS.length]} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
-                        {safeInitials(safeNome)}
-                      </div>
+                      {(()=>{ const ac=getAvatarColor(safeNome); return <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{safeInitials(safeNome)}</div>; })()}
                       {(()=>{ const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:faixaLead==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#090909':'#f4f4f5'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.25)', zIndex:2 }}/> : null; })()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
