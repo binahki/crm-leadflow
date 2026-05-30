@@ -1941,10 +1941,10 @@ function LeadsPage() {
                           return (
                             <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', marginTop:'3px' }}>
                               {vis.map(tag => (
-                                <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                                <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
                               ))}
                               {rest.length > 0 && (
-                                <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                                <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
                               )}
                             </div>
                           );
@@ -2021,8 +2021,8 @@ function LeadsPage() {
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
                         </td>
-                        <td className="px-3 py-3" style={{ overflow:'hidden', paddingTop:'14px', paddingBottom:'14px' }}>
-                          <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:'20px' }}>
+                        <td className="px-3 py-3" style={{ overflow:'hidden' }}>
+                          <div style={{ display:'flex', flexDirection:'column', minWidth:0, minHeight:'56px', justifyContent:'center', gap:'4px' }}>
                             {/* Linha 1: avatar + nome + obs */}
                             <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
                               <div style={{ position:'relative', flexShrink:0 }}>
@@ -2038,12 +2038,12 @@ function LeadsPage() {
                               if (!lt.length) return null;
                               const vis = lt.slice(0, 3); const rest = lt.slice(3);
                               return (
-                                <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', marginTop:'3px', paddingLeft:'35px' }}>
+                                <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', paddingLeft:'35px' }}>
                                   {vis.map(tag => (
-                                    <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                                    <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
                                   ))}
                                   {rest.length > 0 && (
-                                    <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                                    <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 5px', borderRadius:'99px', fontSize:'10px', fontWeight:600, lineHeight:'1.4', color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
                                   )}
                                 </div>
                               );
