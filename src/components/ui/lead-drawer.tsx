@@ -521,7 +521,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
   const score = l.score != null ? Number(l.score) : null;
   const faixa = calcularFaixa(lead, configuracoes!) || l.faixa || null;
-  const instagramValue = String((lead as any)?.instagram || '').trim();
+  const instagramValue = String(l?.instagram || '').trim();
 
   return (
     <>

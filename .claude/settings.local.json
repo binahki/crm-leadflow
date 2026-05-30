@@ -36,7 +36,9 @@
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\src\\\\pages\\\\Kanban.tsx\" | Measure-Object -Line\\).Lines)",
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\src\\\\pages\\\\Leads.tsx\" | Measure-Object -Line\\).Lines)",
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\src\\\\components\\\\ui\\\\lead-drawer.tsx\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(head -30)"
+      "PowerShell(head -30)",
+      "Skill(impeccable:impeccable)",
+      "Skill(impeccable:impeccable:*)"
     ]
   }
 }

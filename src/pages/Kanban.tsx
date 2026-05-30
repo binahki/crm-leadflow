@@ -516,7 +516,7 @@ export default function KanbanPage() {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, lead_tags(tag_id, tags(id, nome, cor))')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram, lead_tags(tag_id, tags(id, nome, cor))')
           .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;

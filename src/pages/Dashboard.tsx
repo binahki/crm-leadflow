@@ -441,7 +441,7 @@ export default function Dashboard() {
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
   useEffect(() => { function close(e: MouseEvent) { if (dropRef.current && !dropRef.current.contains(e.target as Node)) setShowDropdown(false); if (customRef.current && !customRef.current.contains(e.target as Node)) setShowCustom(false); } document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, []);
 
-  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at';
+  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, instagram';
 
   const fetchLeads = async (): Promise<Lead[]> => {
     if (!orgId) { setLoading(false); return []; }
@@ -1003,7 +1003,7 @@ export default function Dashboard() {
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
-                          {(() => { const ac = getAvatarColor(safeNome, dark); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
+                          {(() => { const ac = getAvatarColor(lead.nome, dark); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
                           {(() => { const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: faixaLead === 'verde' ? '#10b981' : '#f59e0b', border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.25)', zIndex: 2 }} /> : null; })()}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
