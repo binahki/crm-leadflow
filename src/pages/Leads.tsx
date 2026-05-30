@@ -19,7 +19,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
-import { getAvatarColorForTheme, getAvatarTextColor } from '@/utils/avatarColor';
+import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 
 const STATUS_STYLE = STATUS_CONFIG;
 
@@ -1063,7 +1063,7 @@ function LeadsPage() {
 
     const { data, error } = await supabase
       .from('leads')
-      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, lead_tags(tag_id, tags(id, nome, cor))`)
+      .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, instagram, lead_tags(tag_id, tags(id, nome, cor))`)
       .order('created_at', { ascending: false })
       .eq('org_id', orgId)
       .range(0, INITIAL_SIZE - 1);
@@ -1982,7 +1982,7 @@ function LeadsPage() {
                     <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
                       {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
                       <div style={{ position:'relative', flexShrink:0 }}>
-                        {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
+                        {(()=>{ const ac=getAvatarColor(lead.nome, dark); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                         <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -2082,7 +2082,7 @@ function LeadsPage() {
                           <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
-                              {(()=>{ const ac=getAvatarColorForTheme(lead.nome, dark); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
+                              {(()=>{ const ac=getAvatarColor(lead.nome, dark); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                               {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}

@@ -1,4 +1,4 @@
-const AVATAR_COLORS = [
+const COLORS = [
   '#0044fd', // azul
   '#fd4c04', // laranja
   '#b8fd2f', // verde
@@ -7,30 +7,27 @@ const AVATAR_COLORS = [
   '#f3f3f2', // cinza (adaptado por tema)
 ];
 
-// FNV-1a hash — distribui bem entre 6 cores
-function fnv1a(s: string): number {
-  let hash = 2166136261;
+function hashName(name: string): number {
+  const s = name.trim().toLowerCase();
+  let h = 0;
   for (let i = 0; i < s.length; i++) {
-    hash ^= s.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
+    h = (h * 31 + s.charCodeAt(i)) | 0;
   }
-  return Math.abs(hash);
+  h ^= (h >>> 16);
+  h = Math.imul(h, 0x45d9f3b);
+  h ^= (h >>> 16);
+  return Math.abs(h);
 }
 
-export function getAvatarColor(name: string): string {
-  if (!name || typeof name !== 'string') return AVATAR_COLORS[0];
-  return AVATAR_COLORS[fnv1a(name.trim().toLowerCase()) % AVATAR_COLORS.length];
-}
-
-// Função padrão para TODAS as páginas — mesmo nome = mesma cor em todo o app
-export function getAvatarColorForTheme(name: string, dark: boolean): string {
-  const cor = getAvatarColor(name);
+// Única função pública de cor — mesma entrada = mesma saída em TODAS as páginas
+export function getAvatarColor(name: string, dark: boolean): string {
+  if (!name) return COLORS[0];
+  const cor = COLORS[hashName(name) % COLORS.length];
   if (cor === '#f3f3f2') return dark ? '#f3f3f2' : '#4a4a4f';
   return cor;
 }
 
-// Cor do texto: branco para fundos escuros/coloridos, preto para fundos claros
+// #b8fd2f (verde neon) e #f3f3f2 (cinza claro) → texto escuro; todo o resto → branco
 export function getAvatarTextColor(bgColor: string): string {
-  if (bgColor === '#b8fd2f' || bgColor === '#f3f3f2') return '#111111';
-  return '#ffffff';
+  return bgColor === '#b8fd2f' || bgColor === '#f3f3f2' ? '#111111' : '#ffffff';
 }

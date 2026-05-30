@@ -11,7 +11,7 @@ import {
 import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
-import { getAvatarColorForTheme, getAvatarTextColor } from '@/utils/avatarColor';
+import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -515,7 +515,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
   if (!isOpen || !lead) return null;
 
-  const avatarCor = getAvatarColorForTheme(lead.nome, dark);
+  const avatarCor = getAvatarColor(lead.nome, dark);
   const avatarText = getAvatarTextColor(avatarCor);
   const l = { ...fullLead, ...lead } as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
