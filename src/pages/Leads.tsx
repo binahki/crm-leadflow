@@ -8,7 +8,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
-import { useTags, Tag as OrgTag } from '@/hooks/useTags';
+import { useTags, Tag as OrgTag, CORES_TAGS } from '@/hooks/useTags';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { Search, MessageCircle, Plus, Download, RefreshCw, Edit, Loader2, ChevronDown, Check, X, Trash2, Filter, Tag, Megaphone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -447,7 +447,7 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
 type BulkTagOp  = { tagId: string; leadIds: string[] };
 type BulkTagOps = { add: BulkTagOp[]; remove: BulkTagOp[] };
 
-function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, onClose }: {
+function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, onClose, onCreateTag }: {
   dark: boolean;
   tags: OrgTag[];
   ids: string[];
@@ -455,11 +455,18 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
   selectedCount: number;
   onApply: (ops: BulkTagOps) => Promise<void>;
   onClose: () => void;
+  onCreateTag: (nome: string, cor: string) => Promise<OrgTag | null>;
 }) {
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#71717a' : '#6b7280';
   const bg = dark ? '#111113' : '#fff';
+
+  const [localTags, setLocalTags] = useState<OrgTag[]>(tags);
+  const [showNewTagForm, setShowNewTagForm] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagCor, setNewTagCor] = useState('#8b5cf6');
+  const [creatingTag, setCreatingTag] = useState(false);
 
   // Computed once on mount: for each tag, how many selected leads currently have it
   const origState = useMemo(() => {
@@ -504,7 +511,7 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
   async function handleApply() {
     const add: BulkTagOp[] = [];
     const remove: BulkTagOp[] = [];
-    tags.forEach(tag => {
+    localTags.forEach(tag => {
       const d = desired.get(tag.id) ?? null;
       if (d === null) return;
       if (d === true) {
@@ -520,6 +527,19 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
     setApplying(false);
   }
 
+  async function handleCreateNew() {
+    if (!newTagName.trim()) return;
+    setCreatingTag(true);
+    const tag = await onCreateTag(newTagName.trim(), newTagCor);
+    if (tag) {
+      setLocalTags(prev => [...prev, tag]);
+      setDesired(prev => { const n = new Map(prev); n.set(tag.id, true); return n; });
+      setNewTagName('');
+      setShowNewTagForm(false);
+    }
+    setCreatingTag(false);
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }}/>
@@ -532,11 +552,11 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
           <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:txtMid, display:'flex', padding:'4px' }}><X style={{ width:'16px', height:'16px' }}/></button>
         </div>
 
-        {tags.length === 0 ? (
-          <div style={{ padding:'32px', textAlign:'center', color:txtMid, fontSize:'13px' }}>Nenhuma tag criada.</div>
+        {localTags.length === 0 ? (
+          <div style={{ padding:'32px', textAlign:'center', color:txtMid, fontSize:'13px' }}>Nenhuma tag criada. Crie uma abaixo.</div>
         ) : (
           <div style={{ padding:'8px', maxHeight:'300px', overflowY:'auto' }}>
-            {tags.map(tag => {
+            {localTags.map(tag => {
               const vis = getVisual(tag.id, desired);
               const orig = origState.get(tag.id) ?? 'none';
               const d = desired.get(tag.id) ?? null;
@@ -567,16 +587,53 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
           </div>
         )}
 
-        <div style={{ padding:'8px 14px 0', display:'flex', alignItems:'center', gap:'12px', fontSize:'10.5px', color:txtMid }}>
-          <span>✓ todos</span><span>— alguns</span><span>□ nenhum</span>
-        </div>
+        {localTags.length > 0 && (
+          <div style={{ padding:'8px 14px 0', display:'flex', alignItems:'center', gap:'12px', fontSize:'10.5px', color:txtMid }}>
+            <span>✓ todos</span><span>— alguns</span><span>□ nenhum</span>
+          </div>
+        )}
 
-        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, marginTop:'8px', display:'flex', gap:'8px' }}>
-          <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
-          <button onClick={handleApply} disabled={applying}
-            style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:hasChanges?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:hasChanges?'#fff':txtMid, fontSize:'13px', fontWeight:500, cursor:applying?'not-allowed':'pointer', fontFamily:'inherit' }}>
-            {applying ? 'Aplicando…' : hasChanges ? 'Confirmar' : 'Sem alterações'}
-          </button>
+        {/* Formulário de nova tag inline */}
+        {showNewTagForm && (
+          <div style={{ margin:'8px 16px 0', padding:'12px', borderRadius:'10px', background:dark?'rgba(139,92,246,0.06)':'#f5f3ff', border:`1px solid ${dark?'rgba(139,92,246,0.2)':'#ddd6fe'}`, display:'flex', flexDirection:'column', gap:'8px' }}>
+            <input
+              value={newTagName}
+              onChange={e => setNewTagName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateNew(); if (e.key === 'Escape') setShowNewTagForm(false); }}
+              placeholder="Nome da nova tag…"
+              autoFocus
+              style={{ width:'100%', padding:'7px 10px', borderRadius:'8px', border:`1px solid ${dark?'#3f3f46':'#d1d5db'}`, background:dark?'#0d0d0f':'#fff', color:dark?'#f4f4f5':'#111827', fontSize:'13px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+            />
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'5px' }}>
+              {CORES_TAGS.map(cor => (
+                <button key={cor} onClick={() => setNewTagCor(cor)}
+                  style={{ width:'20px', height:'20px', borderRadius:'50%', background:cor, border:`2px solid ${newTagCor === cor ? (dark?'#fff':'#111') : 'transparent'}`, cursor:'pointer', padding:0, flexShrink:0, outline:newTagCor === cor ? `2px solid ${cor}` : 'none', outlineOffset:'1px' }} />
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:'6px' }}>
+              <button onClick={() => setShowNewTagForm(false)} style={{ padding:'6px 12px', borderRadius:'8px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'12px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+              <button onClick={handleCreateNew} disabled={creatingTag || !newTagName.trim()}
+                style={{ flex:1, padding:'6px 12px', borderRadius:'8px', border:'none', background:newTagName.trim()?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:newTagName.trim()?'#fff':txtMid, fontSize:'12px', fontWeight:600, cursor:newTagName.trim()?'pointer':'default', fontFamily:'inherit' }}>
+                {creatingTag ? 'Criando…' : 'Criar e marcar'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding:'12px 16px', borderTop:`1px solid ${border}`, marginTop:'8px', display:'flex', flexDirection:'column', gap:'8px' }}>
+          {!showNewTagForm && (
+            <button onClick={() => setShowNewTagForm(true)}
+              style={{ width:'100%', padding:'7px', borderRadius:'9px', border:`1px dashed ${dark?'rgba(139,92,246,0.4)':'#c4b5fd'}`, background:'transparent', color:'#8b5cf6', fontSize:'12.5px', fontWeight:500, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' }}>
+              + Nova tag
+            </button>
+          )}
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={onClose} style={{ padding:'9px 16px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+            <button onClick={handleApply} disabled={applying}
+              style={{ flex:1, padding:'9px', borderRadius:'9px', border:'none', background:hasChanges?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:hasChanges?'#fff':txtMid, fontSize:'13px', fontWeight:500, cursor:applying?'not-allowed':'pointer', fontFamily:'inherit' }}>
+              {applying ? 'Aplicando…' : hasChanges ? 'Confirmar' : 'Sem alterações'}
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -785,10 +842,13 @@ function LeadsPage() {
   const [sortByDate, setSortByDate] = useState<'asc'|'desc'>('desc');
 
   // ── Tags ──────────────────────────────────────────────────────────────────
-  const { tags: orgTags } = useTags(orgId);
+  const { tags: orgTags, createTag: createOrgTag } = useTags(orgId);
   const [leadTagsMap, setLeadTagsMap] = useState<Map<string, OrgTag[]>>(new Map());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [showTagFilter, setShowTagFilter] = useState(false);
+  const [newTagFilterName, setNewTagFilterName] = useState('');
+  const [newTagFilterCor, setNewTagFilterCor] = useState('#8b5cf6');
+  const [creatingTagFilter, setCreatingTagFilter] = useState(false);
   const orgTagsRef = useRef<OrgTag[]>([]);
 
   // ── Lead actions ──────────────────────────────────────────────────────────
@@ -1400,6 +1460,18 @@ function LeadsPage() {
     }
   }
 
+  async function handleCreateTagFilter() {
+    if (!newTagFilterName.trim()) return;
+    setCreatingTagFilter(true);
+    const tag = await createOrgTag(newTagFilterName.trim(), newTagFilterCor);
+    if (tag) {
+      setSelectedTagIds(prev => new Set([...prev, tag.id]));
+      setNewTagFilterName('');
+      setNewTagFilterCor('#8b5cf6');
+    }
+    setCreatingTagFilter(false);
+  }
+
   async function handleBulkTag(ops: BulkTagOps) {
     if (ops.add.length === 0 && ops.remove.length === 0) { setShowBulkTagModal(false); return; }
     setBulkLoading(true);
@@ -1678,6 +1750,26 @@ function LeadsPage() {
                               Limpar
                             </button>
                           )}
+                          {/* Criar nova tag inline */}
+                          <div style={{ borderTop:`1px solid ${dark?'#27272a':'#e5e7eb'}`, marginTop:'6px', paddingTop:'8px', display:'flex', flexDirection:'column', gap:'6px' }}>
+                            <input
+                              value={newTagFilterName}
+                              onChange={e => setNewTagFilterName(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleCreateTagFilter(); e.stopPropagation(); }}
+                              placeholder="Nova tag…"
+                              style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#0d0d0f':'#f8fafc', color:dark?'#f4f4f5':'#111827', fontSize:'12px', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+                            />
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
+                              {CORES_TAGS.map(cor => (
+                                <button key={cor} onClick={() => setNewTagFilterCor(cor)}
+                                  style={{ width:'18px', height:'18px', borderRadius:'50%', background:cor, border:`2px solid ${newTagFilterCor === cor ? (dark?'#fff':'#111') : 'transparent'}`, cursor:'pointer', padding:0, flexShrink:0, outline:newTagFilterCor === cor ? `2px solid ${cor}` : 'none', outlineOffset:'1px' }} />
+                              ))}
+                            </div>
+                            <button onClick={handleCreateTagFilter} disabled={creatingTagFilter || !newTagFilterName.trim()}
+                              style={{ width:'100%', padding:'5px 8px', borderRadius:'7px', border:'none', background:newTagFilterName.trim()?'#8b5cf6':(dark?'#27272a':'#e5e7eb'), color:newTagFilterName.trim()?'#fff':(dark?'#52525b':'#9ca3af'), fontSize:'12px', fontWeight:500, cursor:newTagFilterName.trim()?'pointer':'default', fontFamily:'inherit' }}>
+                              {creatingTagFilter ? 'Criando…' : '+ Criar tag'}
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}
@@ -2019,6 +2111,7 @@ function LeadsPage() {
           selectedCount={activeBulkCount}
           onApply={handleBulkTag}
           onClose={() => setShowBulkTagModal(false)}
+          onCreateTag={createOrgTag}
         />
       )}
 

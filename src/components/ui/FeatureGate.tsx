@@ -13,12 +13,13 @@ interface FeatureGateProps {
 }
 
 export function FeatureGate({ feature, planoNecessario, children, hideContent = false }: FeatureGateProps) {
-  const { features } = usePlanFeatures();
+  const { features, loading } = usePlanFeatures();
   const [showModal, setShowModal] = useState(false);
 
   const isAvailable = features[feature] as boolean;
 
-  if (isAvailable) return <>{children}</>;
+  // Nunca bloquear durante carregamento — evita flash de cadeado
+  if (loading || isAvailable) return <>{children}</>;
 
   const requiredPlan = planoNecessario ?? (FEATURE_REQUIRED_PLAN[feature] as 'Starter' | 'Pro' | 'Enterprise' | undefined) ?? 'Starter';
 

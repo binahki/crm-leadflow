@@ -9,6 +9,18 @@ export type { Plan };
 
 const SUPER_ADMIN_EMAIL = 'admin@floow.com';
 
+function getCachedPlan(orgId: string): Plan | null {
+  try {
+    const cached = localStorage.getItem(`floow_plan_${orgId}`);
+    if (cached && KNOWN_PLANS.includes(cached as Plan)) return cached as Plan;
+  } catch {}
+  return null;
+}
+
+export function invalidatePlanCache(orgId: string) {
+  try { localStorage.removeItem(`floow_plan_${orgId}`); } catch {}
+}
+
 export function usePlanFeatures() {
   const { orgId, ready } = useOrgId();
   const { user } = useAuth();
@@ -27,8 +39,15 @@ export function usePlanFeatures() {
 
     if (!orgId || !ready) return;
 
-    setLoading(true);
-    setPlano('gratuito');
+    // Carrega do cache imediatamente para evitar flash de cadeado
+    const cached = getCachedPlan(orgId);
+    if (cached) {
+      setPlano(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+      setPlano('gratuito');
+    }
 
     (supabase as any)
       .from('organizations')
@@ -43,6 +62,7 @@ export function usePlanFeatures() {
             : 'gratuito';
         setPlano(p);
         setLoading(false);
+        try { localStorage.setItem(`floow_plan_${orgId}`, p); } catch {}
       })
       .catch(() => {
         setPlano('gratuito');

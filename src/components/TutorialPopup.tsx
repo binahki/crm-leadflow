@@ -4,6 +4,7 @@ import { Copy, Check, X, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/hooks/useAuth';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/receber-lead';
@@ -62,6 +63,7 @@ export function TutorialPopup() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const tutorialKey = orgId ? `tutorial_concluido_${orgId}` : null;
 
@@ -82,9 +84,12 @@ export function TutorialPopup() {
   useEffect(() => {
     if (!ready || !orgId || !tutorialKey) return;
     if (localStorage.getItem(tutorialKey) === 'true') return;
+    // Nunca mostrar para admin ou gestor acessando conta de cliente
+    if (user?.email === 'admin@floow.com') return;
+    if (localStorage.getItem('admin_viewing_org')) return;
     const t = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(t);
-  }, [ready, orgId, tutorialKey]);
+  }, [ready, orgId, tutorialKey, user?.email]); // eslint-disable-line
 
   useEffect(() => {
     if (step !== 2 || !orgId || webhookUrl) return;

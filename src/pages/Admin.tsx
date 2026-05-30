@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { toast } from 'sonner';
 import { setAdminViewingOrg, clearAdminViewingOrg } from '@/hooks/useOrgId';
 import { invalidateSubscriptionCache } from '@/components/ProtectedRoute';
+import { invalidatePlanCache } from '@/hooks/usePlanFeatures';
 
 const ADMIN_EMAIL = 'admin@floow.com';
 const EDGE_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/criar-org';
@@ -415,6 +416,7 @@ export default function AdminPage() {
       const ativo = editStatus === 'ativo';
       await supabase.from('organizations').update({ plano: editPlano, status: editStatus, ativo }).eq('id', editOrg.id);
       invalidateSubscriptionCache();
+      invalidatePlanCache(editOrg.id);
       toast.success('Atualizado!');
 
       // 2. Atualiza credenciais se preenchidas
