@@ -1924,8 +1924,8 @@ function LeadsPage() {
                     onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } if (selectedIds.size > 0) { const n = new Set(selectedIds); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); setSelectedIds(n); } else { handleViewLead(lead); } }}
                     style={{ background:cardBg, borderRadius:'12px', padding:'12px 14px', border:`1px solid ${sel ? '#2563eb' : border}`, boxShadow:sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)', cursor:'pointer', transition:'all 0.12s', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y' }}
                   >
-                    <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                      {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none' }}/>}
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
+                      {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
                       <div style={{ position:'relative', flexShrink:0 }}>
                         <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
                         <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
@@ -1933,6 +1933,21 @@ function LeadsPage() {
                       <div style={{ flex:1, minWidth:0 }}>
                         <p style={{ fontSize:'14px', fontWeight:600, color:txtHi, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</p>
                         <p style={{ fontSize:'12px', color:txtMid, margin:'2px 0 0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : ''}{safeName(lead.cidade) && lead.whatsapp ? ' · ' : ''}{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : ''}</p>
+                        {(() => {
+                          const lt = leadTagsMap.get(lead.id) || [];
+                          if (!lt.length) return null;
+                          const vis = lt.slice(0, 3); const rest = lt.slice(3);
+                          return (
+                            <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', marginTop:'3px' }}>
+                              {vis.map(tag => (
+                                <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
+                              ))}
+                              {rest.length > 0 && (
+                                <span title={rest.map(t => t.nome).join(', ')} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:'#6b7280', background:'rgba(107,114,128,0.1)', border:'1px solid rgba(107,114,128,0.2)', cursor:'default' }}>+{rest.length}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', flexShrink:0 }}>
                         <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11px', fontWeight:600, background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
@@ -2006,19 +2021,23 @@ function LeadsPage() {
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
                         </td>
                         <td className="px-3 py-3" style={{ overflow:'hidden' }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
-                            <div style={{ position:'relative', flexShrink:0 }}>
-                              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
+                          <div style={{ display:'flex', flexDirection:'column', minWidth:0 }}>
+                            {/* Linha 1: avatar + nome + obs */}
+                            <div style={{ display:'flex', alignItems:'center', gap:'7px', minWidth:0 }}>
+                              <div style={{ position:'relative', flexShrink:0 }}>
+                                <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#4b5563', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'10px', fontWeight:700 }}>{getInitials(lead.nome)}</div>
+                                {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
+                              </div>
+                              <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>
+                              {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
                             </div>
-                            <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome) || 'Lead'}</span>
-                            {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
+                            {/* Linha 2: tags abaixo do nome, alinhadas com o texto */}
                             {(() => {
                               const lt = leadTagsMap.get(lead.id) || [];
                               if (!lt.length) return null;
                               const vis = lt.slice(0, 3); const rest = lt.slice(3);
                               return (
-                                <div style={{ display:'flex', gap:'3px', flexShrink:0 }}>
+                                <div style={{ display:'flex', gap:'3px', flexWrap:'wrap', marginTop:'3px', paddingLeft:'35px' }}>
                                   {vis.map(tag => (
                                     <span key={tag.id} style={{ display:'inline-flex', alignItems:'center', padding:'1px 6px', borderRadius:'99px', fontSize:'10px', fontWeight:600, color:tag.cor, background:tag.cor+'20', border:`1px solid ${tag.cor}40`, whiteSpace:'nowrap' }}>{tag.nome}</span>
                                   ))}
