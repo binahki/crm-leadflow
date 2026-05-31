@@ -770,7 +770,7 @@ export default function Dashboard() {
   const gridLn = dark ? 'rgba(255,255,255,0.04)' : '#f0f0f0';
   const divCls = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6';
   const hov    = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
-  const pad    = isMobile ? '16px 14px' : '32px';
+  const pad    = isMobile ? '16px 18px' : '32px';
   const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.4)' : 'none' };
   // statusClass removido — pills usam STATUS_DARK_COLOR/BG/BORDER inline
 
@@ -857,7 +857,7 @@ export default function Dashboard() {
         {/* Metric Cards */}
         {isMobile ? (
           /* ── MOBILE: coluna única, cards horizontais com acento lateral ── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
 
             {/* Card 1: META DO MÊS — hero azul */}
             <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 6px 18px rgba(0,68,253,0.28)', border: 'none', animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
@@ -879,7 +879,7 @@ export default function Dashboard() {
             </div>
 
             {/* Card 2: GASTO TOTAL — acento verde */}
-            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #10b981', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '18px 20px', border: `1px solid ${border}`, borderLeft: '3px solid #10b981', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>Gasto Total</p>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
@@ -890,7 +890,7 @@ export default function Dashboard() {
             </div>
 
             {/* Card 3: LEADS — acento azul */}
-            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #0044fd', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '18px 20px', border: `1px solid ${border}`, borderLeft: '3px solid #0044fd', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>Leads</p>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
@@ -904,7 +904,7 @@ export default function Dashboard() {
             </div>
 
             {/* Card 4: CONVERTIDOS — acento roxo */}
-            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #7e3beb', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '18px 20px', border: `1px solid ${border}`, borderLeft: '3px solid #7e3beb', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>{t.convertidoPlural}</p>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
