@@ -781,12 +781,23 @@ export default function Dashboard() {
         {/* Header */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isMobile ? '14px' : '20px', gap: '8px' }}>
           <div>
-            <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: 800, fontFamily: 'Inter, sans-serif', color: txtHi, letterSpacing: '-0.04em', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ animation: 'greetingWordIn 0.4s ease-out 0.1s both' }}>{greetingPrefix}</span>
-              <span>{typedName}</span>
-              {!typingDone && <span className="typewriter-cursor" style={{ animation: 'cursorBlink 0.7s step-end infinite', fontWeight: 100, color: txtLow }}>|</span>}
-              <img src="/wave.png" alt="👋" style={{ width: '22px', height: '22px', objectFit: 'contain', marginLeft: '4px' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-            </h1>
+            {isMobile ? (
+              <div style={{ margin: 0 }}>
+                <p style={{ fontSize: '18px', fontWeight: 600, fontFamily: 'Inter, sans-serif', color: txtMid, margin: 0, animation: 'greetingWordIn 0.4s ease-out 0.1s both' }}>{greetingPrefix}</p>
+                <p style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'Inter, sans-serif', color: txtHi, margin: 0, letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>{typedName}</span>
+                  {!typingDone && <span className="typewriter-cursor" style={{ animation: 'cursorBlink 0.7s step-end infinite', fontWeight: 100, color: txtLow }}>|</span>}
+                  <img src="/wave.png" alt="" style={{ width: '26px', height: '26px', objectFit: 'contain' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                </p>
+              </div>
+            ) : (
+              <h1 style={{ fontSize: '28px', fontWeight: 800, fontFamily: 'Inter, sans-serif', color: txtHi, letterSpacing: '-0.04em', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ animation: 'greetingWordIn 0.4s ease-out 0.1s both' }}>{greetingPrefix}</span>
+                <span>{typedName}</span>
+                {!typingDone && <span className="typewriter-cursor" style={{ animation: 'cursorBlink 0.7s step-end infinite', fontWeight: 100, color: txtLow }}>|</span>}
+                <img src="/wave.png" alt="" style={{ width: '22px', height: '22px', objectFit: 'contain', marginLeft: '4px' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              </h1>
+            )}
             <p style={{ fontSize: '12px', color: txtLow, marginTop: '3px' }}>{(() => {
               try {
                 const d = new Date();
@@ -844,15 +855,15 @@ export default function Dashboard() {
         </div>
 
         {/* Metric Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '16px', marginBottom: '16px' }}>
 
           {/* Card 1: META DO MÊS — hero */}
-          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', boxShadow: '0 8px 24px rgba(0,68,253,0.25)', border: 'none', animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both` : 'none' }}>
+          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '14px 16px' : '24px', boxShadow: '0 8px 24px rgba(0,68,253,0.25)', border: 'none', animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: isMobile ? 'auto' : '140px' }}>
             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Meta do mês</p>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginBottom: '10px' }}>
-              <p style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
+              <div style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
                 {showContent ? <AnimatedCounter value={approvedThisMonth} /> : <div style={{ display: 'inline-block', width: '56px', height: isMobile ? '28px' : '36px', borderRadius: '8px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
-              </p>
+              </div>
               {metaOrg.revs > 0 && (
                 <span style={{ fontSize: '16px', fontWeight: 400, color: 'rgba(255,255,255,0.7)', paddingBottom: '4px' }}>
                   /{metaOrg.revs}
@@ -873,19 +884,19 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Gasto Total</p>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
-              {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '22px' : '32px')}
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px 16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: isMobile ? 'auto' : '140px' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Gasto Total</p>
+            <div style={{ fontSize: isMobile ? '26px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
+              {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '26px' : '32px')}
             </div>
             <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Leads</p>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
-              {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '22px' : '32px')}
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px 16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: isMobile ? 'auto' : '140px' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Leads</p>
+            <div style={{ fontSize: isMobile ? '26px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
+              {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '26px' : '32px')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
@@ -898,10 +909,10 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{t.convertidoPlural}</p>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
-              {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '22px' : '32px')}
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px 16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: isMobile ? 'auto' : '140px' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{t.convertidoPlural}</p>
+            <div style={{ fontSize: isMobile ? '26px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
+              {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '26px' : '32px')}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conversão</span>
@@ -1008,8 +1019,8 @@ export default function Dashboard() {
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = idx % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
-                          {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
-                          {(toNum(lead.status) === 0 || toNum(lead.status) === 1) && !(lead as any).avaliado && (
+                          {(() => { const sz = isMobile ? '32px' : '28px'; const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: sz, height: sz, borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
+                          {!isMobile && (toNum(lead.status) === 0 || toNum(lead.status) === 1) && !(lead as any).avaliado && (
                             <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `1.5px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1px rgba(59,130,246,0.25)', zIndex: 2 }} />
                           )}
                         </div>
@@ -1017,7 +1028,7 @@ export default function Dashboard() {
                           <p style={{ fontSize: '12.5px', fontWeight: 500, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0, 2).join(' ') || 'Lead'}</p>
                           <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>{lead.cidade || '—'}</p>
                         </div>
-                        {(() => {
+                        {!isMobile && (() => {
                           const la = lead as any;
                           const score = la.score != null ? Number(la.score) : null;
                           if (score == null) return null;
@@ -1025,11 +1036,11 @@ export default function Dashboard() {
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
                           return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '72px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
-                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 7px' : '4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
                           <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>
                           {STATUS_LABEL[st] ?? 'Aguardando'}
                         </span>
-                        <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>
+                        {!isMobile && <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>}
                         <button
                           onClick={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center transition-colors flex-shrink-0"

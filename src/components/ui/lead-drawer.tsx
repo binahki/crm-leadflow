@@ -292,7 +292,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       if (perguntasTextos.length === 0) return;
 
       const oId = orgId || fullLead?.org_id || lead?.org_id;
-      if (!oId) {
+      const leadId = lead?.id || fullLead?.id;
+      if (!oId || !leadId) {
         setPerguntasOrdenadas(
           perguntasTextos.map(texto => ({ ordem: 0, texto }))
         );
@@ -305,7 +306,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         const { data: sessao } = await supabase
           .from('quiz_sessoes')
           .select('quiz_slug')
-          .eq('lead_id', lead.id)
+          .eq('lead_id', leadId)
           .maybeSingle();
 
         if (sessao?.quiz_slug) {
