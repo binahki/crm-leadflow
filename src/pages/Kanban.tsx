@@ -149,7 +149,7 @@ function FilterDropdown({ value, options, onChange, dark }: {
           <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:41, background:bg, border:`1px solid ${border}`, borderRadius:'10px', minWidth:'140px', overflow:'hidden', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)', fontFamily:'inherit' }}>
             {options.map(o => (
               <button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }}
-                style={{ width:'100%', display:'block', textAlign:'left', padding:'8px 12px', border:'none', background:o.value===value?rowBg:bg, color:o.value===value?'#2563eb':txtHi, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' }}
+                style={{ width:'100%', display:'block', textAlign:'left', padding:'8px 12px', border:'none', background:o.value===value?rowBg:bg, color:o.value===value?'#0044fd':txtHi, fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' }}
               >{o.label}</button>
             ))}
           </div>
@@ -196,11 +196,11 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
   function CampRow({ camp }: { camp: { name: string; count: number; isActive: boolean } }) {
     const isSel = pendingSelected.has(camp.name);
     return (
-      <button onClick={() => onToggle(camp.name)} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}>
-        <div style={{ width:'14px', height:'14px', borderRadius:'3px', border:`2px solid ${isSel?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSel?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.1s' }}>
+      <button onClick={() => onToggle(camp.name)} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(0,68,253,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}>
+        <div style={{ width:'14px', height:'14px', borderRadius:'3px', border:`2px solid ${isSel?'#0044fd':(dark?'#3f3f46':'#d1d5db')}`, background:isSel?'#0044fd':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.1s' }}>
           {isSel && <Check style={{ width:'9px', height:'9px', color:'#fff' }}/>}
         </div>
-        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
+        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#7ab0ff':'#0044fd'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
           {hasInactive && camp.isActive && <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
           {camp.name || 'Sem campanha'}
         </span>
@@ -234,7 +234,7 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
         </div>
         <div style={{ padding:'7px 8px', borderTop:`1px solid ${border}`, display:'flex', gap:'6px', flexShrink:0 }}>
           <button onClick={onClear} style={{ padding:'5px 10px', borderRadius:'7px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'12px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>Limpar</button>
-          <button onClick={onApply} style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#2563eb', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
+          <button onClick={onApply} style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#0044fd', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
             {hasSelection ? `Aplicar (${selectedLeadCount})` : 'Aplicar'}
           </button>
         </div>
@@ -802,10 +802,10 @@ export default function KanbanPage() {
             <div style={{ position:'relative' }}>
               <button
                 onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }}
-                style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(37,99,235,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#93c5fd':'#2563eb') : (dark?'#d4d4d8':'#374151') }}
+                style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(0,68,253,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#7ab0ff':'#0044fd') : (dark?'#d4d4d8':'#374151') }}
               >
                 <Megaphone style={{ width:'12px', height:'12px' }}/>
-                Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
+                Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#0044fd', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
               </button>
               {showCampaignModal && (
                 <CampFilterDropdown

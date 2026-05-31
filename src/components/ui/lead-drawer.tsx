@@ -108,7 +108,7 @@ function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: strin
   const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : '#ef4444';
   const bg = isVerde ? (dark ? 'rgba(16,185,129,0.15)' : '#d1fae5') : isAmarelo ? (dark ? 'rgba(245,158,11,0.15)' : '#fef3c7') : (dark ? 'rgba(239,68,68,0.15)' : '#fee2e2');
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '99px', background: bg, border: `1px solid ${color}30` }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '6px', background: bg, border: `1px solid ${color}30` }}>
       <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{ fontSize: '12px', fontWeight: 800, color, fontFamily: FONT }}>{score} pts</span>
     </div>
@@ -544,7 +544,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 {initials(lead.nome)}
               </div>
               {status === 1 && !avaliado && (
-                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 2px 8px rgba(59,130,246,0.4)', zIndex: 10, whiteSpace: 'nowrap' }}>
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#0044fd', color: '#fff', padding: '2px 6px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', boxShadow: '0 2px 8px rgba(0,68,253,0.4)', zIndex: 10, whiteSpace: 'nowrap' }}>
                   Novo
                 </div>
               )}
@@ -627,13 +627,13 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             {/* + tag primeiro */}
             <button
               onClick={() => { setShowTagDropdown(true); setTagSearch(''); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? '#3f3f46' : '#d1d5db'}`, cursor: 'pointer', fontFamily: FONT, transition: 'border-color 0.15s, color 0.15s' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 10px', minHeight: '28px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? '#3f3f46' : '#d1d5db'}`, cursor: 'pointer', fontFamily: FONT, transition: 'border-color 0.15s, color 0.15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = dark ? '#71717a' : '#9ca3af'; e.currentTarget.style.color = dark ? '#a1a1aa' : '#6b7280'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = dark ? '#3f3f46' : '#d1d5db'; e.currentTarget.style.color = dark ? '#52525b' : '#9ca3af'; }}
             >+ tag</button>
             {/* Pills ativas */}
             {leadTags.map(tag => (
-              <span key={tag.id} className="ld-tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagEnter 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
+              <span key={tag.id} className="ld-tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagEnter 0.2s cubic-bezier(0.16,1,0.3,1)' }}>
                 {tag.nome}
                 <button onClick={() => removeLeadTag(tag.id)} className="ld-tag-x" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 1px', color: tag.cor, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
                   <X style={{ width: '9px', height: '9px' }} />
@@ -642,7 +642,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             ))}
             {/* Pills saindo — apenas animação, pointerEvents off */}
             {exitingTags.map(tag => (
-              <span key={`exit-${tag.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagExit 0.16s ease-in forwards', pointerEvents: 'none' }}>
+              <span key={`exit-${tag.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '4px 8px 4px 10px', minHeight: '28px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: tag.cor, background: tag.cor + '1e', border: `1px solid ${tag.cor}38`, whiteSpace: 'nowrap', animation: 'tagExit 0.16s ease-in forwards', pointerEvents: 'none' }}>
                 {tag.nome}
               </span>
             ))}
@@ -738,7 +738,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 <Section openKey="reuniao" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark} iconColor="#7e3beb"
                   icon={<Monitor style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title="Reunião de Onboarding">
                   <div style={{ marginBottom: '4px' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>✓ Participou</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, color: '#10b981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}>✓ Participou</span>
                   </div>
                   {entries.map(({ key, pergunta, resposta }) => (
                     <Field key={key} label={pergunta} value={resposta} dark={dark} />
@@ -892,7 +892,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                   ))}
                 </div>
                 <button onClick={handleMgrCreate} disabled={!mgr_newNome.trim() || mgr_creating}
-                  style={{ padding: '8px', borderRadius: '8px', border: 'none', background: mgr_newNome.trim() ? '#3b82f6' : (dark ? '#27272a' : '#e5e7eb'), color: mgr_newNome.trim() ? '#fff' : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 600, cursor: mgr_newNome.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
+                  style={{ padding: '8px', borderRadius: '8px', border: 'none', background: mgr_newNome.trim() ? '#0044fd' : (dark ? '#27272a' : '#e5e7eb'), color: mgr_newNome.trim() ? '#fff' : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 600, cursor: mgr_newNome.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
                   {mgr_creating ? 'Criando...' : 'Criar tag'}
                 </button>
               </div>

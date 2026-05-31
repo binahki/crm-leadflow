@@ -41,7 +41,9 @@ const FUNNEL_CONFIG = [
 ];
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
-const STATUS_DARK: Record<number, string> = { 0: 'bg-blue-900/40 text-blue-300', 1: 'bg-blue-900/40 text-blue-300', 2: 'bg-purple-900/40 text-purple-300', 3: 'bg-emerald-900/40 text-emerald-300', 4: 'bg-rose-900/40 text-rose-300', 5: 'bg-amber-900/40 text-amber-300', 6: 'bg-zinc-800/40 text-zinc-400' };
+const STATUS_DARK: Record<number, string> = { 0: 'text-[#6b9fff]', 1: 'text-[#6b9fff]', 2: 'text-[#b197fc]', 3: 'text-[#34d399]', 4: 'text-[#f87171]', 5: 'text-[#fbbf24]', 6: 'text-[#9ca3af]' };
+const STATUS_DARK_BG: Record<number, string> = { 0: 'rgba(0,68,253,0.18)', 1: 'rgba(0,68,253,0.18)', 2: 'rgba(139,92,246,0.18)', 3: 'rgba(16,185,129,0.18)', 4: 'rgba(239,68,68,0.18)', 5: 'rgba(245,158,11,0.18)', 6: 'rgba(107,114,128,0.18)' };
+const STATUS_DARK_BORDER: Record<number, string> = { 0: 'rgba(0,68,253,0.3)', 1: 'rgba(0,68,253,0.3)', 2: 'rgba(139,92,246,0.3)', 3: 'rgba(16,185,129,0.3)', 4: 'rgba(239,68,68,0.3)', 5: 'rgba(245,158,11,0.3)', 6: 'rgba(107,114,128,0.3)' };
 const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700', 6: 'bg-zinc-100 text-zinc-600' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
@@ -799,7 +801,7 @@ export default function Dashboard() {
               {showDropdown && (
                 <div style={{ position: 'absolute', right: 0, left: 'auto', top: 'calc(100% + 6px)', background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '4px', minWidth: '160px', maxWidth: 'calc(100vw - 32px)', zIndex: 50, boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.1)' }}>
                   {PERIOD_FILTERS.map(f => (
-                    <button key={f.value} onClick={() => selectPeriod(f.value)} style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: 'none', background: selectedPeriod === f.value ? (dark ? 'rgba(255,255,255,0.08)' : '#eff6ff') : 'transparent', color: selectedPeriod === f.value ? (dark ? '#60a5fa' : '#2563eb') : txtMid, fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                    <button key={f.value} onClick={() => selectPeriod(f.value)} style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: 'none', background: selectedPeriod === f.value ? (dark ? 'rgba(255,255,255,0.08)' : '#eff6ff') : 'transparent', color: selectedPeriod === f.value ? (dark ? '#6b9fff' : '#0044fd') : txtMid, fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                       {f.label}
                     </button>
                   ))}
@@ -819,7 +821,7 @@ export default function Dashboard() {
                       </div>
                     ))}
                     <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                      <button onClick={applyCustom} style={{ flex: 1, padding: '8px', borderRadius: '8px', background: '#2563eb', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Aplicar</button>
+                      <button onClick={applyCustom} style={{ flex: 1, padding: '8px', borderRadius: '8px', background: '#0044fd', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Aplicar</button>
                       <button onClick={() => setShowCustom(false)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
                     </div>
                   </div>
@@ -830,7 +832,7 @@ export default function Dashboard() {
               <RefreshCw style={{ width: '14px', height: '14px', color: txtMid, animation: isRefreshing ? 'spin 1s linear infinite' : '' }} />
             </button>
             {!isMobile && (
-              <button style={{ ...btnBase, background: '#2563eb', border: 'none', color: '#fff', fontWeight: 500 }}>
+              <button style={{ ...btnBase, background: '#0044fd', border: 'none', color: '#fff', fontWeight: 500 }}>
                 <Download style={{ width: '14px', height: '14px' }} /> Exportar
               </button>
             )}
@@ -841,7 +843,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)', gap: isMobile ? '12px' : '16px', marginBottom: '16px' }}>
 
           {/* Card 1: META DO MÊS — hero */}
-          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', boxShadow: '0 8px 24px rgba(37,99,235,0.25)', border: 'none', animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both` : 'none' }}>
+          <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', boxShadow: '0 8px 24px rgba(0,68,253,0.25)', border: 'none', animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both` : 'none' }}>
             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Meta do mês</p>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginBottom: '10px' }}>
               <p style={{ fontSize: isMobile ? '28px' : '36px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
@@ -996,7 +998,7 @@ export default function Dashboard() {
           <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow, minWidth: 0, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Leads Recentes</h3>
-              <Link to="/leads" style={{ fontSize: '12px', color: '#2563eb', fontWeight: 500, textDecoration: 'none' }}>Ver todos</Link>
+              <Link to="/leads" style={{ fontSize: '12px', color: '#0044fd', fontWeight: 500, textDecoration: 'none' }}>Ver todos</Link>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
               {loading ? [...Array(4)].map((_, i) => <div key={i} style={{ height: '44px', borderRadius: '10px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', marginBottom: '2px' }} />)
@@ -1006,9 +1008,9 @@ export default function Dashboard() {
                     const safeNome = safeName(lead.nome) || 'Lead';
                     return (
                       <div key={lead.id} onClick={() => setViewingLead(lead)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 8px', borderRadius: '10px', cursor: 'pointer', transition: 'background 0.12s', animation: showContent ? `rowSlideIn 0.3s ease-out ${idx * 50}ms both` : 'none' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = hov}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 8px', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.12s', animation: showContent ? `rowSlideIn 0.3s ease-out ${idx * 50}ms both` : 'none', background: idx % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = idx % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
@@ -1018,7 +1020,11 @@ export default function Dashboard() {
                           <p style={{ fontSize: '12.5px', fontWeight: 500, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0, 2).join(' ') || 'Lead'}</p>
                           <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>{lead.cidade || '—'}</p>
                         </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass[st] ?? ''}`} style={{ fontSize: '10.5px' }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                        {dark ? (
+                          <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '6px', whiteSpace: 'nowrap', fontWeight: 600, background: STATUS_DARK_BG[st], color: { 0:'#6b9fff', 1:'#6b9fff', 2:'#b197fc', 3:'#34d399', 4:'#f87171', 5:'#fbbf24', 6:'#9ca3af' }[st] ?? '#9ca3af', border: `1px solid ${STATUS_DARK_BORDER[st]}` }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                        ) : (
+                          <span className={`text-xs px-2 py-0.5 rounded-md whitespace-nowrap font-semibold ${STATUS_LIGHT[st] ?? ''}`} style={{ fontSize: '10.5px' }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                        )}
                         <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>
                         <button
                           onClick={e => { e.stopPropagation(); handleWhatsApp(lead); }}
@@ -1042,7 +1048,7 @@ export default function Dashboard() {
                   {!metaError && <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#22c55e', animation: 'ping 1.5s cubic-bezier(0,0,0.2,1) infinite', opacity: 0.6 }} />}
                 </div>
               </div>
-              <Link to="/campanhas" style={{ fontSize: '12px', color: '#2563eb', fontWeight: 500, textDecoration: 'none' }}>Ver todas</Link>
+              <Link to="/campanhas" style={{ fontSize: '12px', color: '#0044fd', fontWeight: 500, textDecoration: 'none' }}>Ver todas</Link>
             </div>
             {metaLoading
               ? [...Array(3)].map((_, i) => <div key={i} style={{ height: '32px', borderRadius: '8px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', marginBottom: '8px' }} />)
@@ -1063,12 +1069,12 @@ export default function Dashboard() {
                         </thead>
                         <tbody>
                           {campRows.map((row, i) => (
-                            <tr key={i} style={{ borderTop: `1px solid ${divCls}`, animation: showContent ? `rowSlideIn 0.3s ease-out ${i * 50}ms both` : 'none' }}>
+                            <tr key={i} style={{ background: i % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent', borderTop: dark ? 'none' : `1px solid ${divCls}`, animation: showContent ? `rowSlideIn 0.3s ease-out ${i * 50}ms both` : 'none' }}>
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px', fontWeight: 500, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</td>
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.spend}</td>
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px' }}>
                                 {row.leads > 0
-                                  ? <button onClick={() => goToLeads(row.fullName)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: (row as any).isCRM ? '#10b981' : '#2563eb', fontWeight: 600, fontSize: '12px', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }} >{row.leads}</button>
+                                  ? <button onClick={() => goToLeads(row.fullName)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: (row as any).isCRM ? '#10b981' : '#0044fd', fontWeight: 600, fontSize: '12px', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }} >{row.leads}</button>
                                   : <span style={{ color: txtMid }}>0</span>
                                 }
                               </td>
@@ -1077,7 +1083,7 @@ export default function Dashboard() {
                                 <td style={{ padding: '9px 0' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <div style={{ height: '4px', width: '36px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', overflow: 'hidden', flexShrink: 0 }}>
-                                      <div style={{ height: '100%', width: `${row.perf}%`, background: '#2563eb', borderRadius: '99px' }} />
+                                      <div style={{ height: '100%', width: `${row.perf}%`, background: '#0044fd', borderRadius: '99px' }} />
                                     </div>
                                     <span style={{ fontSize: '11px', color: txtLow }}>{row.perf}%</span>
                                   </div>

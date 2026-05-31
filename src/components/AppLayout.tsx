@@ -69,7 +69,7 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
   const bg = isDark ? '#090909' : '#f4f4f5';
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: bg, position: 'relative' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: bg, position: 'relative', transition: 'background-color 0.25s ease' }}>
 
       {/* Desktop sidebar */}
       {!isMobile && <Sidebar leadCount={leadCount} />}
@@ -107,6 +107,7 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
         background: bg,
         paddingTop: isMobile ? '56px' : '0',
         WebkitOverflowScrolling: 'touch',
+        transition: 'background-color 0.25s ease',
       }}>
         {/* Banner admin impersonation */}
         {adminOrg && (

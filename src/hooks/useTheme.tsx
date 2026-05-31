@@ -8,19 +8,26 @@ const TRANSITION_ID = '__theme-transition';
 
 function injectThemeTransition() {
   if (document.getElementById(TRANSITION_ID)) return;
+  // Transição direta no root para elementos com background inline
+  document.documentElement.style.transition = 'background-color 0.3s ease, color 0.2s ease';
+  document.body.style.transition = 'background-color 0.3s ease';
   const style = document.createElement('style');
   style.id = TRANSITION_ID;
   style.textContent = `
     *, *::before, *::after {
       transition:
-        background-color 0.22s ease,
-        border-color 0.18s ease,
-        color 0.14s ease,
-        box-shadow 0.22s ease !important;
+        background-color 0.25s ease,
+        border-color 0.2s ease,
+        color 0.15s ease,
+        box-shadow 0.25s ease !important;
     }
   `;
   document.head.appendChild(style);
-  setTimeout(() => document.getElementById(TRANSITION_ID)?.remove(), 320);
+  setTimeout(() => {
+    document.getElementById(TRANSITION_ID)?.remove();
+    document.documentElement.style.transition = '';
+    document.body.style.transition = '';
+  }, 380);
 }
 
 export function useTheme() {

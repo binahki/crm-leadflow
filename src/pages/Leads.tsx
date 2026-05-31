@@ -162,6 +162,17 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
   return String(utmCampaign).split('|')[0].trim();
 }
 
+// Pills de status no dark mode — cores vivas, padronizadas
+const DARK_STATUS_PILL: Record<number, { bg: string; color: string; border: string }> = {
+  0: { bg: 'rgba(0,68,253,0.18)', color: '#6b9fff', border: 'rgba(0,68,253,0.3)' },
+  1: { bg: 'rgba(0,68,253,0.18)', color: '#6b9fff', border: 'rgba(0,68,253,0.3)' },
+  2: { bg: 'rgba(139,92,246,0.18)', color: '#b197fc', border: 'rgba(139,92,246,0.3)' },
+  5: { bg: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: 'rgba(245,158,11,0.3)' },
+  3: { bg: 'rgba(16,185,129,0.18)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
+  4: { bg: 'rgba(239,68,68,0.18)', color: '#f87171', border: 'rgba(239,68,68,0.3)' },
+  6: { bg: 'rgba(107,114,128,0.18)', color: '#9ca3af', border: 'rgba(107,114,128,0.3)' },
+};
+
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
   if (score == null) return <span style={{color:dark?'#3f3f46':'#d1d5db',fontSize:'12px'}}>—</span>;
   const isVerde = faixa === 'verde';
@@ -208,7 +219,7 @@ function FilterDropdown({ value, options, onChange, dark }: { value:string; opti
       {open && createPortal(<>
         <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
         <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, background:dark?'#111113':'#ffffff', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, borderRadius:'10px', padding:'4px', zIndex:9999, boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
-          {options.map(o => (<button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'7px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+          {options.map(o => (<button key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'7px', padding:'7px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#0044fd'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
             {value===o.value?<Check style={{ width:'12px', height:'12px', flexShrink:0 }}/>:<span style={{ width:'12px', flexShrink:0 }}/>}
             {o.dot && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>}
             {o.label}
@@ -236,7 +247,7 @@ function CustomDateModal({ dark, customFrom, customTo, setCustomFrom, setCustomT
           <div><label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data inicial</label><input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/></div>
           <div><label style={{ fontSize:'12px', color:txtMid, display:'block', marginBottom:'5px', fontWeight:500 }}>Data final</label><input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/></div>
           <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
-            <button onClick={onApply} style={{ flex:1, padding:'10px', borderRadius:'9px', background:'#2563eb', border:'none', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Aplicar</button>
+            <button onClick={onApply} style={{ flex:1, padding:'10px', borderRadius:'9px', background:'#0044fd', border:'none', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Aplicar</button>
             <button onClick={onClear} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Limpar</button>
           </div>
         </div>
@@ -292,7 +303,7 @@ function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:numb
         <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
         <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, zIndex:9999, background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
           {options.map(o => (
-            <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#2563eb'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+            <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#0044fd'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
               <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>
               {o.label}
             </button>
@@ -382,12 +393,12 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
     return (
       <button
         onClick={() => onToggle(camp.name)}
-        style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(37,99,235,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}
+        style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:isSel?(dark?'rgba(0,68,253,0.1)':'#eff6ff'):'transparent', cursor:'pointer', textAlign:'left', fontFamily:'inherit', marginBottom:'1px' }}
       >
         <div style={{ width:'14px', height:'14px', borderRadius:'3px', border:`2px solid ${isSel?'#2563eb':(dark?'#3f3f46':'#d1d5db')}`, background:isSel?'#2563eb':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.1s' }}>
           {isSel && <Check style={{ width:'9px', height:'9px', color:'#fff' }}/>}
         </div>
-        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#93c5fd':'#1d4ed8'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
+        <span style={{ flex:1, fontSize:'12.5px', fontWeight:500, color:isSel?(dark?'#7ab0ff':'#0044fd'):txtHi, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'5px' }}>
           {hasInactive && camp.isActive && <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
           {camp.name || 'Sem campanha'}
         </span>
@@ -453,7 +464,7 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
           </button>
           <button
             onClick={onApply}
-            style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#2563eb', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}
+            style={{ flex:1, padding:'5px 10px', borderRadius:'7px', border:'none', background:'#0044fd', color:'#fff', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}
           >
             {hasSelection ? `Aplicar (${selectedLeadCount})` : 'Aplicar'}
           </button>
@@ -682,8 +693,8 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
   const btnRef = useRef<HTMLButtonElement>(null);
   const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
   const border = dark ? '#1e1e22' : '#e5e7eb';
-  const barBorder = dark ? 'rgba(37,99,235,0.22)' : '#bfdbfe';
-  const accentTxt = dark ? '#93c5fd' : '#1d4ed8';
+  const barBorder = dark ? 'rgba(0,68,253,0.22)' : '#bfdbfe';
+  const accentTxt = dark ? '#7ab0ff' : '#0044fd';
   const btnBg = dark ? '#111113' : '#fff';
   const btnBorder = dark ? '#2d3748' : '#d1d5db';
   const btnTxt = dark ? '#cbd5e1' : '#374151';
@@ -709,7 +720,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
     : `Ver todos (${totalCount})`;
 
   return (
-    <div style={{ padding:'10px 14px', background:dark?'rgba(37,99,235,0.08)':'#eff6ff', border:`1px solid ${barBorder}`, borderRadius:'10px', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+    <div style={{ padding:'10px 14px', background:dark?'rgba(0,68,253,0.08)':'#eff6ff', border:`1px solid ${barBorder}`, borderRadius:'10px', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
 
       {/* Lado esquerdo: info de seleção */}
       <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', minWidth:0, flex:1 }}>
@@ -722,7 +733,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
         {!allSystemSelected && (
           <>
             <span style={{ color:dark?'rgba(147,197,253,0.25)':'#bfdbfe', fontSize:'13px', flexShrink:0 }}>·</span>
-            <button onClick={onSelectAll} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#60a5fa':'#2563eb', fontWeight:600, fontSize:'12.5px', padding:0, textDecoration:'underline', fontFamily:'inherit', whiteSpace:'nowrap' }}>
+            <button onClick={onSelectAll} style={{ background:'none', border:'none', cursor:'pointer', color:dark?'#6b9fff':'#0044fd', fontWeight:600, fontSize:'12.5px', padding:0, textDecoration:'underline', fontFamily:'inherit', whiteSpace:'nowrap' }}>
               {selectAllLabel}
             </button>
           </>
@@ -1716,7 +1727,7 @@ function LeadsPage() {
         <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Observações</label>
         <textarea placeholder="Notas sobre o lead..." value={newLead.observacoes} onChange={e => setNewLead(n => ({ ...n, observacoes: e.target.value }))} style={{ ...inputStyle, height:'80px', resize:'none' }}/>
       </div>
-      <button onClick={handleAddLead} style={{ padding:'10px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13.5px', fontWeight:600, cursor:'pointer', marginTop:'8px' }}>Adicionar Lead</button>
+      <button onClick={handleAddLead} style={{ padding:'10px', borderRadius:'9px', border:'none', background:'#0044fd', color:'#fff', fontSize:'13.5px', fontWeight:600, cursor:'pointer', marginTop:'8px' }}>Adicionar Lead</button>
     </div>
   );
 
@@ -1732,7 +1743,7 @@ function LeadsPage() {
               <>
                 <button onClick={() => setShowFilters(v => !v)} style={{ ...btnGhost, gap:'4px' }}><Filter style={{ width:'14px', height:'14px' }}/> Filtros</button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'4px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Add</button></DialogTrigger>
+                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'4px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#0044fd', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Add</button></DialogTrigger>
                   <DialogContent style={{ background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'16px' }}>
                     <DialogHeader><DialogTitle style={{ color:dark?'#fff':'#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
                     {addLeadForm}
@@ -1757,10 +1768,10 @@ function LeadsPage() {
                       setPendingCampaigns(new Set(selectedCampaigns));
                       setShowCampaignModal(v => !v);
                     }}
-                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(37,99,235,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#93c5fd' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
+                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, background:selectedCampaigns.size > 0 ? (dark ? 'rgba(0,68,253,0.12)' : '#eff6ff') : (dark ? '#111113' : '#ffffff'), color:selectedCampaigns.size > 0 ? (dark ? '#7ab0ff' : '#2563eb') : (dark ? '#d4d4d8' : '#374151'), fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                   >
                     <Megaphone style={{ width:'12px', height:'12px' }}/>
-                    Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#2563eb', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
+                    Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#0044fd', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
                   </button>
                   {showCampaignModal && createPortal(
                     <CampFilterDropdown
@@ -1839,7 +1850,7 @@ function LeadsPage() {
                 <button onClick={fetchLeads} style={btnGhost}><RefreshCw style={{ width:'13px', height:'13px' }}/></button>
                 <button onClick={exportCSV} style={btnGhost}><Download style={{ width:'13px', height:'13px' }}/></button>
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Adicionar</button></DialogTrigger>
+                  <DialogTrigger asChild><button style={{ display:'flex', alignItems:'center', gap:'5px', padding:'7px 12px', borderRadius:'9px', border:'none', background:'#0044fd', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}><Plus style={{ width:'14px', height:'14px' }}/> Adicionar</button></DialogTrigger>
                   <DialogContent style={{ background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'16px' }}>
                     <DialogHeader><DialogTitle style={{ color:dark?'#fff':'#111827' }}>Adicionar Lead</DialogTitle></DialogHeader>
                     {addLeadForm}
@@ -1862,7 +1873,7 @@ function LeadsPage() {
                 <FilterDropdown value={statusFilter} options={statusOptions} onChange={setStatusFilter} dark={dark}/>
                 <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={handlePeriodChange} dark={dark}/>
                 <div style={{ position:'relative' }}>
-                  <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setCampDropPos({ top: r.bottom + 6, left: r.left }); setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#2563eb' : border}`, color:selectedCampaigns.size > 0 ? '#2563eb' : (dark ? '#a1a1aa' : '#374151') }}>
+                  <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setCampDropPos({ top: r.bottom + 6, left: r.left }); setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, color:selectedCampaigns.size > 0 ? '#0044fd' : (dark ? '#a1a1aa' : '#374151') }}>
                     <Megaphone style={{ width:'13px', height:'13px' }}/> Campanhas {selectedCampaigns.size > 0 && `(${selectedCampaigns.size})`}
                   </button>
                   {showCampaignModal && (
@@ -1892,9 +1903,9 @@ function LeadsPage() {
 
         {/* Campaign filter chip */}
         {selectedCampaigns.size > 0 && (
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
-            <Megaphone style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
-            <span style={{ color:dark?'#93c5fd':'#1d4ed8', fontWeight:500 }}>Campanhas:</span>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(0,68,253,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(0,68,253,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
+            <Megaphone style={{ width:'13px', height:'13px', color:dark?'#6b9fff':'#0044fd', flexShrink:0 }}/>
+            <span style={{ color:dark?'#7ab0ff':'#0044fd', fontWeight:500 }}>Campanhas:</span>
             <span style={{ color:txtHi, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {Array.from(selectedCampaigns).slice(0, 3).join(', ')}{selectedCampaigns.size > 3 ? ` +${selectedCampaigns.size - 3}` : ''}
             </span>
@@ -1903,9 +1914,9 @@ function LeadsPage() {
         )}
         {/* Deep campaign filter chip (from Campanhas page) */}
         {campDeepFilter && (
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(37,99,235,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(37,99,235,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
-            <Tag style={{ width:'13px', height:'13px', color:dark?'#60a5fa':'#2563eb', flexShrink:0 }}/>
-            <span style={{ color:dark?'#93c5fd':'#1d4ed8', fontWeight:500 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 12px', background:dark?'rgba(0,68,253,0.1)':'#eff6ff', border:`1px solid ${dark?'rgba(0,68,253,0.25)':'#bfdbfe'}`, borderRadius:'9px', marginBottom:'10px', fontSize:'12.5px' }}>
+            <Tag style={{ width:'13px', height:'13px', color:dark?'#6b9fff':'#0044fd', flexShrink:0 }}/>
+            <span style={{ color:dark?'#7ab0ff':'#0044fd', fontWeight:500 }}>
               {campDeepFilter.showRevs ? t.convertidoPlural : (campDeepFilter.type==='campaign'?'Campanha':campDeepFilter.type==='adset'?'Conjunto':'Anúncio')}:
             </span>
             <span style={{ color:txtHi, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -1980,10 +1991,10 @@ function LeadsPage() {
                     onTouchMove={() => pressTimer.current && clearTimeout(pressTimer.current)}
                     onContextMenu={e => e.preventDefault()}
                     onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } if (selectedIds.size > 0) { const n = new Set(selectedIds); if (n.has(lead.id)) n.delete(lead.id); else n.add(lead.id); setSelectedIds(n); } else { handleViewLead(lead); } }}
-                    style={{ background:cardBg, borderRadius:'12px', padding:'12px 14px', border:`1px solid ${sel ? '#2563eb' : border}`, boxShadow:sel ? '0 0 0 2px rgba(37,99,235,0.2)' : '0 1px 4px rgba(0,0,0,0.04)', cursor:'pointer', transition:'all 0.12s', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y' }}
+                    style={{ background:cardBg, borderRadius:'12px', padding:'12px 14px', border:`1px solid ${sel ? '#0044fd' : border}`, boxShadow:sel ? '0 0 0 2px rgba(0,68,253,0.2)' : '0 1px 4px rgba(0,0,0,0.04)', cursor:'pointer', transition:'all 0.12s', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y' }}
                   >
                     <div style={{ display:'flex', alignItems:'flex-start', gap:'10px' }}>
-                      {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#2563eb', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
+                      {selectedIds.size > 0 && <input type="checkbox" checked={sel} readOnly style={{ width:'15px', height:'15px', accentColor:'#0044fd', flexShrink:0, pointerEvents:'none', marginTop:'2px' }}/>}
                       <div style={{ position:'relative', flexShrink:0 }}>
                         {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'36px', height:'36px', borderRadius:'10px', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'12px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
                         <div style={{ position:'absolute', top:'-4px', right:'-4px' }}><FaixaDot lead={lead} dark={dark}/></div>
@@ -2008,9 +2019,14 @@ function LeadsPage() {
                         })()}
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', flexShrink:0 }}>
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11px', fontWeight:600, background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
-                          <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
-                        </span>
+                        {(() => {
+                          const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
+                          return (
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'4px', padding:'3px 9px', borderRadius:'6px', fontSize:'11px', fontWeight:600, background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
+                              <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                            </span>
+                          );
+                        })()}
                         <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(lead.created_at)}</span>
                       </div>
                     </div>
@@ -2039,13 +2055,13 @@ function LeadsPage() {
                 <col style={{ width:'72px' }}/>
               </colgroup>
               <thead>
-                <tr className={`border-b ${divider} ${theadBg}`}>
+                <tr className={`${dark ? '' : 'border-b'} ${divider} ${theadBg}`}>
                   <th className="pl-4 pr-2 py-3">
-                    <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.6, cursor:'pointer' }}/>
+                    <input type="checkbox" checked={allPageSelected} onChange={handleCheckboxHeader} style={{ width:'15px', height:'15px', accentColor:'#0044fd', opacity:0.6, cursor:'pointer' }}/>
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
-                    <button onClick={() => setSortByScore(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:sortByScore ? (dark ? '#60a5fa' : '#2563eb') : (dark ? '#6b6b75' : '#6b7280'), background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                    <button onClick={() => setSortByScore(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:sortByScore ? (dark ? '#6b9fff' : '#2563eb') : (dark ? '#6b6b75' : '#6b7280'), background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
                       Score {sortByScore === 'asc' ? '↑' : '↓'}
                     </button>
                   </th>
@@ -2079,14 +2095,14 @@ function LeadsPage() {
                         style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms` }}
                         onClick={() => handleViewLead(lead)}>
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
+                          <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#0044fd', opacity:0.5, cursor:'pointer' }}/>
                         </td>
                         <td className="px-3" style={{ overflow:'hidden', paddingTop:'12px', paddingBottom:'12px' }}>
                           <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
                               {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.3)', zIndex:10 }}/>}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'9px', height:'9px', borderRadius:'50%', background:'#0044fd', zIndex:10 }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
@@ -2115,14 +2131,19 @@ function LeadsPage() {
                         <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
                           <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
                         <td className="px-3 py-3">
-                          <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
-                            <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
-                          </span>
+                          {(() => {
+                            const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
+                            return (
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'3px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', minWidth:'110px', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
+                                <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                              </span>
+                            );
+                          })()}
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
@@ -2234,7 +2255,7 @@ function LeadsPage() {
                 </select>
               </div>
               <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
-                <button onClick={handleEditLead} style={{ flex:1, padding:'10px', borderRadius:'9px', border:'none', background:'#2563eb', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Salvar</button>
+                <button onClick={handleEditLead} style={{ flex:1, padding:'10px', borderRadius:'9px', border:'none', background:'#0044fd', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Salvar</button>
                 <button onClick={() => setIsEditOpen(false)} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Cancelar</button>
               </div>
             </div>
