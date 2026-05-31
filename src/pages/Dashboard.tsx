@@ -43,12 +43,12 @@ const FUNNEL_CONFIG = [
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
 const STATUS_DARK_COLOR: Record<number, string> = { 0: '#93c5fd', 1: '#93c5fd', 2: '#c4b5fd', 3: '#6ee7b7', 4: '#fda4af', 5: '#fdba74', 6: '#a1a1aa' };
 const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.20)', 1: 'rgba(59,130,246,0.20)', 2: 'rgba(139,92,246,0.28)', 3: 'rgba(16,185,129,0.20)', 4: 'rgba(244,63,94,0.20)', 5: 'rgba(249,115,22,0.20)', 6: 'rgba(113,113,122,0.20)' };
-const STATUS_DARK_PILL_BORDER: Record<number, string> = { 0: 'rgba(59,130,246,0.35)', 1: 'rgba(59,130,246,0.35)', 2: 'rgba(139,92,246,0.45)', 3: 'rgba(16,185,129,0.35)', 4: 'rgba(244,63,94,0.35)', 5: 'rgba(249,115,22,0.35)', 6: 'rgba(113,113,122,0.35)' };
+const STATUS_DARK_PILL_BORDER: Record<number, string> = { 0: 'rgba(59,130,246,0.22)', 1: 'rgba(59,130,246,0.22)', 2: 'rgba(139,92,246,0.30)', 3: 'rgba(16,185,129,0.22)', 4: 'rgba(244,63,94,0.22)', 5: 'rgba(249,115,22,0.22)', 6: 'rgba(113,113,122,0.22)' };
 const STATUS_DARK_DOT: Record<number, string>   = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
 const STATUS_LIGHT_BG: Record<number, string>          = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#ffedd5', 6: '#f4f4f5' };
 const STATUS_LIGHT_TEXT: Record<number, string>        = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#6d28d9', 3: '#065f46', 4: '#991b1b', 5: '#9a3412', 6: '#3f3f46' };
 const STATUS_LIGHT_DOT: Record<number, string>         = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
-const STATUS_LIGHT_PILL_BORDER: Record<number, string> = { 0: 'rgba(29,78,216,0.2)', 1: 'rgba(29,78,216,0.2)', 2: 'rgba(109,40,217,0.25)', 3: 'rgba(6,95,70,0.2)', 4: 'rgba(153,27,27,0.2)', 5: 'rgba(154,52,18,0.2)', 6: 'rgba(63,63,70,0.2)' };
+const STATUS_LIGHT_PILL_BORDER: Record<number, string> = { 0: 'rgba(29,78,216,0.12)', 1: 'rgba(29,78,216,0.12)', 2: 'rgba(109,40,217,0.15)', 3: 'rgba(6,95,70,0.12)', 4: 'rgba(153,27,27,0.12)', 5: 'rgba(154,52,18,0.12)', 6: 'rgba(63,63,70,0.12)' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -873,44 +873,24 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <TrendingUp style={{ width: '18px', height: '18px', color: '#10b981' }} />
-              </div>
-              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>Gasto Total</span>
-            </div>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Gasto Total</p>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
               {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '22px' : '32px')}
             </div>
-            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
-                {spendThisMonth > 0 && spendThisMonth !== spend && <span style={{ fontSize: '11px', color: txtMid }}>Mês: R$ {spendThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
-              </div>
-              {metaOrg.budget > 0 && (
-                <div style={{ width: '100%', height: '3px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${Math.min(100, Math.round((spendThisMonth / metaOrg.budget) * 100))}%`, background: '#10b981', borderRadius: '99px' }} />
-                </div>
-              )}
-            </div>
+            <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Users style={{ width: '18px', height: '18px', color: '#3b82f6' }} />
-              </div>
-              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>Leads</span>
-            </div>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Leads</p>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
               {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '22px' : '32px')}
             </div>
-            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
               {spend > 0 && totalLeads > 0 && (
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#3b82f6' }}>
                   CPL R$ {safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
@@ -918,18 +898,13 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Check style={{ width: '18px', height: '18px', color: '#22c55e' }} />
-              </div>
-              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>{t.convertidoPlural}</span>
-            </div>
-            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
+            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{t.convertidoPlural}</p>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '8px' }}>
               {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '22px' : '32px')}
             </div>
-            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conversão</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conversão</span>
               {spend > 0 && approved > 0 && (
                 <span style={{ fontSize: '11px', color: txtMid }}>
                   {t.custoConversaoSigla} R$ {safe(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1034,7 +1009,7 @@ export default function Dashboard() {
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
-                          {toNum(lead.status) === 1 && !(lead as any).avaliado && (
+                          {(toNum(lead.status) === 0 || toNum(lead.status) === 1) && !(lead as any).avaliado && (
                             <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `1.5px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1px rgba(59,130,246,0.25)', zIndex: 2 }} />
                           )}
                         </div>

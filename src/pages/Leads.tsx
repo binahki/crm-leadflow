@@ -164,24 +164,24 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
 
 // Pills de status light — cores saturadas o suficiente para aparecer sobre zebrado #f9fafb
 const LIGHT_STATUS_PILL: Record<number, { bg: string; color: string; dot: string; border: string }> = {
-  0: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.2)'    },
-  1: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.2)'    },
-  2: { bg: '#ede9fe', color: '#6d28d9', dot: '#7e3beb', border: 'rgba(109,40,217,0.25)'  },
-  5: { bg: '#ffedd5', color: '#9a3412', dot: '#f97316', border: 'rgba(154,52,18,0.2)'    },
-  3: { bg: '#d1fae5', color: '#065f46', dot: '#10b981', border: 'rgba(6,95,70,0.2)'      },
-  4: { bg: '#fee2e2', color: '#991b1b', dot: '#f43f5e', border: 'rgba(153,27,27,0.2)'    },
-  6: { bg: '#f4f4f5', color: '#3f3f46', dot: '#71717a', border: 'rgba(63,63,70,0.2)'     },
+  0: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.12)'   },
+  1: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.12)'   },
+  2: { bg: '#ede9fe', color: '#6d28d9', dot: '#7e3beb', border: 'rgba(109,40,217,0.15)'  },
+  5: { bg: '#ffedd5', color: '#9a3412', dot: '#f97316', border: 'rgba(154,52,18,0.12)'   },
+  3: { bg: '#d1fae5', color: '#065f46', dot: '#10b981', border: 'rgba(6,95,70,0.12)'     },
+  4: { bg: '#fee2e2', color: '#991b1b', dot: '#f43f5e', border: 'rgba(153,27,27,0.12)'   },
+  6: { bg: '#f4f4f5', color: '#3f3f46', dot: '#71717a', border: 'rgba(63,63,70,0.12)'    },
 };
 
 // Pills de status dark
 const DARK_STATUS_PILL: Record<number, { bg: string; color: string; dot: string; border: string }> = {
-  0: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
-  1: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
-  2: { bg: 'rgba(139,92,246,0.28)',   color: '#c4b5fd', dot: '#8b5cf6', border: 'rgba(139,92,246,0.45)' },
-  5: { bg: 'rgba(249,115,22,0.20)',   color: '#fdba74', dot: '#f97316', border: 'rgba(249,115,22,0.35)' },
-  3: { bg: 'rgba(16,185,129,0.20)',   color: '#6ee7b7', dot: '#10b981', border: 'rgba(16,185,129,0.35)' },
-  4: { bg: 'rgba(244,63,94,0.20)',    color: '#fda4af', dot: '#f43f5e', border: 'rgba(244,63,94,0.35)'  },
-  6: { bg: 'rgba(113,113,122,0.20)', color: '#a1a1aa', dot: '#71717a', border: 'rgba(113,113,122,0.35)' },
+  0: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.22)'  },
+  1: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.22)'  },
+  2: { bg: 'rgba(139,92,246,0.28)',   color: '#c4b5fd', dot: '#8b5cf6', border: 'rgba(139,92,246,0.30)'  },
+  5: { bg: 'rgba(249,115,22,0.20)',   color: '#fdba74', dot: '#f97316', border: 'rgba(249,115,22,0.22)'  },
+  3: { bg: 'rgba(16,185,129,0.20)',   color: '#6ee7b7', dot: '#10b981', border: 'rgba(16,185,129,0.22)'  },
+  4: { bg: 'rgba(244,63,94,0.20)',    color: '#fda4af', dot: '#f43f5e', border: 'rgba(244,63,94,0.22)'   },
+  6: { bg: 'rgba(113,113,122,0.20)', color: '#a1a1aa', dot: '#71717a', border: 'rgba(113,113,122,0.22)'  },
 };
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
