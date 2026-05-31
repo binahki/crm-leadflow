@@ -4,18 +4,6 @@ import { useAppStore } from '@/stores/appStore';
 // useLayoutEffect para aplicar o tema ANTES da primeira pintura — evita flash
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-const TRANSITION_ID = '__theme-transition';
-
-function injectThemeTransition() {
-  // Adiciona classe CSS que sincroniza TODOS os elementos (sidebar + conteúdo) ao mesmo tempo
-  document.body.classList.add('theme-transitioning');
-  document.documentElement.style.setProperty('transition', 'background-color 0.35s ease, color 0.35s ease');
-  setTimeout(() => {
-    document.body.classList.remove('theme-transitioning');
-    document.documentElement.style.removeProperty('transition');
-  }, 420);
-}
-
 export function useTheme() {
   const { theme, toggleTheme: _toggleTheme } = useAppStore();
 
@@ -28,8 +16,16 @@ export function useTheme() {
   }, [theme]);
 
   function toggleTheme() {
-    injectThemeTransition();
-    _toggleTheme();
+    const root = document.documentElement;
+    root.style.transition = 'opacity 0.15s ease';
+    root.style.opacity = '0.7';
+    setTimeout(() => {
+      _toggleTheme();
+      root.style.opacity = '1';
+      setTimeout(() => {
+        root.style.transition = '';
+      }, 200);
+    }, 80);
   }
 
   return { theme, toggleTheme };

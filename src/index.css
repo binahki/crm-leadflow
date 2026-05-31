@@ -54,14 +54,6 @@ body {
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* Transição sincronizada ao alternar dark/light — sidebar e conteúdo juntos */
-.theme-transitioning,
-.theme-transitioning *,
-.theme-transitioning *::before,
-.theme-transitioning *::after {
-  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease !important;
-}
-
 /* iOS: evita zoom automático ao focar inputs (font-size mínimo 16px) */
 input, textarea, select {
   font-size: max(16px, 1em);
