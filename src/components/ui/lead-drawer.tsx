@@ -557,7 +557,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f0f0f0' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
+                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f0f0f0' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT, maxWidth: isMobile ? 'calc(100% - 80px)' : undefined }}>{lead.nome}</h2>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
                 {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#6b6b75' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}

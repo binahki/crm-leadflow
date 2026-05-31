@@ -470,8 +470,8 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
           {!isCollapsed && (showAccountMenu ? <ChevronDown size={14} color={mutClr} /> : <ChevronUp size={14} color={mutClr} />)}
         </div>
 
-        {/* Dark mode toggle */}
-        <div onClick={toggleTheme} style={{
+        {/* Dark mode toggle — hidden in mobile drawer (accessible via header button) */}
+        {!isMobileDrawer && <div onClick={toggleTheme} style={{
           display: 'flex', alignItems: 'center',
           justifyContent: isCollapsed ? 'center' : 'space-between',
           padding: isCollapsed ? '10px 0' : '9px 12px',
@@ -499,7 +499,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
               boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
             }} />
           </div>
-        </div>
+        </div>}
       </div>
 
       {lockedFeature && (
