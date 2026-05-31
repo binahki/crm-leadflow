@@ -282,3 +282,6 @@ main>div {
   animation: dropdownShow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: top right;
 }
+
+/* Garante que animações não são desativadas pelo navegador mobile */
+* { -webkit-animation-play-state: running !important; }

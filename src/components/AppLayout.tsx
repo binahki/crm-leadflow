@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { getAdminViewingOrg, clearAdminViewingOrg, useOrgId } from '@/hooks/useOrgId';
 import { TrialBanner } from './TrialBanner';
@@ -15,7 +15,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
   const { orgId } = useOrgId();
   const { setConfiguracoes } = useAppStore();
@@ -169,7 +169,20 @@ export function AppLayout({ children, leadCount = 0 }: AppLayoutProps) {
               onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
 
-            <div style={{ width: '36px' }} />
+            <button
+              onClick={toggleTheme}
+              style={{
+                width: '36px', height: '36px', borderRadius: '8px',
+                background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {isDark
+                ? <Sun style={{ width: '18px', height: '18px', color: '#f0c060' }} />
+                : <Moon style={{ width: '18px', height: '18px', color: '#555' }} />
+              }
+            </button>
           </div>
         )}
 
