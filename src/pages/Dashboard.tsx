@@ -45,6 +45,8 @@ const STATUS_DARK_COLOR: Record<number, string> = { 0: '#4d94ff', 1: '#4d94ff', 
 const STATUS_DARK_BG: Record<number, string> = { 0: '#0044fd22', 1: '#0044fd22', 2: '#7e3beb22', 3: '#10b98122', 4: '#ff2a4c22', 5: '#fd4c0422', 6: '#52525b22' };
 const STATUS_DARK_BORDER: Record<number, string> = { 0: '#0044fd55', 1: '#0044fd55', 2: '#7e3beb55', 3: '#10b98155', 4: '#ff2a4c55', 5: '#fd4c0455', 6: '#52525b55' };
 const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700', 6: 'bg-zinc-100 text-zinc-600' };
+const STATUS_LIGHT_BG: Record<number, string> = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#fef3c7', 6: '#f4f4f5' };
+const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#7c3aed', 3: '#047857', 4: '#be123c', 5: '#b45309', 6: '#52525b' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -768,7 +770,7 @@ export default function Dashboard() {
   const hov    = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
   const pad    = isMobile ? '20px 16px' : '32px';
   const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.4)' : 'none' };
-  const statusClass = dark ? STATUS_DARK : STATUS_LIGHT;
+  // statusClass removido — pills usam STATUS_DARK_COLOR/BG/BORDER inline
 
   return (
     <AppLayout leadCount={allLeads.length}>
@@ -1014,16 +1016,25 @@ export default function Dashboard() {
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
-                          {(() => { const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: faixaLead === 'verde' ? '#10b981' : '#f59e0b', border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.25)', zIndex: 2 }} /> : null; })()}
+                          {toNum(lead.status) === 1
+                            ? <div style={{ position: 'absolute', top: '0', right: '0', width: '9px', height: '9px', borderRadius: '50%', background: '#3b82f6', zIndex: 2, transform: 'translate(25%, -25%)' }} />
+                            : (() => { const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: faixaLead === 'verde' ? '#10b981' : '#f59e0b', border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.25)', zIndex: 2 }} /> : null; })()
+                          }
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: '12.5px', fontWeight: 500, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0, 2).join(' ') || 'Lead'}</p>
                           <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>{lead.cidade || '—'}</p>
                         </div>
                         {dark ? (
-                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:'90px', padding:'2px 0', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'10.5px', fontWeight:600, background:STATUS_DARK_BG[st], color:STATUS_DARK_COLOR[st] ?? '#a1a1aa', border:`1px solid ${STATUS_DARK_BORDER[st]}` }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', width:'130px', padding:'4px 0', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:STATUS_DARK_BG[st], color:STATUS_DARK_COLOR[st] ?? '#a1a1aa', border:`1px solid ${STATUS_DARK_BORDER[st]}` }}>
+                            <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_DARK_COLOR[st] ?? '#a1a1aa', flexShrink:0, display:'inline-block' }}/>
+                            {STATUS_LABEL[st] ?? 'Aguardando'}
+                          </span>
                         ) : (
-                          <span className={`text-xs px-2 py-0.5 rounded-md whitespace-nowrap font-semibold ${STATUS_LIGHT[st] ?? ''}`} style={{ fontSize: '10.5px' }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', width:'130px', padding:'4px 0', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:STATUS_LIGHT_TEXT[st] ?? '#52525b' }}>
+                            <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_LIGHT_TEXT[st] ?? '#52525b', flexShrink:0, display:'inline-block' }}/>
+                            {STATUS_LABEL[st] ?? 'Aguardando'}
+                          </span>
                         )}
                         <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>
                         <button
@@ -1069,7 +1080,11 @@ export default function Dashboard() {
                         </thead>
                         <tbody>
                           {campRows.map((row, i) => (
-                            <tr key={i} style={{ background: i % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent', borderTop: dark ? 'none' : `1px solid ${divCls}`, animation: showContent ? `rowSlideIn 0.3s ease-out ${i * 50}ms both` : 'none' }}>
+                            <tr key={i}
+                              style={{ background: i % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent', borderTop: dark ? 'none' : `1px solid ${divCls}`, animation: showContent ? `rowSlideIn 0.3s ease-out ${i * 50}ms both` : 'none', cursor: 'default', transition: 'background 0.12s' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent'}
+                            >
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px', fontWeight: 500, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</td>
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.spend}</td>
                               <td style={{ padding: '9px 6px 9px 0', fontSize: '12px' }}>

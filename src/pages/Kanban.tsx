@@ -771,7 +771,7 @@ export default function KanbanPage() {
           {/* Row 1: title + realtime */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
             <h1 style={{ fontSize:isMobile?'22px':'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#6b6b75':'#9ca3af' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#8a8a96':'#9ca3af' }}>
               <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
             </div>
           </div>
@@ -880,7 +880,7 @@ export default function KanbanPage() {
             </div>
             <div style={{ textAlign:'center', marginBottom:'10px' }}>
               <span style={{ fontSize:'13px', fontWeight:600, color:COLUMNS[activeColIndex].dot }}>{COLUMNS[activeColIndex].label}</span>
-              <span style={{ fontSize:'12px', color:dark?'#52525b':'#9ca3af', marginLeft:'6px' }}>({getColLeads(COLUMNS[activeColIndex].status).length} leads)</span>
+              <span style={{ fontSize:'12px', color:dark?'#8a8a96':'#9ca3af', marginLeft:'6px' }}>({getColLeads(COLUMNS[activeColIndex].status).length} leads)</span>
             </div>
           </>
         )}
