@@ -162,7 +162,18 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
   return String(utmCampaign).split('|')[0].trim();
 }
 
-// Pills de status — cores extraídas da paleta de ícones do sistema
+// Pills de status light — cores saturadas o suficiente para aparecer sobre zebrado #f9fafb
+const LIGHT_STATUS_PILL: Record<number, { bg: string; color: string; dot: string; border: string }> = {
+  0: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.2)'    },
+  1: { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6', border: 'rgba(29,78,216,0.2)'    },
+  2: { bg: '#ede9fe', color: '#6d28d9', dot: '#7e3beb', border: 'rgba(109,40,217,0.25)'  },
+  5: { bg: '#ffedd5', color: '#9a3412', dot: '#f97316', border: 'rgba(154,52,18,0.2)'    },
+  3: { bg: '#d1fae5', color: '#065f46', dot: '#10b981', border: 'rgba(6,95,70,0.2)'      },
+  4: { bg: '#fee2e2', color: '#991b1b', dot: '#f43f5e', border: 'rgba(153,27,27,0.2)'    },
+  6: { bg: '#f4f4f5', color: '#3f3f46', dot: '#71717a', border: 'rgba(63,63,70,0.2)'     },
+};
+
+// Pills de status dark
 const DARK_STATUS_PILL: Record<number, { bg: string; color: string; dot: string; border: string }> = {
   0: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
   1: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
@@ -2024,9 +2035,10 @@ function LeadsPage() {
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', flexShrink:0 }}>
                         {(() => {
                           const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
+                          const lp = LIGHT_STATUS_PILL[s] || LIGHT_STATUS_PILL[0];
                           return (
-                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
-                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : lp.bg, color:dark ? dp.color : lp.color, border: dark ? `1px solid ${dp.border}` : `1px solid ${lp.border}` }}>
+                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : lp.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                             </span>
                           );
                         })()}
@@ -2147,9 +2159,10 @@ function LeadsPage() {
                         <td className="px-3 py-3">
                           {(() => {
                             const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
+                            const lp = LIGHT_STATUS_PILL[s] || LIGHT_STATUS_PILL[0];
                             return (
-                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
-                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : lp.bg, color:dark ? dp.color : lp.color, border: dark ? `1px solid ${dp.border}` : `1px solid ${lp.border}` }}>
+                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : lp.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                               </span>
                             );
                           })()}
@@ -2167,7 +2180,7 @@ function LeadsPage() {
               </tbody>
             </table>
             {!isLoading && totalPages > 1 && (
-              <div className={`px-6 py-4 border-t ${divider} flex items-center justify-between`}>
+              <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.04)' : border}` }}>
                 <p className={`text-sm ${muted}`}>Mostrando {(currentPage - 1) * leadsPerPage + 1}–{Math.min(currentPage * leadsPerPage, filtered.length)} de {filtered.length}</p>
                 <div style={{ display:'flex', gap:'4px' }}>
                   <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding:'6px 12px', borderRadius:'8px', border:`1px solid ${border}`, background:cardBg, color:txtMid, fontSize:'13px', cursor:currentPage === 1 ? 'default' : 'pointer', opacity:currentPage === 1 ? 0.4 : 1 }}>Anterior</button>

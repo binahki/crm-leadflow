@@ -45,9 +45,10 @@ const STATUS_DARK_COLOR: Record<number, string> = { 0: '#93c5fd', 1: '#93c5fd', 
 const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.20)', 1: 'rgba(59,130,246,0.20)', 2: 'rgba(139,92,246,0.28)', 3: 'rgba(16,185,129,0.20)', 4: 'rgba(244,63,94,0.20)', 5: 'rgba(249,115,22,0.20)', 6: 'rgba(113,113,122,0.20)' };
 const STATUS_DARK_PILL_BORDER: Record<number, string> = { 0: 'rgba(59,130,246,0.35)', 1: 'rgba(59,130,246,0.35)', 2: 'rgba(139,92,246,0.45)', 3: 'rgba(16,185,129,0.35)', 4: 'rgba(244,63,94,0.35)', 5: 'rgba(249,115,22,0.35)', 6: 'rgba(113,113,122,0.35)' };
 const STATUS_DARK_DOT: Record<number, string>   = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
-const STATUS_LIGHT_BG: Record<number, string>   = { 0: '#eff6ff', 1: '#eff6ff', 2: '#f5f3ff', 3: '#f0fdf4', 4: '#fff1f2', 5: '#fff7ed', 6: '#f4f4f5' };
-const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#2563eb', 1: '#2563eb', 2: '#7c3aed', 3: '#15803d', 4: '#be123c', 5: '#c2410c', 6: '#52525b' };
-const STATUS_LIGHT_DOT: Record<number, string>  = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
+const STATUS_LIGHT_BG: Record<number, string>          = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#ffedd5', 6: '#f4f4f5' };
+const STATUS_LIGHT_TEXT: Record<number, string>        = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#6d28d9', 3: '#065f46', 4: '#991b1b', 5: '#9a3412', 6: '#3f3f46' };
+const STATUS_LIGHT_DOT: Record<number, string>         = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
+const STATUS_LIGHT_PILL_BORDER: Record<number, string> = { 0: 'rgba(29,78,216,0.2)', 1: 'rgba(29,78,216,0.2)', 2: 'rgba(109,40,217,0.25)', 3: 'rgba(6,95,70,0.2)', 4: 'rgba(153,27,27,0.2)', 5: 'rgba(154,52,18,0.2)', 6: 'rgba(63,63,70,0.2)' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -1049,7 +1050,7 @@ export default function Dashboard() {
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
                           return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '72px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
-                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#52525b', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : 'none' }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
                           <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>
                           {STATUS_LABEL[st] ?? 'Aguardando'}
                         </span>
