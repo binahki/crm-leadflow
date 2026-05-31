@@ -163,14 +163,14 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
 }
 
 // Pills de status — cores extraídas da paleta de ícones do sistema
-const DARK_STATUS_PILL: Record<number, { bg: string; color: string; dot: string }> = {
-  0: { bg: 'rgba(59,130,246,0.12)',   color: '#93c5fd', dot: '#3b82f6' },
-  1: { bg: 'rgba(59,130,246,0.12)',   color: '#93c5fd', dot: '#3b82f6' },
-  2: { bg: 'rgba(139,92,246,0.12)',   color: '#c4b5fd', dot: '#8b5cf6' },
-  5: { bg: 'rgba(249,115,22,0.12)',   color: '#fdba74', dot: '#f97316' },
-  3: { bg: 'rgba(16,185,129,0.12)',   color: '#6ee7b7', dot: '#10b981' },
-  4: { bg: 'rgba(244,63,94,0.12)',    color: '#fda4af', dot: '#f43f5e' },
-  6: { bg: 'rgba(113,113,122,0.12)', color: '#a1a1aa', dot: '#71717a' },
+const DARK_STATUS_PILL: Record<number, { bg: string; color: string; dot: string; border: string }> = {
+  0: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
+  1: { bg: 'rgba(59,130,246,0.20)',   color: '#93c5fd', dot: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
+  2: { bg: 'rgba(139,92,246,0.28)',   color: '#c4b5fd', dot: '#8b5cf6', border: 'rgba(139,92,246,0.45)' },
+  5: { bg: 'rgba(249,115,22,0.20)',   color: '#fdba74', dot: '#f97316', border: 'rgba(249,115,22,0.35)' },
+  3: { bg: 'rgba(16,185,129,0.20)',   color: '#6ee7b7', dot: '#10b981', border: 'rgba(16,185,129,0.35)' },
+  4: { bg: 'rgba(244,63,94,0.20)',    color: '#fda4af', dot: '#f43f5e', border: 'rgba(244,63,94,0.35)'  },
+  6: { bg: 'rgba(113,113,122,0.20)', color: '#a1a1aa', dot: '#71717a', border: 'rgba(113,113,122,0.35)' },
 };
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
@@ -2025,7 +2025,7 @@ function LeadsPage() {
                         {(() => {
                           const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                           return (
-                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
                               <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                             </span>
                           );
@@ -2105,7 +2105,7 @@ function LeadsPage() {
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
                               {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1.5px rgba(59,130,246,0.4)', zIndex:2 }}/>}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`1.5px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1px rgba(59,130,246,0.25)', zIndex:2 }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
@@ -2148,7 +2148,7 @@ function LeadsPage() {
                           {(() => {
                             const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                             return (
-                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
                                 <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                               </span>
                             );

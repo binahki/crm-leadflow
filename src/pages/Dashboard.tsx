@@ -42,7 +42,8 @@ const FUNNEL_CONFIG = [
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
 const STATUS_DARK_COLOR: Record<number, string> = { 0: '#93c5fd', 1: '#93c5fd', 2: '#c4b5fd', 3: '#6ee7b7', 4: '#fda4af', 5: '#fdba74', 6: '#a1a1aa' };
-const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.12)', 1: 'rgba(59,130,246,0.12)', 2: 'rgba(139,92,246,0.12)', 3: 'rgba(16,185,129,0.12)', 4: 'rgba(244,63,94,0.12)', 5: 'rgba(249,115,22,0.12)', 6: 'rgba(113,113,122,0.12)' };
+const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.20)', 1: 'rgba(59,130,246,0.20)', 2: 'rgba(139,92,246,0.28)', 3: 'rgba(16,185,129,0.20)', 4: 'rgba(244,63,94,0.20)', 5: 'rgba(249,115,22,0.20)', 6: 'rgba(113,113,122,0.20)' };
+const STATUS_DARK_PILL_BORDER: Record<number, string> = { 0: 'rgba(59,130,246,0.35)', 1: 'rgba(59,130,246,0.35)', 2: 'rgba(139,92,246,0.45)', 3: 'rgba(16,185,129,0.35)', 4: 'rgba(244,63,94,0.35)', 5: 'rgba(249,115,22,0.35)', 6: 'rgba(113,113,122,0.35)' };
 const STATUS_DARK_DOT: Record<number, string>   = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
 const STATUS_LIGHT_BG: Record<number, string>   = { 0: '#eff6ff', 1: '#eff6ff', 2: '#f5f3ff', 3: '#f0fdf4', 4: '#fff1f2', 5: '#fff7ed', 6: '#f4f4f5' };
 const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#2563eb', 1: '#2563eb', 2: '#7c3aed', 3: '#15803d', 4: '#be123c', 5: '#c2410c', 6: '#52525b' };
@@ -964,7 +965,7 @@ export default function Dashboard() {
                     <XAxis dataKey="date" tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis allowDecimals={false} tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
                     <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '12px', color: txtHi }} formatter={(value: any) => [value, 'Leads']} />
-                    <Area type="monotoneX" dataKey="leads" name="leads" stroke={dark ? '#0044fd' : '#3b82f6'} strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: dark ? '#0044fd' : '#3b82f6' }} animationDuration={1000} animationBegin={200} isAnimationActive={showContent} />
+                    <Area type="monotoneX" dataKey="leads" name="leads" stroke={dark ? '#0044fd' : '#3b82f6'} strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: dark ? '#0044fd' : '#3b82f6' }} animationDuration={1200} animationEasing="ease-out" animationBegin={0} isAnimationActive={showContent} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -1033,7 +1034,7 @@ export default function Dashboard() {
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
                           {toNum(lead.status) === 1 && !(lead as any).avaliado && (
-                            <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1.5px rgba(59,130,246,0.4)', zIndex: 2 }} />
+                            <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `1.5px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1px rgba(59,130,246,0.25)', zIndex: 2 }} />
                           )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1046,9 +1047,9 @@ export default function Dashboard() {
                           if (score == null) return null;
                           const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? la.faixa) as string || null;
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
-                          return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '60px', textAlign: 'center' }}>{score} pts</span>;
+                          return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '72px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
-                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#52525b', border:'none' }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#52525b', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : 'none' }}>
                           <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>
                           {STATUS_LABEL[st] ?? 'Aguardando'}
                         </span>
@@ -1140,6 +1141,8 @@ export default function Dashboard() {
         @keyframes chartIn{from{opacity:0}to{opacity:1}}
         @keyframes rowSlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
         @keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes drawLine{from{stroke-dashoffset:1000}to{stroke-dashoffset:0}}
+        .recharts-area-curve{stroke-dasharray:1000;animation:drawLine 1.2s ease-out forwards}
       `}</style>
     </AppLayout>
   );
