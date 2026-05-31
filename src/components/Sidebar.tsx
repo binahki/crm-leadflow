@@ -182,11 +182,12 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const isExpanded = isMobileDrawer ? true : (pinned || hovered);
   const isCollapsed = !isExpanded;
 
-  const sideBg = isDark ? '#0f0f11' : '#ffffff';
-  const sideBdr = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
-  const lblClr = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.36)';
-  const mutClr = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.58)';
-  const hovBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  // Dark sidebar tokens — #141416 base, labels terciários, hover sutil
+  const sideBg  = isDark ? '#141416' : '#ffffff';
+  const sideBdr = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
+  const lblClr  = isDark ? '#4a4a52' : 'rgba(0,0,0,0.36)';
+  const mutClr  = isDark ? '#6b6b75' : 'rgba(0,0,0,0.58)';
+  const hovBg   = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
 
   function NavGroup({ label, items }: { label: string; items: any[] }) {
     return (
@@ -210,8 +211,8 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
             const itemContent = (
               <div 
                 title={isCollapsed ? item.label : undefined}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: '10px', padding: isCollapsed ? '10px 0' : '9px 12px', borderRadius: '8px', fontSize: '13.5px', fontWeight: active ? 600 : 500, transition: 'background 0.12s, color 0.12s', background: active && !hasChildren ? '#2563eb' : 'transparent', color: active && !hasChildren ? '#ffffff' : mutClr, position: 'relative', cursor: 'pointer' }}
-                onMouseEnter={e => { if (!(active && !hasChildren)) { e.currentTarget.style.background = hovBg; e.currentTarget.style.color = isDark ? '#fff' : '#111'; } }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: '10px', padding: isCollapsed ? '10px 0' : '9px 12px', borderRadius: '8px', fontSize: '13.5px', fontWeight: active ? 600 : 500, transition: 'background 0.12s, color 0.12s, box-shadow 0.12s', background: active && !hasChildren ? (isDark ? 'rgba(255,255,255,0.07)' : '#eff6ff') : 'transparent', color: active && !hasChildren ? (isDark ? '#f0f0f0' : '#2563eb') : mutClr, boxShadow: active && !hasChildren && isDark ? 'inset 2px 0 0 #0044fd' : 'none', position: 'relative', cursor: 'pointer' }}
+                onMouseEnter={e => { if (!(active && !hasChildren)) { e.currentTarget.style.background = hovBg; e.currentTarget.style.color = isDark ? '#a0a0a8' : '#111'; } }}
                 onMouseLeave={e => { if (!(active && !hasChildren)) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = mutClr; } }}
               >
                 <div style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
@@ -224,7 +225,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                       minWidth: '16px', height: '16px',
                       borderRadius: '99px', padding: '0 4px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: isDark ? '2px solid #0f0f11' : '2px solid white',
+                      border: isDark ? '2px solid #141416' : '2px solid white',
                       zIndex: 10
                     }}>
                       {waUnread > 99 ? '99+' : waUnread}
@@ -239,7 +240,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', flexShrink: 0, boxShadow: '0 0 4px rgba(239,68,68,0.5)' }} />
                     )}
                     {item.badge && leadCount > 0 && (
-                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '20px', background: active ? 'rgba(255,255,255,0.22)' : (isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'), color: active ? '#fff' : (isDark ? 'rgba(255,255,255,0.8)' : '#374151'), minWidth: '22px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '20px', background: isDark ? '#0044fd' : (active ? '#dbeafe' : '#e5e7eb'), color: isDark ? '#fff' : (active ? '#1d4ed8' : '#374151'), minWidth: '22px', textAlign: 'center' }}>
                         {leadCount}
                       </span>
                     )}

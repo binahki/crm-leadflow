@@ -531,12 +531,12 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
         document.body
       )}
 
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(18,18,20,0.96)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(20,20,22,0.97)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
           <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', width: '26px', height: '26px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')} onMouseLeave={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)')}>
-            <X style={{ width: '12px', height: '12px', color: dark ? '#52525b' : '#6b7280' }} />
+            <X style={{ width: '12px', height: '12px', color: dark ? '#6b6b75' : '#6b7280' }} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginRight: '36px' }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -551,16 +551,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
+                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: dark ? '#f0f0f0' : '#111827', letterSpacing: '-0.022em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }}>{lead.nome}</h2>
                 <ScoreTag score={score} faixa={faixa} dark={dark} />
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
-                {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
-                {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{formatarWhatsapp(lead.whatsapp)}</span>}
+                {lead.cidade && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#6b6b75' : '#6b7280', fontFamily: FONT }}><MapPin style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{lead.cidade}</span>}
+                {lead.whatsapp && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#6b6b75' : '#6b7280', fontFamily: FONT }}><Phone style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{formatarWhatsapp(lead.whatsapp)}</span>}
                 {/* Instagram + horário sempre na mesma linha */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#71717a' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
-                  {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#52525b' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
+                  {instagramValue && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#6b6b75' : '#6b7280', fontFamily: FONT }}><Instagram style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{instagramValue}</span>}
+                  {lead.created_at && <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px', color: dark ? '#6b6b75' : '#b0b7c3', fontFamily: FONT }}><Clock style={{ width: '11px', height: '11px', strokeWidth: 1.8 }} />{getRelativeTime(lead.created_at)}</span>}
                 </span>
               </div>
             </div>
@@ -585,10 +585,10 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
             }}
             style={{ flex: isMobile ? 'none' : 1, padding: '9px 12px', borderRadius: '8px', background: avaliado ? (dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'), border: `1px solid ${avaliado ? 'rgba(16,185,129,0.3)' : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`, display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', transition: 'all 0.15s' }}
           >
-            <div style={{ width: '15px', height: '15px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#52525b' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+            <div style={{ width: '15px', height: '15px', borderRadius: '4px', border: `2px solid ${avaliado ? '#10b981' : (dark ? '#6b6b75' : '#d4d4d8')}`, background: avaliado ? '#10b981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
               {avaliado && <Check size={9} color="#fff" strokeWidth={3} />}
             </div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#52525b' : '#9ca3af'), fontFamily: FONT, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: avaliado ? '#10b981' : (dark ? '#6b6b75' : '#9ca3af'), fontFamily: FONT, whiteSpace: 'nowrap' }}>
               {avaliado ? 'Perfil avaliado' : 'Marcar como avaliado'}
             </span>
           </div>
@@ -768,11 +768,11 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
           {/* Observações */}
           <div style={{ padding: '0 22px 20px' }}>
-            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', fontFamily: FONT }}>Observações</p>
+            <p style={{ fontSize: '10.5px', fontWeight: 500, color: dark ? '#6b6b75' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px', fontFamily: FONT }}>Observações</p>
             <textarea value={obs} onChange={e => { setObs(e.target.value); setObsChanged(true); }} placeholder="Anotações sobre este lead..." rows={3}
-              style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', lineHeight: 1.55, fontFamily: FONT, color: dark ? '#f4f4f5' : '#374151', background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.025)', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, borderRadius: '10px', resize: 'none', outline: 'none', transition: 'border-color 0.18s', boxSizing: 'border-box' as any }}
-              onFocus={e => (e.target.style.borderColor = 'rgba(59,130,246,0.45)')}
-              onBlur={e => (e.target.style.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}
+              style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', lineHeight: 1.55, fontFamily: FONT, color: dark ? '#f0f0f0' : '#374151', background: dark ? '#0f0f10' : 'rgba(0,0,0,0.025)', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, borderRadius: '10px', resize: 'none', outline: 'none', transition: 'border-color 0.18s', boxSizing: 'border-box' as any }}
+              onFocus={e => { e.target.style.borderColor = 'rgba(0,68,253,0.5)'; e.target.style.boxShadow = '0 0 0 3px rgba(0,68,253,0.1)'; }}
+              onBlur={e => { e.target.style.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
         </div>
@@ -782,7 +782,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
           <button onClick={handleWhatsApp} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: '#25D366', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s', fontFamily: FONT }} onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')} onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
             <WaIcon /> {hasWA ? 'Abrir conversa' : 'Chamar no WhatsApp'}
           </button>
-          <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#52525b' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }}>
+          <button onClick={handleSaveObs} disabled={saving || !obsChanged} style={{ flex: '0 0 auto', padding: '10px 16px', borderRadius: '10px', background: obsChanged ? (dark ? 'rgba(16,185,129,0.1)' : '#f0fdf4') : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${obsChanged ? (dark ? 'rgba(16,185,129,0.3)' : '#bbf7d0') : (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`, color: obsChanged ? (dark ? '#34d399' : '#15803d') : (dark ? '#6b6b75' : '#9ca3af'), fontSize: '13px', fontWeight: 500, cursor: obsChanged ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.18s', fontFamily: FONT }}>
             <Save style={{ width: '13px', height: '13px', strokeWidth: 1.8 }} />{saving ? 'Salvando…' : 'Salvar'}
           </button>
         </div>

@@ -753,19 +753,19 @@ export default function Dashboard() {
     <div style={{ display: 'inline-block', width: w, height: h, borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />
   );
 
-  const bg = dark ? '#0a0a0b' : '#f4f4f5';
-  const cardBg = dark ? '#111113' : '#ffffff';
-  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
-  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
-  // Texto: Hi=títulos, Mid=labels/subtítulos, Low=timestamps/meta (nunca abaixo de #71717a no dark)
-  const txtHi = dark ? '#f4f4f5' : '#111827';
-  const txtMid = dark ? '#a1a1aa' : '#374151';
-  const txtLow = dark ? '#71717a' : '#6b7280';
+  // Dark tokens — sistema coerente com toda a aplicação
+  const bg        = dark ? '#0f0f10' : '#f4f4f5';
+  const cardBg    = dark ? '#1b1b1d' : '#ffffff';
+  const border    = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
+  const txtHi  = dark ? '#f0f0f0' : '#111827';
+  const txtMid = dark ? '#a0a0a8' : '#374151';
+  const txtLow = dark ? '#6b6b75' : '#6b7280';
   const gridLn = dark ? 'rgba(255,255,255,0.04)' : '#f0f0f0';
   const divCls = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6';
-  const hov = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
-  const pad = isMobile ? '20px 16px' : '32px';
-  const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.3)' : 'none' };
+  const hov    = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
+  const pad    = isMobile ? '20px 16px' : '32px';
+  const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.4)' : 'none' };
   const statusClass = dark ? STATUS_DARK : STATUS_LIGHT;
 
   return (
@@ -813,7 +813,7 @@ export default function Dashboard() {
                       <div key={label}>
                         <label style={{ fontSize: '11px', color: txtMid, display: 'block', marginBottom: '4px' }}>{label}</label>
                         <div style={{ position: 'relative' }}>
-                          <input type="date" value={val} onChange={e => set(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${border}`, background: dark ? '#18181b' : cardBg, color: 'transparent', fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as any, cursor: 'pointer' }} />
+                          <input type="date" value={val} onChange={e => set(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : border}`, background: dark ? '#0f0f10' : cardBg, color: 'transparent', fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as any, cursor: 'pointer' }} />
                           <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: val ? txtHi : txtLow, pointerEvents: 'none' }}>{val ? isoToBR(val) : 'dd/mm/aaaa'}</span>
                         </div>
                       </div>
@@ -936,15 +936,15 @@ export default function Dashboard() {
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="leads-gradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.22} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                        <stop offset="0%" stopColor={dark ? '#0044fd' : '#3b82f6'} stopOpacity={dark ? 0.18 : 0.22} />
+                        <stop offset="100%" stopColor={dark ? '#0044fd' : '#3b82f6'} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridLn} vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis allowDecimals={false} tick={{ fill: txtLow, fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
                     <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '12px', color: txtHi }} formatter={(value: any) => [value, 'Leads']} />
-                    <Area type="monotoneX" dataKey="leads" name="leads" stroke="#3b82f6" strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: '#3b82f6' }} animationDuration={1000} animationBegin={200} isAnimationActive={showContent} />
+                    <Area type="monotoneX" dataKey="leads" name="leads" stroke={dark ? '#0044fd' : '#3b82f6'} strokeWidth={2.5} fill="url(#leads-gradient)" dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: dark ? '#0044fd' : '#3b82f6' }} animationDuration={1000} animationBegin={200} isAnimationActive={showContent} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

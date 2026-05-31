@@ -174,7 +174,7 @@ function CampFilterDropdown({ dark, campaigns, pendingSelected, onToggle, onAppl
   const [showInactive, setShowInactive] = useState(false);
   const border  = dark ? '#27272a' : '#e5e7eb';
   const txtHi   = dark ? '#f4f4f5' : '#111827';
-  const txtMid  = dark ? '#a1a1aa' : '#6b7280';
+  const txtMid  = dark ? '#a0a0a8' : '#6b7280';
   const bg      = dark ? '#111113' : '#fff';
   const rowBg   = dark ? '#1a1a1e' : '#f9fafb';
 
@@ -338,12 +338,12 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
     <div ref={setNodeRef} {...attributes} {...listeners}
       onClick={isMobile ? undefined : onCardClick}
       style={{
-        background: dark?'#111113':'#ffffff',
+        background: dark?'#222225':'#ffffff',
         border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.1)'}`,
         borderRadius:'14px', padding:'13px',
         boxShadow: isDragging
           ? (dark?'0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.1)':'0 12px 32px rgba(0,0,0,0.18)')
-          : (dark?'0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)':'0 1px 3px rgba(0,0,0,0.07)'),
+          : (dark?'0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)':'0 1px 3px rgba(0,0,0,0.07)'),
         cursor: isDragging?'grabbing':'grab',
         opacity: isDragging?0:1,
         touchAction: isMobile ? 'manipulation' : 'none',
@@ -360,7 +360,7 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
         </div>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
-            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f4f4f5':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
+            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f0f0f0':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
             {score != null && (
               <span style={{ fontSize:'11px', fontWeight:700, color:faixa==='verde'?'#10b981':faixa==='amarelo'?'#f59e0b':'#ef4444', background:faixa==='verde'?'rgba(16,185,129,0.12)':faixa==='amarelo'?'rgba(245,158,11,0.12)':'rgba(239,68,68,0.12)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>{score}pts</span>
             )}
@@ -421,8 +421,8 @@ function DroppableColumn({ col, children, count, isOver, isMobile }: {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   return (
-    <div style={{ display:'flex', flexDirection:'column', borderRadius:'16px', borderTopWidth:'3px', borderTopStyle:'solid', borderTopColor:col.border, borderRightWidth:'1px', borderRightStyle:'solid', borderRightColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', borderBottomWidth:'1px', borderBottomStyle:'solid', borderBottomColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', borderLeftWidth:'1px', borderLeftStyle:'solid', borderLeftColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', background:dark?'#0f0f11':'#fafafa', overflow:'hidden', boxShadow:isOver?`0 0 0 2px ${col.border}30`:dark?'0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)':'0 2px 8px rgba(0,0,0,0.06)', transition:'box-shadow 0.2s', width:isMobile?'calc(100vw - 48px)':'auto', minWidth:isMobile?'calc(100vw - 48px)':'auto', flexShrink:0, contain:'layout style', willChange:'transform' }}>
-      <div style={{ padding:'12px 14px', borderBottom:`1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)'}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:dark?'#18181b':'#ffffff' }}>
+    <div style={{ display:'flex', flexDirection:'column', borderRadius:'16px', borderTopWidth:'3px', borderTopStyle:'solid', borderTopColor:col.border, borderRightWidth:'1px', borderRightStyle:'solid', borderRightColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', borderBottomWidth:'1px', borderBottomStyle:'solid', borderBottomColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', borderLeftWidth:'1px', borderLeftStyle:'solid', borderLeftColor:isOver?col.border:dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.10)', background:dark?'#1b1b1d':'#fafafa', overflow:'hidden', boxShadow:isOver?`0 0 0 2px ${col.border}30`:dark?'0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)':'0 2px 8px rgba(0,0,0,0.06)', transition:'box-shadow 0.2s', width:isMobile?'calc(100vw - 48px)':'auto', minWidth:isMobile?'calc(100vw - 48px)':'auto', flexShrink:0, contain:'layout style', willChange:'transform' }}>
+      <div style={{ padding:'12px 14px', borderBottom:`1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)'}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:dark?'#141416':'#ffffff' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
           <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:col.dot, display:'inline-block' }}/>
           <span style={{ fontSize:'13px', fontWeight:600, color:dark?'#f4f4f5':'#1f2937', letterSpacing:'-0.01em' }}>{col.label}</span>
@@ -756,9 +756,9 @@ export default function KanbanPage() {
     setShowCustom(false); setSelectedTagIds(new Set()); setSelectedCampaigns(new Set());
   }
 
-  const bg = dark ? '#0a0a0b' : '#f4f4f5';
-  const inputStyle: React.CSSProperties = { padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : border}`, background:dark?'#0d0d0f':'#fff', color:dark?'#f4f4f5':'#111827', fontSize:'12.5px', outline:'none', fontFamily:'inherit' };
-  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : border}`, background:dark?'rgba(255,255,255,0.04)':'#fff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' };
+  const bg = dark ? '#0f0f10' : '#f4f4f5';
+  const inputStyle: React.CSSProperties = { padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : border}`, background:dark?'#0f0f10':'#fff', color:dark?'#f0f0f0':'#111827', fontSize:'12.5px', outline:'none', fontFamily:'inherit' };
+  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : border}`, background:dark?'#1b1b1d':'#fff', color:dark?'#a0a0a8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' };
 
   return (
     <AppLayout leadCount={leads.length}>
@@ -769,7 +769,7 @@ export default function KanbanPage() {
           {/* Row 1: title + realtime */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
             <h1 style={{ fontSize:isMobile?'20px':'22px', fontWeight:700, color:dark?'#f4f4f5':'#111827', margin:0, letterSpacing:'-0.03em' }}>Funil CRM</h1>
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#a1a1aa':'#9ca3af' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#6b6b75':'#9ca3af' }}>
               <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
             </div>
           </div>

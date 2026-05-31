@@ -1669,21 +1669,22 @@ function LeadsPage() {
   }
 
   // ── Style tokens ──────────────────────────────────────────────────────────
-  const bg = dark ? '#0a0a0b' : '#f4f4f5';
-  const cardBg = dark ? '#111113' : '#ffffff';
+  // Dark tokens — sistema coerente
+  const bg     = dark ? '#0f0f10' : '#f4f4f5';
+  const cardBg = dark ? '#1b1b1d' : '#ffffff';
   const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
-  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
-  // Texto: Hi=títulos/nomes, Mid=labels secundários (mínimo legível no dark), Low não usado aqui
-  const txtHi = dark ? '#f4f4f5' : '#111827';
-  const txtMid = dark ? '#a1a1aa' : '#6b7280';
-  const divider = dark ? 'border-[rgba(255,255,255,0.06)]' : 'border-gray-100';
-  const bold = dark ? 'text-white' : 'text-gray-900';
-  const muted = dark ? 'text-[#a1a1aa]' : 'text-gray-600';
-  const theadBg = dark ? 'bg-[#18181b]' : 'bg-gray-50';
-  const hov = dark ? 'hover:bg-[rgba(255,255,255,0.025)]' : 'hover:bg-blue-50/50';
-  const card = dark ? 'bg-[#111113] border-[rgba(255,255,255,0.07)]' : 'bg-white border-gray-100';
-  const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'#0d0d0f':'#f9fafb', color:dark?'#f4f4f5':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
-  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'rgba(255,255,255,0.04)':'#ffffff', color:dark?'#a1a1aa':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
+  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
+  const txtHi  = dark ? '#f0f0f0' : '#111827';
+  const txtMid = dark ? '#a0a0a8' : '#6b7280';
+  // No dark: sem bordas entre linhas de tabela — apenas zebrado diferencia linhas
+  const divider = dark ? '' : 'border-gray-100';
+  const bold   = dark ? 'text-[#f0f0f0]' : 'text-gray-900';
+  const muted  = dark ? 'text-[#a0a0a8]' : 'text-gray-600';
+  const theadBg = dark ? 'bg-[#141416]' : 'bg-gray-50';
+  const hov    = dark ? 'hover:bg-[rgba(255,255,255,0.03)]' : 'hover:bg-blue-50/50';
+  const card   = dark ? 'bg-[#1b1b1d] border-[rgba(255,255,255,0.07)]' : 'bg-white border-gray-100';
+  const inputStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'#0f0f10':'#f9fafb', color:dark?'#f0f0f0':'#111827', fontSize:'13.5px', outline:'none', fontFamily:'inherit' };
+  const btnGhost: React.CSSProperties = { display:'flex', alignItems:'center', gap:'5px', padding:'7px 10px', borderRadius:'9px', border:`1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background:dark?'#1b1b1d':'#ffffff', color:dark?'#a0a0a8':'#374151', fontSize:'12.5px', cursor:'pointer', fontFamily:'inherit' };
 
   const activeBulkCount = allSystemSelected ? filtered.length : selectedIds.size;
   const showSelectionBar = selectedIds.size > 0 || allSystemSelected;
@@ -2044,7 +2045,7 @@ function LeadsPage() {
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Nome</th>
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
-                    <button onClick={() => setSortByScore(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:sortByScore ? (dark ? '#60a5fa' : '#2563eb') : (dark ? '#71717a' : '#6b7280'), background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                    <button onClick={() => setSortByScore(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:sortByScore ? (dark ? '#60a5fa' : '#2563eb') : (dark ? '#6b6b75' : '#6b7280'), background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
                       Score {sortByScore === 'asc' ? '↑' : '↓'}
                     </button>
                   </th>
@@ -2052,7 +2053,7 @@ function LeadsPage() {
                     <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
-                    <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#71717a' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                    <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#6b6b75' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
                       Entrada {sortByDate === 'desc' ? '↓' : '↑'}
                     </button>
                   </th>
@@ -2074,8 +2075,8 @@ function LeadsPage() {
                     const s = toStatusNum(lead.status); const sel = selectedIds.has(lead.id); const obs = (lead as any).observacoes as string | null | undefined; const la = lead as any;
                     return (
                       <tr key={lead.id}
-                        className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer border-b ${divider} last:border-0`}
-                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#0d0d0f' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms` }}
+                        className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer ${dark ? '' : `border-b ${divider} last:border-0`}`}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms` }}
                         onClick={() => handleViewLead(lead)}>
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#3b82f6', opacity:0.5, cursor:'pointer' }}/>
@@ -2090,7 +2091,7 @@ function LeadsPage() {
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
                               <div style={{ display:'flex', alignItems:'center', gap:'4px', minWidth:0 }}>
-                                <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f4f4f5' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</span>
+                                <span style={{ fontSize:'13px', fontWeight:500, color:dark ? '#f0f0f0' : '#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.nome) || 'Lead'}</span>
                                 {obs && obs.trim() && <ObsTooltip text={obs} dark={dark}/>}
                               </div>
                               {(() => {
@@ -2114,14 +2115,14 @@ function LeadsPage() {
                         <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
                           <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
                         </td>
-                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
-                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
                         <td className="px-3 py-3">
                           <span style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'3px 8px', borderRadius:'99px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? STATUS_STYLE[s]?.darkBg : STATUS_STYLE[s]?.lightBg, color:dark ? STATUS_STYLE[s]?.darkText : STATUS_STYLE[s]?.lightText }}>
                             <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                           </span>
                         </td>
-                        <td className="px-3 py-3" style={{ color: txtMid, fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#6b6b75' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
