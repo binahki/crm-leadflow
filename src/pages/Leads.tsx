@@ -163,22 +163,22 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
 }
 
 // Pills de status — cores extraídas da paleta de ícones do sistema
-const DARK_STATUS_PILL: Record<number, { bg: string; color: string; border: string }> = {
-  0: { bg: '#0044fd', color: '#ffffff', border: 'transparent' },
-  1: { bg: '#0044fd', color: '#ffffff', border: 'transparent' },
-  2: { bg: '#7e3beb', color: '#ffffff', border: 'transparent' },
-  5: { bg: '#fd4c04', color: '#ffffff', border: 'transparent' },
-  3: { bg: '#10b981', color: '#ffffff', border: 'transparent' },
-  4: { bg: '#ff2a4c', color: '#ffffff', border: 'transparent' },
-  6: { bg: '#52525b', color: '#e4e4e7', border: 'transparent' },
+const DARK_STATUS_PILL: Record<number, { bg: string; color: string; dot: string }> = {
+  0: { bg: 'rgba(59,130,246,0.12)',   color: '#93c5fd', dot: '#3b82f6' },
+  1: { bg: 'rgba(59,130,246,0.12)',   color: '#93c5fd', dot: '#3b82f6' },
+  2: { bg: 'rgba(139,92,246,0.12)',   color: '#c4b5fd', dot: '#8b5cf6' },
+  5: { bg: 'rgba(249,115,22,0.12)',   color: '#fdba74', dot: '#f97316' },
+  3: { bg: 'rgba(16,185,129,0.12)',   color: '#6ee7b7', dot: '#10b981' },
+  4: { bg: 'rgba(244,63,94,0.12)',    color: '#fda4af', dot: '#f43f5e' },
+  6: { bg: 'rgba(113,113,122,0.12)', color: '#a1a1aa', dot: '#71717a' },
 };
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
   if (score == null) return <span style={{color:dark?'#3f3f46':'#d1d5db',fontSize:'12px'}}>—</span>;
   const isVerde = faixa === 'verde';
   const isAmarelo = faixa === 'amarelo';
-  const color = isVerde ? (dark ? '#ffffff' : '#10b981') : isAmarelo ? (dark ? '#ffffff' : '#f59e0b') : (dark ? '#e4e4e7' : '#6b7280');
-  const bg = isVerde ? (dark ? '#10b981' : '#dcfce7') : isAmarelo ? (dark ? '#f59e0b' : '#fef9c3') : (dark ? '#52525b' : '#f3f4f6');
+  const color = isVerde ? (dark ? '#34d399' : '#15803d') : isAmarelo ? (dark ? '#fbbf24' : '#b45309') : (dark ? '#a1a1aa' : '#71717a');
+  const bg = isVerde ? (dark ? 'rgba(16,185,129,0.12)' : '#dcfce7') : isAmarelo ? (dark ? 'rgba(245,158,11,0.12)' : '#fef3c7') : (dark ? 'rgba(113,113,122,0.12)' : '#f4f4f5');
   return (
     <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 7px',borderRadius:'6px',background:bg,fontSize:'12px',fontWeight:700,color,whiteSpace:'nowrap'}}>
       <span style={{width:'5px',height:'5px',borderRadius:'50%',background:color,display:'inline-block',flexShrink:0}}/>
@@ -2025,8 +2025,8 @@ function LeadsPage() {
                         {(() => {
                           const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                           return (
-                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:700, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
-                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? 'rgba(255,255,255,0.7)' : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
+                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                             </span>
                           );
                         })()}
@@ -2105,7 +2105,7 @@ function LeadsPage() {
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
                               {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'1px', right:'1px', width:'9px', height:'9px', borderRadius:'50%', background:'#3b82f6', zIndex:2 }}/>}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1px #3b82f6', zIndex:2 }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
@@ -2132,7 +2132,15 @@ function LeadsPage() {
                           </div>
                         </td>
                         <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
-                          <ScoreTag score={la.score != null ? Number(la.score) : null} faixa={calcularFaixa(lead, configuracoes!) ?? la.faixa} dark={dark}/>
+                          {(() => {
+                            const score = la.score != null ? Number(la.score) : null;
+                            if (score == null) return <span style={{color:dark?'#3f3f46':'#d1d5db',fontSize:'13px'}}>—</span>;
+                            const faixaVal = calcularFaixa(lead, configuracoes!) ?? la.faixa;
+                            const isVerde = faixaVal === 'verde';
+                            const isAmarelo = faixaVal === 'amarelo';
+                            const color = isVerde ? '#10b981' : isAmarelo ? '#f59e0b' : (dark ? '#6b6b75' : '#9ca3af');
+                            return <span style={{fontSize:'13px',fontWeight:isVerde||isAmarelo?700:600,color}}>{score} pts</span>;
+                          })()}
                         </td>
                         <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
                         <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
@@ -2140,8 +2148,8 @@ function LeadsPage() {
                           {(() => {
                             const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                             return (
-                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'5px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:700, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
-                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? 'rgba(255,255,255,0.7)' : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border:'none' }}>
+                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                               </span>
                             );
                           })()}

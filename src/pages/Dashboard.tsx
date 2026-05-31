@@ -41,12 +41,12 @@ const FUNNEL_CONFIG = [
 ];
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
-const STATUS_DARK_COLOR: Record<number, string> = { 0: '#ffffff', 1: '#ffffff', 2: '#ffffff', 3: '#ffffff', 4: '#ffffff', 5: '#ffffff', 6: '#e4e4e7' };
-const STATUS_DARK_BG: Record<number, string> = { 0: '#0044fd', 1: '#0044fd', 2: '#7e3beb', 3: '#10b981', 4: '#ff2a4c', 5: '#fd4c04', 6: '#52525b' };
-const STATUS_DARK_BORDER: Record<number, string> = { 0: 'transparent', 1: 'transparent', 2: 'transparent', 3: 'transparent', 4: 'transparent', 5: 'transparent', 6: 'transparent' };
-const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700', 6: 'bg-zinc-100 text-zinc-600' };
-const STATUS_LIGHT_BG: Record<number, string> = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#fef3c7', 6: '#f4f4f5' };
-const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#7c3aed', 3: '#047857', 4: '#be123c', 5: '#b45309', 6: '#52525b' };
+const STATUS_DARK_COLOR: Record<number, string> = { 0: '#93c5fd', 1: '#93c5fd', 2: '#c4b5fd', 3: '#6ee7b7', 4: '#fda4af', 5: '#fdba74', 6: '#a1a1aa' };
+const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.12)', 1: 'rgba(59,130,246,0.12)', 2: 'rgba(139,92,246,0.12)', 3: 'rgba(16,185,129,0.12)', 4: 'rgba(244,63,94,0.12)', 5: 'rgba(249,115,22,0.12)', 6: 'rgba(113,113,122,0.12)' };
+const STATUS_DARK_DOT: Record<number, string>   = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
+const STATUS_LIGHT_BG: Record<number, string>   = { 0: '#eff6ff', 1: '#eff6ff', 2: '#f5f3ff', 3: '#f0fdf4', 4: '#fff1f2', 5: '#fff7ed', 6: '#f4f4f5' };
+const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#2563eb', 1: '#2563eb', 2: '#7c3aed', 3: '#15803d', 4: '#be123c', 5: '#c2410c', 6: '#52525b' };
+const STATUS_LIGHT_DOT: Record<number, string>  = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -1016,10 +1016,9 @@ export default function Dashboard() {
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
-                          {toNum(lead.status) === 1 && !(lead as any).avaliado
-                            ? <div style={{ position: 'absolute', top: '1px', right: '1px', width: '9px', height: '9px', borderRadius: '50%', background: '#3b82f6', zIndex: 2 }} />
-                            : (() => { const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? lead.faixa) as string || null; return faixaLead && faixaLead !== 'vermelho' ? <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: faixaLead === 'verde' ? '#10b981' : '#f59e0b', border: `2px solid ${dark ? '#090909' : '#f4f4f5'}`, boxShadow: '0 1px 3px rgba(0,0,0,0.25)', zIndex: 2 }} /> : null; })()
-                          }
+                          {toNum(lead.status) === 1 && !(lead as any).avaliado && (
+                            <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1px #3b82f6', zIndex: 2 }} />
+                          )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ fontSize: '12.5px', fontWeight: 500, color: txtHi, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeNome.split(' ').filter(Boolean).slice(0, 2).join(' ') || 'Lead'}</p>
@@ -1033,17 +1032,10 @@ export default function Dashboard() {
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
                           return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap' }}>{score} pts</span>;
                         })()}
-                        {dark ? (
-                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'5px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:700, background:STATUS_DARK_BG[st], color:STATUS_DARK_COLOR[st] ?? '#e4e4e7', border:'none' }}>
-                            <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'rgba(255,255,255,0.7)', flexShrink:0, display:'inline-block' }}/>
-                            {STATUS_LABEL[st] ?? 'Aguardando'}
-                          </span>
-                        ) : (
-                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'5px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:700, background:STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:STATUS_LIGHT_TEXT[st] ?? '#52525b', border:'none' }}>
-                            <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_LIGHT_TEXT[st] ?? '#52525b', flexShrink:0, display:'inline-block' }}/>
-                            {STATUS_LABEL[st] ?? 'Aguardando'}
-                          </span>
-                        )}
+                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#52525b', border:'none' }}>
+                          <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>
+                          {STATUS_LABEL[st] ?? 'Aguardando'}
+                        </span>
                         <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>
                         <button
                           onClick={e => { e.stopPropagation(); handleWhatsApp(lead); }}
@@ -1093,17 +1085,17 @@ export default function Dashboard() {
                               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'}
                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 !== 0 ? (dark ? '#141416' : '#f9fafb') : 'transparent'}
                             >
-                              <td style={{ padding: '10px 6px 10px 0', fontSize: '12px', fontWeight: 500, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</td>
-                              <td style={{ padding: '10px 6px 10px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.spend}</td>
-                              <td style={{ padding: '10px 6px 10px 0', fontSize: '12px' }}>
+                              <td style={{ padding: '12px 6px 12px 0', fontSize: '12px', fontWeight: 500, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</td>
+                              <td style={{ padding: '12px 6px 12px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.spend}</td>
+                              <td style={{ padding: '12px 6px 12px 0', fontSize: '12px' }}>
                                 {row.leads > 0
                                   ? <button onClick={() => goToLeads(row.fullName)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: (row as any).isCRM ? '#10b981' : '#0044fd', fontWeight: 600, fontSize: '12px', padding: 0, fontFamily: 'inherit', textDecoration: 'underline' }} >{row.leads}</button>
                                   : <span style={{ color: txtMid }}>0</span>
                                 }
                               </td>
-                              <td style={{ padding: '10px 6px 10px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.cpl}</td>
+                              <td style={{ padding: '12px 6px 12px 0', fontSize: '12px', color: txtMid, whiteSpace: 'nowrap', overflow: 'hidden' }}>{row.cpl}</td>
                               {!isMobile && (
-                                <td style={{ padding: '10px 0' }}>
+                                <td style={{ padding: '12px 0' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <div style={{ height: '4px', width: '36px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', overflow: 'hidden', flexShrink: 0 }}>
                                       <div style={{ height: '100%', width: `${row.perf}%`, background: '#0044fd', borderRadius: '99px' }} />

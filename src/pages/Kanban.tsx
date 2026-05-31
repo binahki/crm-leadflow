@@ -354,9 +354,12 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
       <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
         <div style={{ position:'relative', flexShrink:0 }}>
           <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(color), fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
-          {isMobile && faixa && faixa !== 'vermelho' && (
-            <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
-          )}
+          {statusNum === 1 && !(lead as any).avaliado
+            ? <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1px #3b82f6', zIndex:2 }}/>
+            : isMobile && faixa && faixa !== 'vermelho'
+              ? <div style={{ position:'absolute', top:'-4px', right:'-4px', width:'12px', height:'12px', borderRadius:'50%', background: faixa==='verde'?'#10b981':'#f59e0b', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
+              : null
+          }
         </div>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
