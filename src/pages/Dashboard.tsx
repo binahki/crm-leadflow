@@ -856,11 +856,11 @@ export default function Dashboard() {
 
         {/* Metric Cards */}
         {isMobile ? (
-          /* ── MOBILE: 2×2 grid with accent borders ── */
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
+          /* ── MOBILE: coluna única, cards horizontais com acento lateral ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
 
-            {/* Card 1: META DO MÊS — full width hero */}
-            <div style={{ gridColumn: 'span 2', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 6px 18px rgba(0,68,253,0.28)', border: 'none', animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            {/* Card 1: META DO MÊS — hero azul */}
+            <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 6px 18px rgba(0,68,253,0.28)', border: 'none', animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
               <div>
                 <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Meta do mês</p>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
@@ -878,38 +878,42 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Card 2: GASTO TOTAL — green accent */}
-            <div style={{ background: cardBg, borderRadius: '12px', padding: '12px 14px', border: `1px solid ${border}`, borderLeft: '3px solid #10b981', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both' : 'none', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <p style={{ fontSize: '10px', color: txtLow, margin: 0, fontWeight: 500 }}>Gasto Total</p>
-              <div style={{ fontSize: '22px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('80px', '22px')}
+            {/* Card 2: GASTO TOTAL — acento verde */}
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #10b981', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>Gasto Total</p>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('80px', '24px')}
+                </div>
               </div>
-              <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
+              <span style={{ fontSize: '12px', color: txtLow, textAlign: 'right', flexShrink: 0 }}>Meta Ads</span>
             </div>
 
-            {/* Card 3: LEADS — blue accent */}
-            <div style={{ background: cardBg, borderRadius: '12px', padding: '12px 14px', border: `1px solid ${border}`, borderLeft: '3px solid #0044fd', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both' : 'none', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <p style={{ fontSize: '10px', color: txtLow, margin: 0, fontWeight: 500 }}>Leads</p>
-              <div style={{ fontSize: '22px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                {showContent ? <AnimatedCounter value={totalLeads} /> : sk('50px', '22px')}
+            {/* Card 3: LEADS — acento azul */}
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #0044fd', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>Leads</p>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {showContent ? <AnimatedCounter value={totalLeads} /> : sk('50px', '24px')}
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
-                {spend > 0 && totalLeads > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#3b82f6' }}>CPL R${safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>Total período</p>
+                {spend > 0 && totalLeads > 0 && <p style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6', margin: '2px 0 0' }}>CPL R$ {safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
               </div>
             </div>
 
-            {/* Card 4: CONVERTIDOS — purple accent, centered */}
-            <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: 'calc(50% - 4px)', background: cardBg, borderRadius: '12px', padding: '12px 14px', border: `1px solid ${border}`, borderLeft: '3px solid #7e3beb', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both' : 'none', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <p style={{ fontSize: '10px', color: txtLow, margin: 0, fontWeight: 500 }}>{t.convertidoPlural}</p>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {showContent ? <AnimatedCounter value={approved} /> : sk('50px', '22px')}
+            {/* Card 4: CONVERTIDOS — acento roxo */}
+            <div style={{ background: cardBg, borderRadius: '12px', padding: '14px 16px', border: `1px solid ${border}`, borderLeft: '3px solid #7e3beb', boxShadow: cardShadow, animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both' : 'none', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>{t.convertidoPlural}</p>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {showContent ? <AnimatedCounter value={approved} /> : sk('50px', '24px')}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conv.</span>
-                  {spend > 0 && approved > 0 && <span style={{ fontSize: '10px', color: txtMid }}>{t.custoConversaoSigla} R${safe(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e', margin: 0 }}>{convRate}% conversão</p>
+                {spend > 0 && approved > 0 && <p style={{ fontSize: '11px', color: txtMid, margin: '2px 0 0' }}>{t.custoConversaoSigla} R$ {safe(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
               </div>
             </div>
 
