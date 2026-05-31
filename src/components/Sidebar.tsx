@@ -182,11 +182,11 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
   const isExpanded = isMobileDrawer ? true : (pinned || hovered);
   const isCollapsed = !isExpanded;
 
-  // Dark sidebar tokens — #141416 base, labels terciários, hover sutil
+  // Dark sidebar tokens — #141416 base
   const sideBg  = isDark ? '#141416' : '#ffffff';
   const sideBdr = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
-  const lblClr  = isDark ? '#4a4a52' : 'rgba(0,0,0,0.36)';
-  const mutClr  = isDark ? '#6b6b75' : 'rgba(0,0,0,0.58)';
+  const lblClr  = isDark ? '#6b6b78' : 'rgba(0,0,0,0.36)'; // labels de seção mais legíveis
+  const mutClr  = isDark ? '#8a8a96' : 'rgba(0,0,0,0.58)'; // itens inativos
   const hovBg   = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
 
   function NavGroup({ label, items }: { label: string; items: any[] }) {

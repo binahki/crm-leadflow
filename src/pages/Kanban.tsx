@@ -505,9 +505,10 @@ export default function KanbanPage() {
   );
 
   // ── Fetch all leads ──────────────────────────────────────────
+  const isInitialLoadRef = useRef(true);
   useEffect(() => {
     if (!orgReady || !orgId) return;
-    setLeads([]);
+    // Nunca resetar para [] — mantém dados anteriores durante refetch para evitar flash
     (async () => {
       let allData: Lead[] = [];
       let from = 0;
@@ -524,6 +525,7 @@ export default function KanbanPage() {
         from += PAGE;
       }
       setLeads(allData);
+      isInitialLoadRef.current = false;
     })();
   }, [orgId, orgReady]); // eslint-disable-line
 
@@ -768,7 +770,7 @@ export default function KanbanPage() {
         <div style={{ marginBottom:'16px' }}>
           {/* Row 1: title + realtime */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-            <h1 style={{ fontSize:isMobile?'20px':'22px', fontWeight:700, color:dark?'#f4f4f5':'#111827', margin:0, letterSpacing:'-0.03em' }}>Funil CRM</h1>
+            <h1 style={{ fontSize:isMobile?'22px':'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
             <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#6b6b75':'#9ca3af' }}>
               <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
             </div>

@@ -162,15 +162,15 @@ function extractCampaignName(utmCampaign: string | null | undefined): string {
   return String(utmCampaign).split('|')[0].trim();
 }
 
-// Pills de status no dark mode — cores vivas, padronizadas
+// Pills de status — cores extraídas da paleta de ícones do sistema
 const DARK_STATUS_PILL: Record<number, { bg: string; color: string; border: string }> = {
-  0: { bg: 'rgba(0,68,253,0.18)', color: '#6b9fff', border: 'rgba(0,68,253,0.3)' },
-  1: { bg: 'rgba(0,68,253,0.18)', color: '#6b9fff', border: 'rgba(0,68,253,0.3)' },
-  2: { bg: 'rgba(139,92,246,0.18)', color: '#b197fc', border: 'rgba(139,92,246,0.3)' },
-  5: { bg: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: 'rgba(245,158,11,0.3)' },
-  3: { bg: 'rgba(16,185,129,0.18)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
-  4: { bg: 'rgba(239,68,68,0.18)', color: '#f87171', border: 'rgba(239,68,68,0.3)' },
-  6: { bg: 'rgba(107,114,128,0.18)', color: '#9ca3af', border: 'rgba(107,114,128,0.3)' },
+  0: { bg: '#0044fd22', color: '#4d94ff', border: '#0044fd55' },
+  1: { bg: '#0044fd22', color: '#4d94ff', border: '#0044fd55' },
+  2: { bg: '#7e3beb22', color: '#a78bfa', border: '#7e3beb55' },
+  5: { bg: '#fd4c0422', color: '#fb923c', border: '#fd4c0455' },
+  3: { bg: '#10b98122', color: '#34d399', border: '#10b98155' },
+  4: { bg: '#ff2a4c22', color: '#f87171', border: '#ff2a4c55' },
+  6: { bg: '#52525b22', color: '#a1a1aa', border: '#52525b55' },
 };
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
@@ -1737,7 +1737,10 @@ function LeadsPage() {
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', gap:'8px', animation: 'headerIn 0.3s ease-out forwards' }}>
-          <h1 className={`text-xl font-bold ${bold}`}>Leads <span className={`font-normal text-base ${muted}`}>({hasActiveFilters ? filtered.length : totalCount})</span></h1>
+          <h1 style={{ fontSize: isMobile ? '22px' : '26px', fontWeight: 800, fontFamily: 'Inter, sans-serif', color: dark ? '#f0f0f0' : '#111827', margin: 0, letterSpacing: '-0.035em', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            Leads
+            <span style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: 400, color: txtMid, letterSpacing: '-0.01em' }}>({hasActiveFilters ? filtered.length : totalCount})</span>
+          </h1>
           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
             {isMobile ? (
               <>
@@ -2022,8 +2025,8 @@ function LeadsPage() {
                         {(() => {
                           const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                           return (
-                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'4px', padding:'3px 9px', borderRadius:'6px', fontSize:'11px', fontWeight:600, background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
-                              <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', width:'110px', padding:'3px 0', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
+                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                             </span>
                           );
                         })()}
@@ -2102,7 +2105,7 @@ function LeadsPage() {
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
                               {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-2px', right:'-2px', width:'9px', height:'9px', borderRadius:'50%', background:'#0044fd', zIndex:10 }}/>}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'0', right:'0', width:'8px', height:'8px', borderRadius:'50%', background:'#3b82f6', zIndex:2, transform:'translate(25%, -25%)' }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
@@ -2137,8 +2140,8 @@ function LeadsPage() {
                           {(() => {
                             const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
                             return (
-                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'3px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', minWidth:'110px', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
-                                <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', width:'130px', padding:'4px 0', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : STATUS_STYLE[s]?.lightBg, color:dark ? dp.color : STATUS_STYLE[s]?.lightText, border: dark ? `1px solid ${dp.border}` : 'none' }}>
+                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:STATUS_STYLE[s]?.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
                               </span>
                             );
                           })()}

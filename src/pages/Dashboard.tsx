@@ -41,9 +41,9 @@ const FUNNEL_CONFIG = [
 ];
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
-const STATUS_DARK: Record<number, string> = { 0: 'text-[#6b9fff]', 1: 'text-[#6b9fff]', 2: 'text-[#b197fc]', 3: 'text-[#34d399]', 4: 'text-[#f87171]', 5: 'text-[#fbbf24]', 6: 'text-[#9ca3af]' };
-const STATUS_DARK_BG: Record<number, string> = { 0: 'rgba(0,68,253,0.18)', 1: 'rgba(0,68,253,0.18)', 2: 'rgba(139,92,246,0.18)', 3: 'rgba(16,185,129,0.18)', 4: 'rgba(239,68,68,0.18)', 5: 'rgba(245,158,11,0.18)', 6: 'rgba(107,114,128,0.18)' };
-const STATUS_DARK_BORDER: Record<number, string> = { 0: 'rgba(0,68,253,0.3)', 1: 'rgba(0,68,253,0.3)', 2: 'rgba(139,92,246,0.3)', 3: 'rgba(16,185,129,0.3)', 4: 'rgba(239,68,68,0.3)', 5: 'rgba(245,158,11,0.3)', 6: 'rgba(107,114,128,0.3)' };
+const STATUS_DARK_COLOR: Record<number, string> = { 0: '#4d94ff', 1: '#4d94ff', 2: '#a78bfa', 3: '#34d399', 4: '#f87171', 5: '#fb923c', 6: '#a1a1aa' };
+const STATUS_DARK_BG: Record<number, string> = { 0: '#0044fd22', 1: '#0044fd22', 2: '#7e3beb22', 3: '#10b98122', 4: '#ff2a4c22', 5: '#fd4c0422', 6: '#52525b22' };
+const STATUS_DARK_BORDER: Record<number, string> = { 0: '#0044fd55', 1: '#0044fd55', 2: '#7e3beb55', 3: '#10b98155', 4: '#ff2a4c55', 5: '#fd4c0455', 6: '#52525b55' };
 const STATUS_LIGHT: Record<number, string> = { 0: 'bg-blue-100 text-blue-700', 1: 'bg-blue-100 text-blue-700', 2: 'bg-purple-100 text-purple-700', 3: 'bg-emerald-100 text-emerald-700', 4: 'bg-rose-100 text-rose-700', 5: 'bg-amber-100 text-amber-700', 6: 'bg-zinc-100 text-zinc-600' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
@@ -762,7 +762,7 @@ export default function Dashboard() {
   const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
   const txtHi  = dark ? '#f0f0f0' : '#111827';
   const txtMid = dark ? '#a0a0a8' : '#374151';
-  const txtLow = dark ? '#6b6b75' : '#6b7280';
+  const txtLow = dark ? '#8a8a96' : '#6b7280';
   const gridLn = dark ? 'rgba(255,255,255,0.04)' : '#f0f0f0';
   const divCls = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6';
   const hov    = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
@@ -777,7 +777,7 @@ export default function Dashboard() {
         {/* Header */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: isMobile ? '14px' : '20px', gap: '8px' }}>
           <div>
-            <h1 style={{ fontSize: isMobile ? '18px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.03em', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <h1 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: 800, fontFamily: 'Inter, sans-serif', color: txtHi, letterSpacing: '-0.04em', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ animation: 'greetingWordIn 0.4s ease-out 0.1s both' }}>{greetingPrefix}</span>
               <span>{typedName}</span>
               {!typingDone && <span className="typewriter-cursor" style={{ animation: 'cursorBlink 0.7s step-end infinite', fontWeight: 100, color: txtLow }}>|</span>}
@@ -1021,7 +1021,7 @@ export default function Dashboard() {
                           <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>{lead.cidade || '—'}</p>
                         </div>
                         {dark ? (
-                          <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '6px', whiteSpace: 'nowrap', fontWeight: 600, background: STATUS_DARK_BG[st], color: { 0:'#6b9fff', 1:'#6b9fff', 2:'#b197fc', 3:'#34d399', 4:'#f87171', 5:'#fbbf24', 6:'#9ca3af' }[st] ?? '#9ca3af', border: `1px solid ${STATUS_DARK_BORDER[st]}` }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:'90px', padding:'2px 0', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'10.5px', fontWeight:600, background:STATUS_DARK_BG[st], color:STATUS_DARK_COLOR[st] ?? '#a1a1aa', border:`1px solid ${STATUS_DARK_BORDER[st]}` }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
                         ) : (
                           <span className={`text-xs px-2 py-0.5 rounded-md whitespace-nowrap font-semibold ${STATUS_LIGHT[st] ?? ''}`} style={{ fontSize: '10.5px' }}>{STATUS_LABEL[st] ?? 'Aguardando'}</span>
                         )}
