@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle } from 'lucide-react';
+import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle, Users, Check } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -871,28 +871,42 @@ export default function Dashboard() {
           </div>
 
           {/* Card 2: GASTO TOTAL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 6px' }}>Gasto Total</p>
-            <div style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px', display: 'flex', alignItems: 'center' }}>
-              {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '16px' : '26px')}
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 80ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <TrendingUp style={{ width: '18px', height: '18px', color: '#10b981' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>Gasto Total</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <TrendingUp style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0 }} />
-              <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+              {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', isMobile ? '22px' : '32px')}
+            </div>
+            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
+                {spendThisMonth > 0 && spendThisMonth !== spend && <span style={{ fontSize: '11px', color: txtMid }}>Mês: R$ {spendThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+              </div>
+              {metaOrg.budget > 0 && (
+                <div style={{ width: '100%', height: '3px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, Math.round((spendThisMonth / metaOrg.budget) * 100))}%`, background: '#10b981', borderRadius: '99px' }} />
+                </div>
+              )}
             </div>
           </div>
 
           {/* Card 3: LEADS + CPL */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>Leads</p>
-            <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-              {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '16px' : '26px')}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <TrendingUp style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0 }} />
-                <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Users style={{ width: '18px', height: '18px', color: '#3b82f6' }} />
               </div>
+              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>Leads</span>
+            </div>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+              {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', isMobile ? '22px' : '32px')}
+            </div>
+            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
               {spend > 0 && totalLeads > 0 && (
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6' }}>
                   CPL R$ {safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -902,18 +916,20 @@ export default function Dashboard() {
           </div>
 
           {/* Card 4: CONVERTIDOS + CUSTO CONVERSAO */}
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '12px' : '20px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none' }}>
-            <p style={{ fontSize: '11px', color: txtLow, margin: '0 0 4px' }}>{t.convertidoPlural}</p>
-            <p style={{ fontSize: isMobile ? '16px' : '26px', fontWeight: 700, color: txtHi, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-              {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '16px' : '26px')}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <TrendingUp style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0 }} />
-                <span style={{ fontSize: '11px', color: txtLow }}>{t.statusConvertidoLabel.toLowerCase()}</span>
+          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '14px' : '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Check style={{ width: '18px', height: '18px', color: '#22c55e' }} />
               </div>
+              <span style={{ fontSize: '12px', color: txtLow, fontWeight: 500 }}>{t.convertidoPlural}</span>
+            </div>
+            <div style={{ fontSize: isMobile ? '22px' : '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1 }}>
+              {showContent ? <AnimatedCounter value={approved} /> : sk('60px', isMobile ? '22px' : '32px')}
+            </div>
+            <div style={{ borderTop: `1px solid ${border}`, paddingTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conversão</span>
               {spend > 0 && approved > 0 && (
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#a855f7' }}>
+                <span style={{ fontSize: '11px', color: txtMid }}>
                   {t.custoConversaoSigla} R$ {safe(spend / approved).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
@@ -1017,7 +1033,7 @@ export default function Dashboard() {
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {(() => { const ac = getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(ac), fontSize: '11px', fontWeight: 700 }}>{safeInitials(safeNome)}</div>; })()}
                           {toNum(lead.status) === 1 && !(lead as any).avaliado && (
-                            <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1px #3b82f6', zIndex: 2 }} />
+                            <div style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: `2px solid ${dark ? '#111113' : '#ffffff'}`, boxShadow: '0 0 0 1.5px rgba(59,130,246,0.4)', zIndex: 2 }} />
                           )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1030,7 +1046,7 @@ export default function Dashboard() {
                           if (score == null) return null;
                           const faixaLead = (calcularFaixa(lead as any, configuracoes!) ?? la.faixa) as string || null;
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
-                          return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap' }}>{score} pts</span>;
+                          return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '60px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
                         <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize:'11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#52525b', border:'none' }}>
                           <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>

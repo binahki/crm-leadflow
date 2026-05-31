@@ -2081,7 +2081,7 @@ function LeadsPage() {
               </thead>
               <tbody>
                 {isLoading ? ([...Array(10)].map((_, i) => (
-                  <tr key={i} className={`border-b ${divider}`}>
+                  <tr key={i}>
                     <td className="pl-4 pr-2 py-3"><div style={{ width:'15px', height:'15px', borderRadius:'3px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite' }}/></td>
                     <td className="px-3 py-3"><div style={{ display:'flex', alignItems:'center', gap:'7px' }}><div style={{ width:'28px', height:'28px', borderRadius:'50%', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', flexShrink:0 }}/><div style={{ height:'13px', borderRadius:'4px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', width:`${90 + Math.floor((i * 37) % 70)}px` }}/></div></td>
                     {[60, 90, 110, 90, 80].map((w, j) => (<td key={j} className="px-3 py-3"><div style={{ height:'13px', borderRadius:'4px', background:dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', animation:'pulse 1.5s ease-in-out infinite', width:`${w}px` }}/></td>))}
@@ -2094,8 +2094,8 @@ function LeadsPage() {
                     const s = toStatusNum(lead.status); const sel = selectedIds.has(lead.id); const obs = (lead as any).observacoes as string | null | undefined; const la = lead as any;
                     return (
                       <tr key={lead.id}
-                        className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer ${dark ? '' : `border-b ${divider} last:border-0`}`}
-                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms` }}
+                        className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer ${dark ? '' : `border-b ${divider}`}`}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms`, ...(idx === paginatedLeads.length - 1 ? { borderBottom: 'none' } : {}) }}
                         onClick={() => handleViewLead(lead)}>
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#0044fd', opacity:0.5, cursor:'pointer' }}/>
@@ -2105,7 +2105,7 @@ function LeadsPage() {
                             {/* Avatar centralizado verticalmente */}
                             <div style={{ position:'relative', flexShrink:0, alignSelf:'center' }}>
                               {(()=>{ const ac=getAvatarColor(lead.nome, dark, lead.id); return <div style={{ width:'32px', height:'32px', borderRadius:'50%', background:ac, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(ac), fontSize:'11px', fontWeight:700 }}>{getInitials(lead.nome)}</div>; })()}
-                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1px #3b82f6', zIndex:2 }}/>}
+                              {toStatusNum(lead.status) === 1 && !la.avaliado && <div style={{ position:'absolute', top:'-1px', right:'-1px', width:'10px', height:'10px', borderRadius:'50%', background:'#3b82f6', border:`2px solid ${dark?'#111113':'#ffffff'}`, boxShadow:'0 0 0 1.5px rgba(59,130,246,0.4)', zIndex:2 }}/>}
                             </div>
                             {/* Coluna: nome + tags, centralizada verticalmente */}
                             <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', gap:'3px', minWidth:0 }}>
@@ -2131,7 +2131,7 @@ function LeadsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3" style={{ whiteSpace:'nowrap' }}>
+                        <td className="px-3 py-3" style={{ whiteSpace:'nowrap', textAlign:'center' }}>
                           {(() => {
                             const score = la.score != null ? Number(la.score) : null;
                             if (score == null) return <span style={{color:dark?'#3f3f46':'#d1d5db',fontSize:'13px'}}>—</span>;
@@ -2157,8 +2157,8 @@ function LeadsPage() {
                         <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
-                            <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4 }}><MessageCircle className="w-3.5 h-3.5"/></button>
-                            <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Edit className="w-3.5 h-3.5"/></button>
+                            <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4, borderRadius:'8px' }}><MessageCircle className="w-3.5 h-3.5"/></button>
+                            <button onClick={() => { setEditingLead(lead); setIsEditOpen(true); }} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-blue-500/15 text-blue-500 hover:bg-blue-500/25' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} style={{ borderRadius:'8px' }}><Edit className="w-3.5 h-3.5"/></button>
                           </div>
                         </td>
                       </tr>
