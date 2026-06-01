@@ -142,16 +142,6 @@ export function QuizRenderer({
   const [citySearch, setCitySearch] = React.useState('');
   const [showCitySugg, setShowCitySugg] = React.useState(false);
   const [analiseProgress, setAnaliseProgress] = React.useState(0);
-  const [nomeErro, setNomeErro] = React.useState<string | null>(null);
-
-  const isMaleName = (name: string): boolean => {
-    const n = name.trim().toLowerCase();
-    if (!n) return false;
-    const firstWord = n.split(' ')[0];
-    const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre', 'guilherme', 'henrique', 'murilo', 'vinicius', 'eduardo', 'leonardo', 'andré', 'andre'];
-    if (commonMaleNames.includes(firstWord)) return true;
-    return false;
-  };
 
   React.useEffect(() => {
     if (phase === 'analise') {
@@ -482,18 +472,13 @@ export function QuizRenderer({
                             const val = e.target.value;
                             if (cfg.campo === 'nome') {
                               onNomeChange?.(val);
-                              if (isMaleName(val)) setNomeErro('Opa! Este quiz é exclusivo para o público feminino. 🌸');
-                              else setNomeErro(null);
                             } else if (cfg.campo === 'instagram') {
                               onInstagramChange?.(val);
                             }
                           }}
                           placeholder={cfg.placeholder}
-                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nomeErro ? '#ef4444' : (cfg.campo === 'nome' && nome.length > 2 && !nomeErro ? '#10b981' : '#e2e8f0') }}
+                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nome.length > 2 ? '#10b981' : '#e2e8f0' }}
                         />
-                        {cfg.campo === 'nome' && nomeErro && (
-                          <p style={{ color: '#ef4444', fontSize: '11px', margin: '4px 0 0', fontWeight: 600 }}>{nomeErro}</p>
-                        )}
                       </div>
                     )}
                   </div>

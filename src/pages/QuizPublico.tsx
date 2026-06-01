@@ -28,17 +28,6 @@ function launchConfetti(primary: string) {
   document.head.appendChild(s);
 }
 
-function isProbablyMale(name: string): boolean {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  const firstWord = n.split(' ')[0];
-  
-  const commonMaleNames = ['joao', 'joão', 'pedro', 'lucas', 'mateus', 'matheus', 'vitor', 'victor', 'gabriel', 'rafael', 'felipe', 'gustavo', 'igor', 'caio', 'bruno', 'diego', 'tiago', 'thiago', 'samuel', 'daniel', 'miguel', 'arthur', 'artur', 'davi', 'david', 'marcos', 'paulo', 'ricardo', 'fernando', 'anderson', 'rodrigo', 'marcelo', 'alexandre', 'guilherme', 'henrique', 'murilo', 'vinicius', 'vitor', 'eduardo', 'leonardo', 'gabriel', 'rafael', 'thiago', 'bruno', 'felipe', 'gustavo', 'igor', 'caio', 'diego', 'marcelo', 'ricardo', 'andré', 'andre'];
-  if (commonMaleNames.includes(firstWord)) return true;
-
-  return false;
-}
-
 export default function QuizPublico() {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
@@ -421,7 +410,7 @@ export default function QuizPublico() {
 
   // ── Finaliza quiz: marca sessão, abre WA, vai para sucesso ───────────────────
   async function finalizarQuiz(leadId?: string | number) {
-    if (leadId) await marcarConcluido(leadId);
+    await marcarConcluido(leadId);
     setSubmitting(false);
 
     const isRedirect = (quiz as any).whatsapp_redirecionar_direto === true;
@@ -481,10 +470,6 @@ export default function QuizPublico() {
     const rawWa = whatsapp.replace(/\D/g, '');
     
     // Validações
-    if (isProbablyMale(nome)) {
-      alert('Desculpe, este quiz é exclusivo para o público feminino.');
-      return;
-    }
     if (rawWa.length !== 11) {
       alert('Por favor, informe um WhatsApp válido com DDD (11 dígitos).');
       return;
@@ -528,9 +513,7 @@ export default function QuizPublico() {
       }
     }
 
-    const newLeadId = crypto.randomUUID();
     const leadData = {
-      id: newLeadId,
       org_id: quiz.org_id,
       nome: nome.trim(),
       whatsapp: rawWa,
@@ -563,8 +546,8 @@ export default function QuizPublico() {
         return;
       }
 
-      console.log('Lead salvo:', newLeadId);
-      await finalizarQuiz(newLeadId);
+      console.log('Lead salvo com sucesso.');
+      await finalizarQuiz(undefined);
     } catch (err) {
       console.error('ERRO CATCH:', err);
       setSubmitting(false);
