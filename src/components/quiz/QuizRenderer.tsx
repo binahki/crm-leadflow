@@ -576,4 +576,4 @@ export function QuizRenderer({
 }
 
 const lblS: React.CSSProperties = { display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' };
-const inpS: React.CSSProperties = { width: '100%', padding: '13px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '15px', color: '#111', outline: 'none', transition: 'all 150ms ease-out', background: '#fff' };
+const inpS: React.CSSProperties = { width: '100%', padding: '13px 14px', borderRadius: '12px', border: '1.5px solid #e5e7eb', fontSize: '16px', color: '#111', outline: 'none', transition: 'all 150ms ease-out', background: '#fff' };

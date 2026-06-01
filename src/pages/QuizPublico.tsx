@@ -45,6 +45,8 @@ export default function QuizPublico() {
   const isPreview = searchParams.get('preview') === 'true';
 
   const [phase, setPhase] = useState<Phase>('loading');
+  const [networkError, setNetworkError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [quiz, setQuiz] = useState<QuizConfig | null>(null);
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [todasPerguntas, setTodasPerguntas] = useState<Pergunta[]>([]);
@@ -88,47 +90,68 @@ export default function QuizPublico() {
   // ── Load quiz ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!slug) { setPhase('not_found'); return; }
+    let mounted = true;
+
+    const timeoutId = setTimeout(() => {
+      if (mounted) { setNetworkError(true); setPhase('not_found'); }
+    }, 10000);
+
     async function loadQuiz() {
-      const { data: quizData, error } = await db
-        .from('quizzes').select('*').eq('slug', slug).eq('ativo', true).single();
-      if (error || !quizData) { setPhase('not_found'); return; }
-      setQuiz(quizData);
+      try {
+        const { data: quizData, error } = await db
+          .from('quizzes').select('*').eq('slug', slug).eq('ativo', true).single();
+        if (!mounted) return;
+        if (error || !quizData) { clearTimeout(timeoutId); setPhase('not_found'); return; }
+        setQuiz(quizData);
 
-      const { data: blocoData } = await db
-        .from('quiz_blocos').select('*').eq('quiz_id', quizData.id).order('ordem');
-      if (!blocoData?.length) { setPhase('not_found'); return; }
-      setBlocos(blocoData);
+        const { data: blocoData } = await db
+          .from('quiz_blocos').select('*').eq('quiz_id', quizData.id).order('ordem');
+        if (!mounted) return;
+        if (!blocoData?.length) { clearTimeout(timeoutId); setPhase('not_found'); return; }
+        setBlocos(blocoData);
 
-      const blocoIds = blocoData.map((b: Bloco) => b.id);
-      const { data: pergs } = await db
-        .from('quiz_perguntas').select('*').in('bloco_id', blocoIds).order('ordem');
-      if (!pergs?.length) { setPhase('not_found'); return; }
+        const blocoIds = blocoData.map((b: Bloco) => b.id);
+        const { data: pergs } = await db
+          .from('quiz_perguntas').select('*').in('bloco_id', blocoIds).order('ordem');
+        if (!mounted) return;
+        if (!pergs?.length) { clearTimeout(timeoutId); setPhase('not_found'); return; }
 
-      const pergIds = pergs.map((p: { id: string }) => p.id);
-      const { data: ops } = await db
-        .from('quiz_opcoes').select('*').in('pergunta_id', pergIds).order('ordem');
+        const pergIds = pergs.map((p: { id: string }) => p.id);
+        const { data: ops } = await db
+          .from('quiz_opcoes').select('*').in('pergunta_id', pergIds).order('ordem');
+        if (!mounted) return;
 
-      const blocoOrder: Record<string, number> = {};
-      blocoData.forEach((b: Bloco) => { blocoOrder[b.id] = b.ordem; });
+        const blocoOrder: Record<string, number> = {};
+        blocoData.forEach((b: Bloco) => { blocoOrder[b.id] = b.ordem; });
 
-      const perguntasComOpcoes: Pergunta[] = pergs
-        .sort((a: Pergunta, b: Pergunta) => {
-          const bA = blocoOrder[a.bloco_id] ?? 0;
-          const bB = blocoOrder[b.bloco_id] ?? 0;
-          return bA !== bB ? bA - bB : a.ordem - b.ordem;
-        })
-        .map((p: Pergunta) => ({
-          ...p,
-          opcoes: (ops || [])
-            .filter((o: Opcao) => o.pergunta_id === p.id)
-            .sort((a: Opcao, b: Opcao) => a.ordem - b.ordem),
-        }));
+        const perguntasComOpcoes: Pergunta[] = pergs
+          .sort((a: Pergunta, b: Pergunta) => {
+            const bA = blocoOrder[a.bloco_id] ?? 0;
+            const bB = blocoOrder[b.bloco_id] ?? 0;
+            return bA !== bB ? bA - bB : a.ordem - b.ordem;
+          })
+          .map((p: Pergunta) => ({
+            ...p,
+            opcoes: (ops || [])
+              .filter((o: Opcao) => o.pergunta_id === p.id)
+              .sort((a: Opcao, b: Opcao) => a.ordem - b.ordem),
+          }));
 
-      setTodasPerguntas(perguntasComOpcoes);
-      setPhase('capa');
+        clearTimeout(timeoutId);
+        setTodasPerguntas(perguntasComOpcoes);
+        setPhase('capa');
+      } catch (err) {
+        if (!mounted) return;
+        clearTimeout(timeoutId);
+        console.error('[QuizPublico] loadQuiz failed:', err);
+        setNetworkError(true);
+        setPhase('not_found');
+      }
     }
     loadQuiz();
-  }, [slug, isPreview, iniciarSessao]);
+
+    return () => { mounted = false; clearTimeout(timeoutId); };
+  }, [slug, isPreview, retryCount]);
 
   // ── Salva progresso ao visualizar cada pergunta (mesmo sem responder) ─────────
   useEffect(() => {
@@ -687,8 +710,23 @@ export default function QuizPublico() {
     );
   }
 
-  // ── Not found ─────────────────────────────────────────────────────────────────
+  // ── Not found / network error ─────────────────────────────────────────────────
   if (phase === 'not_found') {
+    if (networkError) {
+      return (
+        <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px', padding: '24px', fontFamily: "'DM Sans', system-ui, sans-serif", textAlign: 'center' }}>
+          <div style={{ fontSize: '40px' }}>⚡</div>
+          <p style={{ fontSize: '18px', fontWeight: 700, color: '#111', margin: 0 }}>Falha ao carregar</p>
+          <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Verifique sua conexão e tente novamente.</p>
+          <button
+            onClick={() => { setNetworkError(false); setPhase('loading'); setRetryCount(c => c + 1); }}
+            style={{ marginTop: '8px', padding: '12px 28px', borderRadius: '10px', border: 'none', background: '#111', color: '#fff', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      );
+    }
     return (
       <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', padding: '24px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
         <div style={{ fontSize: '40px' }}>🔍</div>
