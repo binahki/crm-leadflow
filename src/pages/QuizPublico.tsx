@@ -505,7 +505,9 @@ export default function QuizPublico() {
       }
     }
 
+    const newLeadId = crypto.randomUUID();
     const leadData = {
+      id: newLeadId,
       org_id: quiz.org_id,
       nome: nome.trim(),
       whatsapp: rawWa,
@@ -523,17 +525,14 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { data: newLead, error } = await db.from('leads').insert(leadData).select().single();
-      console.log('Resultado insert:', { newLead, error });
+      const { error } = await db.from('leads').insert(leadData);
+      console.log('Resultado insert:', { error });
 
       if (error) {
         console.error('ERRO SUPABASE:', error);
         if (error.code === '23505') {
           console.log('Lead já existe, continuando...');
-          const { data: existingLead } = await db
-            .from('leads').select('id')
-            .eq('org_id', quiz.org_id).eq('whatsapp', rawWa).single();
-          await finalizarQuiz(existingLead?.id);
+          await finalizarQuiz(undefined);
           return;
         }
         setSubmitting(false);
@@ -541,8 +540,8 @@ export default function QuizPublico() {
         return;
       }
 
-      console.log('Lead salvo:', newLead);
-      await finalizarQuiz(newLead?.id);
+      console.log('Lead salvo:', newLeadId);
+      await finalizarQuiz(newLeadId);
     } catch (err) {
       console.error('ERRO CATCH:', err);
       setSubmitting(false);
