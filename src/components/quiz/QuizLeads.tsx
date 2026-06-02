@@ -30,6 +30,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState<any>(null);
   const [sessoes, setSessoes] = useState<any[]>([]);
+  const [leadsMap, setLeadsMap] = useState<Map<string, any>>(new Map());
   const [blocos, setBlocos] = useState<any[]>([]);
   const [perguntas, setPerguntas] = useState<any[]>([]);
   const [opcoes, setOpcoes] = useState<any[]>([]);
@@ -73,7 +74,17 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         if (oData) setOpcoes(oData);
       }
 
-      if (sData.data) setSessoes(sData.data);
+      if (sData.data) {
+        setSessoes(sData.data);
+        // Busca status real dos leads no CRM para exibir status correto
+        const leadIds = sData.data.filter((s: any) => s.lead_id).map((s: any) => String(s.lead_id));
+        if (leadIds.length > 0) {
+          const { data: leadsData } = await (supabase as any).from('leads').select('id, status, nome, whatsapp').in('id', leadIds);
+          if (leadsData) setLeadsMap(new Map(leadsData.map((l: any) => [String(l.id), l])));
+        } else {
+          setLeadsMap(new Map());
+        }
+      }
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -146,20 +157,36 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
       const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 30);
       result = result.filter(s => new Date(s.created_at) >= cutoff);
     }
-    if (statusFilter === 'abandon') result = result.filter(s => !s.concluiu);
-    else if (statusFilter === 'reprovada') result = result.filter(s => s.concluiu && !s.virou_lead);
-    else if (statusFilter === 'lead') result = result.filter(s => s.virou_lead);
+    if (statusFilter === 'abandon') {
+      result = result.filter(s => !s.concluiu);
+    } else if (statusFilter === 'reprovada') {
+      result = result.filter(s => {
+        if (!s.concluiu) return false;
+        const lead = s.lead_id ? leadsMap.get(String(s.lead_id)) : null;
+        if (lead) return Number(lead.status) === 4;
+        return !s.virou_lead;
+      });
+    } else if (statusFilter === 'lead') {
+      result = result.filter(s => s.virou_lead || (s.lead_id && leadsMap.has(String(s.lead_id))));
+    } else if (statusFilter === 'aprovado') {
+      result = result.filter(s => {
+        const lead = s.lead_id ? leadsMap.get(String(s.lead_id)) : null;
+        return lead && Number(lead.status) === 3;
+      });
+    }
     if (deviceFilter !== 'all') result = result.filter(s => s.dispositivo === deviceFilter);
     if (search) {
       const q = search.toLowerCase();
+      const lead = (s: any) => s.lead_id ? leadsMap.get(String(s.lead_id)) : null;
       result = result.filter(sess =>
         sess.session_id.toLowerCase().includes(q) ||
         (sess.utm_source || '').toLowerCase().includes(q) ||
+        (lead(sess)?.nome || '').toLowerCase().includes(q) ||
         Object.values(sess.respostas || {}).some(v => String(v).toLowerCase().includes(q))
       );
     }
     return result;
-  }, [sessoes, period, statusFilter, deviceFilter, search]);
+  }, [sessoes, leadsMap, period, statusFilter, deviceFilter, search]);
 
   const stats = useMemo(() => {
     const total = filteredSessoes.length;
@@ -248,8 +275,9 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         <div style={{ padding: '12px 24px 16px', borderTop: `1px solid ${border}`, display: 'flex', gap: '8px', flexWrap: 'wrap', flexShrink: 0, background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
           <FilterPill label="Todos"      active={statusFilter === 'all'}       onClick={() => setStatusFilter('all')}       isDark={isDark} />
           <FilterPill label="Abandonou"  active={statusFilter === 'abandon'}   onClick={() => setStatusFilter('abandon')}   color="#ef4444" isDark={isDark} />
-          <FilterPill label="Reprovada"  active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
-          <FilterPill label="Virou Lead" active={statusFilter === 'lead'}      onClick={() => setStatusFilter('lead')}      color="#10b981" isDark={isDark} />
+          <FilterPill label="Reprovado"  active={statusFilter === 'reprovada'} onClick={() => setStatusFilter('reprovada')} color="#f59e0b" isDark={isDark} />
+          <FilterPill label="Lead"       active={statusFilter === 'lead'}      onClick={() => setStatusFilter('lead')}      color="#10b981" isDark={isDark} />
+          <FilterPill label="Aprovado"   active={statusFilter === 'aprovado'}  onClick={() => setStatusFilter('aprovado')}  color="#10b981" isDark={isDark} />
           <div style={{ width: '1px', height: '20px', background: border, margin: '0 4px' }} />
           <FilterPill icon={<Monitor size={13} />}    label="Desktop" active={deviceFilter === 'desktop'} onClick={() => setDeviceFilter(deviceFilter === 'desktop' ? 'all' : 'desktop')} isDark={isDark} />
           <FilterPill icon={<Smartphone size={13} />} label="Mobile"  active={deviceFilter === 'mobile'}  onClick={() => setDeviceFilter(deviceFilter === 'mobile'  ? 'all' : 'mobile')}  isDark={isDark} />
@@ -350,11 +378,21 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                     const score = calculateSessionScore(sess.respostas);
                     const effectiveTotal = sess.total_etapas > 0 ? sess.total_etapas : (perguntas.length || 0);
                     const progressPct = effectiveTotal > 0 ? Math.round((sess.ultima_etapa / effectiveTotal) * 100) : 0;
-                    const statusInfo = sess.virou_lead
-                      ? { label: 'Virou Lead', color: '#10b981', bg: '#10b98115' }
-                      : sess.concluiu
-                      ? { label: 'Reprovada', color: '#f59e0b', bg: '#f59e0b15' }
-                      : { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
+                    const sessLead = sess.lead_id ? leadsMap.get(String(sess.lead_id)) : null;
+                    const leadStatus = sessLead ? Number(sessLead.status) : null;
+                    const statusInfo = (() => {
+                      if (!sess.concluiu) return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
+                      if (sessLead && leadStatus !== null) {
+                        if (leadStatus === 3) return { label: 'Aprovado',    color: '#10b981', bg: '#10b98115' };
+                        if (leadStatus === 4) return { label: 'Reprovado',   color: '#ef4444', bg: '#ef444415' };
+                        if (leadStatus === 5) return { label: 'Contrato',    color: '#f59e0b', bg: '#f59e0b15' };
+                        if (leadStatus === 2) return { label: 'Reunião',     color: '#8b5cf6', bg: '#8b5cf615' };
+                        if (leadStatus === 6) return { label: 'Sem Retorno', color: '#71717a', bg: '#71717a15' };
+                        return { label: 'Lead',       color: '#10b981', bg: '#10b98115' };
+                      }
+                      if (sess.virou_lead) return { label: 'Lead',       color: '#10b981', bg: '#10b98115' };
+                      return { label: 'Reprovado', color: '#f59e0b', bg: '#f59e0b15' };
+                    })();
                     const rowBg = idx % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc');
                     const hoverBg = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc';
                     const deviceIcon = sess.dispositivo === 'mobile'
@@ -374,9 +412,12 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         <td style={{ position: 'sticky', left: STICKY[0].left, zIndex: 1, background: cardBg, width: STICKY[0].width, padding: '12px 8px', textAlign: 'center', color: textMut, fontSize: '11px' }}>
                           {filteredSessoes.length - idx}
                         </td>
-                        {/* Sessão ID */}
-                        <td style={{ position: 'sticky', left: STICKY[1].left, zIndex: 1, background: cardBg, width: STICKY[1].width, padding: '12px', fontWeight: 700, color: textMain, fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                          {sess.session_id.substring(0, 8)}
+                        {/* Sessão ID / Nome do lead */}
+                        <td style={{ position: 'sticky', left: STICKY[1].left, zIndex: 1, background: cardBg, width: STICKY[1].width, padding: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {sessLead?.nome
+                            ? <span style={{ fontSize: '12px', fontWeight: 600, color: textMain }}>{sessLead.nome.split(' ').slice(0, 2).join(' ')}</span>
+                            : <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: textMain }}>{sess.session_id.substring(0, 8)}</span>
+                          }
                         </td>
                         {/* Data */}
                         <td style={{ position: 'sticky', left: STICKY[2].left, zIndex: 1, background: cardBg, width: STICKY[2].width, padding: '12px', color: textMut, whiteSpace: 'nowrap', fontSize: '12px' }}>
