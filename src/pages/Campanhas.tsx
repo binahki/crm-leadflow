@@ -1615,44 +1615,52 @@ export default function CampanhasPage() {
 
         {/* Banner Ravena — desbotado no gratuito, sem bloqueio */}
         <div style={{ opacity: ravenaDesbotada ? 0.4 : 1 }}>
-        {aiLog && (
-          <div
-            onClick={() => setShowAiPanel(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '14px',
-              padding: '14px 20px', borderRadius: '14px',
-              background: dark
-                ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))'
-                : 'linear-gradient(135deg, #faf5ff, #eff6ff)',
-              border: `1px solid ${dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)'}`,
-              cursor: 'pointer', marginTop: '12px', marginBottom: '4px',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-          >
-            {/* Avatar Ravena */}
-            <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 12px rgba(139,92,246,0.4)' }} />
-            {/* Texto */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: dark ? '#c4b5fd' : '#6d28d9', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {aiLog.status === 'pendente' ? '⏳ Ravena tem sugestões aguardando aprovação' : 'Ravena analisou suas campanhas hoje'}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {aiLog.frase_do_dia || aiLog.resumo || 'Clique para ver a análise completa'}
-              </p>
+        {aiLog && (() => {
+          const isPendente = aiLog.status === 'pendente';
+          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
+          const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
+          const bannerBg = isPendente
+            ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
+            : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
+          const bannerBorder = isPendente
+            ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
+            : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
+          const textColor = isPendente ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
+          const subColor  = isPendente ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
+          const badgeBg   = isPendente ? '#f59e0b' : '#8b5cf6';
+          const badgeNum  = isPendente ? numSugestoes : numExecutadas;
+          const badgeText = isPendente
+            ? `${badgeNum} sugestão${badgeNum !== 1 ? 'ões' : ''}`
+            : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''}`;
+          return (
+            <div
+              onClick={() => setShowAiPanel(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderRadius: '14px', background: bannerBg, border: `1px solid ${bannerBorder}`, cursor: 'pointer', marginTop: '12px', marginBottom: '4px', transition: 'all 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
+              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isPendente ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
+                  {isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas'}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {isPendente
+                    ? `${numSugestoes} sugestão${numSugestoes !== 1 ? 'ões' : ''} aguardando aprovação`
+                    : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de budget realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                {badgeNum > 0 && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: badgeBg, padding: '2px 8px', borderRadius: '99px' }}>
+                    {badgeText}
+                  </span>
+                )}
+                <span style={{ fontSize: '18px', color: subColor }}>→</span>
+              </div>
             </div>
-            {/* Seta + badge ações */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              {aiLog.acoes_executadas?.length > 0 && (
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: '#8b5cf6', padding: '2px 8px', borderRadius: '99px' }}>
-                  {aiLog.acoes_executadas.length} ação{aiLog.acoes_executadas.length !== 1 ? 'ões' : ''}
-                </span>
-              )}
-              <span style={{ fontSize: '18px', color: dark ? '#8b5cf6' : '#7c3aed' }}>→</span>
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {!aiLog && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: '8px',
@@ -2540,9 +2548,8 @@ export default function CampanhasPage() {
           allLeads={allLeads}
           onClose={() => setShowAiPanel(false)}
           metaRevs={metaRevsOrg}
-          onExecutar={handleExecutarOtimizacao}
-          onIgnorar={handleIgnorarOtimizacao}
-          executando={executandoOtimizacao}
+          setToast={setToast}
+          onLogUpdate={(updatedLog) => setAiLog(updatedLog)}
         />
       )}
 
@@ -2749,41 +2756,58 @@ export default function CampanhasPage() {
 
 // ── Componentes do Painel de Otimização IA ───────────────────────────────────
 
-function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, onExecutar, onIgnorar, executando = false }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; onExecutar?: (logId: string) => void; onIgnorar?: (logId: string) => void; executando?: boolean }) {
+function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, setToast, onLogUpdate }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; setToast?: (t: {msg: string; ok: boolean} | null) => void; onLogUpdate?: (log: any) => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const t = useTerminology();
+
+  // Estado interno de sugestões — permite remover individualmente sem reload
+  const [sugestoes, setSugestoes] = useState<any[]>(() =>
+    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter')
+  );
+  const [aplicandoIds, setAplicandoIds] = useState<Set<string>>(new Set());
 
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const cardBg = dark ? '#161619' : '#fff';
 
-  const leadsEmAtendimento = allLeads.filter(l => Number(l.status) === 1).length;
+  const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
-  // Formata valor monetário para exibição
-  const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+  const isPendente = log.status === 'pendente';
+  const headerTitle = isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
+  const headerSub = isPendente
+    ? 'Revise e aprove as otimizações recomendadas'
+    : `Hoje às ${new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
-  // Parser fallback para extrair métricas do campo resumo (texto legado)
-  const parseMetric = (label: string) => {
-    const regex = new RegExp(`${label}:?\\s*([^|\\n\\.]+)(\\.|\\||\\n|$)`, 'i');
-    const match = log.resumo?.match(regex);
-    return match ? match[1].trim() : null;
-  };
+  async function aplicarSugestao(acao: any) {
+    const uid = acao.id;
+    setAplicandoIds(prev => new Set([...prev, uid]));
+    try {
+      const res = await (supabase as any).functions.invoke('executar-otimizacao', {
+        body: { log_id: log.id, acao_id: uid },
+      });
+      if (res.error) throw res.error;
+      const novas = sugestoes.filter(a => a.id !== uid);
+      setSugestoes(novas);
+      if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novas.length === 0 ? 'executado' : log.status });
+      setToast?.({ msg: `Ação aplicada com sucesso`, ok: true });
+    } catch {
+      setToast?.({ msg: 'Erro ao aplicar — tente novamente', ok: false });
+    } finally {
+      setAplicandoIds(prev => { const n = new Set(prev); n.delete(uid); return n; });
+      setTimeout(() => setToast?.(null), 4000);
+    }
+  }
 
-  const kpis = [
-    { label: 'Investimento', value: (log.total_gasto != null && log.total_gasto > 0) ? fmtMoeda(log.total_gasto) : '—', icon: DollarSign, color: '#10b981' },
-    { label: 'Leads', value: (log.total_leads != null && log.total_leads > 0) ? String(log.total_leads) : '—', icon: Users, color: '#3b82f6' },
-    { label: 'CPL médio', value: (log.cpl_medio != null && log.cpl_medio > 0) ? fmtMoeda(log.cpl_medio) : '—', icon: TrendingUp, color: '#10b981' },
-    { label: 'Projeção', value: (log.ritmo_mensal != null && log.ritmo_mensal > 0) ? fmtMoeda(log.ritmo_mensal) : '—', icon: BarChart, color: '#a855f7' },
-  ];
-
-  const statusBudget = parseMetric('Status do budget');
-  const hasAlert = !!log.alerta;
-  const isCritical = hasAlert && (log.alerta.toLowerCase().includes('crítico') || log.alerta.toLowerCase().includes('meta'));
-  
-  const statusColor = isCritical ? '#ef4444' : (hasAlert || (statusBudget?.includes('Acima'))) ? '#f59e0b' : '#10b981';
-  const statusLabel = isCritical ? 'CPL fora da meta' : (hasAlert || (statusBudget?.includes('Acima'))) ? 'Atenção ao budget' : 'Ravena estável';
+  async function ignorarSugestao(acao: any) {
+    const novas = sugestoes.filter(a => a.id !== acao.id);
+    setSugestoes(novas);
+    if (novas.length === 0) {
+      await (supabase as any).from('ai_optimization_logs').update({ status: 'ignorado' }).eq('id', log.id);
+      if (onLogUpdate) onLogUpdate({ ...log, status: 'ignorado' });
+    }
+  }
 
   return (
     <>
@@ -2813,10 +2837,8 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
               {/* Avatar Ravena */}
               <img src="/ravena.png" alt="Ravena" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 16px rgba(139,92,246,0.4)' }} />
               <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>Ravena otimizou suas campanhas</h2>
-                <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>
-                  Hoje às {new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>{headerTitle}</h2>
+                <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>{headerSub}</p>
               </div>
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: txtMid, borderRadius: '8px' }}>
@@ -2827,13 +2849,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-
-          {/* Frase do dia */}
-          {log.frase_do_dia && (
-            <p style={{ fontSize: '15px', fontWeight: 500, color: txtHi, lineHeight: 1.6, margin: 0, padding: '20px 24px', borderBottom: `1px solid ${border}` }}>
-              "{log.frase_do_dia}"
-            </p>
-          )}
 
           {/* Barra de progresso do mês */}
           {(() => {
@@ -2875,63 +2890,53 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* Ações: pendente = sugestões aguardando aprovação / executado = histórico */}
-            <div>
-              {log.status === 'pendente' ? (
-                <>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>⏳</span> Sugestões aguardando aprovação
-                  </p>
-                  {(log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {(log.acoes_sugeridas as any[]).filter(a => a.tipo !== 'manter').map((acao: any, i: number) => (
-                        <SugestaoCard key={i} acao={acao} dark={dark} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
-                      <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>✅ Nenhuma ação necessária — campanhas em ritmo normal.</p>
-                    </div>
-                  )}
-                  {/* Botões Aplicar / Ignorar */}
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                    {(log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length > 0 && (
-                      <button
-                        onClick={() => onExecutar?.(log.id)}
-                        disabled={executando}
-                        style={{ flex: 1, padding: '12px', borderRadius: '11px', border: 'none', background: executando ? (dark ? '#27272a' : '#e5e7eb') : '#8b5cf6', color: executando ? txtMid : '#fff', fontSize: '14px', fontWeight: 700, cursor: executando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}
-                      >
-                        {executando ? 'Aplicando…' : `Aplicar ${(log.acoes_sugeridas as any[]).filter(a => a.tipo !== 'manter').length} otimização${(log.acoes_sugeridas as any[]).filter(a => a.tipo !== 'manter').length !== 1 ? 'ões' : ''}`}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onIgnorar?.(log.id)}
-                      disabled={executando}
-                      style={{ flex: (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length > 0 ? 0 : 1, padding: '12px 20px', borderRadius: '11px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '14px', fontWeight: 500, cursor: executando ? 'default' : 'pointer', fontFamily: 'inherit' }}
-                    >
-                      Ignorar
-                    </button>
+            {/* SEÇÃO 1: Feito automaticamente (acoes_executadas) */}
+            {log.acoes_executadas?.length > 0 && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Feito automaticamente
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {log.acoes_executadas.map((acao: any, i: number) => (
+                    <ActionCard key={i} acao={acao} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SEÇÃO 2: Sugestões aguardando aprovação */}
+            {isPendente && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Aguardando sua aprovação
+                </p>
+                {sugestoes.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {sugestoes.map((acao: any, i: number) => (
+                      <SugestaoCard
+                        key={acao.id || i}
+                        acao={acao}
+                        dark={dark}
+                        onAplicar={() => aplicarSugestao(acao)}
+                        onIgnorar={() => ignorarSugestao(acao)}
+                        aplicando={aplicandoIds.has(acao.id)}
+                      />
+                    ))}
                   </div>
-                </>
-              ) : (
-                <>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que eu fiz hoje</p>
-                  {log.acoes_executadas?.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {log.acoes_executadas.map((acao: any, i: number) => (
-                        <ActionCard key={i} acao={acao} dark={dark} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
-                      <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
-                        ✋ {log.resumo || 'Nenhuma ação necessária hoje.'}
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+                ) : (
+                  <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+                    <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>✅ Todas as sugestões foram processadas.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Fallback quando não tem nenhuma ação */}
+            {!log.acoes_executadas?.length && !isPendente && (
+              <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
+                <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>✋ {log.resumo || 'Nenhuma ação necessária hoje.'}</p>
+              </div>
+            )}
 
             {/* Insight do dia */}
             {log.insight_do_dia && (
@@ -3004,8 +3009,11 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   );
 }
 
-// SugestaoCard — mostra ação sugerida ainda não executada, com visual "pendente"
-function SugestaoCard({ acao, dark }: { acao: any; dark: boolean }) {
+// SugestaoCard — ação sugerida com botões Aplicar / Ignorar individuais
+function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
+  acao: any; dark: boolean;
+  onAplicar: () => void; onIgnorar: () => void; aplicando?: boolean;
+}) {
   const isPause = (acao.tipo || '').startsWith('pausar');
   const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
   const isUp = isBudget && acao.direcao === 'aumento';
@@ -3013,36 +3021,44 @@ function SugestaoCard({ acao, dark }: { acao: any; dark: boolean }) {
 
   const color = isPause ? '#ef4444' : isUp ? '#10b981' : isDown ? '#f97316' : '#3b82f6';
   const bg = isPause ? 'rgba(239,68,68,0.06)' : isUp ? 'rgba(16,185,129,0.06)' : 'rgba(249,115,22,0.06)';
-  const border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const bdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
-
   const tipoLabel = isPause ? 'Pausar' : isUp ? 'Aumentar orçamento' : isDown ? 'Reduzir orçamento' : 'Ajustar';
   const tipoIcon = isPause ? '⏸' : isUp ? '↑' : isDown ? '↓' : '⚙';
 
   return (
-    <div style={{ padding: '14px', borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}30`, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-      <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '16px' }}>
-        {tipoIcon}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-          <span style={{ fontSize: '10px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tipoLabel}</span>
-          <span style={{ fontSize: '9px', fontWeight: 700, background: '#f59e0b', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>PENDENTE</span>
+    <div style={{ padding: '14px', borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}30`, opacity: aplicando ? 0.7 : 1, transition: 'opacity 0.15s' }}>
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '12px' }}>
+        <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '16px' }}>
+          {tipoIcon}
         </div>
-        <p style={{ fontSize: '13px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {acao.nome || acao.campanha_nome || '—'}
-        </p>
-        {isBudget && acao.antigo_budget != null && acao.novo_budget != null && (
-          <p style={{ fontSize: '12px', fontWeight: 600, color: txtHi, margin: '0 0 4px' }}>
-            <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget}</span>
-            <span style={{ margin: '0 7px', color: txtMid }}>→</span>
-            <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: '10px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tipoLabel}</span>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: txtHi, margin: '2px 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {acao.nome || acao.campanha_nome || '—'}
           </p>
-        )}
-        {acao.motivo && (
-          <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>
-        )}
+          {isBudget && acao.antigo_budget != null && acao.novo_budget != null && (
+            <p style={{ fontSize: '12px', fontWeight: 600, color: txtHi, margin: '0 0 3px' }}>
+              <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget}</span>
+              <span style={{ margin: '0 6px', color: txtMid }}>→</span>
+              <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+            </p>
+          )}
+          {acao.motivo && (
+            <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>
+          )}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={onAplicar} disabled={aplicando}
+          style={{ flex: 1, padding: '8px', borderRadius: '9px', border: 'none', background: aplicando ? bdr : '#8b5cf6', color: aplicando ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
+          {aplicando ? 'Aplicando…' : 'Aplicar'}
+        </button>
+        <button onClick={onIgnorar} disabled={aplicando}
+          style={{ padding: '8px 14px', borderRadius: '9px', border: `1px solid ${bdr}`, background: 'transparent', color: txtMid, fontSize: '13px', fontWeight: 500, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+          Ignorar
+        </button>
       </div>
     </div>
   );

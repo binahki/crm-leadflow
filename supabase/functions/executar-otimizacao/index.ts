@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
   try {
-    const { log_id } = await req.json();
+    const body = await req.json();
+    const { log_id, acao_id } = body;
     if (!log_id) {
       return new Response(
         JSON.stringify({ ok: false, erro: "log_id obrigatório" }),
@@ -67,14 +68,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Buscar o log pendente
+    // 1. Buscar o log (pendente ou executado — suporta execução parcial)
     const logRes = await rest(
-      `ai_optimization_logs?select=*&id=eq.${log_id}&status=eq.pendente&limit=1`
+      `ai_optimization_logs?select=*&id=eq.${log_id}&limit=1`
     );
     const [log] = await logRes.json();
-    if (!log) {
+    if (!log || log.status === 'ignorado') {
       return new Response(
-        JSON.stringify({ ok: false, erro: "Log não encontrado ou já processado" }),
+        JSON.stringify({ ok: false, erro: "Log não encontrado ou ignorado" }),
         { status: 404, headers: CORS }
       );
     }
@@ -96,8 +97,14 @@ Deno.serve(async (req) => {
     const acoesExecutadas: any[] = [];
     let pausasExecutadas = 0;
 
-    // 3. Executar cada ação sugerida
-    for (const acao of (log.acoes_sugeridas as any[]) || []) {
+    // Se acao_id fornecido, executar apenas essa ação específica (aplicação individual)
+    const todasAcoes: any[] = log.acoes_sugeridas || [];
+    const acoesParaExecutar = acao_id
+      ? todasAcoes.filter((a: any) => a.id === acao_id)
+      : todasAcoes;
+
+    // 3. Executar cada ação selecionada
+    for (const acao of acoesParaExecutar) {
       const tipo: string = acao.tipo || "";
 
       // Ação "manter" — ignorar silenciosamente
@@ -176,12 +183,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Atualizar log: status 'executado', ações realizadas, timestamp
+    // 4. Atualizar log: mesclar ações executadas; remover aplicadas de acoes_sugeridas
+    const prevExecutadas: any[] = log.acoes_executadas || [];
+    const novasExecutadas = [...prevExecutadas, ...acoesExecutadas];
+
+    // acoes_sugeridas: remover as que foram aplicadas nesta chamada
+    const idsAplicados = new Set(acoesExecutadas.filter(a => a.ok).map((a: any) => a.id));
+    const sugestoesRestantes = todasAcoes.filter((a: any) => !idsAplicados.has(a.id));
+    const novoStatus = sugestoesRestantes.length === 0 ? 'executado' : log.status;
+
     const patchRes = await rest(`ai_optimization_logs?id=eq.${log_id}`, {
       method: "PATCH",
       body: JSON.stringify({
-        status: "executado",
-        acoes_executadas: acoesExecutadas,
+        status: novoStatus,
+        acoes_executadas: novasExecutadas,
+        acoes_sugeridas: sugestoesRestantes,
         executado_em: new Date().toISOString(),
       }),
       headers: { ...dbH, Prefer: "return=minimal" },
