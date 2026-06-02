@@ -1630,7 +1630,7 @@ export default function CampanhasPage() {
           const badgeBg   = isPendente ? '#f59e0b' : '#8b5cf6';
           const badgeNum  = isPendente ? numSugestoes : numExecutadas;
           const badgeText = isPendente
-            ? `${badgeNum} sugestão${badgeNum !== 1 ? 'ões' : ''}`
+            ? (badgeNum === 1 ? '1 sugestão' : `${badgeNum} sugestões`)
             : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''}`;
           return (
             <div
@@ -1646,7 +1646,7 @@ export default function CampanhasPage() {
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isPendente
-                    ? `${numSugestoes} sugestão${numSugestoes !== 1 ? 'ões' : ''} aguardando aprovação`
+                    ? (numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
                     : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de budget realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
                 </p>
               </div>
@@ -2955,30 +2955,61 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que analisei hoje</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {log.insights.map((item: any, i: number) => (
-                    <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}` }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <span style={{
-                          fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px',
-                          color: item.decisao === 'escalar' ? '#10b981' : item.decisao === 'pausar' ? '#ef4444' : item.decisao === 'aguardar' ? '#3b82f6' : '#f59e0b',
-                          background: item.decisao === 'escalar' ? 'rgba(16,185,129,0.1)' : item.decisao === 'pausar' ? 'rgba(239,68,68,0.1)' : item.decisao === 'aguardar' ? 'rgba(59,130,246,0.1)' : 'rgba(245,158,11,0.1)',
-                        }}>
-                          {item.decisao === 'escalar' ? '⭐ Escalar' : item.decisao === 'pausar' ? '⏸ Pausar' : item.decisao === 'aguardar' ? '⏳ Aguardar' : '👀 Manter'}
-                        </span>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                          {item.campanha_nome}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: '12px', color: txtMid, margin: '0 0 4px', lineHeight: 1.5 }}>
-                        {item.porque}
-                      </p>
-                      {item.proximo_passo && (
-                        <p style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontStyle: 'italic' }}>
-                          → {item.proximo_passo}
+                  {log.insights.map((item: any, i: number) => {
+                    // Verifica se essa campanha tem ação executada automaticamente
+                    const acaoExec = (log.acoes_executadas || []).find((a: any) =>
+                      (a.nome || a.campanha_nome || '').toLowerCase() === (item.campanha_nome || '').toLowerCase()
+                    );
+                    // Verifica se tem sugestão pendente de aprovação
+                    const acaoSug = (log.acoes_sugeridas || []).find((a: any) =>
+                      (a.nome || a.campanha_nome || '').toLowerCase() === (item.campanha_nome || '').toLowerCase()
+                    );
+
+                    let badgeColor: string, badgeBg: string, badgeLabel: string, detalheTexto: string | null = null;
+                    if (acaoExec) {
+                      badgeColor = '#3b82f6'; badgeBg = 'rgba(59,130,246,0.1)';
+                      const isUp = acaoExec.direcao === 'aumento';
+                      const isDown = acaoExec.direcao === 'reducao';
+                      badgeLabel = acaoExec.tipo?.startsWith('pausar') ? '✓ Campanha pausada'
+                        : isUp ? '✓ Orçamento aumentado' : isDown ? '✓ Orçamento reduzido' : '✓ Ajuste feito';
+                      if (acaoExec.antigo_budget != null && acaoExec.novo_budget != null) {
+                        detalheTexto = `${isUp ? 'Aumentei' : 'Reduzi'} o orçamento de R$ ${acaoExec.antigo_budget} para R$ ${acaoExec.novo_budget}/dia`;
+                      }
+                    } else if (acaoSug) {
+                      badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.1)';
+                      badgeLabel = acaoSug.tipo?.startsWith('pausar') ? '⏳ Sugestão de pausa' : '⏳ Sugestão de ajuste';
+                      const isUp = acaoSug.direcao === 'aumento';
+                      detalheTexto = acaoSug.tipo?.startsWith('pausar')
+                        ? 'Sugeri pausar — aguardando sua aprovação'
+                        : `Sugeri ${isUp ? 'aumentar' : 'reduzir'} o orçamento — aguardando sua aprovação`;
+                    } else {
+                      // Análise pura sem ação
+                      badgeColor = item.decisao === 'escalar' ? '#10b981' : item.decisao === 'pausar' ? '#ef4444' : item.decisao === 'aguardar' ? '#3b82f6' : '#6b7280';
+                      badgeBg = item.decisao === 'escalar' ? 'rgba(16,185,129,0.1)' : item.decisao === 'pausar' ? 'rgba(239,68,68,0.1)' : item.decisao === 'aguardar' ? 'rgba(59,130,246,0.1)' : 'rgba(107,114,128,0.1)';
+                      badgeLabel = item.decisao === 'escalar' ? '⭐ Escalar' : item.decisao === 'pausar' ? '⏸ Pausar' : item.decisao === 'aguardar' ? '⏳ Aguardar' : '👀 Manter';
+                    }
+
+                    return (
+                      <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', color: badgeColor, background: badgeBg, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {badgeLabel}
+                          </span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {item.campanha_nome}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: txtMid, margin: '0 0 4px', lineHeight: 1.5 }}>
+                          {detalheTexto || item.porque}
                         </p>
-                      )}
-                    </div>
-                  ))}
+                        {!detalheTexto && item.proximo_passo && (
+                          <p style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontStyle: 'italic' }}>
+                            → {item.proximo_passo}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3009,7 +3040,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   );
 }
 
-// SugestaoCard — ação sugerida com botões Aplicar / Ignorar individuais
+// SugestaoCard — mostra o QUE vai acontecer primeiro, depois o motivo da IA
 function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   acao: any; dark: boolean;
   onAplicar: () => void; onIgnorar: () => void; aplicando?: boolean;
@@ -3017,46 +3048,65 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   const isPause = (acao.tipo || '').startsWith('pausar');
   const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
   const isUp = isBudget && acao.direcao === 'aumento';
-  const isDown = isBudget && acao.direcao === 'reducao';
+  const isDown = isBudget && !isUp;
 
-  const color = isPause ? '#ef4444' : isUp ? '#10b981' : isDown ? '#f97316' : '#3b82f6';
-  const bg = isPause ? 'rgba(239,68,68,0.06)' : isUp ? 'rgba(16,185,129,0.06)' : 'rgba(249,115,22,0.06)';
+  const color = isPause ? '#ef4444' : isUp ? '#10b981' : '#f97316';
   const bdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
-  const tipoLabel = isPause ? 'Pausar' : isUp ? 'Aumentar orçamento' : isDown ? 'Reduzir orçamento' : 'Ajustar';
-  const tipoIcon = isPause ? '⏸' : isUp ? '↑' : isDown ? '↓' : '⚙';
+  const separatorColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+
+  const ant = acao.antigo_budget != null ? `R$ ${acao.antigo_budget}` : null;
+  const nov = acao.novo_budget   != null ? `R$ ${acao.novo_budget}`   : null;
+
+  // O que vai acontecer (header)
+  const headerLabel = isPause
+    ? '⏸ Pausar campanha agora'
+    : isUp
+    ? `↑ Aumentar orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`
+    : `↓ Reduzir orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`;
+
+  // Subtexto explicativo
+  const subtexto = isPause
+    ? 'Se você clicar em Aplicar, esta campanha será pausada imediatamente no Meta Ads.'
+    : isUp
+    ? `Se você clicar em Aplicar, o orçamento diário sobe de ${ant} para ${nov} no Meta Ads.`
+    : `Se você clicar em Aplicar, o orçamento diário cai de ${ant} para ${nov} no Meta Ads.`;
 
   return (
-    <div style={{ padding: '14px', borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}30`, opacity: aplicando ? 0.7 : 1, transition: 'opacity 0.15s' }}>
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '12px' }}>
-        <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '16px' }}>
-          {tipoIcon}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: '10px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tipoLabel}</span>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: txtHi, margin: '2px 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {acao.nome || acao.campanha_nome || '—'}
-          </p>
-          {isBudget && acao.antigo_budget != null && acao.novo_budget != null && (
-            <p style={{ fontSize: '12px', fontWeight: 600, color: txtHi, margin: '0 0 3px' }}>
-              <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget}</span>
-              <span style={{ margin: '0 6px', color: txtMid }}>→</span>
-              <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
-            </p>
-          )}
-          {acao.motivo && (
-            <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>
-          )}
-        </div>
+    <div style={{ borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}28`, opacity: aplicando ? 0.7 : 1, transition: 'opacity 0.15s', overflow: 'hidden' }}>
+      {/* Header colorido — o que vai acontecer */}
+      <div style={{ padding: '12px 14px', background: `${color}0d`, borderBottom: `1px solid ${color}20` }}>
+        <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color, lineHeight: 1.3 }}>{headerLabel}</p>
+        <p style={{ margin: '4px 0 0', fontSize: '11.5px', color: dark ? `${color}cc` : '#374151', lineHeight: 1.5, fontWeight: 400 }}>{subtexto}</p>
       </div>
-      <div style={{ display: 'flex', gap: '8px' }}>
+
+      {/* Nome da campanha */}
+      <div style={{ padding: '10px 14px 0' }}>
+        <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {acao.nome || acao.campanha_nome || '—'}
+        </p>
+      </div>
+
+      {/* Motivo da Ravena */}
+      {acao.motivo && (
+        <div style={{ padding: '8px 14px 12px' }}>
+          <div style={{ height: '1px', background: separatorColor, margin: '0 0 8px' }} />
+          <p style={{ margin: '0 0 3px', fontSize: '10px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Por que a Ravena sugere isso:
+          </p>
+          <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.55 }}>{acao.motivo}</p>
+        </div>
+      )}
+
+      {/* Botões */}
+      <div style={{ display: 'flex', gap: '8px', padding: '0 14px 14px' }}>
         <button onClick={onAplicar} disabled={aplicando}
-          style={{ flex: 1, padding: '8px', borderRadius: '9px', border: 'none', background: aplicando ? bdr : '#8b5cf6', color: aplicando ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
+          style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: aplicando ? bdr : '#8b5cf6', color: aplicando ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
           {aplicando ? 'Aplicando…' : 'Aplicar'}
         </button>
         <button onClick={onIgnorar} disabled={aplicando}
-          style={{ padding: '8px 14px', borderRadius: '9px', border: `1px solid ${bdr}`, background: 'transparent', color: txtMid, fontSize: '13px', fontWeight: 500, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+          style={{ padding: '9px 14px', borderRadius: '9px', border: `1px solid ${bdr}`, background: 'transparent', color: txtMid, fontSize: '13px', fontWeight: 500, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit' }}>
           Ignorar
         </button>
       </div>
@@ -3071,54 +3121,47 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
   const isPause = typeof acao.tipo === 'string' && acao.tipo.startsWith('pausar_');
   const hasError = acao.ok === false;
 
-  const color = isUp ? '#10b981' : isDown ? '#ef4444' : isPause ? '#71717a' : '#3b82f6';
-  const bg = isUp ? 'rgba(16,185,129,0.05)' : isDown ? 'rgba(239,68,68,0.05)' : 'rgba(113,113,122,0.05)';
+  const color = isUp ? '#10b981' : isDown ? '#f97316' : isPause ? '#71717a' : '#3b82f6';
+  const bg = isUp ? 'rgba(16,185,129,0.05)' : isDown ? 'rgba(249,115,22,0.05)' : 'rgba(113,113,122,0.05)';
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : isPause ? Pause : Zap;
 
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
 
+  // Fix 5: percentual de variação
+  const variacaoPct = isBudget && acao.antigo_budget && acao.novo_budget
+    ? Math.round(((Number(acao.novo_budget) - Number(acao.antigo_budget)) / Number(acao.antigo_budget)) * 100)
+    : null;
+
   return (
-    <div style={{ 
-      padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', 
-      border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start',
-      transition: 'all 0.2s ease', position: 'relative', overflow: 'hidden'
-    }}>
-      <div style={{ 
-        width: '36px', height: '36px', borderRadius: '10px', background: bg, 
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 
-      }}>
+    <div style={{ padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={18} color={color} />
       </div>
-      
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
           <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isUp ? 'Budget aumentado' : isDown ? 'Budget reduzido' : isPause ? 'Pausado' : 'Ação IA'}
+            {isUp ? 'Orçamento aumentado' : isDown ? 'Orçamento reduzido' : isPause ? 'Campanha pausada' : 'Ação automática'}
           </span>
-          {hasError && (
-            <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>
-          )}
+          {hasError && <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>}
         </div>
-        
         <p style={{ fontSize: '13.5px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {acao.nome || acao.campanha_nome || '—'}
         </p>
-
         {isBudget && acao.novo_budget != null && (
-          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
-            <span style={{ margin: '0 8px', color: txtMid }}>→</span>
+            <span style={{ color: txtMid }}>→</span>
             <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+            {variacaoPct !== null && (
+              <span style={{ fontSize: '11px', fontWeight: 700, color: variacaoPct > 0 ? '#10b981' : '#f97316' }}>
+                ({variacaoPct > 0 ? '+' : ''}{variacaoPct}%)
+              </span>
+            )}
           </p>
         )}
-
-        {acao.motivo && (
-          <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>
-            {acao.motivo}
-          </p>
-        )}
+        {acao.motivo && <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>}
       </div>
     </div>
   );
