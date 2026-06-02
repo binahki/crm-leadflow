@@ -409,8 +409,9 @@ export default function QuizPublico() {
   }
 
   // ── Finaliza quiz: marca sessão, abre WA, vai para sucesso ───────────────────
-  async function finalizarQuiz(leadId?: string | number) {
-    await marcarConcluido(leadId);
+  // virouLead=true por padrão porque finalizarQuiz só é chamado após submit do formulário com sucesso
+  async function finalizarQuiz(leadId?: string | number, virouLead = true) {
+    await marcarConcluido(leadId, undefined, virouLead);
     setSubmitting(false);
 
     const isRedirect = (quiz as any).whatsapp_redirecionar_direto === true;
@@ -579,37 +580,26 @@ export default function QuizPublico() {
   const utms = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    // Capture UTMs on mount and merge safely (do not overwrite with empty objects)
+    // Captura UTMs UMA VEZ no mount — não depender de searchParams para evitar sobrescrita
     const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
-    let hasNew = false;
-    const currentCaptured = { ...utms.current };
-    
+    const captured: Record<string, string> = {};
+
     utmKeys.forEach(key => {
       const val = searchParams.get(key);
-      if (val) {
-        currentCaptured[key] = val;
-        hasNew = true;
+      if (val) captured[key] = val;
+    });
+
+    // Fallback: lê direto da URL caso o router já tenha stripped os params
+    const raw = new URLSearchParams(window.location.search);
+    utmKeys.forEach(key => {
+      if (!captured[key]) {
+        const val = raw.get(key);
+        if (val) captured[key] = val;
       }
     });
 
-    // Also support fallback parsing from the full window location (in case hash router strips params)
-    const href = window.location.href;
-    if (href.includes('?')) {
-      const searchPart = href.substring(href.indexOf('?'));
-      const p = new URLSearchParams(searchPart);
-      utmKeys.forEach(key => {
-        const val = p.get(key);
-        if (val && !currentCaptured[key]) {
-          currentCaptured[key] = val;
-          hasNew = true;
-        }
-      });
-    }
-
-    if (hasNew || Object.keys(utms.current).length === 0) {
-      utms.current = currentCaptured;
-    }
-  }, [searchParams]);
+    utms.current = captured;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!quiz) return;

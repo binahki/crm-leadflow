@@ -58,6 +58,7 @@ export function usePlanFeatures() {
         .single()
         .then(({ data }: any) => {
           const p: Plan =
+            data?.plano === 'basic' ? 'gratuito' :
             data?.plano && KNOWN_PLANS.includes(data.plano as Plan)
               ? (data.plano as Plan)
               : 'gratuito';
@@ -78,6 +79,7 @@ export function usePlanFeatures() {
       .single()
       .then(({ data }: any) => {
         const p: Plan =
+          data?.plano === 'basic' ? 'gratuito' :
           data?.plano && KNOWN_PLANS.includes(data.plano as Plan)
             ? (data.plano as Plan)
             : 'gratuito';

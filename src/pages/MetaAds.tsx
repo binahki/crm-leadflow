@@ -650,7 +650,7 @@ export default function MetaAdsPage() {
             )}
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaLocked ? 0.5 : (ravenaAtiva === true ? 1 : 0.5), pointerEvents: ravenaLocked ? 'none' : (ravenaAtiva === true ? 'auto' : 'none') }}>
+              {/* Metas — acessíveis em TODOS os planos incluindo gratuito */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={lbl}>Investimento mensal</label>
@@ -669,6 +669,7 @@ export default function MetaAdsPage() {
                   </div>
                 </div>
               </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', opacity: ravenaLocked ? 0.4 : (ravenaAtiva === true ? 1 : 0.5), pointerEvents: ravenaLocked ? 'none' : (ravenaAtiva === true ? 'auto' : 'none') }}>
               <div>
                 <label style={lbl}>Modo de operação</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -720,10 +721,10 @@ export default function MetaAdsPage() {
                 </div>
               )}
             </div>
-              <button onClick={handleSaveRavena} disabled={savingRavena || ravenaLocked}
-                style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: (savingRavena || ravenaLocked) ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: (savingRavena || ravenaLocked) ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: (savingRavena || ravenaLocked) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}>
+              <button onClick={handleSaveRavena} disabled={savingRavena}
+                style={{ width: '100%', padding: '11px', borderRadius: '10px', border: 'none', background: savingRavena ? (dark ? '#27272a' : '#e5e7eb') : '#3b82f6', color: savingRavena ? txtMid : '#fff', fontSize: '13.5px', fontWeight: 600, cursor: savingRavena ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', fontFamily: FONT, transition: 'background 0.15s' }}>
                 <Save style={{ width: '14px', height: '14px' }} />
-                {savingRavena ? 'Salvando…' : 'Salvar configuração da Ravena'}
+                {savingRavena ? 'Salvando…' : ravenaLocked ? 'Salvar metas' : 'Salvar configuração da Ravena'}
               </button>
             </div>
           </div>

@@ -31,6 +31,8 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
   const iniciadoRef = useRef(false);
   const respostasRef = useRef<Record<string, any>>({});
   const queuePromiseRef = useRef<Promise<any>>(Promise.resolve());
+  // UTMs capturadas UMA VEZ no mount — não reler da URL a cada etapa para evitar sobrescrita se URL mudar
+  const utmsCapturedRef = useRef<Record<string, string>>(getUTMs());
 
   const quizSlugRef = useRef(quizSlug);
   const orgIdRef = useRef(orgId);
@@ -69,7 +71,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         virou_lead: false,
         dispositivo: getDispositivo(),
         user_agent: navigator.userAgent.slice(0, 200),
-        ...getUTMs(),
+        ...utmsCapturedRef.current,
       };
       
       const { error } = await supabase.from('quiz_sessoes').upsert(payload, { onConflict: 'session_id' });
@@ -100,7 +102,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         updated_at: new Date().toISOString(),
         dispositivo: getDispositivo(),
         user_agent: navigator.userAgent.slice(0, 200),
-        ...getUTMs(),
+        ...utmsCapturedRef.current,
       };
 
       if (Object.keys(respostasRef.current).length > 0) {
@@ -143,7 +145,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     });
   }, [enqueue]);
 
-  const marcarConcluido = useCallback((leadId?: string | number, etapaAtual?: number) => {
+  const marcarConcluido = useCallback((leadId?: string | number, etapaAtual?: number, virouLead?: boolean) => {
     const total = totalEtapasRef.current;
 
     enqueue(async () => {
@@ -151,7 +153,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         concluiu: true,
         ultima_etapa: etapaAtual !== undefined ? etapaAtual : (total > 0 ? total : undefined),
         total_etapas: total > 0 ? total : undefined,
-        virou_lead: !!leadId,
+        virou_lead: virouLead ?? !!leadId,
         lead_id: leadId || null,
         updated_at: new Date().toISOString(),
       };
