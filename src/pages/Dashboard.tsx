@@ -374,19 +374,53 @@ export default function Dashboard() {
 
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [metaOrg, setMetaOrg] = useState({ revs: 0, budget: 0 });
+
+  // Modal de configuração inicial de metas
+  const [showMetaModal, setShowMetaModal]       = useState(false);
+  const [metaModalBudget, setMetaModalBudget]   = useState(5000);
+  const [metaModalRevs, setMetaModalRevs]       = useState(50);
+  const [metaModalSaving, setMetaModalSaving]   = useState(false);
+
   useEffect(() => {
     if (!orgId) return;
-    supabase.from('organizations').select('nome, ravena_meta_revendedoras, ravena_budget_mensal').eq('id', orgId).single()
-      .then(({ data }) => {
+    (supabase as any).from('organizations')
+      .select('nome, ravena_meta_revendedoras, ravena_budget_mensal, meta_account_id')
+      .eq('id', orgId).single()
+      .then(({ data }: any) => {
         if (data) {
-          setNomeEmpresa((data as any).nome || '');
-          setMetaOrg({
-            revs: Number((data as any).ravena_meta_revendedoras) || 0,
-            budget: Number((data as any).ravena_budget_mensal) || 0,
-          });
+          setNomeEmpresa(data.nome || '');
+          const revs   = Number(data.ravena_meta_revendedoras) || 0;
+          const budget = Number(data.ravena_budget_mensal) || 0;
+          setMetaOrg({ revs, budget });
+          // Mostra modal na primeira visita se metas não configuradas
+          const key = `floow_meta_setup_${orgId}`;
+          if (!localStorage.getItem(key) && revs === 0 && !data.meta_account_id) {
+            setMetaModalBudget(5000);
+            setMetaModalRevs(50);
+            setTimeout(() => setShowMetaModal(true), 1200);
+          }
         }
       });
   }, [orgId]); // eslint-disable-line
+
+  async function handleSaveMetaSetup() {
+    if (!orgId) return;
+    setMetaModalSaving(true);
+    await (supabase as any).from('organizations').update({
+      ravena_budget_mensal: metaModalBudget,
+      ravena_meta_revendedoras: metaModalRevs,
+    }).eq('id', orgId);
+    setMetaOrg({ revs: metaModalRevs, budget: metaModalBudget });
+    localStorage.setItem(`floow_meta_setup_${orgId}`, 'done');
+    setMetaModalSaving(false);
+    setShowMetaModal(false);
+  }
+
+  function closeMetaModal() {
+    if (orgId) localStorage.setItem(`floow_meta_setup_${orgId}`, 'done');
+    setShowMetaModal(false);
+  }
+
   const primeiroNome = nomeEmpresa.split(' ')[0];
 
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
@@ -1192,7 +1226,72 @@ export default function Dashboard() {
         @keyframes cursorBlink{0%,100%{opacity:1}50%{opacity:0}}
         @keyframes drawLine{from{stroke-dashoffset:1000}to{stroke-dashoffset:0}}
         .recharts-area-curve{stroke-dasharray:1000;animation:drawLine 1.2s ease-out forwards}
+        @keyframes metaModalIn{from{opacity:0;transform:translate(-50%,-48%) scale(0.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
       `}</style>
+
+      {/* Modal de configuração inicial de metas */}
+      {showMetaModal && (() => {
+        const mBg  = dark ? '#18191f' : '#ffffff';
+        const mBdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+        const mTxt = dark ? '#f1f5f9' : '#0f172a';
+        const mMid = dark ? '#94a3b8' : '#64748b';
+        const mShadow = dark
+          ? '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07)'
+          : '0 20px 60px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)';
+        const mInp: React.CSSProperties = {
+          width: '100%', padding: '10px 12px', borderRadius: '10px',
+          border: `1px solid ${mBdr}`,
+          background: dark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+          color: mTxt, fontSize: '14px', outline: 'none',
+          fontFamily: "'Inter',system-ui,sans-serif", boxSizing: 'border-box',
+          transition: 'border-color 0.15s',
+        };
+        return (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 9980, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }} onClick={closeMetaModal} />
+            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9981, width: '360px', maxWidth: 'calc(100vw - 32px)', background: mBg, border: `1px solid ${mBdr}`, borderRadius: '20px', padding: '28px 24px 24px', boxShadow: mShadow, fontFamily: "'Inter',system-ui,sans-serif", animation: 'metaModalIn 0.25s cubic-bezier(0.32,0.72,0,1)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '24px', marginBottom: '10px', textAlign: 'center' }}>🎯</div>
+              <h2 style={{ fontSize: '17px', fontWeight: 700, color: mTxt, margin: '0 0 6px', textAlign: 'center', letterSpacing: '-0.02em' }}>Configure sua meta</h2>
+              <p style={{ fontSize: '13px', color: mMid, margin: '0 0 20px', textAlign: 'center', lineHeight: 1.55 }}>
+                Defina seus objetivos mensais para acompanhar resultados no dashboard.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ fontSize: '10.5px', fontWeight: 600, color: dark ? '#475569' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '6px' }}>
+                    Meta de revendedoras / mês
+                  </label>
+                  <input type="number" value={metaModalRevs} onChange={e => setMetaModalRevs(Number(e.target.value))}
+                    style={mInp} min={1}
+                    onFocus={e => (e.target.style.borderColor = '#0044fd')}
+                    onBlur={e => (e.target.style.borderColor = mBdr)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '10.5px', fontWeight: 600, color: dark ? '#475569' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: '6px' }}>
+                    Orçamento mensal (R$)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: mMid, pointerEvents: 'none' }}>R$</span>
+                    <input type="number" value={metaModalBudget} onChange={e => setMetaModalBudget(Number(e.target.value))}
+                      style={{ ...mInp, paddingLeft: '32px' }} min={0}
+                      onFocus={e => (e.target.style.borderColor = '#0044fd')}
+                      onBlur={e => (e.target.style.borderColor = mBdr)} />
+                  </div>
+                </div>
+              </div>
+              <button onClick={handleSaveMetaSetup} disabled={metaModalSaving}
+                style={{ width: '100%', padding: '12px', borderRadius: '11px', border: 'none', background: metaModalSaving ? mBdr : '#0044fd', color: metaModalSaving ? mMid : '#fff', fontSize: '14px', fontWeight: 600, cursor: metaModalSaving ? 'default' : 'pointer', fontFamily: "'Inter',system-ui,sans-serif", marginBottom: '8px', transition: 'background 0.15s' }}>
+                {metaModalSaving ? 'Salvando…' : 'Salvar e começar'}
+              </button>
+              <button onClick={closeMetaModal}
+                style={{ display: 'block', width: '100%', background: 'none', border: 'none', color: mMid, fontSize: '12.5px', cursor: 'pointer', fontFamily: "'Inter',system-ui,sans-serif", textAlign: 'center', padding: '4px 0' }}>
+                Pular por agora
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
     </AppLayout>
   );
 }
