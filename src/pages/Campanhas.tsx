@@ -3066,92 +3066,91 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   );
 }
 
-// SugestaoCard — mostra o QUE vai acontecer primeiro, depois o motivo da IA
 function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   acao: any; dark: boolean;
   onAplicar: () => void; onIgnorar: () => void; aplicando?: boolean;
 }) {
-  const isPausarConjunto = acao.tipo === 'pausar_conjunto';
-  const isPause = (acao.tipo || '').startsWith('pausar');
-  const isAumentarConjunto = acao.tipo === 'aumentar_conjunto';
-  const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
-  const isUp = (isBudget && acao.direcao === 'aumento') || isAumentarConjunto;
-  const isDown = isBudget && acao.direcao === 'reducao';
+  const tipo = (acao.tipo || '').toLowerCase();
+  const isPause    = tipo.includes('pausar');
+  const isIncrease = tipo.includes('aumentar') || (tipo === 'reduzir' && acao.direcao === 'aumento');
+  const isDecrease = (tipo.includes('reduzir') && acao.direcao !== 'aumento') || (tipo === 'reduzir' && !acao.direcao);
+  const isConjunto = tipo.includes('conjunto');
 
-  const color = isPause ? '#ef4444' : isUp ? '#10b981' : '#f97316';
-  const bdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const txtHi = dark ? '#f4f4f5' : '#111827';
+  const color   = isPause ? '#ef4444' : isIncrease ? '#10b981' : '#f97316';
+  const headerBg = isPause ? 'rgba(239,68,68,0.08)' : isIncrease ? 'rgba(16,185,129,0.08)' : 'rgba(249,115,22,0.08)';
+  const headerIcon = isPause ? '⏸' : isIncrease ? '↑' : '↓';
+  const headerLabel = isPause
+    ? (isConjunto ? 'Pausar conjunto' : 'Pausar campanha')
+    : isIncrease
+    ? (isConjunto ? 'Aumentar orçamento do conjunto' : 'Aumentar orçamento da campanha')
+    : (isConjunto ? 'Reduzir orçamento do conjunto' : 'Reduzir orçamento da campanha');
+
+  const bdr    = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const sepClr = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const txtHi  = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
-  const separatorColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 
-  const ant = acao.antigo_budget != null ? `R$ ${acao.antigo_budget}` : null;
-  const nov = acao.novo_budget   != null ? `R$ ${acao.novo_budget}`   : null;
-  const conjuntoNome = acao.conjunto_nome || acao.nome || '—';
   const campanhaNome = acao.campanha_nome || '';
+  const conjuntoNome = acao.conjunto_nome || acao.nome || '—';
+  const nomePrincipal = isConjunto ? conjuntoNome : (acao.campanha_nome || acao.nome || '—');
 
-  const headerLabel = isPausarConjunto
-    ? '⏸ Pausar conjunto agora'
-    : isPause
-    ? '⏸ Pausar campanha agora'
-    : isAumentarConjunto
-    ? `↑ Aumentar orçamento do conjunto${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`
-    : isUp
-    ? `↑ Aumentar orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`
-    : `↓ Reduzir orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`;
-
-  const subtexto = isPausarConjunto
-    ? `Se você clicar em Aplicar, o conjunto ${conjuntoNome} será pausado imediatamente no Meta Ads.`
-    : isPause
-    ? 'Se você clicar em Aplicar, esta campanha será pausada imediatamente no Meta Ads.'
-    : isAumentarConjunto
-    ? `Se você clicar em Aplicar, o orçamento do conjunto ${conjuntoNome} sobe de ${ant} para ${nov} no Meta Ads.`
-    : isUp
-    ? `Se você clicar em Aplicar, o orçamento diário sobe de ${ant} para ${nov} no Meta Ads.`
-    : `Se você clicar em Aplicar, o orçamento diário cai de ${ant} para ${nov} no Meta Ads.`;
-
-  const nameDisplay = (isPausarConjunto || isAumentarConjunto)
-    ? `${conjuntoNome} — ${campanhaNome}`
-    : (acao.nome || acao.campanha_nome || '—');
+  const ant = acao.antigo_budget != null ? acao.antigo_budget : null;
+  const nov = acao.novo_budget   != null ? acao.novo_budget   : null;
+  const varPct = ant && nov && Number(ant) > 0
+    ? Math.round(((Number(nov) - Number(ant)) / Number(ant)) * 100)
+    : null;
 
   return (
-    <div style={{ borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}28`, opacity: aplicando ? 0.7 : 1, transition: 'opacity 0.15s', overflow: 'hidden' }}>
-      {/* Header colorido — o que vai acontecer */}
-      <div style={{ padding: '12px 14px', background: `${color}0d`, borderBottom: `1px solid ${color}20` }}>
-        <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color, lineHeight: 1.3 }}>{headerLabel}</p>
-        <p style={{ margin: '4px 0 0', fontSize: '11.5px', color: dark ? `${color}cc` : '#374151', lineHeight: 1.5, fontWeight: 400 }}>{subtexto}</p>
-      </div>
+    <div style={{ borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`, opacity: aplicando ? 0.65 : 1, transition: 'opacity 0.15s', overflow: 'hidden' }}>
 
-      {/* Nome — hierarquia campanha > conjunto */}
-      <div style={{ padding: '10px 14px 0' }}>
-        {(isPausarConjunto || isAumentarConjunto) ? (
-          <>
-            <p style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {campanhaNome}
-            </p>
-            <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {conjuntoNome}
-            </p>
-          </>
-        ) : (
-          <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {acao.nome || acao.campanha_nome || '—'}
-          </p>
+      {/* Header — linha fina */}
+      <div style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', background: headerBg, borderBottom: `1px solid ${color}20` }}>
+        <span style={{ fontSize: '12px', fontWeight: 700, color, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {headerIcon} {headerLabel}
+        </span>
+        {varPct !== null && (
+          <span style={{ fontSize: '12px', fontWeight: 800, color }}>
+            {varPct > 0 ? '+' : ''}{varPct}%
+          </span>
         )}
       </div>
 
-      {/* Motivo da Ravena */}
-      {acao.motivo && (
-        <div style={{ padding: '8px 14px 12px' }}>
-          <div style={{ height: '1px', background: separatorColor, margin: '0 0 8px' }} />
-          <p style={{ margin: '0 0 3px', fontSize: '10px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Por que a Ravena sugere isso:
+      {/* Nomes */}
+      <div style={{ padding: '12px 14px 0' }}>
+        {isConjunto && campanhaNome && (
+          <p style={{ margin: '0 0 3px', fontSize: '10px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {campanhaNome}
           </p>
-          <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.55 }}>{acao.motivo}</p>
+        )}
+        <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {nomePrincipal}
+        </p>
+      </div>
+
+      {/* Budget */}
+      {ant != null && nov != null && (
+        <div style={{ padding: '10px 14px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '13px', color: txtMid }}>R$ {ant}</span>
+          <span style={{ fontSize: '12px', color: txtMid }}>→</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color }}> R$ {nov}/dia</span>
+        </div>
+      )}
+
+      {/* Separador + motivo */}
+      {acao.motivo && (
+        <div style={{ padding: '10px 14px 0' }}>
+          <div style={{ height: '1px', background: sepClr, marginBottom: '8px' }} />
+          <p style={{
+            margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          } as React.CSSProperties}>
+            {acao.motivo}
+          </p>
         </div>
       )}
 
       {/* Botões */}
-      <div style={{ display: 'flex', gap: '8px', padding: '0 14px 14px' }}>
+      <div style={{ display: 'flex', gap: '8px', padding: '12px 14px 14px' }}>
         <button onClick={onAplicar} disabled={aplicando}
           style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: aplicando ? bdr : '#8b5cf6', color: aplicando ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
           {aplicando ? 'Aplicando…' : 'Aplicar'}
