@@ -761,9 +761,11 @@ export default function CampanhasPage() {
         if(data&&data.length>0){
           const log=data[0];
           const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
-          // sem_acao: mostrar só nas últimas 24h; demais: mostrar nas últimas 26h
-          const semAcao = log.status === 'sem_acao';
-          if (semAcao ? horas <= 24 : horas <= 26) setAiLog(log);
+          const horasLimitePendente = 168; // 7 dias
+          const horasLimiteExecutado = 24;
+          if (log.status === 'pendente' && horas <= horasLimitePendente) setAiLog(log);
+          else if (log.status === 'executado' && horas <= horasLimiteExecutado) setAiLog(log);
+          // sem_acao e outros: não mostrar no banner
         }
       });
   },[orgId, orgReady]); // eslint-disable-line
@@ -2823,12 +2825,14 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   }
 
   async function ignorarSugestao(acao: any) {
-    const novas = sugestoes.filter(a => a.id !== acao.id);
+    const novas = sugestoes.filter((a: any) => a.id !== acao.id);
     setSugestoes(novas);
-    if (novas.length === 0) {
-      await (supabase as any).from('ai_optimization_logs').update({ status: 'ignorado' }).eq('id', log.id);
-      if (onLogUpdate) onLogUpdate({ ...log, status: 'ignorado' });
-    }
+    const novoStatus = novas.length === 0 ? 'ignorado' : 'pendente';
+    await (supabase as any)
+      .from('ai_optimization_logs')
+      .update({ acoes_sugeridas: novas, status: novoStatus })
+      .eq('id', log.id);
+    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novoStatus });
   }
 
   return (
