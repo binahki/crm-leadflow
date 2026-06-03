@@ -2985,30 +2985,42 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                     let badgeColor: string, badgeBg: string, badgeLabel: string, detalheTexto: string | null = null;
                     if (acaoExec) {
                       badgeColor = '#3b82f6'; badgeBg = 'rgba(59,130,246,0.1)';
+                      badgeLabel = '✓ Ajuste feito';
                       const isUp = acaoExec.direcao === 'aumento';
-                      const isDown = acaoExec.direcao === 'reducao';
-                      badgeLabel = acaoExec.tipo?.startsWith('pausar') ? '✓ Campanha pausada'
-                        : isUp ? '✓ Orçamento aumentado' : isDown ? '✓ Orçamento reduzido' : '✓ Ajuste feito';
-                      if (acaoExec.antigo_budget != null && acaoExec.novo_budget != null) {
+                      if (acaoExec.tipo === 'redistribuir_conjunto') {
+                        detalheTexto = `Redistribuí orçamento: ↓${acaoExec.conjunto_reduzido_nome} R$${acaoExec.antigo_budget_reduzido}→R$${acaoExec.novo_budget_reduzido}, ↑${acaoExec.conjunto_aumentado_nome} R$${acaoExec.antigo_budget_aumentado}→R$${acaoExec.novo_budget_aumentado}`;
+                      } else if (acaoExec.tipo === 'reduzir_conjunto') {
+                        detalheTexto = `Reduzi ${acaoExec.conjunto_nome || ''}: R$${acaoExec.antigo_budget}→R$${acaoExec.novo_budget}/dia`;
+                      } else if (acaoExec.tipo?.startsWith('pausar')) {
+                        detalheTexto = `Pausei ${acaoExec.tipo === 'pausar_conjunto' ? `o conjunto ${acaoExec.conjunto_nome || ''}` : 'a campanha'}`;
+                      } else if (acaoExec.antigo_budget != null && acaoExec.novo_budget != null) {
                         detalheTexto = `${isUp ? 'Aumentei' : 'Reduzi'} o orçamento de R$ ${acaoExec.antigo_budget} para R$ ${acaoExec.novo_budget}/dia`;
                       }
                     } else if (acaoSug) {
                       badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.1)';
-                      badgeLabel = acaoSug.tipo?.startsWith('pausar') ? '⏳ Sugestão de pausa' : '⏳ Sugestão de ajuste';
-                      const isUp = acaoSug.direcao === 'aumento';
-                      detalheTexto = acaoSug.tipo?.startsWith('pausar')
-                        ? 'Sugeri pausar — aguardando sua aprovação'
-                        : `Sugeri ${isUp ? 'aumentar' : 'reduzir'} o orçamento — aguardando sua aprovação`;
+                      badgeLabel = '⏳ Sugestão enviada';
+                      if (acaoSug.tipo === 'pausar_conjunto') {
+                        detalheTexto = `Sugeri pausar o conjunto ${acaoSug.conjunto_nome || ''}`;
+                      } else if (acaoSug.tipo?.startsWith('pausar')) {
+                        detalheTexto = 'Sugeri pausar a campanha';
+                      } else if (acaoSug.tipo === 'aumentar_conjunto') {
+                        detalheTexto = `Sugeri aumentar orçamento do conjunto ${acaoSug.conjunto_nome || ''}: R$${acaoSug.antigo_budget}→R$${acaoSug.novo_budget}/dia`;
+                      } else {
+                        const isUp = acaoSug.direcao === 'aumento';
+                        detalheTexto = `Sugeri ${isUp ? 'aumentar' : 'reduzir'} o orçamento: R$${acaoSug.antigo_budget}→R$${acaoSug.novo_budget}/dia`;
+                      }
                     } else {
-                      // Análise pura sem ação
+                      // Análise pura — verbos conjugados no passado
                       badgeColor = item.decisao === 'escalar' ? '#10b981' : item.decisao === 'pausar' ? '#ef4444' : item.decisao === 'aguardar' ? '#3b82f6' : '#6b7280';
                       badgeBg = item.decisao === 'escalar' ? 'rgba(16,185,129,0.1)' : item.decisao === 'pausar' ? 'rgba(239,68,68,0.1)' : item.decisao === 'aguardar' ? 'rgba(59,130,246,0.1)' : 'rgba(107,114,128,0.1)';
-                      badgeLabel = item.decisao === 'escalar' ? '⭐ Escalar' : item.decisao === 'pausar' ? '⏸ Pausar' : item.decisao === 'aguardar' ? '⏳ Aguardar' : '👀 Manter';
+                      badgeLabel = item.decisao === 'escalar' ? '⭐ Escalei' : item.decisao === 'pausar' ? '⏸ Pausei' : item.decisao === 'aguardar' ? '⏳ Aguardei' : '👀 Mantive';
                     }
+
+                    const textoExibido = detalheTexto || (item.porque ? (item.porque.length > 100 ? item.porque.slice(0, 99) + '…' : item.porque) : '');
 
                     return (
                       <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: textoExibido ? '6px' : 0 }}>
                           <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', color: badgeColor, background: badgeBg, whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {badgeLabel}
                           </span>
@@ -3016,12 +3028,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                             {item.campanha_nome}
                           </span>
                         </div>
-                        <p style={{ fontSize: '12px', color: txtMid, margin: '0 0 4px', lineHeight: 1.5 }}>
-                          {detalheTexto || item.porque}
-                        </p>
-                        {!detalheTexto && item.proximo_passo && (
-                          <p style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', margin: 0, fontStyle: 'italic' }}>
-                            → {item.proximo_passo}
+                        {textoExibido && (
+                          <p style={{ fontSize: '12px', color: txtMid, margin: 0, lineHeight: 1.5 }}>
+                            {textoExibido}
                           </p>
                         )}
                       </div>
@@ -3112,11 +3121,22 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
         <p style={{ margin: '4px 0 0', fontSize: '11.5px', color: dark ? `${color}cc` : '#374151', lineHeight: 1.5, fontWeight: 400 }}>{subtexto}</p>
       </div>
 
-      {/* Nome */}
+      {/* Nome — hierarquia campanha > conjunto */}
       <div style={{ padding: '10px 14px 0' }}>
-        <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {nameDisplay}
-        </p>
+        {(isPausarConjunto || isAumentarConjunto) ? (
+          <>
+            <p style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {campanhaNome}
+            </p>
+            <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {conjuntoNome}
+            </p>
+          </>
+        ) : (
+          <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {acao.nome || acao.campanha_nome || '—'}
+          </p>
+        )}
       </div>
 
       {/* Motivo da Ravena */}
@@ -3180,16 +3200,19 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
     ? Math.round(((Number(acao.novo_budget) - Number(acao.antigo_budget)) / Number(acao.antigo_budget)) * 100)
     : null;
 
-  const label = isRedistribuir ? 'Orçamento redistribuído entre conjuntos'
+  const label = isRedistribuir ? 'Orçamento redistribuído'
     : isReduzirConjunto ? 'Orçamento de conjunto reduzido'
     : isUp ? 'Orçamento aumentado'
     : isDown ? 'Orçamento reduzido'
     : isPause ? 'Campanha pausada'
     : 'Ação automática';
 
-  const nameDisplay = isReduzirConjunto
-    ? `${acao.conjunto_nome || acao.nome || '—'} — ${acao.campanha_nome || ''}`
-    : (acao.nome || acao.campanha_nome || '—');
+  const truncMotivo = (str: string | undefined, max: number) => {
+    if (!str) return '';
+    const dot = str.indexOf('.');
+    const s = dot > 0 && dot < str.length - 1 ? str.slice(0, dot + 1) : str;
+    return s.length > max ? s.slice(0, max - 1) + '…' : s;
+  };
 
   return (
     <div style={{ padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
@@ -3197,40 +3220,68 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
         <Icon size={18} color={color} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
           <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {label}
           </span>
           {hasError && <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>}
         </div>
-        <p style={{ fontSize: '13.5px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {nameDisplay}
-        </p>
+
         {isRedistribuir && (
-          <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 6px', lineHeight: 1.5 }}>
-            Reduzi <strong style={{ color: txtHi }}>{acao.conjunto_reduzido_nome}</strong> de R$ {acao.antigo_budget_reduzido} para R$ {acao.novo_budget_reduzido}/dia e aumentei <strong style={{ color: txtHi }}>{acao.conjunto_aumentado_nome}</strong> de R$ {acao.antigo_budget_aumentado} para R$ {acao.novo_budget_aumentado}/dia
-          </p>
-        )}
-        {isReduzirConjunto && acao.novo_budget != null && (
-          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
-            <span style={{ color: txtMid }}>→</span>
-            <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
-          </p>
-        )}
-        {isBudget && acao.novo_budget != null && (
-          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
-            <span style={{ color: txtMid }}>→</span>
-            <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
-            {variacaoPct !== null && (
-              <span style={{ fontSize: '11px', fontWeight: 700, color: variacaoPct > 0 ? '#10b981' : '#f97316' }}>
-                ({variacaoPct > 0 ? '+' : ''}{variacaoPct}%)
-              </span>
+          <>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: txtHi, margin: '0 0 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {acao.campanha_nome || acao.nome || '—'}
+            </p>
+            <p style={{ fontSize: '11.5px', color: txtMid, margin: '0 0 4px', lineHeight: 1.5 }}>
+              ↓ {acao.conjunto_reduzido_nome}: R${acao.antigo_budget_reduzido}→R${acao.novo_budget_reduzido}/dia &nbsp;↑ {acao.conjunto_aumentado_nome}: R${acao.antigo_budget_aumentado}→R${acao.novo_budget_aumentado}/dia
+            </p>
+            {acao.motivo && (
+              <p style={{ margin: 0, fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', lineHeight: 1.4 }}>
+                {truncMotivo(acao.motivo, 80)}
+              </p>
             )}
-          </p>
+          </>
         )}
-        {acao.motivo && <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>}
+
+        {isReduzirConjunto && (
+          <>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: txtHi, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {acao.conjunto_nome || acao.nome || '—'}
+            </p>
+            <p style={{ fontSize: '11px', color: txtMid, margin: '0 0 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              campanha: {acao.campanha_nome || '—'}
+            </p>
+            {acao.novo_budget != null && (
+              <p style={{ fontSize: '12px', color: txtHi, margin: 0, display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                <span style={{ color: txtMid }}>R$ {acao.antigo_budget || '??'}</span>
+                <span style={{ color: txtMid }}>→</span>
+                <span style={{ color, fontWeight: 600 }}>R$ {acao.novo_budget}/dia</span>
+                {acao.motivo && <span style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af' }}>· {truncMotivo(acao.motivo, 60)}</span>}
+              </p>
+            )}
+          </>
+        )}
+
+        {!isRedistribuir && !isReduzirConjunto && (
+          <>
+            <p style={{ fontSize: '13.5px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {acao.nome || acao.campanha_nome || '—'}
+            </p>
+            {isBudget && acao.novo_budget != null && (
+              <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
+                <span style={{ color: txtMid }}>→</span>
+                <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+                {variacaoPct !== null && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: variacaoPct > 0 ? '#10b981' : '#f97316' }}>
+                    ({variacaoPct > 0 ? '+' : ''}{variacaoPct}%)
+                  </span>
+                )}
+              </p>
+            )}
+            {acao.motivo && <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{truncMotivo(acao.motivo, 80)}</p>}
+          </>
+        )}
       </div>
     </div>
   );
