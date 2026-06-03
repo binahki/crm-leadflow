@@ -1641,7 +1641,7 @@ export default function CampanhasPage() {
           const badgeNum  = isPendente ? numSugestoes : numExecutadas;
           const badgeText = isPendente
             ? (badgeNum === 1 ? '1 sugestão' : `${badgeNum} sugestões`)
-            : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''}`;
+            : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''} de orçamento`;
           return (
             <div
               onClick={() => setShowAiPanel(true)}
@@ -1659,7 +1659,7 @@ export default function CampanhasPage() {
                     ? 'Nenhuma ação necessária hoje. Próxima análise às 8h'
                     : isPendente
                       ? (numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
-                      : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de budget realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
+                      : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de orçamento realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
@@ -2907,15 +2907,43 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* SEÇÃO 1: Feito automaticamente (acoes_executadas) */}
-            {log.acoes_executadas?.length > 0 && (
+            {/* SEÇÃO 1a: Feito automaticamente pela Ravena */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).length > 0 && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Feito automaticamente
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).map((acao: any, i: number) => (
+                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SEÇÃO 1b: Aplicado pelo usuário a partir de sugestão */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico !== true).length > 0 && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Aplicado por você
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico !== true).map((acao: any, i: number) => (
+                    <ActionCard key={i} acao={acao} dark={dark} origem="usuario" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback retrocompat: sem campo automatico — mostrar todos juntos */}
+            {log.acoes_executadas?.length > 0 && (log.acoes_executadas as any[]).every((a: any) => a.automatico === undefined) && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
                   Feito automaticamente
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {log.acoes_executadas.map((acao: any, i: number) => (
-                    <ActionCard key={i} acao={acao} dark={dark} />
+                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
                   ))}
                 </div>
               </div>
@@ -3070,6 +3098,7 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   acao: any; dark: boolean;
   onAplicar: () => void; onIgnorar: () => void; aplicando?: boolean;
 }) {
+  const [motivoExpandido, setMotivoExpandido] = useState(false);
   const tipo = (acao.tipo || '').toLowerCase();
   const isPause    = tipo.includes('pausar');
   const isIncrease = tipo.includes('aumentar') || (tipo === 'reduzir' && acao.direcao === 'aumento');
@@ -3136,16 +3165,24 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
         </div>
       )}
 
-      {/* Separador + motivo */}
+      {/* Separador + motivo expansível */}
       {acao.motivo && (
         <div style={{ padding: '10px 14px 0' }}>
           <div style={{ height: '1px', background: sepClr, marginBottom: '8px' }} />
-          <p style={{
-            margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          } as React.CSSProperties}>
-            {acao.motivo}
-          </p>
+          {acao.motivo.length <= 80 ? (
+            <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>
+          ) : (
+            <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5 }}>
+              {motivoExpandido ? acao.motivo : acao.motivo.slice(0, 80) + '…'}
+              {' '}
+              <button
+                onClick={() => setMotivoExpandido(v => !v)}
+                style={{ fontSize: '11px', color: '#8b5cf6', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                {motivoExpandido ? 'ver menos' : 'ver mais'}
+              </button>
+            </p>
+          )}
         </div>
       )}
 
@@ -3164,46 +3201,48 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   );
 }
 
-function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
-  const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
-  const isUp = isBudget && acao.direcao === 'aumento';
-  const isDown = isBudget && acao.direcao === 'reducao';
-  const isPause = typeof acao.tipo === 'string' && acao.tipo.startsWith('pausar_');
-  const isRedistribuir = acao.tipo === 'redistribuir_conjunto';
-  const isReduzirConjunto = acao.tipo === 'reduzir_conjunto';
+function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?: 'automatico' | 'usuario' }) {
+  const tipo = (acao.tipo || '').toLowerCase();
+  const isPause        = tipo.includes('pausar');
+  const isRedistribuir = tipo.includes('redistribuir');
+  const isConjunto     = tipo.includes('conjunto');
+  const isUp           = tipo.includes('aumentar') || acao.direcao === 'aumento';
+  const isDown         = (tipo.includes('reduzir') && acao.direcao !== 'aumento') || (!isUp && !isPause && !isRedistribuir && tipo.includes('reduzir'));
+  const isReduzirConjunto = tipo === 'reduzir_conjunto';
+  const isBudget = tipo === 'ajustar_budget_campanha' || tipo === 'ajustar_budget_adset';
   const hasError = acao.ok === false;
 
   const color = isRedistribuir ? '#3b82f6'
-    : isReduzirConjunto ? '#f97316'
+    : isPause ? '#71717a'
     : isUp ? '#10b981'
     : isDown ? '#f97316'
-    : isPause ? '#71717a'
     : '#3b82f6';
   const bg = isRedistribuir ? 'rgba(59,130,246,0.05)'
-    : isReduzirConjunto ? 'rgba(249,115,22,0.05)'
+    : isPause ? 'rgba(113,113,122,0.05)'
     : isUp ? 'rgba(16,185,129,0.05)'
     : isDown ? 'rgba(249,115,22,0.05)'
-    : 'rgba(113,113,122,0.05)';
+    : 'rgba(59,130,246,0.05)';
   const Icon = isRedistribuir ? RefreshCw
-    : isReduzirConjunto ? TrendingDown
+    : isPause ? Pause
     : isUp ? TrendingUp
     : isDown ? TrendingDown
-    : isPause ? Pause
     : Zap;
 
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
 
-  const variacaoPct = isBudget && acao.antigo_budget && acao.novo_budget
+  const variacaoPct = (isBudget || isReduzirConjunto) && acao.antigo_budget && acao.novo_budget
     ? Math.round(((Number(acao.novo_budget) - Number(acao.antigo_budget)) / Number(acao.antigo_budget)) * 100)
     : null;
 
-  const label = isRedistribuir ? 'Orçamento redistribuído'
-    : isReduzirConjunto ? 'Orçamento de conjunto reduzido'
-    : isUp ? 'Orçamento aumentado'
-    : isDown ? 'Orçamento reduzido'
+  const label = isPause && isConjunto ? 'Conjunto pausado'
     : isPause ? 'Campanha pausada'
+    : isRedistribuir ? 'Orçamento redistribuído'
+    : isUp && isConjunto ? 'Orçamento de conjunto aumentado'
+    : isUp ? 'Orçamento aumentado'
+    : isDown && isConjunto ? 'Orçamento de conjunto reduzido'
+    : isDown ? 'Orçamento reduzido'
     : 'Ação automática';
 
   const truncMotivo = (str: string | undefined, max: number) => {
@@ -3219,10 +3258,13 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
         <Icon size={18} color={color} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {label}
           </span>
+          {origem === 'usuario' && (
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 7px', borderRadius: '99px' }}>✓ Você aprovou</span>
+          )}
           {hasError && <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>}
         </div>
 
