@@ -2805,9 +2805,14 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         body: { log_id: log.id, acao_id: uid },
       });
       if (res.error) throw res.error;
+      const acaoAplicada = sugestoes.find(a => a.id === uid);
       const novas = sugestoes.filter(a => a.id !== uid);
       setSugestoes(novas);
-      if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novas.length === 0 ? 'executado' : log.status });
+      const novasExecutadas = [
+        ...(log.acoes_executadas || []),
+        ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, ok: true }] : []),
+      ];
+      if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
       setToast?.({ msg: `Ação aplicada com sucesso`, ok: true });
     } catch {
       setToast?.({ msg: 'Erro ao aplicar — tente novamente', ok: false });
@@ -2907,43 +2912,29 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* SEÇÃO 1a: Feito automaticamente pela Ravena */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).length > 0 && (
+            {/* SEÇÃO 1a: Feito automaticamente (automatico !== false — inclui true e legado sem campo) */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico !== false).length > 0 && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
                   Feito automaticamente
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).map((acao: any, i: number) => (
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico !== false).map((acao: any, i: number) => (
                     <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* SEÇÃO 1b: Aplicado pelo usuário a partir de sugestão */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico !== true).length > 0 && (
+            {/* SEÇÃO 1b: Aprovado por você (automatico === false explícito) */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).length > 0 && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Aplicado por você
+                  Aprovado por você
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico !== true).map((acao: any, i: number) => (
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).map((acao: any, i: number) => (
                     <ActionCard key={i} acao={acao} dark={dark} origem="usuario" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Fallback retrocompat: sem campo automatico — mostrar todos juntos */}
-            {log.acoes_executadas?.length > 0 && (log.acoes_executadas as any[]).every((a: any) => a.automatico === undefined) && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Feito automaticamente
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {log.acoes_executadas.map((acao: any, i: number) => (
-                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
                   ))}
                 </div>
               </div>
@@ -3169,11 +3160,11 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
       {acao.motivo && (
         <div style={{ padding: '10px 14px 0' }}>
           <div style={{ height: '1px', background: sepClr, marginBottom: '8px' }} />
-          {acao.motivo.length <= 80 ? (
+          {acao.motivo.length <= 90 ? (
             <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5 }}>{acao.motivo}</p>
           ) : (
             <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.5 }}>
-              {motivoExpandido ? acao.motivo : acao.motivo.slice(0, 80) + '…'}
+              {motivoExpandido ? acao.motivo : acao.motivo.slice(0, 90) + '…'}
               {' '}
               <button
                 onClick={() => setMotivoExpandido(v => !v)}
@@ -3253,7 +3244,7 @@ function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?:
   };
 
   return (
-    <div style={{ padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+    <div style={{ padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start', opacity: hasError ? 0.5 : 1 }}>
       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={18} color={color} />
       </div>
@@ -3265,7 +3256,6 @@ function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?:
           {origem === 'usuario' && (
             <span style={{ fontSize: '10px', fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 7px', borderRadius: '99px' }}>✓ Você aprovou</span>
           )}
-          {hasError && <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>}
         </div>
 
         {isRedistribuir && (
@@ -3322,6 +3312,11 @@ function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?:
             )}
             {acao.motivo && <p style={{ margin: 0, fontSize: '11.5px', color: txtMid, lineHeight: 1.5 }}>{truncMotivo(acao.motivo, 80)}</p>}
           </>
+        )}
+        {hasError && (
+          <p style={{ margin: '6px 0 0', fontSize: '11px', color: dark ? '#71717a' : '#9ca3af' }}>
+            ⚠ Não foi possível executar esta ação
+          </p>
         )}
       </div>
     </div>
