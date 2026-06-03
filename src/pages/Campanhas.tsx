@@ -46,7 +46,7 @@ function calcScore(
   const campLeads = allCampLeadsMap.get(r.id) || [];
   const oldest = campLeads.length > 0
     ? Math.min(...campLeads.map(l => new Date((l as any).created_at || Date.now()).getTime()))
-    : Date.now();
+    : 0;
   const ageDays = (Date.now() - oldest) / (1000 * 60 * 60 * 24);
   const isNew = ageDays < 3;
   const potenciais = campLeads.filter(l => [2, 5].includes(Number((l as any).status))).length;
@@ -870,7 +870,9 @@ export default function CampanhasPage() {
       const utmRaw = (la.utm_campaign || '').trim();
       let bestMatch: string | null = null;
       if (utmRaw) {
-        const utm = utmRaw.toLowerCase().split('|')[0].trim();
+        const parts = utmRaw.split('|');
+        const utm = (parts[0] || '').toLowerCase().trim();
+        const utmId = parts.length >= 2 ? parts[1].trim() : '';
         let maxMatchLen = 0;
 
         for (const c of campaigns) {
@@ -884,6 +886,12 @@ export default function CampanhasPage() {
               maxMatchLen = cn.length;
               bestMatch = c.id;
             }
+          }
+        }
+
+        if (!bestMatch && utmId) {
+          for (const c of campaigns) {
+            if (utmId === c.id) { bestMatch = c.id; break; }
           }
         }
       }
@@ -927,7 +935,9 @@ export default function CampanhasPage() {
       const utmRaw = (la.utm_campaign || '').trim();
       let bestMatch: string | null = null;
       if (utmRaw) {
-        const utm = utmRaw.toLowerCase().split('|')[0].trim();
+        const parts = utmRaw.split('|');
+        const utm = (parts[0] || '').toLowerCase().trim();
+        const utmId = parts.length >= 2 ? parts[1].trim() : '';
         let maxMatchLen = 0;
 
         for (const c of campaigns) {
@@ -941,6 +951,12 @@ export default function CampanhasPage() {
               maxMatchLen = cn.length;
               bestMatch = c.id;
             }
+          }
+        }
+
+        if (!bestMatch && utmId) {
+          for (const c of campaigns) {
+            if (utmId === c.id) { bestMatch = c.id; break; }
           }
         }
       }
@@ -980,7 +996,9 @@ export default function CampanhasPage() {
       const la = l as any;
       const utmRaw = (la.utm_campaign || '').trim();
       if (!utmRaw) continue;
-      const utm = utmRaw.toLowerCase().split('|')[0].trim();
+      const parts = utmRaw.split('|');
+      const utm = (parts[0] || '').toLowerCase().trim();
+      const utmId = parts.length >= 2 ? parts[1].trim() : '';
       let bestMatch: string | null = null;
       let maxMatchLen = 0;
       for (const c of campaigns) {
@@ -990,6 +1008,11 @@ export default function CampanhasPage() {
         if (utm === cn) { bestMatch = c.id; break; }
         if (utm.includes(cn.slice(0, 20))) {
           if (cn.length > maxMatchLen) { maxMatchLen = cn.length; bestMatch = c.id; }
+        }
+      }
+      if (!bestMatch && utmId) {
+        for (const c of campaigns) {
+          if (utmId === c.id) { bestMatch = c.id; break; }
         }
       }
       if (bestMatch) {
@@ -1050,13 +1073,77 @@ export default function CampanhasPage() {
     return map;
   }, [chartRows, allCampLeadsMap, campRevsMap, datePreset]);
 
-  // Top 5 por score para o ranking lateral
+  // Top 5 por score para o ranking lateral — SEMPRE últimos 7 dias
   const rankedRows = useMemo(() => {
-    return [...chartRows]
-      .map(r => ({ ...r, score: calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset) }))
+    const leads7d = filterLeadsByPreset(allLeads, 'last_7d');
+    const today7d = todayBRCamp();
+    const ok7d = (ref: string | null | undefined) => {
+      const d = leadDateBRCamp(ref);
+      return !!d && d >= subDaysCamp(today7d, 6) && d <= today7d;
+    };
+    const revs7d = allLeads.filter(l => Number((l as any).status) === 3 && ok7d((l as any).status_aprovado_at || (l as any).ultimo_status_change || l.created_at));
+    const leadsCount = new Map<string, number>();
+    const revsCount = new Map<string, number>();
+    campaigns.forEach(c => { leadsCount.set(c.id, 0); revsCount.set(c.id, 0); });
+    for (const l of leads7d) {
+      if (!isPaidTraffic(l)) continue;
+      const la = l as any;
+      const utmRaw = (la.utm_campaign || '').trim();
+      if (!utmRaw) continue;
+      const parts = utmRaw.split('|');
+      const utm = (parts[0] || '').toLowerCase().trim();
+      const utmId = parts.length >= 2 ? parts[1].trim() : '';
+      let best: string | null = null;
+      for (const c of campaigns) {
+        if (utm === c.id) { best = c.id; break; }
+        const cn = c.name.toLowerCase().split('|')[0].trim();
+        if (!cn || cn.length < 3) continue;
+        if (utm === cn) { best = c.id; break; }
+        if (cn.length > 5 && utm.includes(cn.slice(0, 20))) { best = c.id; }
+      }
+      if (!best && utmId) for (const c of campaigns) { if (utmId === c.id) { best = c.id; break; } }
+      if (best) leadsCount.set(best, (leadsCount.get(best) || 0) + 1);
+    }
+    for (const l of revs7d) {
+      if (!isPaidTraffic(l)) continue;
+      const la = l as any;
+      const utmRaw = (la.utm_campaign || '').trim();
+      if (!utmRaw) continue;
+      const parts = utmRaw.split('|');
+      const utm = (parts[0] || '').toLowerCase().trim();
+      const utmId = parts.length >= 2 ? parts[1].trim() : '';
+      let best: string | null = null;
+      for (const c of campaigns) {
+        if (utm === c.id) { best = c.id; break; }
+        const cn = c.name.toLowerCase().split('|')[0].trim();
+        if (!cn || cn.length < 3) continue;
+        if (utm === cn) { best = c.id; break; }
+        if (cn.length > 5 && utm.includes(cn.slice(0, 20))) { best = c.id; }
+      }
+      if (!best && utmId) for (const c of campaigns) { if (utmId === c.id) { best = c.id; break; } }
+      if (best) revsCount.set(best, (revsCount.get(best) || 0) + 1);
+    }
+    const allRows = campaigns
+      .filter(c => c.spend > 0 || c.status === 'ACTIVE')
+      .map(c => {
+        const l = leadsCount.get(c.id) ?? 0;
+        const r = revsCount.get(c.id) ?? 0;
+        return {
+          name: c.name.length > 16 ? c.name.slice(0, 16) + '…' : c.name,
+          fullName: c.name,
+          leads: l,
+          rev: r,
+          cpl: l > 0 && c.spend > 0 ? Math.round(c.spend / l) : 0,
+          cpr: r > 0 && c.spend > 0 ? Math.round(c.spend / r) : 0,
+          spend: c.spend,
+          id: c.id,
+        };
+      });
+    return allRows
+      .map(r => ({ ...r, score: calcScore(r, allRows, allCampLeadsMap, revsCount, 'last_7d') }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
-  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset]);
+  }, [campaigns, allCampLeadsMap, allLeads]);
 
   // ── Performance badge por campanha ───────────────────────────
   function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
@@ -1320,12 +1407,12 @@ export default function CampanhasPage() {
   const cprCard = revsCRMTotal>0&&totalSpend>0  ? totalSpend/revsCRMTotal  : 0;
 
   const avgCTR = useMemo(() => {
-    const ativas = campaigns.filter(c => c.impressions > 0);
+    const ativas = filtered.filter(c => c.impressions > 0);
     if (!ativas.length) return 0;
     const totalImpressions = ativas.reduce((s,c) => s + c.impressions, 0);
     const totalClicks = ativas.reduce((s,c) => s + c.clicks, 0);
     return totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-  }, [campaigns]);
+  }, [filtered]);
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
   const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
@@ -1338,23 +1425,115 @@ export default function CampanhasPage() {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     setTogglingCampaigns(prev => new Set(prev).add(id));
     const labels = {campaign:'Campanha', adset:'Conjunto', ad:'Anúncio'};
+    const callApi = async (entityId: string): Promise<{ ok: boolean; erro?: string }> => {
+      try {
+        const url = new URL(`https://graph.facebook.com/v18.0/${entityId}`);
+        url.searchParams.set('status', newStatus);
+        url.searchParams.set('access_token', metaToken || '');
+        const res = await fetch(url.toString(), { method: 'POST' });
+        const d = await res.json();
+        if (!res.ok || d.error) return { ok: false, erro: d.error?.error_user_msg || d.error?.message || 'Erro Meta API' };
+        return { ok: true };
+      } catch (e: any) {
+        return { ok: false, erro: e.message || 'Erro de rede' };
+      }
+    };
+    const getChildAds = async (parentId: string): Promise<string[]> => {
+      try {
+        const url = new URL(`https://graph.facebook.com/v18.0/${parentId}/ads`);
+        url.searchParams.set('fields', 'id');
+        url.searchParams.set('limit', '100');
+        url.searchParams.set('access_token', metaToken || '');
+        const res = await fetch(url.toString());
+        const d = await res.json();
+        return (d.data || []).map((a: any) => a.id);
+      } catch { return []; }
+    };
+    const getAdsetIds = async (campaignId: string): Promise<string[]> => {
+      try {
+        const url = new URL(`https://graph.facebook.com/v18.0/${campaignId}/adsets`);
+        url.searchParams.set('fields', 'id');
+        url.searchParams.set('limit', '50');
+        url.searchParams.set('access_token', metaToken || '');
+        const res = await fetch(url.toString());
+        const d = await res.json();
+        return (d.data || []).map((a: any) => a.id);
+      } catch { return []; }
+    };
+    const fixAndPause = async (adsetId: string): Promise<boolean> => {
+      try {
+        const getUrl = new URL(`https://graph.facebook.com/v18.0/${adsetId}`);
+        getUrl.searchParams.set('fields', 'targeting');
+        getUrl.searchParams.set('access_token', metaToken || '');
+        const getRes = await fetch(getUrl.toString());
+        const getData = await getRes.json();
+        if (getData.error || !getData.targeting) return false;
+        const targeting = JSON.parse(JSON.stringify(getData.targeting));
+        if (targeting.excluded_geo_locations) {
+          delete targeting.excluded_geo_locations;
+        }
+        const updUrl = new URL(`https://graph.facebook.com/v18.0/${adsetId}`);
+        updUrl.searchParams.set('targeting', JSON.stringify(targeting));
+        updUrl.searchParams.set('access_token', metaToken || '');
+        const updRes = await fetch(updUrl.toString(), { method: 'POST' });
+        const updData = await updRes.json();
+        if (updData.error) return false;
+        const pauseUrl = new URL(`https://graph.facebook.com/v18.0/${adsetId}`);
+        pauseUrl.searchParams.set('status', 'PAUSED');
+        pauseUrl.searchParams.set('access_token', metaToken || '');
+        const pauseRes = await fetch(pauseUrl.toString(), { method: 'POST' });
+        const pauseData = await pauseRes.json();
+        return !pauseData.error;
+      } catch { return false; }
+    };
     try {
-      const res = await fetch(`https://graph.facebook.com/v18.0/${id}`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({status: newStatus, access_token: metaToken})
-      });
-      if (!res.ok) throw new Error();
-      // Update local state ONLY after API confirms
-      setCampaigns(prev => type === 'campaign'
-        ? prev.map(c => c.id === id ? {...c, status: newStatus} : c)
-        : type === 'adset'
-          ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: newStatus} : as)}))
-          : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad)}))}))
-      );
-      setToast({msg: `${labels[type]} ${newStatus === 'ACTIVE' ? 'ativado' : 'pausado'}`, ok: true});
-    } catch {
-      setToast({msg: 'Erro ao atualizar — verifique permissão ads_management', ok: false});
+      const result = await callApi(id);
+      if (!result.ok && type !== 'ad' && newStatus === 'PAUSED') {
+        // Fallback 1: tentar pausar anúncios individualmente
+        const ads = await getChildAds(id);
+        let pausedAds = 0;
+        let lastAdError = '';
+        for (const adId of ads) {
+          const r = await callApi(adId);
+          if (r.ok) pausedAds++;
+          else lastAdError = r.erro || '';
+        }
+        if (pausedAds > 0) {
+          setCampaigns(prev => type === 'campaign'
+            ? prev.map(c => c.id === id ? {...c, status: 'PAUSED'} : c)
+            : prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: 'PAUSED'} : as)}))
+          );
+          setToast({msg: `${labels[type]} pausada via ${pausedAds} anúncio${pausedAds > 1 ? 's' : ''}`, ok: true});
+          return;
+        }
+        // Fallback 2: corrigir segmentação e pausar
+        const targets = type === 'campaign' ? await getAdsetIds(id) : [id];
+        let fixedCount = 0;
+        for (const t of targets) {
+          if (await fixAndPause(t)) fixedCount++;
+        }
+        if (fixedCount > 0) {
+          setCampaigns(prev => type === 'campaign'
+            ? prev.map(c => c.id === id ? {...c, status: 'PAUSED'} : c)
+            : prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: 'PAUSED'} : as)}))
+          );
+          setToast({msg: `${labels[type]} pausada (segmentação corrigida em ${fixedCount} conjunto${fixedCount > 1 ? 's' : ''})`, ok: true});
+          return;
+        }
+        throw new Error(result.erro || lastAdError || 'Erro ao pausar');
+      } else if (result.ok) {
+        setCampaigns(prev => type === 'campaign'
+          ? prev.map(c => c.id === id ? {...c, status: newStatus} : c)
+          : type === 'adset'
+            ? prev.map(c => ({...c, adsets: c.adsets?.map(as => as.id === id ? {...as, status: newStatus} : as)}))
+            : prev.map(c => ({...c, ads: c.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad), adsets: c.adsets?.map(as => ({...as, ads: as.ads?.map(ad => ad.id === id ? {...ad, status: newStatus} : ad)}))}))
+        );
+        setToast({msg: `${labels[type]} ${newStatus === 'ACTIVE' ? 'ativado' : 'pausado'}`, ok: true});
+      } else {
+        throw new Error(result.erro || 'Erro desconhecido');
+      }
+    } catch (e: any) {
+      setToast({msg: `Erro: ${e.message}`, ok: false});
     } finally {
       setTogglingCampaigns(prev => { const n = new Set(prev); n.delete(id); return n; });
       setTimeout(() => setToast(null), 3000);
@@ -1367,11 +1546,10 @@ export default function CampanhasPage() {
     const cents = Math.round(num * 100);
     setEditingBudget(null);
     try {
-      const res = await fetch(`https://graph.facebook.com/v18.0/${id}`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({daily_budget: cents, access_token: metaToken})
-      });
+      const url = new URL(`https://graph.facebook.com/v18.0/${id}`);
+      url.searchParams.set('daily_budget', String(cents));
+      url.searchParams.set('access_token', metaToken || '');
+      const res = await fetch(url.toString(), { method: 'POST' });
       if (!res.ok) throw new Error();
       if (level === 'campaign') {
         setCampaigns(prev => prev.map(c => c.id === id ? {...c, daily_budget: num} : c));
@@ -1634,27 +1812,31 @@ export default function CampanhasPage() {
         {aiLog && (() => {
           const isPendente = aiLog.status === 'pendente';
           const isSemAcao = aiLog.status === 'sem_acao';
-          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
+          if (aiLog.status === 'ignorado') return null;
+          let ignoredIds = new Set<string>();
+          try { ignoredIds = new Set(JSON.parse(localStorage.getItem(`ravena_ignored_${aiLog.id}`) || '[]')); } catch {}
+          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && !ignoredIds.has(a.id)).length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
+          const pendenteAtivo = isPendente && numSugestoes > 0;
           const bannerBg = isSemAcao
             ? (dark ? 'rgba(255,255,255,0.03)' : '#f9fafb')
-            : isPendente
+            : pendenteAtivo
               ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
               : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
           const bannerBorder = isSemAcao
             ? (dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb')
-            : isPendente
+            : pendenteAtivo
               ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
               : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
           const textColor = isSemAcao
             ? (dark ? '#a1a1aa' : '#6b7280')
-            : isPendente ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
+            : pendenteAtivo ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
           const subColor = isSemAcao
             ? (dark ? '#71717a' : '#9ca3af')
-            : isPendente ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
-          const badgeBg   = isPendente ? '#f59e0b' : '#8b5cf6';
-          const badgeNum  = isPendente ? numSugestoes : numExecutadas;
-          const badgeText = isPendente
+            : pendenteAtivo ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
+          const badgeBg   = pendenteAtivo ? '#f59e0b' : '#8b5cf6';
+          const badgeNum  = pendenteAtivo ? numSugestoes : numExecutadas;
+          const badgeText = pendenteAtivo
             ? (badgeNum === 1 ? '1 sugestão' : `${badgeNum} sugestões`)
             : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''} de orçamento`;
           return (
@@ -1664,16 +1846,16 @@ export default function CampanhasPage() {
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isSemAcao ? 'none' : isPendente ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
+              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isSemAcao ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas'}
+                  {isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isSemAcao
                     ? 'Nenhuma ação necessária hoje. Próxima análise às 8h'
                     : isPendente
-                      ? (numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
+                      ? (numSugestoes === 0 ? 'Clique para ver o histórico de ações' : numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
                       : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de orçamento realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
                 </p>
               </div>
@@ -1806,7 +1988,7 @@ export default function CampanhasPage() {
                 const allLeadsList = allCampLeadsMap.get(r.id) || [];
                 const oldest = allLeadsList.length > 0
                   ? Math.min(...allLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
-                  : Date.now();
+                  : 0;
                 const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
                 const isNew = ageDays < 3;
                 // potenciais: usa campLeadsMap (filtrado por período) para exibição
@@ -2577,6 +2759,14 @@ export default function CampanhasPage() {
           metaRevs={metaRevsOrg}
           setToast={setToast}
           onLogUpdate={(updatedLog) => setAiLog(updatedLog)}
+          onCampaignStatusChange={(id, tipo, status) => {
+            if (tipo === 'pausar_campanha' || tipo === 'pausar') {
+              setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+            } else if (tipo === 'pausar_adset' || tipo === 'pausar_conjunto') {
+              setCampaigns(prev => prev.map(c => ({ ...c, adsets: c.adsets?.map(as => as.id === id ? { ...as, status } : as) })));
+            }
+            setTimeout(() => setToast?.({ msg: 'Status atualizado na lista', ok: true }), 100);
+          }}
         />
       )}
 
@@ -2783,14 +2973,19 @@ export default function CampanhasPage() {
 
 // ── Componentes do Painel de Otimização IA ───────────────────────────────────
 
-function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, setToast, onLogUpdate }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; setToast?: (t: {msg: string; ok: boolean} | null) => void; onLogUpdate?: (log: any) => void }) {
+function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, setToast, onLogUpdate, onCampaignStatusChange }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; setToast?: (t: {msg: string; ok: boolean} | null) => void; onLogUpdate?: (log: any) => void; onCampaignStatusChange?: (id: string, tipo: string, status: string) => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const t = useTerminology();
 
   // Estado interno de sugestões — permite remover individualmente sem reload
+  const storageKey = `ravena_ignored_${log.id}`;
+  const [ignoradas, setIgnoradas] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || '[]')); }
+    catch { return new Set<string>(); }
+  });
   const [sugestoes, setSugestoes] = useState<any[]>(() =>
-    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter')
+    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && !ignoradas.has(a.id))
   );
   const [aplicandoIds, setAplicandoIds] = useState<Set<string>>(new Set());
 
@@ -2834,6 +3029,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, ok: true }] : []),
       ];
       if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
+      onCampaignStatusChange?.(acao.id, acao.tipo, 'PAUSED');
       setToast?.({ msg: 'Ação aplicada com sucesso', ok: true });
     } catch {
       setToast?.({ msg: 'Erro ao conectar — tente novamente', ok: false });
@@ -2844,14 +3040,23 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   }
 
   async function ignorarSugestao(acao: any) {
-    const novas = sugestoes.filter((a: any) => a.id !== acao.id);
+    const uid = acao.id;
+    const novasIgnoradas = new Set(ignoradas);
+    novasIgnoradas.add(uid);
+    setIgnoradas(novasIgnoradas);
+    try { localStorage.setItem(storageKey, JSON.stringify([...novasIgnoradas])); } catch {}
+    const novas = sugestoes.filter((a: any) => a.id !== uid);
     setSugestoes(novas);
-    const novoStatus = novas.length === 0 ? 'ignorado' : 'pendente';
-    await (supabase as any)
-      .from('ai_optimization_logs')
-      .update({ acoes_sugeridas: novas, status: novoStatus })
-      .eq('id', log.id);
-    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novoStatus });
+    try {
+      const { error } = await (supabase as any)
+        .from('ai_optimization_logs')
+        .update({ acoes_sugeridas: novas })
+        .eq('id', log.id);
+      if (error) console.warn('ignorarSugestao: DB update failed', error);
+    } catch (e) {
+      console.warn('ignorarSugestao: DB update error', e);
+    }
+    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas });
   }
 
   return (
