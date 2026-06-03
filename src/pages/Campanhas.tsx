@@ -716,22 +716,33 @@ export default function CampanhasPage() {
     const fallback = since || (todayBRCamp().slice(0,7) + '-01T00:00:00-03:00');
     const fields = 'id,utm_campaign,utm_medium,utm_content,utm_source,status,created_at,status_aprovado_at,status_reuniao_at,status_contrato_at,ultimo_status_change';
     Promise.all([
-      // Revendedoras com status_aprovado_at preenchido — filtro preciso por data de aprovação
+      // Revendedoras com status_aprovado_at — data precisa de aprovação
       supabase.from('leads').select(fields).eq('org_id', orgId)
         .eq('status', 3).not('status_aprovado_at', 'is', null)
         .gte('status_aprovado_at', fallback)
         .order('status_aprovado_at', { ascending: false }).limit(500),
-      // Revendedoras sem status_aprovado_at — leads aprovados manualmente (adicionados direto como aprovado)
+      // Revendedoras com ultimo_status_change mas sem status_aprovado_at
       supabase.from('leads').select(fields).eq('org_id', orgId)
         .eq('status', 3).is('status_aprovado_at', null)
+        .not('ultimo_status_change', 'is', null)
+        .gte('ultimo_status_change', fallback)
+        .order('ultimo_status_change', { ascending: false }).limit(200),
+      // Revendedoras sem nenhum campo de data — fallback created_at
+      supabase.from('leads').select(fields).eq('org_id', orgId)
+        .eq('status', 3).is('status_aprovado_at', null)
+        .is('ultimo_status_change', null)
         .gte('created_at', fallback)
         .order('created_at', { ascending: false }).limit(200),
-      // Demais leads (não aprovados) — filtro por created_at
+      // Todos os outros leads (não revendedoras) — por created_at
       supabase.from('leads').select(fields).eq('org_id', orgId)
         .neq('status', 3).gte('created_at', fallback)
         .order('created_at', { ascending: false }).limit(2500),
-    ]).then(([{ data: revsData }, { data: revsFallback }, { data: leadsData }]: any[]) => {
-      const combined = [...(revsData || []), ...(revsFallback || []), ...(leadsData || [])];
+    ]).then(([{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }]: any[]) => {
+      const seen = new Set<string>();
+      const combined: any[] = [];
+      for (const l of [...(d1 || []), ...(d2 || []), ...(d3 || []), ...(d4 || [])]) {
+        if (!seen.has(l.id)) { seen.add(l.id); combined.push(l); }
+      }
       if (combined.length) setAllLeads(combined);
     });
   },[orgId, orgReady, datePreset]); // eslint-disable-line
@@ -1086,7 +1097,9 @@ export default function CampanhasPage() {
 
   function saveFilterAndNavigate(filter: object) {
     if (!orgId) return;
-    const payload = { ...filter, datePreset };
+    const showRevs = (filter as any).showRevs === true;
+    // useAprovacaoDate: true instrui a página de leads a filtrar por status_aprovado_at em vez de created_at
+    const payload = { ...filter, datePreset, ...(showRevs ? { useAprovacaoDate: true } : {}) };
     localStorage.setItem(`leads_campaign_filter_${orgId}`, JSON.stringify(payload));
     navigate('/leads');
   }
