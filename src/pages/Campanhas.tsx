@@ -761,8 +761,9 @@ export default function CampanhasPage() {
         if(data&&data.length>0){
           const log=data[0];
           const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
-          // Mostra log pendente independente da idade; executado só nas últimas 24h
-          if(log.status === 'pendente' || horas<=24) setAiLog(log);
+          // sem_acao: mostrar só nas últimas 24h; demais: mostrar nas últimas 26h
+          const semAcao = log.status === 'sem_acao';
+          if (semAcao ? horas <= 24 : horas <= 26) setAiLog(log);
         }
       });
   },[orgId, orgReady]); // eslint-disable-line
@@ -1617,16 +1618,25 @@ export default function CampanhasPage() {
         <div style={{ opacity: ravenaDesbotada ? 0.4 : 1 }}>
         {aiLog && (() => {
           const isPendente = aiLog.status === 'pendente';
+          const isSemAcao = aiLog.status === 'sem_acao';
           const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
-          const bannerBg = isPendente
-            ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
-            : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
-          const bannerBorder = isPendente
-            ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
-            : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
-          const textColor = isPendente ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
-          const subColor  = isPendente ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
+          const bannerBg = isSemAcao
+            ? (dark ? 'rgba(255,255,255,0.03)' : '#f9fafb')
+            : isPendente
+              ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
+              : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
+          const bannerBorder = isSemAcao
+            ? (dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb')
+            : isPendente
+              ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
+              : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
+          const textColor = isSemAcao
+            ? (dark ? '#a1a1aa' : '#6b7280')
+            : isPendente ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
+          const subColor = isSemAcao
+            ? (dark ? '#71717a' : '#9ca3af')
+            : isPendente ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
           const badgeBg   = isPendente ? '#f59e0b' : '#8b5cf6';
           const badgeNum  = isPendente ? numSugestoes : numExecutadas;
           const badgeText = isPendente
@@ -1639,19 +1649,21 @@ export default function CampanhasPage() {
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isPendente ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
+              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isSemAcao ? 'none' : isPendente ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas'}
+                  {isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {isPendente
-                    ? (numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
-                    : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de budget realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
+                  {isSemAcao
+                    ? 'Nenhuma ação necessária hoje. Próxima análise às 8h'
+                    : isPendente
+                      ? (numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
+                      : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de budget realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                {badgeNum > 0 && (
+                {!isSemAcao && badgeNum > 0 && (
                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: badgeBg, padding: '2px 8px', borderRadius: '99px' }}>
                     {badgeText}
                   </span>
@@ -2775,10 +2787,15 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
   const isPendente = log.status === 'pendente';
-  const headerTitle = isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
-  const headerSub = isPendente
-    ? 'Revise e aprove as otimizações recomendadas'
-    : `Hoje às ${new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const isSemAcao = log.status === 'sem_acao';
+  const headerTitle = isSemAcao
+    ? 'Ravena analisou suas campanhas — tudo estável'
+    : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
+  const headerSub = isSemAcao
+    ? 'Nenhuma ação necessária hoje'
+    : isPendente
+      ? 'Revise e aprove as otimizações recomendadas'
+      : `Hoje às ${new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
   async function aplicarSugestao(acao: any) {
     const uid = acao.id;
@@ -3045,10 +3062,12 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   acao: any; dark: boolean;
   onAplicar: () => void; onIgnorar: () => void; aplicando?: boolean;
 }) {
+  const isPausarConjunto = acao.tipo === 'pausar_conjunto';
   const isPause = (acao.tipo || '').startsWith('pausar');
+  const isAumentarConjunto = acao.tipo === 'aumentar_conjunto';
   const isBudget = acao.tipo === 'ajustar_budget_campanha' || acao.tipo === 'ajustar_budget_adset';
-  const isUp = isBudget && acao.direcao === 'aumento';
-  const isDown = isBudget && !isUp;
+  const isUp = (isBudget && acao.direcao === 'aumento') || isAumentarConjunto;
+  const isDown = isBudget && acao.direcao === 'reducao';
 
   const color = isPause ? '#ef4444' : isUp ? '#10b981' : '#f97316';
   const bdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
@@ -3058,20 +3077,32 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
 
   const ant = acao.antigo_budget != null ? `R$ ${acao.antigo_budget}` : null;
   const nov = acao.novo_budget   != null ? `R$ ${acao.novo_budget}`   : null;
+  const conjuntoNome = acao.conjunto_nome || acao.nome || '—';
+  const campanhaNome = acao.campanha_nome || '';
 
-  // O que vai acontecer (header)
-  const headerLabel = isPause
+  const headerLabel = isPausarConjunto
+    ? '⏸ Pausar conjunto agora'
+    : isPause
     ? '⏸ Pausar campanha agora'
+    : isAumentarConjunto
+    ? `↑ Aumentar orçamento do conjunto${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`
     : isUp
     ? `↑ Aumentar orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`
     : `↓ Reduzir orçamento${ant && nov ? `: ${ant} → ${nov} por dia` : ''}`;
 
-  // Subtexto explicativo
-  const subtexto = isPause
+  const subtexto = isPausarConjunto
+    ? `Se você clicar em Aplicar, o conjunto ${conjuntoNome} será pausado imediatamente no Meta Ads.`
+    : isPause
     ? 'Se você clicar em Aplicar, esta campanha será pausada imediatamente no Meta Ads.'
+    : isAumentarConjunto
+    ? `Se você clicar em Aplicar, o orçamento do conjunto ${conjuntoNome} sobe de ${ant} para ${nov} no Meta Ads.`
     : isUp
     ? `Se você clicar em Aplicar, o orçamento diário sobe de ${ant} para ${nov} no Meta Ads.`
     : `Se você clicar em Aplicar, o orçamento diário cai de ${ant} para ${nov} no Meta Ads.`;
+
+  const nameDisplay = (isPausarConjunto || isAumentarConjunto)
+    ? `${conjuntoNome} — ${campanhaNome}`
+    : (acao.nome || acao.campanha_nome || '—');
 
   return (
     <div style={{ borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${color}28`, opacity: aplicando ? 0.7 : 1, transition: 'opacity 0.15s', overflow: 'hidden' }}>
@@ -3081,10 +3112,10 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
         <p style={{ margin: '4px 0 0', fontSize: '11.5px', color: dark ? `${color}cc` : '#374151', lineHeight: 1.5, fontWeight: 400 }}>{subtexto}</p>
       </div>
 
-      {/* Nome da campanha */}
+      {/* Nome */}
       <div style={{ padding: '10px 14px 0' }}>
         <p style={{ margin: 0, fontSize: '12.5px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {acao.nome || acao.campanha_nome || '—'}
+          {nameDisplay}
         </p>
       </div>
 
@@ -3119,20 +3150,46 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
   const isUp = isBudget && acao.direcao === 'aumento';
   const isDown = isBudget && acao.direcao === 'reducao';
   const isPause = typeof acao.tipo === 'string' && acao.tipo.startsWith('pausar_');
+  const isRedistribuir = acao.tipo === 'redistribuir_conjunto';
+  const isReduzirConjunto = acao.tipo === 'reduzir_conjunto';
   const hasError = acao.ok === false;
 
-  const color = isUp ? '#10b981' : isDown ? '#f97316' : isPause ? '#71717a' : '#3b82f6';
-  const bg = isUp ? 'rgba(16,185,129,0.05)' : isDown ? 'rgba(249,115,22,0.05)' : 'rgba(113,113,122,0.05)';
-  const Icon = isUp ? TrendingUp : isDown ? TrendingDown : isPause ? Pause : Zap;
+  const color = isRedistribuir ? '#3b82f6'
+    : isReduzirConjunto ? '#f97316'
+    : isUp ? '#10b981'
+    : isDown ? '#f97316'
+    : isPause ? '#71717a'
+    : '#3b82f6';
+  const bg = isRedistribuir ? 'rgba(59,130,246,0.05)'
+    : isReduzirConjunto ? 'rgba(249,115,22,0.05)'
+    : isUp ? 'rgba(16,185,129,0.05)'
+    : isDown ? 'rgba(249,115,22,0.05)'
+    : 'rgba(113,113,122,0.05)';
+  const Icon = isRedistribuir ? RefreshCw
+    : isReduzirConjunto ? TrendingDown
+    : isUp ? TrendingUp
+    : isDown ? TrendingDown
+    : isPause ? Pause
+    : Zap;
 
   const txtHi = dark ? '#f4f4f5' : '#111827';
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
 
-  // Fix 5: percentual de variação
   const variacaoPct = isBudget && acao.antigo_budget && acao.novo_budget
     ? Math.round(((Number(acao.novo_budget) - Number(acao.antigo_budget)) / Number(acao.antigo_budget)) * 100)
     : null;
+
+  const label = isRedistribuir ? 'Orçamento redistribuído entre conjuntos'
+    : isReduzirConjunto ? 'Orçamento de conjunto reduzido'
+    : isUp ? 'Orçamento aumentado'
+    : isDown ? 'Orçamento reduzido'
+    : isPause ? 'Campanha pausada'
+    : 'Ação automática';
+
+  const nameDisplay = isReduzirConjunto
+    ? `${acao.conjunto_nome || acao.nome || '—'} — ${acao.campanha_nome || ''}`
+    : (acao.nome || acao.campanha_nome || '—');
 
   return (
     <div style={{ padding: '14px', borderRadius: '16px', background: dark ? '#161619' : '#fff', border: `1px solid ${border}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
@@ -3142,13 +3199,25 @@ function ActionCard({ acao, dark }: { acao: any; dark: boolean }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
           <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isUp ? 'Orçamento aumentado' : isDown ? 'Orçamento reduzido' : isPause ? 'Campanha pausada' : 'Ação automática'}
+            {label}
           </span>
           {hasError && <span style={{ fontSize: '9px', fontWeight: 900, background: '#ef4444', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>ERRO</span>}
         </div>
         <p style={{ fontSize: '13.5px', fontWeight: 700, color: txtHi, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {acao.nome || acao.campanha_nome || '—'}
+          {nameDisplay}
         </p>
+        {isRedistribuir && (
+          <p style={{ fontSize: '12px', color: txtMid, margin: '4px 0 6px', lineHeight: 1.5 }}>
+            Reduzi <strong style={{ color: txtHi }}>{acao.conjunto_reduzido_nome}</strong> de R$ {acao.antigo_budget_reduzido} para R$ {acao.novo_budget_reduzido}/dia e aumentei <strong style={{ color: txtHi }}>{acao.conjunto_aumentado_nome}</strong> de R$ {acao.antigo_budget_aumentado} para R$ {acao.novo_budget_aumentado}/dia
+          </p>
+        )}
+        {isReduzirConjunto && acao.novo_budget != null && (
+          <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
+            <span style={{ color: txtMid }}>→</span>
+            <span style={{ color }}>R$ {acao.novo_budget}/dia</span>
+          </p>
+        )}
         {isBudget && acao.novo_budget != null && (
           <p style={{ fontSize: '13px', fontWeight: 600, color: txtHi, margin: '4px 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ color: txtMid, fontWeight: 400 }}>R$ {acao.antigo_budget || '??'}</span>
