@@ -159,7 +159,10 @@ function toStatusNum(s: any): number {
 
 function extractCampaignName(utmCampaign: string | null | undefined): string {
   if (!utmCampaign) return '';
-  return String(utmCampaign).split('|')[0].trim();
+  const parts = String(utmCampaign).split('|');
+  const name = (parts[0] || '').trim();
+  if (!name && parts.length >= 2) return parts[1].trim();
+  return name;
 }
 
 // Pills de status light — cores saturadas o suficiente para aparecer sobre zebrado #f9fafb
@@ -1001,6 +1004,9 @@ function LeadsPage() {
           const mapped = periodMap[df.datePreset];
           if (mapped) setPeriodFilter(mapped);
         }
+        if (df.showRevs) {
+          setStatusFilter('3');
+        }
         // Toast com nomes legíveis
         const campNm = df.campaignName || df.campaignId || 'Campanha';
         const asNm = df.adSetName || df.adSetId || '';
@@ -1083,6 +1089,34 @@ function LeadsPage() {
       .eq('org_id', orgId);
     setTotalCount(count || 0);
 
+    // Read deep filter from localStorage to prioritize fetching relevant leads
+    let deepFilter: any = null;
+    try {
+      const raw = localStorage.getItem(`leads_campaign_filter_${orgId}`);
+      if (raw) deepFilter = JSON.parse(raw);
+    } catch {}
+
+    let initialData: any[] = [];
+    if (deepFilter) {
+      let query = supabase
+        .from('leads')
+        .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, instagram, lead_tags(tag_id, tags(id, nome, cor))`)
+        .eq('org_id', orgId);
+      
+      if (deepFilter.showRevs) {
+        query = query.eq('status', 3);
+      }
+      
+      if (deepFilter.campaignId) {
+        query = query.ilike('utm_campaign', `%${deepFilter.campaignId}%`);
+      }
+      
+      const { data: prioritized } = await query.limit(200);
+      if (prioritized?.length) {
+        initialData = prioritized;
+      }
+    }
+
     const { data, error } = await supabase
       .from('leads')
       .select(`id, nome, whatsapp, cidade, status, created_at, utm_source, utm_campaign, utm_medium, utm_content, score, faixa, observacoes, motivo_reprovacao, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, org_id, wa_sent, avaliado, instagram, lead_tags(tag_id, tags(id, nome, cor))`)
@@ -1091,16 +1125,27 @@ function LeadsPage() {
       .range(0, INITIAL_SIZE - 1);
 
     if (error) { toast.error('Erro ao carregar leads'); setIsLoading(false); return; }
-    const rawLeads = (data || []) as any[];
+    
+    // Combine and deduplicate
+    const seen = new Set<string>();
+    const combined: any[] = [];
+    
+    for (const l of [...initialData, ...(data || [])]) {
+      if (!seen.has(l.id)) {
+        seen.add(l.id);
+        combined.push(l);
+      }
+    }
+
     const tagSeed = new Map<string, OrgTag[]>();
-    rawLeads.forEach(l => {
+    combined.forEach(l => {
       if (l.lead_tags?.length) {
         const tags = (l.lead_tags as any[]).filter(lt => lt.tags).map(lt => ({ id: lt.tags.id, nome: lt.tags.nome, cor: lt.tags.cor, org_id: orgId as string, created_at: '' }) as OrgTag);
         if (tags.length) tagSeed.set(l.id, tags);
       }
     });
     if (tagSeed.size > 0) setLeadTagsMap(tagSeed);
-    setAllLeads(rawLeads as unknown as Lead[]);
+    setAllLeads(combined as unknown as Lead[]);
     setIsLoading(false);
 
     if (count && count > INITIAL_SIZE) {
@@ -1239,7 +1284,9 @@ function LeadsPage() {
 
     // Escolhe a data de referência para o filtro de período baseado no status selecionado:
     // cada status tem seu próprio timestamp de quando o lead foi movido para aquele status.
-    const statusNum = (statusFilter !== 'all' && statusFilter !== 'novo') ? parseInt(statusFilter) : null;
+    const statusNum = (statusFilter !== 'all' && statusFilter !== 'novo')
+      ? parseInt(statusFilter)
+      : (campDeepFilter?.showRevs ? 3 : null);
     const getRef = (l: Lead): string | null | undefined => {
       const la = l as any;
       switch (statusNum) {

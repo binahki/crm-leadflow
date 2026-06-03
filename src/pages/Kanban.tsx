@@ -118,7 +118,10 @@ function filterByPeriod(items: Lead[], period: string, customFrom?: string, cust
 
 function extractCampaignName(utmCampaign: string | null | undefined): string {
   if (!utmCampaign) return '';
-  return String(utmCampaign).split('|')[0].trim();
+  const parts = String(utmCampaign).split('|');
+  const name = (parts[0] || '').trim();
+  if (!name && parts.length >= 2) return parts[1].trim();
+  return name;
 }
 
 // ── Filter Dropdown ───────────────────────────────────────────────────────────

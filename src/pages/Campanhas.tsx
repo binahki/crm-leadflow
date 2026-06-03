@@ -27,6 +27,7 @@ interface Campaign {
   id: string; name: string; status: string;
   spend: number; impressions: number; clicks: number; ctr: number; cpm: number;
   leads_api: number; cpl?: number; daily_budget?: number; lifetime_budget?: number;
+  created_time?: string;
   adsets?: AdSet[]; ads?: Ad[];
 }
 
@@ -278,7 +279,7 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
   }
   try {
     const campUrl = new URL(`${base}/act_${account}/campaigns`);
-    campUrl.searchParams.set('fields', `id,name,status,daily_budget,lifetime_budget,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
+    campUrl.searchParams.set('fields', `id,name,status,daily_budget,lifetime_budget,created_time,insights.date_preset(${dp}){spend,impressions,clicks,ctr,cpm,actions}`);
     campUrl.searchParams.set('limit', '50');
     campUrl.searchParams.set('access_token', tok);
     const campData = await (await fetch(campUrl.toString())).json();
@@ -348,6 +349,7 @@ async function fetchCampaignsWithChildren(datePreset: string, token: string, acc
         cpl: leadsApi > 0 ? spend / leadsApi : 0,
         daily_budget: c.daily_budget ? parseInt(c.daily_budget) / 100 : undefined,
         lifetime_budget: c.lifetime_budget ? parseInt(c.lifetime_budget) / 100 : undefined,
+        created_time: c.created_time,
         adsets, ads,
       });
     }
@@ -1984,13 +1986,18 @@ export default function CampanhasPage() {
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: txtHi, margin: '0 0 2px' }}>Top Campanhas</h3>
               {rankedRows.map((r, i) => {
                 const color = scoreColor(r.score);
-                // usa allCampLeadsMap para idade real (não filtrada por período)
+                const camp = campaigns.find(c => c.id === r.id);
+                const campCreatedMs = camp?.created_time ? new Date(camp.created_time).getTime() : 0;
+                const campAgeDays = campCreatedMs > 0
+                  ? Math.floor((Date.now() - campCreatedMs) / (1000*60*60*24))
+                  : 999;
+                const isNew = campAgeDays <= 7;
+                // ageDays para exibição no painel (dias ativo)
                 const allLeadsList = allCampLeadsMap.get(r.id) || [];
                 const oldest = allLeadsList.length > 0
                   ? Math.min(...allLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
                   : 0;
                 const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
-                const isNew = ageDays < 3;
                 // potenciais: usa campLeadsMap (filtrado por período) para exibição
                 const periodLeadsList = campLeadsMap.get(r.id) || [];
                 const potenciais = periodLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;

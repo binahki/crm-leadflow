@@ -532,8 +532,8 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { error } = await db.from('leads').insert(leadData);
-      console.log('Resultado insert:', { error });
+      const { data: novoLead, error } = await db.from('leads').insert(leadData).select('id').single();
+      console.log('Resultado insert:', { novoLead, error });
 
       if (error) {
         console.error('ERRO SUPABASE:', error);
@@ -547,8 +547,8 @@ export default function QuizPublico() {
         return;
       }
 
-      console.log('Lead salvo com sucesso.');
-      await finalizarQuiz(undefined);
+      console.log('Lead salvo com sucesso.', novoLead?.id);
+      await finalizarQuiz(novoLead?.id);
     } catch (err) {
       console.error('ERRO CATCH:', err);
       setSubmitting(false);

@@ -99,7 +99,7 @@ function formatValue(val: unknown): string {
 }
 
 function initials(name: string) { if (!name) return '?'; return name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
-function cleanCampaignName(raw?: string | null) { if (!raw) return null; return raw.replace(/\|\d+$/, '').trim(); }
+function cleanCampaignName(raw?: string | null) { if (!raw) return null; const parts = raw.split('|'); const name = (parts[0] || '').trim(); if (!name && parts.length >= 2) return `ID: ${parts[1].trim()}`; return name; }
 
 function ScoreTag({ score, faixa, dark }: { score?: number | null; faixa?: string | null; dark: boolean }) {
   if (score == null || score === undefined) return null;
