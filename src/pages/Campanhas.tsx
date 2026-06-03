@@ -2816,10 +2816,16 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     const uid = acao.id;
     setAplicandoIds(prev => new Set([...prev, uid]));
     try {
-      const res = await (supabase as any).functions.invoke('executar-otimizacao', {
-        body: { log_id: log.id, acao_id: uid },
+      const res = await fetch('https://obguidmfvfjaekaskgob.functions.supabase.co/executar-otimizacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ log_id: log.id, acao_id: uid }),
       });
-      if (res.error) throw res.error;
+      const data = await res.json();
+      if (!data.ok) {
+        setToast?.({ msg: data.erro || 'Erro ao executar a ação', ok: false });
+        return;
+      }
       const acaoAplicada = sugestoes.find(a => a.id === uid);
       const novas = sugestoes.filter(a => a.id !== uid);
       setSugestoes(novas);
@@ -2828,9 +2834,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, ok: true }] : []),
       ];
       if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
-      setToast?.({ msg: `Ação aplicada com sucesso`, ok: true });
+      setToast?.({ msg: 'Ação aplicada com sucesso', ok: true });
     } catch {
-      setToast?.({ msg: 'Erro ao aplicar — tente novamente', ok: false });
+      setToast?.({ msg: 'Erro ao conectar — tente novamente', ok: false });
     } finally {
       setAplicandoIds(prev => { const n = new Set(prev); n.delete(uid); return n; });
       setTimeout(() => setToast?.(null), 4000);
