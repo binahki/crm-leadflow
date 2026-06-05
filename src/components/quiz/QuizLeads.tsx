@@ -53,13 +53,14 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: qData } = await supabase.from('quizzes').select('slug, id, org_id').eq('id', quizId).single();
+      const db = supabase as any;
+      const { data: qData } = await db.from('quizzes').select('slug, id, org_id, corte_verde, corte_amarelo').eq('id', quizId).single();
       if (!qData) return;
       setQuiz(qData);
       const [bData, pData, sData] = await Promise.all([
-        supabase.from('quiz_blocos').select('id, ordem').eq('quiz_id', quizId).order('ordem'),
-        supabase.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
-        supabase.from('quiz_sessoes')
+        db.from('quiz_blocos').select('id, ordem').eq('quiz_id', quizId).order('ordem'),
+        db.from('quiz_perguntas').select('*').eq('quiz_id', quizId).order('ordem'),
+        db.from('quiz_sessoes')
           .select('*')
           .eq('quiz_slug', qData.slug)
           .order('updated_at', { ascending: false }),
@@ -70,7 +71,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
       if (pData.data) {
         setPerguntas(pData.data);
         const pergIds = pData.data.map((p: any) => p.id);
-        const { data: oData } = await supabase.from('quiz_opcoes').select('*').in('pergunta_id', pergIds);
+        const { data: oData } = await db.from('quiz_opcoes').select('*').in('pergunta_id', pergIds);
         if (oData) setOpcoes(oData);
       }
 
@@ -377,11 +378,19 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                   filteredSessoes.map((sess, idx) => {
                     const score = calculateSessionScore(sess.respostas);
                     const effectiveTotal = sess.total_etapas > 0 ? sess.total_etapas : (perguntas.length || 0);
-                    const progressPct = effectiveTotal > 0 ? Math.round((sess.ultima_etapa / effectiveTotal) * 100) : 0;
+                    const ultimaEtapaCapped = effectiveTotal > 0 ? Math.min(sess.ultima_etapa || 0, effectiveTotal) : (sess.ultima_etapa || 0);
+                    const progressPct = effectiveTotal > 0 ? Math.round((ultimaEtapaCapped / effectiveTotal) * 100) : 0;
                     const sessLead = sess.lead_id ? leadsMap.get(String(sess.lead_id)) : null;
                     const leadStatus = sessLead ? Number(sessLead.status) : null;
+                    const corteMinimo = (quiz as any)?.corte_amarelo ?? (quiz as any)?.corte_verde ?? 25;
                     const statusInfo = (() => {
-                      if (!sess.concluiu) return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
+                      if (!sess.concluiu) {
+                        const step = ultimaEtapaCapped;
+                        if (step > 0 && effectiveTotal > 0) {
+                          return { label: `Abandonou (${step}/${effectiveTotal})`, color: '#f97316', bg: '#f9731615' };
+                        }
+                        return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
+                      }
                       if (sessLead && leadStatus !== null) {
                         if (leadStatus === 3) return { label: 'Aprovado',    color: '#10b981', bg: '#10b98115' };
                         if (leadStatus === 4) return { label: 'Reprovado',   color: '#ef4444', bg: '#ef444415' };
@@ -390,7 +399,11 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         if (leadStatus === 6) return { label: 'Sem Retorno', color: '#71717a', bg: '#71717a15' };
                         return { label: 'Lead',       color: '#10b981', bg: '#10b98115' };
                       }
-                      if (sess.virou_lead) return { label: 'Lead',       color: '#10b981', bg: '#10b98115' };
+                      if (sess.virou_lead) return { label: 'Lead', color: '#10b981', bg: '#10b98115' };
+                      // concluiu=true, sem lead — distingue aprovado (não converteu) de reprovado
+                      if (score > 0 && score >= corteMinimo) {
+                        return { label: 'Não converteu', color: '#3b82f6', bg: '#3b82f615' };
+                      }
                       return { label: 'Reprovado', color: '#f59e0b', bg: '#f59e0b15' };
                     })();
                     const rowBg = idx % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc');
@@ -430,7 +443,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                         {/* Progresso */}
                         <td style={{ position: 'sticky', left: STICKY[4].left, zIndex: 1, background: cardBg, width: STICKY[4].width, padding: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 600, color: textMain }}>{sess.ultima_etapa}/{effectiveTotal || '?'}</div>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: textMain }}>{ultimaEtapaCapped}/{effectiveTotal || '?'}</div>
                             <div style={{ width: '70px', height: '4px', background: border, borderRadius: '2px', overflow: 'hidden' }}>
                               <div style={{ width: `${progressPct}%`, height: '100%', background: statusInfo.color, borderRadius: '2px' }} />
                             </div>

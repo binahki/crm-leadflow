@@ -325,11 +325,13 @@ export default function QuizPublico() {
       if (targetId === 'approval') {
         const score = calculateScore(newAnswers, newMultipleAnswers);
         setScore(score); setFaixa(score >= (quiz?.corte_verde ?? 35) ? 'verde' : 'amarelo');
+        marcarConcluido(undefined, newVisible.length, false);
         setPhase('aprovado_form'); return;
       }
       if (targetId === 'collect') {
         const score = calculateScore(newAnswers, newMultipleAnswers);
         setScore(score); setFaixa(score >= (quiz?.corte_verde ?? 35) ? 'verde' : 'amarelo');
+        marcarConcluido(undefined, newVisible.length, false);
         setPhase('coleta'); return;
       }
       
@@ -356,8 +358,8 @@ export default function QuizPublico() {
       const duration = (quiz.analise_duracao || 4) * 1000;
       setTimeout(() => {
         if (isApproved) {
+          marcarConcluido(undefined, newVisible.length, false);
           setPhase('aprovado_form');
-          registrarEtapa(newVisible.length + 1, 'Formulário', 'Viu formulário');
         } else {
           marcarConcluido(undefined, newVisible.length);
           setPhase('reprovado');
