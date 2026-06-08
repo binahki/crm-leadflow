@@ -480,6 +480,19 @@ export default function QuizPublico() {
     await marcarConcluido(leadId, undefined, virouLead);
     setSubmitting(false);
 
+    // Campo-specific redirect: botao_acao === 'redirecionar' no último campo da coleta
+    const lastCfg = coletaConfig[coletaConfig.length - 1];
+    if (lastCfg?.botao_acao === 'redirecionar' && lastCfg?.botao_target) {
+      let finalUrl = lastCfg.botao_target
+        .replace(/\{\{nome\}\}/g, nome).replace(/\[NOME\]/g, nome)
+        .replace(/\{\{whatsapp\}\}/g, whatsapp)
+        .replace(/\{\{cidade\}\}/g, cidade).replace(/\[CIDADE\]/g, cidade)
+        .replace(/\{\{instagram\}\}/g, instagram);
+      if (!/^https?:\/\//i.test(finalUrl)) finalUrl = 'https://' + finalUrl;
+      window.location.href = finalUrl;
+      return;
+    }
+
     const isRedirect = (quiz as any).whatsapp_redirecionar_direto === true;
     if (isRedirect) {
       let redirectValue = (quiz as any).redirect_whatsapp || '';
