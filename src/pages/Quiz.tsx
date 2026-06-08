@@ -18,7 +18,7 @@ import { QuizLeads } from '@/components/quiz/QuizLeads';
 import {
   Plus, Trash2, Copy, ExternalLink, RotateCcw, ClipboardList, ChevronLeft,
   Loader2, Settings, Eye, Check, X, Upload, GripVertical, ChevronDown, ChevronUp, TrendingUp, ArrowDownRight, ArrowUpRight, Filter,
-  Search, Download, Calendar, ChevronRight, Users,
+  Search, Download, Calendar, ChevronRight, Users, Palette,
   MessageCircle, Instagram, MapPin, Sparkles, BrainCircuit,
   Clock, Share2, MoreHorizontal, TrendingDown,
   LayoutDashboard,
@@ -31,9 +31,9 @@ import { CSS } from '@dnd-kit/utilities';
 const db = supabase as any;
 
 const DEFAULT_DEPOIMENTOS = [
-  { nome: 'Rafaela Nascimento', handle: '@rafaela.nascimento', texto: 'Comecei sem saber nada de vendas. Hoje faturei R$ 3.200 no mês passado só com as semi joias!' },
-  { nome: 'Camila Ferreira', handle: '@camila.ferreira', texto: 'O consignado mudou minha vida! Recebi o kit em casa, sem investir nada. No primeiro mês já lucrei R$ 1.400' },
-  { nome: 'Carla Ferraz', handle: '@carlamferraz_', texto: 'Sou mãe de 2 filhos e trabalho de casa. As semi joias me deram liberdade financeira e tempo com minha família!' },
+  { nome: 'Ana Paula Silva',   handle: '@ana.silva',      texto: 'Não acreditei quando vi os resultados. Em poucos meses já estava faturando muito mais do que esperava!' },
+  { nome: 'Carla Mendes',      handle: '@carla.mendes',   texto: 'Comecei do zero, sem experiência nenhuma. Hoje tenho minha própria renda e trabalho no meu horário.' },
+  { nome: 'Fernanda Costa',    handle: '@fernanda.costa', texto: 'A melhor decisão que tomei foi dar esse primeiro passo. Mudou completamente minha vida financeira.' },
 ];
 
 const BASE_URL = 'https://app.floowcrm.online';
@@ -57,7 +57,7 @@ function hexToRgba(hex: string, a: number) { return hexRgba(hex, a); }
 
 function sanitizeQuizForUpdate(q: QuizConfig) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id: _a, org_id: _b, created_at: _c, updated_at: _d, published_at: _e, ...rest } = q as any;
+  const { id: _a, org_id: _b, created_at: _c, updated_at: _d, published_at: _e, publicado: _f, ativo: _g, ...rest } = q as any;
   return rest;
 }
 
@@ -257,7 +257,7 @@ export default function QuizBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [quizzes, setQuizzes] = useState<QuizConfig[]>([]);
-  const [activeTab, setActiveTab] = useState<'editor' | 'leads'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'design' | 'leads'>('editor');
   const [quiz, setQuiz] = useState<QuizConfig | null>(null);
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [perguntas, setPerguntas] = useState<Record<string, Pergunta[]>>({});
@@ -274,7 +274,6 @@ export default function QuizBuilderPage() {
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showUnpublishModal, setShowUnpublishModal] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeCoverTab, setActiveCoverTab] = useState<'content' | 'appearance'>('content');
   const [newBenefit, setNewBenefit] = useState('');
   const [showConditional, setShowConditional] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -308,6 +307,7 @@ export default function QuizBuilderPage() {
   const [newCampoObrigatorio, setNewCampoObrigatorio] = useState(false);
   const [selectedColetaElement, setSelectedColetaElement] = useState<'texto' | 'campo' | 'botao' | 'aviso' | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasUnpublishedEdits, setHasUnpublishedEdits] = useState(false);
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedRecentlyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -705,11 +705,16 @@ export default function QuizBuilderPage() {
     setRedoHistory([]);
   }
 
+  function markDirty() {
+    setHasUnsavedChanges(true);
+    setHasUnpublishedEdits(true);
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function updateQuizField(field: string, value: any) {
     if (!quiz) return;
     pushHistory();
-    setHasUnsavedChanges(true);
+    markDirty();
     setQuiz(prev => prev ? { ...prev, [field]: value } : prev);
   }
 
@@ -750,8 +755,8 @@ export default function QuizBuilderPage() {
   }
 
   // ── Manual save ─────────────────────────────────────────────────────────────
-  async function handleManualSave() {
-    if (!quiz) return;
+  async function handleManualSave(): Promise<boolean> {
+    if (!quiz) return false;
     setIsSaving(true);
     try {
       const blocoSaves = blocos.map(b =>
@@ -783,10 +788,13 @@ export default function QuizBuilderPage() {
 
       setHasUnsavedChanges(false);
       toast.success('✓ Salvo com sucesso');
+      return true;
     } catch (err) {
       toast.error('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
+      return false;
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   }
 
   // ── Publish ─────────────────────────────────────────────────────────────────
@@ -795,6 +803,7 @@ export default function QuizBuilderPage() {
     const { error } = await db.from('quizzes').update({ publicado: true, ativo: true }).eq('id', quiz.id);
     if (error) { toast.error(error.message); return; }
     setQuiz(q => q ? { ...q, publicado: true, ativo: true } : q);
+    setHasUnpublishedEdits(false);
     setShowPublishModal(false);
     toast.success('Quiz publicado! 🎉');
   }
@@ -865,7 +874,7 @@ export default function QuizBuilderPage() {
       toast.error(`Erro ao criar etapa: ${npErr?.message || 'Erro desconhecido'}`);
       return;
     }
-    setHasUnsavedChanges(true);
+    markDirty();
     setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
     setOpcoes(o => ({ ...o, [np.id]: [] }));
     setSelectedPageId(np.id);
@@ -972,7 +981,7 @@ export default function QuizBuilderPage() {
 
   function updatePergunta(id: string, field: string, value: string | null) {
     pushHistory();
-    setHasUnsavedChanges(true);
+    markDirty();
     setPerguntas(prev => {
       const next = { ...prev };
       for (const bid of Object.keys(next))
@@ -984,7 +993,7 @@ export default function QuizBuilderPage() {
   async function deletePergunta(id: string) {
     const { error } = await db.from('quiz_perguntas').delete().eq('id', id);
     if (error) { toast.error(`Erro ao deletar: ${error.message}`); return; }
-    setHasUnsavedChanges(true);
+    markDirty();
     setPerguntas(prev => {
       const next = { ...prev };
       for (const bid of Object.keys(next)) next[bid] = next[bid].filter(p => p.id !== id);
@@ -1001,13 +1010,13 @@ export default function QuizBuilderPage() {
       pergunta_id: pergId, texto: '', pontos: 0, reprova_imediato: false, ordem, emoji: null,
     }).select().single();
     if (error) { toast.error(`Erro ao adicionar opção: ${error.message}`); return; }
-    setHasUnsavedChanges(true);
+    markDirty();
     if (no) setOpcoes(p => ({ ...p, [pergId]: [...(p[pergId] || []), no] }));
   }
 
   function updateOpcao(id: string, field: string, value: string | number | boolean | null) {
     pushHistory();
-    setHasUnsavedChanges(true);
+    markDirty();
     setOpcoes(prev => {
       const next = { ...prev };
       for (const pid of Object.keys(next))
@@ -1019,7 +1028,7 @@ export default function QuizBuilderPage() {
   async function deleteOpcao(id: string) {
     const { error } = await db.from('quiz_opcoes').delete().eq('id', id);
     if (error) { toast.error(`Erro ao deletar opção: ${error.message}`); return; }
-    setHasUnsavedChanges(true);
+    markDirty();
     setOpcoes(prev => {
       const next = { ...prev };
       for (const pid of Object.keys(next)) next[pid] = next[pid].filter(o => o.id !== id);
@@ -1051,7 +1060,7 @@ export default function QuizBuilderPage() {
   }
 
   function updateBlocoField(id: string, field: string, value: string) {
-    setHasUnsavedChanges(true);
+    markDirty();
     setBlocos(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
   }
 
@@ -1339,14 +1348,132 @@ export default function QuizBuilderPage() {
   const fixedCardActive = (id: string) => selectedPageId === id;
 
   // ── Coleta config for collect panel ────────────────────────────────────────
-  // Merge stored config with DEFAULT to guarantee all fields are always present
+  // Merge stored config with DEFAULT — fills missing fields so inputs never appear blank
   const currentColetaConfig: ColetaCampo[] = (() => {
     if (!quiz.coleta_config?.length) return [...DEFAULT_COLETA_CONFIG];
     const stored = [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem);
     const storedCampos = new Set(stored.map(c => c.campo));
     const missing = DEFAULT_COLETA_CONFIG.filter(d => !storedCampos.has(d.campo));
-    return [...stored, ...missing];
+    const merged = stored.map(cfg => {
+      const def = DEFAULT_COLETA_CONFIG.find(d => d.campo === cfg.campo);
+      return {
+        ...def,
+        ...cfg,
+        label:       cfg.label       || def?.label       || cfg.campo,
+        placeholder: cfg.placeholder || def?.placeholder || '',
+        botao_texto: cfg.botao_texto || def?.botao_texto || 'Continuar →',
+      };
+    });
+    return [...merged, ...missing];
   })();
+
+  // ── Design panel ───────────────────────────────────────────────────────────
+  function renderDesignPanel() {
+    if (!quiz) return null;
+    return (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div>
+          <label style={lbl}>Cor primária</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input type="color" value={quiz.cor_primaria || '#2563eb'}
+              onChange={e => updateQuizField('cor_primaria', e.target.value)}
+              style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+            <input value={quiz.cor_primaria || '#2563eb'}
+              onChange={e => updateQuizField('cor_primaria', e.target.value)}
+              style={{ ...iStyle, flex: 1 }} />
+          </div>
+        </div>
+        <div>
+          <label style={lbl}>Cor do botão <span style={{ fontWeight: 400 }}>(padrão: cor primária)</span></label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input type="color" value={quiz.cor_botao || quiz.cor_primaria || '#2563eb'}
+              onChange={e => updateQuizField('cor_botao', e.target.value)}
+              style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+            <input value={quiz.cor_botao || ''}
+              onChange={e => updateQuizField('cor_botao', e.target.value || null)}
+              placeholder={quiz.cor_primaria || '#2563eb'}
+              style={{ ...iStyle, flex: 1 }} />
+            {quiz.cor_botao && (
+              <button onClick={() => updateQuizField('cor_botao', null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
+                <X style={{ width: '12px', height: '12px' }} />
+              </button>
+            )}
+          </div>
+          <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta botões Iniciar, Continuar e Enviar</p>
+        </div>
+        <div>
+          <label style={lbl}>Cor de fundo</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input type="color" value={quiz.cor_fundo || '#ffffff'}
+              onChange={e => updateQuizField('cor_fundo', e.target.value)}
+              style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+            <input value={quiz.cor_fundo || '#ffffff'}
+              onChange={e => updateQuizField('cor_fundo', e.target.value)}
+              style={{ ...iStyle, flex: 1 }} />
+          </div>
+          <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Cor de fundo da página do quiz</p>
+        </div>
+        <div>
+          <label style={lbl}>Cor dos títulos</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input type="color" value={quiz.cor_titulo || '#111111'}
+              onChange={e => updateQuizField('cor_titulo', e.target.value)}
+              style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+            <input value={quiz.cor_titulo || '#111111'}
+              onChange={e => updateQuizField('cor_titulo', e.target.value)}
+              style={{ ...iStyle, flex: 1 }} />
+          </div>
+          <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta títulos, perguntas e texto principal</p>
+        </div>
+        <div>
+          <label style={lbl}>Cor do subtítulo / texto secundário</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input type="color" value={quiz.cor_subtitulo || '#6b7280'}
+              onChange={e => updateQuizField('cor_subtitulo', e.target.value)}
+              style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
+            <input value={quiz.cor_subtitulo || '#6b7280'}
+              onChange={e => updateQuizField('cor_subtitulo', e.target.value)}
+              style={{ ...iStyle, flex: 1 }} />
+          </div>
+          <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta subtítulos e textos de apoio</p>
+        </div>
+        <div>
+          <label style={lbl}>Logo</label>
+          {quiz.logo_url ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg }}>
+                <img src={quiz.logo_url} alt="Logo" style={{ height: `${quiz.logo_altura || 32}px`, maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
+                <span style={{ flex: 1, fontSize: '12px', color: textMut }}>Logo ativa</span>
+                <button onClick={async () => { await db.from('quizzes').update({ logo_url: null }).eq('id', quiz.id); setQuiz(q => q ? { ...q, logo_url: null } : q); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
+                  <X style={{ width: '14px', height: '14px' }} />
+                </button>
+              </div>
+              <div style={{ marginTop: '10px' }}>
+                <label style={lbl}>Tamanho da logo: {quiz.logo_altura || 32}px</label>
+                <input
+                  type="range" min={20} max={80} step={4}
+                  value={quiz.logo_altura || 32}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setQuiz(q => q ? { ...q, logo_altura: val } : q);
+                  }}
+                  style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }}
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'logo_url'); }} />
+              <button onClick={() => logoInputRef.current?.click()} disabled={uploading} style={{ width: '100%', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1.5px dashed ${border}`, background: 'transparent', color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                {uploading ? <><Loader2 style={{ width: '13px', height: '13px', animation: 'spin 0.7s linear infinite' }} /> Enviando...</> : <><Upload style={{ width: '13px', height: '13px' }} /> Upload da logo</>}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ── Right panel ────────────────────────────────────────────────────────────
   function renderRightPanel() {
@@ -1356,23 +1483,8 @@ export default function QuizBuilderPage() {
     if (selectedPageType === 'cover') {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', borderBottom: `1px solid ${border}`, flexShrink: 0, background: cardBg }}>
-            {(['content', 'appearance'] as const).map(tab => (
-              <button key={tab} onClick={() => setActiveCoverTab(tab)} style={{
-                flex: 1, padding: '10px', border: 'none', background: 'transparent',
-                cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px',
-                fontWeight: activeCoverTab === tab ? 700 : 400,
-                color: activeCoverTab === tab ? textMain : textMut,
-                borderBottom: `2px solid ${activeCoverTab === tab ? '#2563eb' : 'transparent'}`,
-                marginBottom: '-1px',
-              }}>
-                {tab === 'content' ? 'Conteúdo' : 'Aparência'}
-              </button>
-            ))}
-          </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-            {activeCoverTab === 'content' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <label style={{ ...lbl, marginBottom: 0 }}>Título da capa</label>
@@ -1474,109 +1586,6 @@ export default function QuizBuilderPage() {
                     placeholder="Clique para iniciar →" />
                 </div>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={lbl}>Cor primária</label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={quiz.cor_primaria || '#2563eb'}
-                      onChange={e => updateQuizField('cor_primaria', e.target.value)}
-                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
-                    <input value={quiz.cor_primaria || '#2563eb'}
-                      onChange={e => updateQuizField('cor_primaria', e.target.value)}
-                      style={{ ...iStyle, flex: 1 }} />
-                  </div>
-                </div>
-                <div>
-                  <label style={lbl}>Cor do botão <span style={{ fontWeight: 400 }}>(padrão: cor primária)</span></label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={quiz.cor_botao || quiz.cor_primaria || '#2563eb'}
-                      onChange={e => updateQuizField('cor_botao', e.target.value)}
-                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
-                    <input value={quiz.cor_botao || ''}
-                      onChange={e => updateQuizField('cor_botao', e.target.value || null)}
-                      placeholder={quiz.cor_primaria || '#2563eb'}
-                      style={{ ...iStyle, flex: 1 }} />
-                    {quiz.cor_botao && (
-                      <button onClick={() => updateQuizField('cor_botao', null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
-                        <X style={{ width: '12px', height: '12px' }} />
-                      </button>
-                    )}
-                  </div>
-                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta botões Iniciar, Continuar e Enviar</p>
-                </div>
-                <div>
-                  <label style={lbl}>Cor de fundo</label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={quiz.cor_fundo || '#ffffff'}
-                      onChange={e => updateQuizField('cor_fundo', e.target.value)}
-                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
-                    <input value={quiz.cor_fundo || '#ffffff'}
-                      onChange={e => updateQuizField('cor_fundo', e.target.value)}
-                      style={{ ...iStyle, flex: 1 }} />
-                  </div>
-                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Cor de fundo da página do quiz</p>
-                </div>
-                <div>
-                  <label style={lbl}>Cor dos títulos</label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={quiz.cor_titulo || '#111111'}
-                      onChange={e => updateQuizField('cor_titulo', e.target.value)}
-                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
-                    <input value={quiz.cor_titulo || '#111111'}
-                      onChange={e => updateQuizField('cor_titulo', e.target.value)}
-                      style={{ ...iStyle, flex: 1 }} />
-                  </div>
-                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta títulos, perguntas e texto principal</p>
-                </div>
-                <div>
-                  <label style={lbl}>Cor do subtítulo / texto secundário</label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={quiz.cor_subtitulo || '#6b7280'}
-                      onChange={e => updateQuizField('cor_subtitulo', e.target.value)}
-                      style={{ width: '36px', height: '34px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, cursor: 'pointer', padding: '2px', background: 'none' }} />
-                    <input value={quiz.cor_subtitulo || '#6b7280'}
-                      onChange={e => updateQuizField('cor_subtitulo', e.target.value)}
-                      style={{ ...iStyle, flex: 1 }} />
-                  </div>
-                  <p style={{ fontSize: '10px', color: textMut, margin: '3px 0 0' }}>Afeta subtítulos e textos de apoio</p>
-                </div>
-                <div>
-                  <label style={lbl}>Logo</label>
-                  {quiz.logo_url ? (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: cardBg }}>
-                        <img src={quiz.logo_url} alt="Logo" style={{ height: `${quiz.logo_altura || 32}px`, maxWidth: '80px', objectFit: 'contain', borderRadius: 4 }} />
-                        <span style={{ flex: 1, fontSize: '12px', color: textMut }}>Logo ativa</span>
-                        <button onClick={async () => { await db.from('quizzes').update({ logo_url: null }).eq('id', quiz.id); setQuiz(q => q ? { ...q, logo_url: null } : q); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px' }}>
-                          <X style={{ width: '14px', height: '14px' }} />
-                        </button>
-                      </div>
-                      <div style={{ marginTop: '10px' }}>
-                        <label style={lbl}>Tamanho da logo: {quiz.logo_altura || 32}px</label>
-                        <input
-                          type="range" min={20} max={80} step={4}
-                          value={quiz.logo_altura || 32}
-                          onChange={e => {
-                            const val = Number(e.target.value);
-                            setQuiz(q => q ? { ...q, logo_altura: val } : q);
-                          }}
-                          style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-                        onChange={e => { if (e.target.files?.[0]) handleFileUpload(e.target.files[0], 'logo_url'); }} />
-                      <button onClick={() => logoInputRef.current?.click()} disabled={uploading} style={{ width: '100%', padding: '10px 12px', borderRadius: tokens.radius.sm, border: `1.5px dashed ${border}`, background: 'transparent', color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        {uploading ? <><Loader2 style={{ width: '13px', height: '13px', animation: 'spin 0.7s linear infinite' }} /> Enviando...</> : <><Upload style={{ width: '13px', height: '13px' }} /> Upload da logo</>}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       );
@@ -2081,11 +2090,12 @@ export default function QuizBuilderPage() {
     return null;
   }
 
-  // ── SCALE for phone preview ─────────────────────────────────────────────────
-  const PHONE_INNER_W = 302;
-  const SCALE = PHONE_INNER_W / 480;
-  const PHONE_INNER_H = 605;
-  const CONTENT_H = Math.round(PHONE_INNER_H / SCALE);
+  // ── Phone preview dimensions ────────────────────────────────────────────────
+  // Content renders at native width — no transform scale needed
+  const PHONE_INNER_H = 645; // 720px frame - 12px*2 border - 51px DI (14+37)
+  const previewBg = isDark
+    ? 'radial-gradient(ellipse at 50% 30%, rgba(37,99,235,0.08) 0%, transparent 70%), #0a0a0f'
+    : 'radial-gradient(ellipse at 50% 30%, rgba(37,99,235,0.06) 0%, transparent 70%), #f0f0f2';
 
   // ── MAIN RENDER ──────────────────────────────────────────────────────────────
   return (
@@ -2104,9 +2114,9 @@ export default function QuizBuilderPage() {
           </div>
 
           <div style={{ display: 'flex', gap: '4px', height: '100%', alignItems: 'center' }}>
-            {(['editor', 'leads'] as const).map(tab => (
-              <button 
-                key={tab} 
+            {(['editor', 'design', 'leads'] as const).map(tab => (
+              <button
+                key={tab}
                 onClick={() => setActiveTab(tab)}
                 style={{
                   height: '100%', padding: '0 16px', border: 'none', background: 'transparent',
@@ -2116,8 +2126,8 @@ export default function QuizBuilderPage() {
                   transition: 'color 0.2s'
                 }}
               >
-                {tab === 'editor' ? <Plus size={14} /> : <Users size={14} />}
-                {tab === 'editor' ? 'Editor' : 'Leads'}
+                {tab === 'editor' ? <Plus size={14} /> : tab === 'design' ? <Palette size={14} /> : <Users size={14} />}
+                {tab === 'editor' ? 'Editor' : tab === 'design' ? 'Design' : 'Leads'}
                 {activeTab === tab && (
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', background: '#2563eb' }} />
                 )}
@@ -2129,62 +2139,56 @@ export default function QuizBuilderPage() {
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {activeTab === 'editor' && (
-              <>
-                {/* Toggle Ativo/Inativo */}
-                <div
-                  onClick={toggleAtivo}
-                  title={quiz.ativo ? 'Quiz ativo (clique para desativar)' : 'Quiz inativo (clique para ativar)'}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '4px 10px', borderRadius: tokens.radius.sm, border: `1px solid ${quiz.ativo ? '#16a34a' : border}`, background: quiz.ativo ? 'rgba(22,163,74,0.08)' : 'transparent' }}
-                >
-                  <div style={{ width: '28px', height: '16px', borderRadius: '99px', background: quiz.ativo ? '#16a34a' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <div style={{ position: 'absolute', top: '2px', left: quiz.ativo ? '14px' : '2px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: quiz.ativo ? '#16a34a' : textMut }}>{quiz.ativo ? 'Ativo' : 'Inativo'}</span>
+              <div
+                onClick={toggleAtivo}
+                title={quiz.ativo ? 'Quiz ativo (clique para desativar)' : 'Quiz inativo (clique para ativar)'}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '4px 10px', borderRadius: tokens.radius.sm, border: `1px solid ${quiz.ativo ? '#16a34a' : border}`, background: quiz.ativo ? 'rgba(22,163,74,0.08)' : 'transparent' }}
+              >
+                <div style={{ width: '28px', height: '16px', borderRadius: '99px', background: quiz.ativo ? '#16a34a' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute', top: '2px', left: quiz.ativo ? '14px' : '2px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                 </div>
-
-                {/* Salvar */}
-                <button onClick={handleManualSave} disabled={isSaving || !hasUnsavedChanges} style={{
-                  padding: '6px 12px', borderRadius: tokens.radius.sm,
-                  border: `1px solid ${hasUnsavedChanges ? '#2563eb' : border}`,
-                  background: hasUnsavedChanges ? '#2563eb' : 'transparent',
-                  color: hasUnsavedChanges ? '#fff' : textMut,
-                  fontSize: '12px', fontWeight: 600,
-                  cursor: hasUnsavedChanges ? 'pointer' : 'default',
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  opacity: isSaving ? 0.7 : 1,
-                }}>
-                  {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                  {isSaving ? 'Salvando...' : hasUnsavedChanges ? 'Salvar' : 'Salvo'}
-                </button>
-
-                {/* Publicar */}
-                {hasUnsavedChanges ? (
-                  <button disabled style={{
-                    padding: '6px 12px', borderRadius: tokens.radius.sm,
-                    background: '#f59e0b', color: '#fff', border: 'none',
-                    fontSize: '12px', fontWeight: 700, cursor: 'not-allowed', opacity: 0.8
-                  }}>
-                    Salvar primeiro
-                  </button>
-                ) : !isPublicado ? (
-                  <button onClick={() => setShowPublishModal(true)} style={{
-                    padding: '6px 12px', borderRadius: tokens.radius.sm,
-                    background: '#2563eb', color: '#fff', border: 'none',
-                    fontSize: '12px', fontWeight: 700, cursor: 'pointer'
-                  }}>
-                    Publicar
-                  </button>
-                ) : (
-                  <button onClick={() => setShowUnpublishModal(true)} style={{
-                    padding: '6px 12px', borderRadius: tokens.radius.sm,
-                    background: 'transparent', color: '#16a34a', border: '1px solid #16a34a',
-                    fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                  }}>
-                    <Check size={12} /> Atualizado
-                  </button>
-                )}
-              </>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: quiz.ativo ? '#16a34a' : textMut }}>{quiz.ativo ? 'Ativo' : 'Inativo'}</span>
+              </div>
             )}
+
+            {/* Salvar */}
+            <button onClick={handleManualSave} disabled={isSaving || !hasUnsavedChanges} style={{
+              padding: '6px 12px', borderRadius: tokens.radius.sm,
+              border: `1px solid ${hasUnsavedChanges ? '#2563eb' : border}`,
+              background: hasUnsavedChanges ? '#2563eb' : 'transparent',
+              color: hasUnsavedChanges ? '#fff' : textMut,
+              fontSize: '12px', fontWeight: 600,
+              cursor: hasUnsavedChanges ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', gap: '6px',
+              opacity: isSaving ? 0.7 : 1,
+            }}>
+              {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              {isSaving ? 'Salvando...' : hasUnsavedChanges ? 'Salvar' : 'Salvo'}
+            </button>
+
+            {/* Publicar */}
+            {(() => {
+              const isLive = isPublicado && !hasUnsavedChanges && !hasUnpublishedEdits;
+              return (
+                <button
+                  onClick={() => { if (!hasUnsavedChanges) setShowPublishModal(true); }}
+                  disabled={hasUnsavedChanges}
+                  title={hasUnsavedChanges ? 'Salve as alterações antes de publicar' : undefined}
+                  style={{
+                    padding: '6px 12px', borderRadius: tokens.radius.sm,
+                    fontSize: '12px', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    cursor: hasUnsavedChanges ? 'not-allowed' : 'pointer',
+                    opacity: hasUnsavedChanges ? 0.4 : 1,
+                    border: isLive ? '1px solid #16a34a' : 'none',
+                    background: isLive ? 'transparent' : '#2563eb',
+                    color: isLive ? '#16a34a' : '#fff',
+                  }}>
+                  {isLive ? 'Publicado ✓' : 'Publicar'}
+                </button>
+              );
+            })()}
+
             <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex' }}>
               <Settings size={18} />
             </button>
@@ -2370,7 +2374,7 @@ export default function QuizBuilderPage() {
                                 textMain={textMain}
                                 textMut={textMut}
                                 border={border}
-                                primary={primary}
+                                primary='#2563eb'
                                 onClick={() => {
                                   setExpandedColetaCampo(cfg.campo);
                                   setPreviewColetaIdx(i);
@@ -2472,33 +2476,23 @@ export default function QuizBuilderPage() {
           </div>
 
           {/* ══ CENTER COLUMN: Phone preview ════════════════════════════════ */}
-          <div className="quiz-phone-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '24px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: textMut, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Preview ao vivo</p>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  {(['capa', 'quiz', 'analise', 'aprovado_form', 'coleta', 'reprovado'] as Phase[]).map(ph => (
-                    <button key={ph} onClick={() => {
-                      setPreviewPhase(ph);
-                      if (ph === 'quiz') setPreviewIdx(0);
-                      if (ph === 'capa') setSelectedPageId('cover');
-                      if (ph === 'aprovado_form') setSelectedPageId('approval');
-                      if (ph === 'analise') setSelectedPageId('analise');
-                      if (ph === 'coleta') setSelectedPageId('collect');
-                      if (ph === 'reprovado') setSelectedPageId('rejection');
-                      setPreviewSelectedOpcao(null);
-                    }}
-                      style={{ padding: '2px 6px', fontSize: '9px', borderRadius: 4, border: `1px solid ${border}`, background: previewPhase === ph ? '#2563eb' : 'transparent', color: previewPhase === ph ? '#fff' : textMut, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-                      {ph === 'capa' ? 'Capa' : ph === 'quiz' ? 'Quiz' : ph === 'analise' ? 'Análise' : ph === 'aprovado_form' ? 'Aprovado' : ph === 'coleta' ? 'Dados' : 'Reprovado'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {/* Phone frame */}
-              <div style={{ width: '320px', height: '640px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: isDark ? '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 40px 80px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.5)', overflow: 'hidden', background: '#fff', position: 'relative', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20 }} />
-                <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
+          <div className="quiz-phone-panel" style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', background: previewBg }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '32px 40px 48px', minWidth: 'min-content' }}>
+              {/* Phone frame — iPhone 17 */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                {/* Power button (right) */}
+                <div style={{ position: 'absolute', right: '-3px', top: '160px', width: '3px', height: '70px', background: '#2c2c2e', borderRadius: '0 2px 2px 0' }} />
+                {/* Volume up (left) */}
+                <div style={{ position: 'absolute', left: '-3px', top: '120px', width: '3px', height: '36px', background: '#2c2c2e', borderRadius: '2px 0 0 2px' }} />
+                {/* Volume down (left) */}
+                <div style={{ position: 'absolute', left: '-3px', top: '168px', width: '3px', height: '36px', background: '#2c2c2e', borderRadius: '2px 0 0 2px' }} />
+                {/* Ground shadow */}
+                <div style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', width: '55%', height: '16px', background: 'rgba(0,0,0,0.2)', filter: 'blur(16px)', borderRadius: '50%', zIndex: 0 }} />
+                <div style={{ width: '360px', height: '680px', borderRadius: '48px', border: '10px solid #1c1c1e', boxShadow: '0 40px 80px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.05)', overflow: 'hidden', background: quiz?.cor_fundo || '#ffffff', position: 'relative', zIndex: 1 }}>
+                  {/* Dynamic Island pill */}
+                  <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', width: '80px', height: '22px', background: '#0a0a0a', borderRadius: '12px', zIndex: 30 }} />
+                  {/* Scrollable content */}
+                  <div className="no-scrollbar" style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden' }}>
                     {quiz && (
                       <QuizRenderer quiz={quiz} blocos={blocos} phase={previewPhase}
                         currentPergunta={previewPerguntaWithOpcoes as any} currentBloco={previewCurrentBloco}
@@ -2510,7 +2504,7 @@ export default function QuizBuilderPage() {
                         onGoToColeta={() => { setPreviewPhase('coleta'); setPreviewColetaIdx(0); }}
                         coletaStep={previewPhase === 'coleta' ? previewColetaIdx : undefined}
                         onColetaNext={() => setPreviewColetaIdx(i => Math.min(i + 1, currentColetaConfig.length - 1))}
-                        isBuilderPreview={selectedPageType === 'collect'}
+                        isBuilderPreview={selectedPageType === 'collect' && activeTab === 'editor'}
                         selectedColetaElement={selectedColetaElement}
                         onSelectColetaElement={setSelectedColetaElement}
                         isPreview />
@@ -2518,24 +2512,25 @@ export default function QuizBuilderPage() {
                   </div>
                 </div>
               </div>
-              <p style={{ margin: 0, fontSize: '10px', color: textMut, opacity: 0.6 }}>quiz/{quiz.slug}</p>
+              <p style={{ margin: 0, fontSize: '11px', color: textMut, opacity: 0.5, letterSpacing: '0.05em' }}>quiz/{quiz.slug}</p>
             </div>
           </div>
 
-          {/* ══ RIGHT COLUMN: Edit panel ════════════════════════════════════ */}
+          {/* ══ RIGHT COLUMN: Edit/Design panel ══════════════════════════════ */}
           <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${border}`, background: cardBg }}>
             <div style={{ padding: '8px 14px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <span style={{ fontSize: '12px', fontWeight: 600, color: textMain }}>
-                {selectedPageType === 'cover' ? '📋 Capa' :
-                  selectedPageType === 'approval' ? '✅ Aprovação' :
-                    selectedPageType === 'analise' ? '⌛ Análise' :
-                      selectedPageType === 'collect' ? (showAddColeta ? '📝 Novo campo' : expandedColetaCampo ? `📝 ${currentColetaConfig.find(c => c.campo === expandedColetaCampo)?.label ?? 'Coleta'}` : '📝 Coleta') :
-                        selectedPageType === 'rejection' ? '❌ Reprovação' :
-                          `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
+                {activeTab === 'design' ? '🎨 Design' :
+                  selectedPageType === 'cover' ? '📋 Capa' :
+                    selectedPageType === 'approval' ? '✅ Aprovação' :
+                      selectedPageType === 'analise' ? '⌛ Análise' :
+                        selectedPageType === 'collect' ? (showAddColeta ? '📝 Novo campo' : expandedColetaCampo ? `📝 ${currentColetaConfig.find(c => c.campo === expandedColetaCampo)?.label ?? 'Coleta'}` : '📝 Coleta') :
+                          selectedPageType === 'rejection' ? '❌ Reprovação' :
+                            `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
               </span>
             </div>
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              {renderRightPanel()}
+              {activeTab === 'design' ? renderDesignPanel() : renderRightPanel()}
             </div>
             </div>
           </>
@@ -2664,11 +2659,15 @@ export default function QuizBuilderPage() {
               <X style={{ width: '18px', height: '18px' }} />
             </button>
           </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-            <div style={{ width: '320px', height: '640px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: '0 32px 64px rgba(0,0,0,0.3)', overflow: 'hidden', background: '#fff', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20 }} />
-              <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
-                <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
+          <div style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', background: previewBg, padding: '40px' }}>
+            <div style={{ position: 'relative', flexShrink: 0, alignSelf: 'flex-start' }}>
+              <div style={{ position: 'absolute', right: '-3px', top: '160px', width: '3px', height: '70px', background: '#2c2c2e', borderRadius: '0 2px 2px 0' }} />
+              <div style={{ position: 'absolute', left: '-3px', top: '120px', width: '3px', height: '36px', background: '#2c2c2e', borderRadius: '2px 0 0 2px' }} />
+              <div style={{ position: 'absolute', left: '-3px', top: '168px', width: '3px', height: '36px', background: '#2c2c2e', borderRadius: '2px 0 0 2px' }} />
+              <div style={{ position: 'absolute', bottom: '-20px', left: '50%', transform: 'translateX(-50%)', width: '55%', height: '16px', background: 'rgba(0,0,0,0.2)', filter: 'blur(16px)', borderRadius: '50%', zIndex: 0 }} />
+              <div style={{ width: '360px', height: '680px', borderRadius: '48px', border: '10px solid #1c1c1e', boxShadow: '0 40px 80px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.05)', overflow: 'hidden', background: quiz?.cor_fundo || '#ffffff', position: 'relative', zIndex: 1 }}>
+                <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', width: '80px', height: '22px', background: '#0a0a0a', borderRadius: '12px', zIndex: 30 }} />
+                <div className="no-scrollbar" style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden' }}>
                   {quiz && (
                     <QuizRenderer quiz={quiz} blocos={blocos} phase={previewPhase}
                       currentPergunta={previewPerguntaWithOpcoes as any} currentBloco={previewCurrentBloco}
@@ -2715,9 +2714,9 @@ export default function QuizBuilderPage() {
           onClick={() => setShowPublishModal(false)}>
           <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Publicar alterações?</h3>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Publicar quiz?</h3>
             <p style={{ margin: 0, fontSize: '13px', color: textMut }}>
-              Publicar alterações salvas para quem acessa o link?
+              Suas alterações ficarão visíveis para todos.
             </p>
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
               <button onClick={() => setShowPublishModal(false)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>

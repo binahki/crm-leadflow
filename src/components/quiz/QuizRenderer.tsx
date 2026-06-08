@@ -15,10 +15,10 @@ export interface ColetaCampo {
 }
 
 export const DEFAULT_COLETA_CONFIG: ColetaCampo[] = [
-  { campo: 'nome',      label: 'Nome completo', placeholder: 'Digite seu nome',      obrigatorio: true,  ordem: 1 },
-  { campo: 'whatsapp',  label: 'WhatsApp',      placeholder: '(XX) XXXXX-XXXX',      obrigatorio: true,  ordem: 2 },
-  { campo: 'cidade',    label: 'Cidade',         placeholder: 'Sua cidade',           obrigatorio: false, ordem: 3 },
-  { campo: 'instagram', label: 'Instagram',      placeholder: '@seuinstagram',        obrigatorio: false, ordem: 4 },
+  { campo: 'nome',      label: 'Qual o seu nome completo?',    placeholder: 'Digite seu nome',      tipo: 'texto',    obrigatorio: true,  ordem: 1, botao_texto: 'Continuar →',          botao_acao: 'proxima_etapa' },
+  { campo: 'cidade',    label: 'Qual a sua cidade?',           placeholder: 'Ex: São Paulo - SP',   tipo: 'texto',    obrigatorio: false, ordem: 2, botao_texto: 'Continuar →',          botao_acao: 'proxima_etapa' },
+  { campo: 'instagram', label: 'Qual o seu Instagram?',        placeholder: '@seuinstagram',        tipo: 'texto',    obrigatorio: false, ordem: 3, botao_texto: 'Continuar →',          botao_acao: 'proxima_etapa' },
+  { campo: 'whatsapp',  label: 'Qual o seu WhatsApp com DDD?', placeholder: '(XX) XXXXX-XXXX',      tipo: 'telefone', obrigatorio: true,  ordem: 4, botao_texto: 'Concluir meu cadastro', botao_acao: 'redirecionar', show_whatsapp_warning: true, whatsapp_warning_text: '📲 Ao clicar, você será direcionada para o WhatsApp. Envie a mensagem para garantir sua vaga — a mensagem já vem preenchida ✓' },
 ];
 
 export interface QuizConfig {
@@ -138,9 +138,9 @@ export function defaultEmojiForBloco(titulo: string): string {
 }
 
 export const DEFAULT_DEPOIMENTOS = [
-  { nome: 'Rafaela Nascimento', handle: '@rafaela.nascimento', texto: 'Comecei sem saber nada de vendas. Hoje faturei R$ 3.200 no mês passado só com as semi joias!' },
-  { nome: 'Camila Ferreira', handle: '@camila.ferreira', texto: 'O consignado mudou minha vida! Recebi o kit em casa, sem investir nada. No primeiro mês já lucrei R$ 1.400' },
-  { nome: 'Carla Ferraz', handle: '@carlamferraz_', texto: 'Sou mãe de 2 filhos e trabalho de casa. As semi joias me deram liberdade financeira e tempo com minha família!' },
+  { nome: 'Ana Paula Silva',   handle: '@ana.silva',      texto: 'Não acreditei quando vi os resultados. Em poucos meses já estava faturando muito mais do que esperava!' },
+  { nome: 'Carla Mendes',      handle: '@carla.mendes',   texto: 'Comecei do zero, sem experiência nenhuma. Hoje tenho minha própria renda e trabalho no meu horário.' },
+  { nome: 'Fernanda Costa',    handle: '@fernanda.costa', texto: 'A melhor decisão que tomei foi dar esse primeiro passo. Mudou completamente minha vida financeira.' },
 ];
 
 function easedProgress(idx: number, total: number): number {
@@ -173,6 +173,7 @@ export function QuizRenderer({
   const [analiseProgress, setAnaliseProgress] = React.useState(0);
   const [internalColetaStep, setInternalColetaStep] = React.useState(0);
   const [coletaFieldError, setColetaFieldError] = React.useState<string | null>(null);
+  const [hoveredColetaElement, setHoveredColetaElement] = React.useState<'texto' | 'campo' | 'botao' | 'aviso' | null>(null);
 
   React.useEffect(() => {
     if (phase !== 'coleta') {
@@ -257,16 +258,14 @@ export function QuizRenderer({
         input,textarea,button,select{font-family:inherit;}
       `}</style>
 
-      <div style={{ background: '#fff', borderBottom: '1px solid #f3f4f6', zIndex: 100 }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '14px 24px 8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          {quiz.logo_url ? (
+      <div style={{ background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: isPreview ? '40px' : 'env(safe-area-inset-top, 12px)' }}>
+        {quiz.logo_url && (
+          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '8px 24px 6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <img src={quiz.logo_url} alt={quiz.titulo}
               style={{ maxHeight: `${quiz.logo_altura || 32}px`, maxWidth: '160px', objectFit: 'contain' }} />
-          ) : (
-            <span style={{ fontSize: '14px', fontWeight: 700, color: quiz.cor_titulo || '#111111' }}>{quiz.titulo}</span>
-          )}
-        </div>
-        <div style={{ padding: '0 24px' }}>
+          </div>
+        )}
+        <div style={{ padding: '0 24px 10px' }}>
           <div style={{ maxWidth: '480px', margin: '0 auto', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
             <div style={{
               height: '100%', background: primary,
@@ -276,7 +275,6 @@ export function QuizRenderer({
             }} />
           </div>
         </div>
-        <div style={{ height: '24px' }} />
       </div>
 
       {phase === 'capa' && (
@@ -563,31 +561,34 @@ export function QuizRenderer({
 
         const getWrapperStyle = (type: 'texto' | 'campo' | 'botao' | 'aviso'): React.CSSProperties => {
           if (!isBuilderPreview) return {};
-          const isSelected = selectedColetaElement === type;
+          const isActive = selectedColetaElement === type || hoveredColetaElement === type;
           return {
             position: 'relative',
             cursor: 'pointer',
-            border: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
             borderRadius: '12px',
-            padding: isBuilderPreview ? '12px' : '0',
-            margin: isBuilderPreview ? '-12px -12px 4px -12px' : '0',
-            transition: 'opacity 0.2s',
-            outline: 0,
-            opacity: (selectedColetaElement && !isSelected) ? 0.5 : 1,
+            padding: '12px',
+            margin: '-12px -12px 4px -12px',
+            outline: isActive ? '2px solid #2563eb' : 'none',
+            outlineOffset: '0px',
           };
         };
 
         const BuilderBadge = ({ type, label }: { type: 'texto' | 'campo' | 'botao' | 'aviso', label: string }) => {
           if (!isBuilderPreview) return null;
+          const isActive = selectedColetaElement === type || hoveredColetaElement === type;
+          if (!isActive) return null;
           return (
-            <div style={{ position: 'absolute', top: '-10px', left: '12px', background: selectedColetaElement === type ? '#3b82f6' : '#94a3b8', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', zIndex: 10 }}>
+            <div style={{ position: 'absolute', top: '-10px', left: '12px', background: '#2563eb', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', zIndex: 10 }}>
               {label}
             </div>
           );
         };
 
         return (
-          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
+          <div
+            style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 24px 80px', animation: 'fadeIn 0.4s ease' }}
+            onClick={e => { if (isBuilderPreview && e.target === e.currentTarget) onSelectColetaElement?.(null); }}
+          >
             <form onSubmit={e => {
               if (isBuilderPreview) { e.preventDefault(); return; }
               if (isSubmitAction) {
@@ -603,6 +604,8 @@ export function QuizRenderer({
             }}>
               <div
                 style={getWrapperStyle('texto')}
+                onMouseEnter={() => { if (isBuilderPreview) setHoveredColetaElement('texto'); }}
+                onMouseLeave={() => { if (isBuilderPreview) setHoveredColetaElement(null); }}
                 onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('texto'); } }}
               >
                 <BuilderBadge type="texto" label="TEXTOS" />
@@ -618,6 +621,8 @@ export function QuizRenderer({
 
               <div
                 style={{ ...getWrapperStyle('campo'), marginTop: isBuilderPreview ? '16px' : '16px' }}
+                onMouseEnter={() => { if (isBuilderPreview) setHoveredColetaElement('campo'); }}
+                onMouseLeave={() => { if (isBuilderPreview) setHoveredColetaElement(null); }}
                 onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('campo'); } }}
               >
                 <BuilderBadge type="campo" label="CAMPO" />
@@ -651,6 +656,8 @@ export function QuizRenderer({
 
               <div
                 style={{ ...getWrapperStyle('botao'), marginTop: isBuilderPreview ? '22px' : '22px' }}
+                onMouseEnter={() => { if (isBuilderPreview) setHoveredColetaElement('botao'); }}
+                onMouseLeave={() => { if (isBuilderPreview) setHoveredColetaElement(null); }}
                 onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('botao'); } }}
               >
                 <BuilderBadge type="botao" label="BOTÃO" />
@@ -692,6 +699,8 @@ export function QuizRenderer({
               {cfg.campo === 'whatsapp' && cfg.show_whatsapp_warning !== false && (
                 <div
                   style={{ ...getWrapperStyle('aviso'), marginTop: isBuilderPreview ? '14px' : '14px' }}
+                  onMouseEnter={() => { if (isBuilderPreview) setHoveredColetaElement('aviso'); }}
+                  onMouseLeave={() => { if (isBuilderPreview) setHoveredColetaElement(null); }}
                   onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('aviso'); } }}
                 >
                   <BuilderBadge type="aviso" label="AVISO WA" />

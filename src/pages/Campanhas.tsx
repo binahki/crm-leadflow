@@ -1817,9 +1817,7 @@ export default function CampanhasPage() {
           const isSemAcao = aiLog.status === 'sem_acao';
           const isErro = aiLog.status === 'erro';
           if (aiLog.status === 'ignorado') return null;
-          let ignoredIds = new Set<string>();
-          try { ignoredIds = new Set(JSON.parse(localStorage.getItem(`ravena_ignored_${aiLog.id}`) || '[]')); } catch {}
-          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && !ignoredIds.has(a.id)).length;
+          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
           const pendenteAtivo = isPendente && numSugestoes > 0;
           const bannerBg = isErro
@@ -2997,14 +2995,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   useEffect(() => { setMounted(true); }, []);
   const t = useTerminology();
 
-  // Estado interno de sugestões — permite remover individualmente sem reload
-  const storageKey = `ravena_ignored_${log.id}`;
-  const [ignoradas, setIgnoradas] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || '[]')); }
-    catch { return new Set<string>(); }
-  });
+  // Estado interno de sugestões — banco é a fonte de verdade, sem localStorage
   const [sugestoes, setSugestoes] = useState<any[]>(() =>
-    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && !ignoradas.has(a.id))
+    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter')
   );
   const [aplicandoIds, setAplicandoIds] = useState<Set<string>>(new Set());
 
@@ -3060,10 +3053,6 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
   async function ignorarSugestao(acao: any) {
     const uid = acao.id;
-    const novasIgnoradas = new Set(ignoradas);
-    novasIgnoradas.add(uid);
-    setIgnoradas(novasIgnoradas);
-    try { localStorage.setItem(storageKey, JSON.stringify([...novasIgnoradas])); } catch {}
     const novas = sugestoes.filter((a: any) => a.id !== uid);
     setSugestoes(novas);
     try {
