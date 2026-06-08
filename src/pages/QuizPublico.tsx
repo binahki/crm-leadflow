@@ -12,6 +12,59 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+const UTM_SESSION_KEY = 'quiz_last_utms';
+
+function initializeUtms() {
+  try {
+    const raw = new URLSearchParams(window.location.search);
+    const fromUrl: Record<string, string> = {};
+    UTM_KEYS.forEach(key => {
+      const val = raw.get(key);
+      if (val) fromUrl[key] = val;
+    });
+
+    if (Object.keys(fromUrl).length > 0) {
+      let existing: Record<string, string> = {};
+      try {
+        const stored = sessionStorage.getItem(UTM_SESSION_KEY);
+        if (stored) existing = JSON.parse(stored);
+      } catch {}
+      const merged = { ...existing, ...fromUrl };
+      sessionStorage.setItem(UTM_SESSION_KEY, JSON.stringify(merged));
+    }
+  } catch (e) {
+    console.error('Error initializing UTMs:', e);
+  }
+}
+
+function getUtmsPayload(): Record<string, string> {
+  let stored: Record<string, string> = {};
+  try {
+    const storedStr = sessionStorage.getItem(UTM_SESSION_KEY);
+    if (storedStr) stored = JSON.parse(storedStr);
+  } catch {}
+
+  const raw = new URLSearchParams(window.location.search);
+  const fromUrl: Record<string, string> = {};
+  UTM_KEYS.forEach(key => {
+    const val = raw.get(key);
+    if (val) fromUrl[key] = val;
+  });
+
+  const merged = { ...fromUrl, ...stored };
+
+  const coreKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+  coreKeys.forEach(key => {
+    if (!merged[key]) {
+      merged[key] = '';
+    }
+  });
+
+  return merged;
+}
+
+
 declare global {
   interface Window { confetti?: (opts: Record<string, unknown>) => void; }
 }
@@ -52,6 +105,8 @@ export default function QuizPublico() {
   const [whatsapp, setWhatsapp] = useState('');
   const [cidade, setCidade] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [coletaStep, setColetaStep] = useState(0);
+  const [extraFields, setExtraFields] = useState<Record<string, string>>({});
 
   const { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionIdRef } = useQuizTracker(
     slug || '',
@@ -60,6 +115,15 @@ export default function QuizPublico() {
   );
 
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Reset coleta step ao entrar na fase ───────────────────────────────────────
+  useEffect(() => {
+    if (phase === 'coleta') setColetaStep(0);
+  }, [phase]); // eslint-disable-line
+
+  function handleColetaNext() {
+    setColetaStep(s => s + 1);
+  }
 
   // ── Cria sessão assim que a capa do quiz é exibida ────────────────────────────
   // Chamada imediata: garante registro mesmo se a pessoa fechar antes de começar.
@@ -516,6 +580,15 @@ export default function QuizPublico() {
       }
     }
 
+    // Campos extras (não-padrão da coleta) vão em quiz_respostas
+    const defaultCampos = new Set(['nome', 'whatsapp', 'cidade', 'instagram']);
+    Object.entries(extraFields).forEach(([campo, val]) => {
+      if (!defaultCampos.has(campo) && val.trim()) {
+        const cfg = coletaConfig.find(c => c.campo === campo);
+        quizRespostas[cfg?.label || campo] = val.trim();
+      }
+    });
+
     const leadData = {
       org_id: quiz.org_id,
       nome: nome.trim(),
@@ -527,7 +600,7 @@ export default function QuizPublico() {
       score: score,
       faixa: faixa!,
       created_at: new Date().toISOString(),
-      ...utms.current
+      ...getUtmsPayload()
     };
 
     console.log('LeadData final:', leadData);
@@ -579,29 +652,11 @@ export default function QuizPublico() {
   const primary = quiz?.cor_primaria || '#2563eb';
   const whatsappEnabled = (quiz as any)?.whatsapp_redirecionar_direto === true;
 
-  const utms = useRef<Record<string, string>>({});
+  const utms = useRef<Record<string, string>>(getUtmsPayload());
 
   useEffect(() => {
-    // Captura UTMs UMA VEZ no mount — não depender de searchParams para evitar sobrescrita
-    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
-    const captured: Record<string, string> = {};
-
-    utmKeys.forEach(key => {
-      const val = searchParams.get(key);
-      if (val) captured[key] = val;
-    });
-
-    // Fallback: lê direto da URL caso o router já tenha stripped os params
-    const raw = new URLSearchParams(window.location.search);
-    utmKeys.forEach(key => {
-      if (!captured[key]) {
-        const val = raw.get(key);
-        if (val) captured[key] = val;
-      }
-    });
-
-    utms.current = captured;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    initializeUtms();
+  }, []);
 
   useEffect(() => {
     if (!quiz) return;
@@ -748,6 +803,10 @@ export default function QuizPublico() {
       onInstagramChange={setInstagram}
       onSubmit={handleSubmitLead}
       whatsappEnabled={whatsappEnabled}
+      coletaStep={coletaStep}
+      onColetaNext={handleColetaNext}
+      extraFieldValues={extraFields}
+      onExtraFieldChange={(campo, val) => setExtraFields(prev => ({ ...prev, [campo]: val }))}
     />
   );
 }

@@ -165,14 +165,20 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
         if (!s.concluiu) return false;
         const lead = s.lead_id ? leadsMap.get(String(s.lead_id)) : null;
         if (lead) return Number(lead.status) === 4;
-        return !s.virou_lead;
+        const score = calculateSessionScore(s.respostas);
+        const corte = (quiz as any)?.corte_amarelo ?? (quiz as any)?.corte_verde ?? 25;
+        return score < corte && !s.virou_lead;
       });
     } else if (statusFilter === 'lead') {
       result = result.filter(s => s.virou_lead || (s.lead_id && leadsMap.has(String(s.lead_id))));
     } else if (statusFilter === 'aprovado') {
       result = result.filter(s => {
         const lead = s.lead_id ? leadsMap.get(String(s.lead_id)) : null;
-        return lead && Number(lead.status) === 3;
+        if (lead) return Number(lead.status) === 3;
+        if (!s.concluiu) return false;
+        const score = calculateSessionScore(s.respostas);
+        const corte = (quiz as any)?.corte_amarelo ?? (quiz as any)?.corte_verde ?? 25;
+        return score >= corte && !s.virou_lead;
       });
     }
     if (deviceFilter !== 'all') result = result.filter(s => s.dispositivo === deviceFilter);
@@ -317,25 +323,25 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
               <thead>
                 <tr style={{ background: headBg, borderBottom: `1px solid ${border}` }}>
                   {/* Sticky fixed columns */}
-                  <th style={{ position: 'sticky', left: STICKY[0].left, zIndex: 2, background: headBg, width: STICKY[0].width, minWidth: STICKY[0].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700 }}>
+                  <th style={{ position: 'sticky', left: STICKY[0].left, zIndex: 2, background: headBg, width: STICKY[0].width, minWidth: STICKY[0].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     #
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[1].left, zIndex: 2, background: headBg, width: STICKY[1].width, minWidth: STICKY[1].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <th style={{ position: 'sticky', left: STICKY[1].left, zIndex: 2, background: headBg, width: STICKY[1].width, minWidth: STICKY[1].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     Sessão
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[2].left, zIndex: 2, background: headBg, width: STICKY[2].width, minWidth: STICKY[2].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <th style={{ position: 'sticky', left: STICKY[2].left, zIndex: 2, background: headBg, width: STICKY[2].width, minWidth: STICKY[2].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     Data
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[3].left, zIndex: 2, background: headBg, width: STICKY[3].width, minWidth: STICKY[3].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700 }}>
+                  <th style={{ position: 'sticky', left: STICKY[3].left, zIndex: 2, background: headBg, width: STICKY[3].width, minWidth: STICKY[3].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     📱
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[4].left, zIndex: 2, background: headBg, width: STICKY[4].width, minWidth: STICKY[4].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <th style={{ position: 'sticky', left: STICKY[4].left, zIndex: 2, background: headBg, width: STICKY[4].width, minWidth: STICKY[4].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     Progresso
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[5].left, zIndex: 2, background: headBg, width: STICKY[5].width, minWidth: STICKY[5].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <th style={{ position: 'sticky', left: STICKY[5].left, zIndex: 2, background: headBg, width: STICKY[5].width, minWidth: STICKY[5].width, padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     Status
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY[6].left, zIndex: 2, background: headBg, width: STICKY[6].width, minWidth: STICKY[6].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '11px', fontWeight: 700, boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
+                  <th style={{ position: 'sticky', left: STICKY[6].left, zIndex: 2, background: headBg, width: STICKY[6].width, minWidth: STICKY[6].width, padding: '10px 8px', textAlign: 'center', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
                     Pts
                   </th>
 
@@ -344,7 +350,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                     <th
                       key={p.id}
                       title={p.texto}
-                      style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', borderLeft: `1px solid ${border}` }}
+                      style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', borderLeft: `1px solid ${border}` }}
                     >
                       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
                         {p.texto.length > 22 ? p.texto.slice(0, 22) + '…' : p.texto}
@@ -353,16 +359,16 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                   ))}
 
                   {/* UTM columns */}
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '90px', borderLeft: `1px solid ${border}` }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '90px', borderLeft: `1px solid ${border}` }}>
                     Source
                   </th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '130px' }}>
                     Campaign
                   </th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '130px' }}>
                     Conjunto
                   </th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', minWidth: '130px' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: textMut, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', minWidth: '130px' }}>
                     Anúncio
                   </th>
                 </tr>
@@ -378,8 +384,10 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                   filteredSessoes.map((sess, idx) => {
                     const score = calculateSessionScore(sess.respostas);
                     const effectiveTotal = sess.total_etapas > 0 ? sess.total_etapas : (perguntas.length || 0);
+                    const respostasCount = Object.keys(sess.respostas || {}).length;
+                    const progressoCount = effectiveTotal > 0 ? Math.min(respostasCount, effectiveTotal) : respostasCount;
+                    const progressPct = effectiveTotal > 0 ? Math.round((progressoCount / effectiveTotal) * 100) : 0;
                     const ultimaEtapaCapped = effectiveTotal > 0 ? Math.min(sess.ultima_etapa || 0, effectiveTotal) : (sess.ultima_etapa || 0);
-                    const progressPct = effectiveTotal > 0 ? Math.round((ultimaEtapaCapped / effectiveTotal) * 100) : 0;
                     const sessLead = sess.lead_id ? leadsMap.get(String(sess.lead_id)) : null;
                     const leadStatus = sessLead ? Number(sessLead.status) : null;
                     const corteMinimo = (quiz as any)?.corte_amarelo ?? (quiz as any)?.corte_verde ?? 25;
@@ -387,7 +395,7 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                       if (!sess.concluiu) {
                         const step = ultimaEtapaCapped;
                         if (step > 0 && effectiveTotal > 0) {
-                          return { label: `Abandonou (${step}/${effectiveTotal})`, color: '#f97316', bg: '#f9731615' };
+                          return { label: `Abandonou (etapa ${step}/${effectiveTotal})`, color: '#f97316', bg: '#f9731615' };
                         }
                         return { label: 'Abandonou', color: '#ef4444', bg: '#ef444415' };
                       }
@@ -401,13 +409,13 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                       }
                       if (sess.virou_lead) return { label: 'Lead', color: '#10b981', bg: '#10b98115' };
                       // concluiu=true, sem lead — distingue aprovado (não converteu) de reprovado
-                      if (score > 0 && score >= corteMinimo) {
+                      if (score >= corteMinimo) {
                         return { label: 'Não converteu', color: '#3b82f6', bg: '#3b82f615' };
                       }
-                      return { label: 'Reprovado', color: '#f59e0b', bg: '#f59e0b15' };
+                      return { label: 'Reprovado', color: '#ef4444', bg: '#ef444415' };
                     })();
-                    const rowBg = idx % 2 === 0 ? 'transparent' : (isDark ? 'rgba(255,255,255,0.01)' : '#fcfcfc');
-                    const hoverBg = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc';
+                    const rowBg = idx % 2 === 0 ? cardBg : (isDark ? '#141416' : '#f5f5f5');
+                    const hoverBg = isDark ? '#1f1f22' : '#f0f0f0';
                     const deviceIcon = sess.dispositivo === 'mobile'
                       ? <Smartphone size={14} />
                       : sess.dispositivo === 'tablet'
@@ -417,56 +425,57 @@ export function QuizLeads({ quizId, isDark }: QuizLeadsProps) {
                     return (
                       <tr
                         key={sess.id}
-                        style={{ borderBottom: `1px solid ${border}`, transition: 'background 0.15s' }}
+                        style={{ background: rowBg, borderBottom: `1px solid ${border}`, transition: 'background 0.15s' }}
                         onMouseEnter={e => { Array.from(e.currentTarget.cells).forEach(td => (td as HTMLElement).style.background = hoverBg); }}
-                        onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach(td => (td as HTMLElement).style.background = ''); }}
+                        onMouseLeave={e => { Array.from(e.currentTarget.cells).forEach(td => (td as HTMLElement).style.background = rowBg); }}
                       >
                         {/* # */}
-                        <td style={{ position: 'sticky', left: STICKY[0].left, zIndex: 1, background: cardBg, width: STICKY[0].width, padding: '12px 8px', textAlign: 'center', color: textMut, fontSize: '11px' }}>
+                        <td style={{ position: 'sticky', left: STICKY[0].left, zIndex: 1, background: rowBg, width: STICKY[0].width, padding: '12px 8px', textAlign: 'center', color: textMut, fontSize: '11px' }}>
                           {filteredSessoes.length - idx}
                         </td>
                         {/* Sessão ID / Nome do lead */}
-                        <td style={{ position: 'sticky', left: STICKY[1].left, zIndex: 1, background: cardBg, width: STICKY[1].width, padding: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <td style={{ position: 'sticky', left: STICKY[1].left, zIndex: 1, background: rowBg, width: STICKY[1].width, padding: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {sessLead?.nome
                             ? <span style={{ fontSize: '12px', fontWeight: 600, color: textMain }}>{sessLead.nome.split(' ').slice(0, 2).join(' ')}</span>
                             : <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: textMain }}>{sess.session_id.substring(0, 8)}</span>
                           }
                         </td>
                         {/* Data */}
-                        <td style={{ position: 'sticky', left: STICKY[2].left, zIndex: 1, background: cardBg, width: STICKY[2].width, padding: '12px', color: textMut, whiteSpace: 'nowrap', fontSize: '12px' }}>
+                        <td style={{ position: 'sticky', left: STICKY[2].left, zIndex: 1, background: rowBg, width: STICKY[2].width, padding: '12px', color: textMut, whiteSpace: 'nowrap', fontSize: '12px' }}>
                           {formatDateBR(sess.created_at)}
                         </td>
                         {/* Dispositivo */}
-                        <td style={{ position: 'sticky', left: STICKY[3].left, zIndex: 1, background: cardBg, width: STICKY[3].width, padding: '12px 8px', textAlign: 'center', color: textMut }}>
+                        <td style={{ position: 'sticky', left: STICKY[3].left, zIndex: 1, background: rowBg, width: STICKY[3].width, padding: '12px 8px', textAlign: 'center', color: textMut }}>
                           {deviceIcon}
                         </td>
                         {/* Progresso */}
-                        <td style={{ position: 'sticky', left: STICKY[4].left, zIndex: 1, background: cardBg, width: STICKY[4].width, padding: '12px' }}>
+                        <td style={{ position: 'sticky', left: STICKY[4].left, zIndex: 1, background: rowBg, width: STICKY[4].width, padding: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 600, color: textMain }}>{ultimaEtapaCapped}/{effectiveTotal || '?'}</div>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: textMain }}>{progressoCount}/{effectiveTotal || '?'}</div>
                             <div style={{ width: '70px', height: '4px', background: border, borderRadius: '2px', overflow: 'hidden' }}>
                               <div style={{ width: `${progressPct}%`, height: '100%', background: statusInfo.color, borderRadius: '2px' }} />
                             </div>
                           </div>
                         </td>
                         {/* Status */}
-                        <td style={{ position: 'sticky', left: STICKY[5].left, zIndex: 1, background: cardBg, width: STICKY[5].width, padding: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ padding: '3px 8px', borderRadius: '6px', background: statusInfo.bg, color: statusInfo.color, fontSize: '10px', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                              {statusInfo.label}
-                            </span>
-                            {sess.virou_lead && sess.lead_id && (
+                        <td style={{ position: 'sticky', left: STICKY[5].left, zIndex: 1, background: rowBg, width: STICKY[5].width, padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {sess.lead_id ? (
                               <button
                                 onClick={() => navigate(`/leads?id=${sess.lead_id}`)}
-                                style={{ padding: '3px 6px', borderRadius: '6px', border: `1px solid ${statusInfo.color}40`, background: 'transparent', color: statusInfo.color, fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}
+                                style={{ padding: '3px 8px', borderRadius: '6px', border: 'none', background: statusInfo.bg, color: statusInfo.color, fontSize: '10px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
                               >
-                                Lead <ExternalLink size={9} />
+                                {statusInfo.label} <ExternalLink size={10} />
                               </button>
+                            ) : (
+                              <span style={{ padding: '3px 8px', borderRadius: '6px', background: statusInfo.bg, color: statusInfo.color, fontSize: '10px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                {statusInfo.label}
+                              </span>
                             )}
                           </div>
                         </td>
                         {/* Pts */}
-                        <td style={{ position: 'sticky', left: STICKY[6].left, zIndex: 1, background: cardBg, width: STICKY[6].width, padding: '12px 8px', textAlign: 'center', fontWeight: 800, color: score > 0 ? '#8b5cf6' : textMut, boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
+                        <td style={{ position: 'sticky', left: STICKY[6].left, zIndex: 1, background: rowBg, width: STICKY[6].width, padding: '12px 8px', textAlign: 'center', fontWeight: 800, color: score > 0 ? '#8b5cf6' : textMut, boxShadow: LAST_STICKY_RIGHT_SHADOW }}>
                           {score || '—'}
                         </td>
 

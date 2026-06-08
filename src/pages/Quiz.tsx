@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/AppLayout';
 import { useOrgId } from '@/hooks/useOrgId';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
@@ -54,6 +54,12 @@ interface Pergunta {
 interface FlatPergunta extends Pergunta { blocoTitulo: string; globalIndex: number; }
 
 function hexToRgba(hex: string, a: number) { return hexRgba(hex, a); }
+
+function sanitizeQuizForUpdate(q: QuizConfig) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id: _a, org_id: _b, created_at: _c, updated_at: _d, published_at: _e, ...rest } = q as any;
+  return rest;
+}
 
 function formatWANumber(v: string): string {
   const nums = v.replace(/\D/g, '');
@@ -202,6 +208,43 @@ function SortableOpcaoCard({ op, isDark, border, textMut, primary, iStyle, lbl, 
   );
 }
 
+// ── Sortable coleta sidebar sub-item ──────────────────────────────────────────
+const DEFAULT_COLETA_CAMPOS = new Set(['nome', 'whatsapp', 'cidade', 'instagram']);
+
+function SortableColetaSidebarItem({ cfg, index, isActive, isDark, textMain, textMut, border, primary, onClick, onDelete }: {
+  cfg: ColetaCampo; index: number; isActive: boolean;
+  isDark: boolean; textMain: string; textMut: string; border: string; primary: string;
+  onClick: () => void; onDelete?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `sidebar-coleta-${cfg.campo}` });
+  const [hovered, setHovered] = useState(false);
+  const dndStyle: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const isDefault = DEFAULT_COLETA_CAMPOS.has(cfg.campo);
+  const bg = isActive ? `${primary}12` : hovered ? (isDark ? '#1a1a1e' : '#f9fafb') : 'transparent';
+  return (
+    <div ref={setNodeRef} style={{ ...dndStyle, display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 7px', borderRadius: '8px', marginBottom: '2px', cursor: 'pointer', border: `1.5px solid ${isActive ? primary : 'transparent'}`, background: bg, transition: 'all 0.15s' }}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}>
+      <div {...attributes} {...listeners} style={{ color: textMut, cursor: isDragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none', display: 'flex' }} onClick={e => e.stopPropagation()}>
+        <GripVertical style={{ width: '9px', height: '9px' }} />
+      </div>
+      <span style={{ fontSize: '10px', fontWeight: 700, color: isActive ? primary : textMut, flexShrink: 0, minWidth: '14px', textAlign: 'right' as const }}>{index + 1}.</span>
+      <span style={{ flex: 1, fontSize: '11px', fontWeight: isActive ? 700 : 400, color: isActive ? primary : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{cfg.label}</span>
+      {hovered && !isDefault && onDelete && (
+        <button onClick={e => { e.stopPropagation(); onDelete(); }} title="Remover campo"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '2px', flexShrink: 0 }}>
+          <Trash2 style={{ width: '10px', height: '10px' }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Sortable coleta field card ────────────────────────────────────────────────
+const DEFAULT_CAMPOS = new Set(['nome', 'whatsapp', 'cidade', 'instagram']);
+const TIPO_LABELS: Record<string, string> = { texto: 'Aa  Texto', telefone: '📞  Telefone', email: '✉️  E-mail', numero: '#  Número', cpf: '🪪  CPF' };
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function QuizBuilderPage() {
   const { orgId, ready } = useOrgId();
@@ -253,8 +296,18 @@ export default function QuizBuilderPage() {
   // Preview state (interactive phone preview)
   const [previewPhase, setPreviewPhase] = useState<Phase>('capa');
   const [previewIdx, setPreviewIdx] = useState(0);
+  const [previewColetaIdx, setPreviewColetaIdx] = useState(0);
   const [previewSelectedOpcao, setPreviewSelectedOpcao] = useState<string | null>(null);
   const previewAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Collect panel state
+  const [showAddColeta, setShowAddColeta] = useState(false);
+  const [newCampoLabel, setNewCampoLabel] = useState('');
+  const [newCampoTipo, setNewCampoTipo] = useState<ColetaCampo['tipo']>('texto');
+  const [newCampoPlaceholder, setNewCampoPlaceholder] = useState('');
+  const [newCampoObrigatorio, setNewCampoObrigatorio] = useState(false);
+  const [selectedColetaElement, setSelectedColetaElement] = useState<'texto' | 'campo' | 'botao' | 'aviso' | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedRecentlyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,10 +324,11 @@ export default function QuizBuilderPage() {
   const inputBg = isDark ? '#1a1a1e' : '#f7f6f4';
 
   // Computed flat list
-  const flatPerguntas: FlatPergunta[] = [...blocos]
+  const flatPerguntas = useMemo<FlatPergunta[]>(() => [...blocos]
     .sort((a, b) => a.ordem - b.ordem)
     .flatMap(b => (perguntas[b.id] || []).sort((a, b) => a.ordem - b.ordem).map(p => ({ ...p, blocoTitulo: b.titulo })))
-    .map((p, i) => ({ ...p, globalIndex: i + 1 }));
+    .map((p, i) => ({ ...p, globalIndex: i + 1 }))
+  , [blocos, perguntas]);
 
   const quizLink = quiz ? `${BASE_URL}/quiz/${quiz.slug}` : '';
 
@@ -303,6 +357,11 @@ export default function QuizBuilderPage() {
       setPreviewPhase('aprovado_form');
     } else if (selectedPageId === 'collect') {
       setPreviewPhase('coleta');
+      setPreviewColetaIdx(0);
+      const firstCampo = quiz?.coleta_config?.length
+        ? [...quiz.coleta_config].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))[0]?.campo
+        : DEFAULT_COLETA_CONFIG[0]?.campo ?? 'nome';
+      setExpandedColetaCampo(firstCampo ?? null);
     } else if (selectedPageId === 'analise') {
       setPreviewPhase('analise');
     } else if (selectedPageId === 'rejection') {
@@ -318,6 +377,10 @@ export default function QuizBuilderPage() {
   useEffect(() => {
     setShowConditional(!!selectedPergunta?.condicao_pergunta_id);
   }, [selectedPergunta?.id]);
+
+  useEffect(() => {
+    setSelectedColetaElement(null);
+  }, [expandedColetaCampo]);
 
   useEffect(() => {
     if (!ready || !orgId) return;
@@ -646,14 +709,8 @@ export default function QuizBuilderPage() {
   function updateQuizField(field: string, value: any) {
     if (!quiz) return;
     pushHistory();
-
-    const quizId = quiz.id;
+    setHasUnsavedChanges(true);
     setQuiz(prev => prev ? { ...prev, [field]: value } : prev);
-    debounce(`quiz_${field}`, async () => {
-      console.log('[save] quiz field:', field, value, 'id:', quizId);
-      const { error } = await db.from('quizzes').update({ [field]: value }).eq('id', quizId);
-      if (error) throw new Error(error.message);
-    });
   }
 
   function handleUndo() {
@@ -697,8 +754,34 @@ export default function QuizBuilderPage() {
     if (!quiz) return;
     setIsSaving(true);
     try {
-      const { error } = await db.from('quizzes').update({ ...quiz }).eq('id', quiz.id);
-      if (error) throw new Error(error.message);
+      const blocoSaves = blocos.map(b =>
+        (db as any).from('quiz_blocos').update({ titulo: b.titulo, emoji: b.emoji, ordem: b.ordem }).eq('id', b.id)
+      );
+
+      const allPerguntas = Object.values(perguntas).flat();
+      const pergSaves = allPerguntas.map(p =>
+        (db as any).from('quiz_perguntas').update({
+          texto: p.texto, subtexto: p.subtexto, tipo_resposta: p.tipo_resposta,
+          condicao_pergunta_id: p.condicao_pergunta_id, condicao_opcao_id: p.condicao_opcao_id, ordem: p.ordem,
+        }).eq('id', p.id)
+      );
+
+      const allOpcoes = Object.values(opcoes).flat();
+      const opcaoSaves = allOpcoes.map(o =>
+        (db as any).from('quiz_opcoes').update({
+          texto: o.texto, pontos: o.pontos, reprova_imediato: o.reprova_imediato, emoji: o.emoji, ordem: o.ordem, target_pergunta_id: o.target_pergunta_id,
+        }).eq('id', o.id)
+      );
+
+      const results = await Promise.all([
+        db.from('quizzes').update(sanitizeQuizForUpdate(quiz)).eq('id', quiz.id),
+        ...blocoSaves, ...pergSaves, ...opcaoSaves,
+      ]);
+
+      const firstError = results.find((r: any) => r.error);
+      if (firstError?.error) throw new Error((firstError.error as any).message);
+
+      setHasUnsavedChanges(false);
       toast.success('✓ Salvo com sucesso');
     } catch (err) {
       toast.error('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
@@ -782,6 +865,7 @@ export default function QuizBuilderPage() {
       toast.error(`Erro ao criar etapa: ${npErr?.message || 'Erro desconhecido'}`);
       return;
     }
+    setHasUnsavedChanges(true);
     setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
     setOpcoes(o => ({ ...o, [np.id]: [] }));
     setSelectedPageId(np.id);
@@ -888,22 +972,19 @@ export default function QuizBuilderPage() {
 
   function updatePergunta(id: string, field: string, value: string | null) {
     pushHistory();
+    setHasUnsavedChanges(true);
     setPerguntas(prev => {
       const next = { ...prev };
       for (const bid of Object.keys(next))
         next[bid] = next[bid].map(p => p.id === id ? { ...p, [field]: value } : p);
       return next;
     });
-    debounce(`perg_${id}_${field}`, async () => {
-      console.log('[save] pergunta:', id, field, value);
-      const { error } = await db.from('quiz_perguntas').update({ [field]: value }).eq('id', id);
-      if (error) throw new Error(error.message);
-    });
   }
 
   async function deletePergunta(id: string) {
     const { error } = await db.from('quiz_perguntas').delete().eq('id', id);
     if (error) { toast.error(`Erro ao deletar: ${error.message}`); return; }
+    setHasUnsavedChanges(true);
     setPerguntas(prev => {
       const next = { ...prev };
       for (const bid of Object.keys(next)) next[bid] = next[bid].filter(p => p.id !== id);
@@ -920,27 +1001,25 @@ export default function QuizBuilderPage() {
       pergunta_id: pergId, texto: '', pontos: 0, reprova_imediato: false, ordem, emoji: null,
     }).select().single();
     if (error) { toast.error(`Erro ao adicionar opção: ${error.message}`); return; }
+    setHasUnsavedChanges(true);
     if (no) setOpcoes(p => ({ ...p, [pergId]: [...(p[pergId] || []), no] }));
   }
 
   function updateOpcao(id: string, field: string, value: string | number | boolean | null) {
     pushHistory();
+    setHasUnsavedChanges(true);
     setOpcoes(prev => {
       const next = { ...prev };
       for (const pid of Object.keys(next))
         next[pid] = next[pid].map(o => o.id === id ? { ...o, [field]: value } : o);
       return next;
     });
-    debounce(`opcao_${id}_${field}`, async () => {
-      console.log('[save] opcao:', id, field, value);
-      const { error } = await db.from('quiz_opcoes').update({ [field]: value }).eq('id', id);
-      if (error) throw new Error(error.message);
-    });
   }
 
   async function deleteOpcao(id: string) {
     const { error } = await db.from('quiz_opcoes').delete().eq('id', id);
     if (error) { toast.error(`Erro ao deletar opção: ${error.message}`); return; }
+    setHasUnsavedChanges(true);
     setOpcoes(prev => {
       const next = { ...prev };
       for (const pid of Object.keys(next)) next[pid] = next[pid].filter(o => o.id !== id);
@@ -972,11 +1051,8 @@ export default function QuizBuilderPage() {
   }
 
   function updateBlocoField(id: string, field: string, value: string) {
+    setHasUnsavedChanges(true);
     setBlocos(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
-    debounce(`bloco_${id}_${field}`, async () => {
-      const { error } = await db.from('quiz_blocos').update({ [field]: value }).eq('id', id);
-      if (error) throw new Error(error.message);
-    });
   }
 
   function addBenefit() {
@@ -1343,12 +1419,7 @@ export default function QuizBuilderPage() {
                           value={quiz.capa_imagem_height || 200}
                           onChange={e => {
                             const val = Number(e.target.value);
-                            const qId = quiz.id;
                             setQuiz(q => q ? { ...q, capa_imagem_height: val } : q);
-                            debounce('quiz_capa_imagem_height', async () => {
-                              const { error } = await db.from('quizzes').update({ capa_imagem_height: val }).eq('id', qId);
-                              if (error) throw new Error(error.message);
-                            }, 500);
                           }}
                           style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }} />
                       </div>
@@ -1488,12 +1559,7 @@ export default function QuizBuilderPage() {
                           value={quiz.logo_altura || 32}
                           onChange={e => {
                             const val = Number(e.target.value);
-                            const qId = quiz.id;
                             setQuiz(q => q ? { ...q, logo_altura: val } : q);
-                            debounce('quiz_logo_altura', async () => {
-                              const { error } = await db.from('quizzes').update({ logo_altura: val }).eq('id', qId);
-                              if (error) throw new Error(error.message);
-                            }, 300);
                           }}
                           style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }}
                         />
@@ -1706,186 +1772,259 @@ export default function QuizBuilderPage() {
     }
 
     if (selectedPageType === 'collect') {
-      const configToShow: ColetaCampo[] = (() => {
-        if (!quiz.coleta_config?.length) return [...DEFAULT_COLETA_CONFIG];
-        const stored = [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem);
-        const storedCampos = new Set(stored.map((c: ColetaCampo) => c.campo));
-        const missing = DEFAULT_COLETA_CONFIG.filter(d => !storedCampos.has(d.campo));
-        return [...stored, ...missing];
-      })();
+      const slugify = (str: string) => str.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
-      const redirectValue = (quiz as any).redirect_whatsapp || '';
-      let redirectUrl = redirectValue;
-      let novaAba = false;
-
-      if (redirectValue.startsWith('{') && redirectValue.endsWith('}')) {
-        try {
-          const parsed = JSON.parse(redirectValue);
-          redirectUrl = parsed.url || '';
-          novaAba = !!parsed.nova_aba;
-        } catch (e) {
-          // Fallback
-        }
-      }
-
-      const setRedirectData = (url: string, nAba: boolean) => {
-        updateQuizField('redirect_whatsapp', JSON.stringify({ url, nova_aba: nAba }));
+      const addColetaCampo = () => {
+        if (!newCampoLabel.trim()) { toast.error('Informe o nome do campo'); return; }
+        const campoId = slugify(newCampoLabel);
+        if (currentColetaConfig.some(c => c.campo === campoId)) { toast.error('Já existe um campo com esse nome'); return; }
+        const newCfg: ColetaCampo = {
+          campo: campoId, label: newCampoLabel.trim(),
+          placeholder: newCampoPlaceholder.trim() || newCampoLabel.trim(),
+          obrigatorio: newCampoObrigatorio, tipo: newCampoTipo || 'texto',
+          ordem: currentColetaConfig.length + 1,
+        };
+        const updated = [...currentColetaConfig, newCfg];
+        updateColetaConfig(updated);
+        setNewCampoLabel(''); setNewCampoPlaceholder(''); setNewCampoTipo('texto');
+        setNewCampoObrigatorio(false); setShowAddColeta(false);
+        setExpandedColetaCampo(campoId);
+        setPreviewColetaIdx(updated.length - 1);
+        toast.success('Campo adicionado');
       };
 
-      return (
-        <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 8px' }}>
-            Campos do formulário
-          </p>
-          {configToShow.map((cfg: ColetaCampo) => {
-            const isExp = expandedColetaCampo === cfg.campo;
-            const emoji = ({ nome: '👤', whatsapp: '📱', cidade: '🏙️', instagram: '📸' } as Record<string, string>)[cfg.campo] ?? '📝';
-            return (
-              <div key={cfg.campo} style={{ borderRadius: '10px', border: `1px solid ${isExp ? '#2563eb' : border}`, background: cardBg, flexShrink: 0, width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', cursor: 'pointer', userSelect: 'none' as const }}
-                  onClick={() => setExpandedColetaCampo(isExp ? null : cfg.campo)}>
-                  <span style={{ fontSize: '14px', flexShrink: 0 }}>{emoji}</span>
-                  <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
-                  {cfg.obrigatorio && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700, flexShrink: 0, marginRight: '4px' }}>obrigatório</span>}
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, transform: isExp ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.22s ease' }}>
-                    <path d="M3 5L7 9L11 5" stroke={textMut} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div style={{ maxHeight: isExp ? '260px' : '0px', overflow: 'hidden', transition: 'max-height 0.25s ease' }}>
-                  <div style={{ padding: '12px', borderTop: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box' as const }}>
-                    <div>
-                      <label style={lbl}>Label</label>
-                      <input value={cfg.label} onChange={e => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, label: e.target.value } : c))} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
-                    </div>
-                    <div>
-                      <label style={lbl}>Placeholder</label>
-                      <input value={cfg.placeholder} onChange={e => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, placeholder: e.target.value } : c))} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '13px', color: textMain }}>Obrigatório</span>
-                      <div onClick={() => updateColetaConfig(configToShow.map((c: ColetaCampo) => c.campo === cfg.campo ? { ...c, obrigatorio: !c.obrigatorio } : c))}
-                        style={{ width: '34px', height: '20px', borderRadius: '99px', background: cfg.obrigatorio ? '#2563eb' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-                        <div style={{ position: 'absolute', top: '3px', left: cfg.obrigatorio ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div style={{ marginTop: '8px', padding: '14px', borderRadius: '12px', background: hexToRgba('#2563eb', 0.04), border: `1px solid ${hexToRgba('#2563eb', 0.12)}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      // Add campo form
+      if (showAddColeta) {
+        return (
+          <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: textMain }}>Novo campo</span>
+              <button onClick={() => { setShowAddColeta(false); setNewCampoLabel(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px' }}>
+                <X style={{ width: '14px', height: '14px' }} />
+              </button>
+            </div>
             <div>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '10px' }}>Configuração do Botão & Destino</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div>
-                  <label style={lbl}>Texto do botão</label>
-                  <input
-                    value={(quiz as any).whatsapp_mensagem_personalizada || ''}
-                    onChange={e => updateQuizField('whatsapp_mensagem_personalizada', e.target.value)}
-                    placeholder="Concluir cadastro no whatsapp!"
-                    style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={lbl}>Tipo de navegação</label>
-                  <select
-                    value={(quiz as any).whatsapp_redirecionar_direto ? 'redirecionar' : 'sucesso'}
-                    onChange={e => updateQuizField('whatsapp_redirecionar_direto', e.target.value === 'redirecionar')}
-                    style={{ ...iStyle, width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 8px' }}
-                  >
-                    <option value="sucesso">Ir para tela de Sucesso</option>
-                    <option value="redirecionar">Redirecionar</option>
-                  </select>
-                </div>
-                {(quiz as any).whatsapp_redirecionar_direto && (
-                  <>
-                    <div>
-                      <label style={lbl}>Destino do redirecionamento</label>
-                      <input
-                        value={redirectUrl}
-                        onChange={e => setRedirectData(e.target.value, novaAba)}
-                        placeholder="https://wa.me/556194233987?text=Oi!%20Sou%20{{nome}}"
-                        style={{ ...iStyle, width: '100%', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '2px' }}
-                      onClick={() => setRedirectData(redirectUrl, !novaAba)}>
-                      <input
-                        type="checkbox"
-                        checked={novaAba}
-                        onChange={() => {}}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: '13px', color: textMain, userSelect: 'none' }}>Nova aba?</span>
-                    </div>
-
-                    <div style={{ marginTop: '6px', padding: '10px', borderRadius: '10px', background: isDark ? '#18181b' : '#f8fafc', border: `1px solid ${border}` }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: textMain, display: 'block', marginBottom: '4px' }}>
-                        ✨ Parâmetros dinâmicos do formulário:
-                      </span>
-                      <p style={{ fontSize: '11px', color: textMut, margin: '0 0 8px', lineHeight: '1.4' }}>
-                        Adicione no link para personalizar com as respostas do lead. Clique para copiar:
-                      </p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {['{{nome}}', '{{whatsapp}}', '{{cidade}}', '{{instagram}}'].map(param => (
-                          <span
-                            key={param}
-                            onClick={() => {
-                              navigator.clipboard.writeText(param);
-                              toast.success(`Copiado: ${param}`);
-                            }}
-                            style={{
-                              fontSize: '10.5px',
-                              fontWeight: 700,
-                              fontFamily: 'monospace',
-                              background: isDark ? '#27272a' : '#eff6ff',
-                              color: '#2563eb',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              border: `1px solid ${isDark ? '#3f3f46' : '#bfdbfe'}`,
-                              cursor: 'pointer',
-                              userSelect: 'none',
-                              transition: 'all 0.15s'
-                            }}
-                            title="Clique para copiar"
-                            onMouseEnter={e => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = isDark ? '#27272a' : '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
-                          >
-                            {param}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+              <label style={lbl}>Nome do campo</label>
+              <input value={newCampoLabel} onChange={e => setNewCampoLabel(e.target.value)} placeholder="Ex: Data de nascimento" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} autoFocus />
+              {newCampoLabel && <span style={{ fontSize: '10px', color: textMut, fontFamily: 'monospace' }}>{`ID: {{${slugify(newCampoLabel)}}}`}</span>}
+            </div>
+            <div>
+              <label style={lbl}>Tipo</label>
+              <select value={newCampoTipo || 'texto'} onChange={e => setNewCampoTipo(e.target.value as ColetaCampo['tipo'])} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const, height: '34px', padding: '0 8px' }}>
+                {Object.entries(TIPO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Placeholder</label>
+              <input value={newCampoPlaceholder} onChange={e => setNewCampoPlaceholder(e.target.value)} placeholder="Texto de exemplo" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: textMain }}>Obrigatório</span>
+              <div onClick={() => setNewCampoObrigatorio(v => !v)} style={{ width: '34px', height: '20px', borderRadius: '99px', background: newCampoObrigatorio ? '#2563eb' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', top: '3px', left: newCampoObrigatorio ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
               </div>
             </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => { setShowAddColeta(false); setNewCampoLabel(''); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${border}`, background: 'transparent', color: textMut, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+              <button onClick={addColetaCampo} style={{ flex: 2, padding: '10px', borderRadius: '10px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Adicionar</button>
+            </div>
+          </div>
+        );
+      }
+
+      // Single-campo settings panel
+      const selectedCfg = expandedColetaCampo
+        ? currentColetaConfig.find(c => c.campo === expandedColetaCampo)
+        : currentColetaConfig[0];
+
+      if (!selectedCfg) {
+        return (
+          <div style={{ padding: '32px 16px', textAlign: 'center', color: textMut, fontSize: '13px' }}>
+            Selecione um campo na sidebar para editar
+          </div>
+        );
+      }
+
+      const isDefaultCampo = DEFAULT_CAMPOS.has(selectedCfg.campo);
+      const isWA = selectedCfg.campo === 'whatsapp';
+
+      const updateCampo = (updated: Partial<ColetaCampo>) => {
+        updateColetaConfig(currentColetaConfig.map(c =>
+          c.campo === selectedCfg.campo ? { ...c, ...updated } : c
+        ));
+      };
+
+      // ── Element card selector (null state) ────────────────────────────────
+      if (selectedColetaElement === null) {
+        const elementCards: { type: 'texto' | 'campo' | 'botao' | 'aviso'; icon: string; label: string; desc: string }[] = [
+          { type: 'texto', icon: '✏️', label: 'Textos', desc: 'Título e subtítulo da etapa' },
+          { type: 'campo', icon: '⌨️', label: 'Campo', desc: 'Placeholder, tipo e obrigatoriedade' },
+          { type: 'botao', icon: '🔘', label: 'Botão', desc: 'Texto e ação do botão' },
+          ...(isWA ? [{ type: 'aviso' as const, icon: '💬', label: 'Aviso WA', desc: 'Mensagem exibida abaixo do botão' }] : []),
+        ];
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {elementCards.map(({ type, icon, label, desc }) => (
+                <div key={type} onClick={() => setSelectedColetaElement(type)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', border: `1.5px solid ${border}`, background: cardBg, cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = primary; el.style.background = hexToRgba(primary, 0.04); }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = border; el.style.background = cardBg; }}>
+                  <span style={{ fontSize: '20px', flexShrink: 0 }}>{icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: textMain }}>{label}</div>
+                    <div style={{ fontSize: '11px', color: textMut, marginTop: '1px' }}>{desc}</div>
+                  </div>
+                  <ChevronRight style={{ width: '14px', height: '14px', color: textMut, flexShrink: 0 }} />
+                </div>
+              ))}
+            </div>
+            {!isDefaultCampo && (
+              <div style={{ padding: '12px 16px', borderTop: `1px solid ${border}` }}>
+                <button onClick={() => {
+                  const next = currentColetaConfig.filter(c => c.campo !== selectedCfg.campo).map((c, j) => ({ ...c, ordem: j + 1 }));
+                  updateColetaConfig(next);
+                  const idx = currentColetaConfig.findIndex(c => c.campo === selectedCfg.campo);
+                  const fallback = next[Math.max(0, idx - 1)];
+                  if (fallback) { setExpandedColetaCampo(fallback.campo); setPreviewColetaIdx(Math.max(0, idx - 1)); }
+                  else { setExpandedColetaCampo(next[0]?.campo ?? null); setPreviewColetaIdx(0); }
+                }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1.5px solid #ef4444', background: 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontFamily: 'inherit' }}>
+                  <Trash2 style={{ width: '14px', height: '14px' }} /> Remover campo
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ── Focused element panel ─────────────────────────────────────────────
+      const elementLabelMap: Record<string, string> = { texto: 'Textos', campo: 'Campo', botao: 'Botão', aviso: 'Aviso WA' };
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '8px 12px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <button onClick={() => setSelectedColetaElement(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f3f4f6'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+              <ChevronLeft style={{ width: '12px', height: '12px' }} /> Voltar
+            </button>
+            <span style={{ fontSize: '11px', color: textMut }}>/</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: textMain }}>{elementLabelMap[selectedColetaElement]}</span>
           </div>
 
-          <div style={{ marginTop: '16px', borderTop: `1px solid ${border}`, paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: textMain }}>Rastreamento de Anúncios</span>
-            <p style={{ fontSize: '12px', color: textMut, margin: 0, lineHeight: '1.4' }}>
-              Copie e cole os parâmetros abaixo em seus anúncios para rastreá-los com precisão no seu CRM:
-            </p>
-            <button
-              onClick={() => {
-                const utm = 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}';
-                navigator.clipboard.writeText(utm);
-                toast.success('Parâmetros UTM copiados!');
-              }}
-              style={{
-                width: '100%', padding: '10px', borderRadius: '10px',
-                border: `1.5px dashed ${isDark ? '#333' : '#cbd5e1'}`, background: 'transparent',
-                color: textMain, fontSize: '12px', fontWeight: 600,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                transition: 'all 0.2s', marginTop: '4px'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.background = hexToRgba('#2563eb', 0.05); }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = isDark ? '#333' : '#cbd5e1'; e.currentTarget.style.color = textMain; e.currentTarget.style.background = 'transparent'; }}
-            >
-              <Copy size={14} />
-              Copiar parâmetros de UTM
-            </button>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {selectedColetaElement === 'texto' && (
+              <>
+                <div>
+                  <label style={lbl}>Título do campo</label>
+                  <input value={selectedCfg.label} onChange={e => updateCampo({ label: e.target.value })} placeholder="Ex: Qual o seu Instagram?" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                </div>
+                <div>
+                  <label style={lbl}>Subtítulo <span style={{ fontWeight: 400, color: textMut }}>(opcional)</span></label>
+                  <input value={selectedCfg.subtitulo || ''} onChange={e => updateCampo({ subtitulo: e.target.value || undefined })} placeholder="Dica exibida abaixo da pergunta" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                </div>
+              </>
+            )}
+
+            {selectedColetaElement === 'campo' && (
+              <>
+                <div>
+                  <label style={lbl}>Placeholder</label>
+                  <input value={selectedCfg.placeholder} onChange={e => updateCampo({ placeholder: e.target.value })} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                </div>
+                <div>
+                  <label style={lbl}>Tipo do campo</label>
+                  <select value={selectedCfg.tipo || 'texto'} onChange={e => updateCampo({ tipo: e.target.value as ColetaCampo['tipo'] })} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const, height: '34px', padding: '0 8px' }}>
+                    {Object.entries(TIPO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>ID automático</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ padding: '5px 9px', borderRadius: '8px', background: isDark ? '#18181b' : '#f1f5f9', border: `1px solid ${border}`, fontFamily: 'monospace', fontSize: '12px', color: '#2563eb' }}>
+                      {`{{${selectedCfg.campo}}}`}
+                    </div>
+                    <button onClick={() => { navigator.clipboard.writeText(`{{${selectedCfg.campo}}}`); toast.success('Copiado!'); }} title="Copiar ID"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '4px', borderRadius: '4px' }}>
+                      <Copy style={{ width: '12px', height: '12px' }} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: textMain }}>Obrigatório</span>
+                  <div onClick={() => { if (!isWA) updateCampo({ obrigatorio: !selectedCfg.obrigatorio }); }}
+                    style={{ width: '34px', height: '20px', borderRadius: '99px', background: selectedCfg.obrigatorio ? '#2563eb' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', cursor: isWA ? 'not-allowed' : 'pointer', transition: 'background 0.2s', flexShrink: 0, opacity: isWA ? 0.5 : 1 }}>
+                    <div style={{ position: 'absolute', top: '3px', left: selectedCfg.obrigatorio ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {selectedColetaElement === 'botao' && (
+              <>
+                <div>
+                  <label style={lbl}>Texto do botão</label>
+                  <input value={selectedCfg.botao_texto || ''} onChange={e => updateCampo({ botao_texto: e.target.value || null })} placeholder="Continuar →" style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                </div>
+                <div>
+                  <label style={lbl}>Ação do botão</label>
+                  <select
+                    value={selectedCfg.botao_acao === 'whatsapp' ? 'redirecionar' : (selectedCfg.botao_acao || 'proxima_etapa')}
+                    onChange={e => updateCampo({ botao_acao: e.target.value as ColetaCampo['botao_acao'], botao_target: null })}
+                    style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const, height: '34px', padding: '0 8px' }}>
+                    <option value="proxima_etapa">Próxima etapa</option>
+                    <option value="redirecionar">Redirecionar</option>
+                    <option value="pagina_sucesso">Página de sucesso</option>
+                  </select>
+                </div>
+                {(selectedCfg.botao_acao === 'proxima_etapa' || !selectedCfg.botao_acao || selectedCfg.botao_acao === 'whatsapp') && (
+                  <div>
+                    <label style={lbl}>Ir para qual etapa?</label>
+                    <select value={selectedCfg.botao_target || 'proxima'} onChange={e => updateCampo({ botao_target: e.target.value === 'proxima' ? null : e.target.value })} style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const, height: '34px', padding: '0 8px' }}>
+                      <option value="proxima">Próxima (padrão)</option>
+                      {currentColetaConfig.filter(c => c.campo !== selectedCfg.campo).map(c => (
+                        <option key={c.campo} value={c.campo}>{c.label}</option>
+                      ))}
+                      <option value="aprovacao">Página de Aprovação ✅</option>
+                      <option value="reprovacao">Página de Reprovação ❌</option>
+                    </select>
+                  </div>
+                )}
+                {selectedCfg.botao_acao === 'redirecionar' && (
+                  <div>
+                    <label style={lbl}>URL de destino</label>
+                    <input value={selectedCfg.botao_target || ''} onChange={e => updateCampo({ botao_target: e.target.value || null })} placeholder="https://..." style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const }} />
+                  </div>
+                )}
+              </>
+            )}
+
+            {selectedColetaElement === 'aviso' && isWA && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: textMain, fontWeight: 500 }}>Mostrar aviso</span>
+                  <div onClick={() => updateCampo({ show_whatsapp_warning: selectedCfg.show_whatsapp_warning === false ? undefined : false })}
+                    style={{ width: '34px', height: '20px', borderRadius: '99px', background: selectedCfg.show_whatsapp_warning !== false ? '#2563eb' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: '3px', left: selectedCfg.show_whatsapp_warning !== false ? '17px' : '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
+                  </div>
+                </div>
+                {selectedCfg.show_whatsapp_warning !== false && (
+                  <div>
+                    <label style={lbl}>Texto do aviso</label>
+                    <textarea
+                      value={selectedCfg.whatsapp_warning_text || ''}
+                      onChange={e => updateCampo({ whatsapp_warning_text: e.target.value || null })}
+                      placeholder="📲 Ao clicar, você será direcionada para o WhatsApp. Envie a mensagem para garantir sua vaga — a mensagem já vem preenchida ✓"
+                      rows={4}
+                      style={{ ...iStyle, width: '100%', boxSizing: 'border-box' as const, resize: 'vertical' as const, fontFamily: 'inherit', lineHeight: 1.5 }}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       );
@@ -1943,9 +2082,9 @@ export default function QuizBuilderPage() {
   }
 
   // ── SCALE for phone preview ─────────────────────────────────────────────────
-  const PHONE_INNER_W = 242;
+  const PHONE_INNER_W = 302;
   const SCALE = PHONE_INNER_W / 480;
-  const PHONE_INNER_H = 485;
+  const PHONE_INNER_H = 605;
   const CONTENT_H = Math.round(PHONE_INNER_H / SCALE);
 
   // ── MAIN RENDER ──────────────────────────────────────────────────────────────
@@ -1988,26 +2127,62 @@ export default function QuizBuilderPage() {
 
           <div style={{ flex: 1 }} />
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {activeTab === 'editor' && (
               <>
-                <button onClick={handleManualSave} disabled={isSaving} style={{
-                  padding: '6px 12px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`,
-                  background: 'transparent', color: textMut, fontSize: '12px', fontWeight: 600,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                {/* Toggle Ativo/Inativo */}
+                <div
+                  onClick={toggleAtivo}
+                  title={quiz.ativo ? 'Quiz ativo (clique para desativar)' : 'Quiz inativo (clique para ativar)'}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '4px 10px', borderRadius: tokens.radius.sm, border: `1px solid ${quiz.ativo ? '#16a34a' : border}`, background: quiz.ativo ? 'rgba(22,163,74,0.08)' : 'transparent' }}
+                >
+                  <div style={{ width: '28px', height: '16px', borderRadius: '99px', background: quiz.ativo ? '#16a34a' : (isDark ? '#3f3f46' : '#d1d5db'), position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: '2px', left: quiz.ativo ? '14px' : '2px', width: '12px', height: '12px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: quiz.ativo ? '#16a34a' : textMut }}>{quiz.ativo ? 'Ativo' : 'Inativo'}</span>
+                </div>
+
+                {/* Salvar */}
+                <button onClick={handleManualSave} disabled={isSaving || !hasUnsavedChanges} style={{
+                  padding: '6px 12px', borderRadius: tokens.radius.sm,
+                  border: `1px solid ${hasUnsavedChanges ? '#2563eb' : border}`,
+                  background: hasUnsavedChanges ? '#2563eb' : 'transparent',
+                  color: hasUnsavedChanges ? '#fff' : textMut,
+                  fontSize: '12px', fontWeight: 600,
+                  cursor: hasUnsavedChanges ? 'pointer' : 'default',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  opacity: isSaving ? 0.7 : 1,
                 }}>
                   {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                  {isSaving ? 'Salvando...' : 'Salvar'}
+                  {isSaving ? 'Salvando...' : hasUnsavedChanges ? 'Salvar' : 'Salvo'}
                 </button>
-                <button onClick={() => setShowPublishModal(true)} style={{
-                  padding: '6px 12px', borderRadius: tokens.radius.sm,
-                  background: isPublicado ? 'transparent' : '#2563eb', 
-                  color: isPublicado ? '#16a34a' : '#fff',
-                  border: isPublicado ? '1px solid #16a34a' : 'none',
-                  fontSize: '12px', fontWeight: 700, cursor: 'pointer'
-                }}>
-                  {isPublicado ? 'Publicado' : 'Publicar'}
-                </button>
+
+                {/* Publicar */}
+                {hasUnsavedChanges ? (
+                  <button disabled style={{
+                    padding: '6px 12px', borderRadius: tokens.radius.sm,
+                    background: '#f59e0b', color: '#fff', border: 'none',
+                    fontSize: '12px', fontWeight: 700, cursor: 'not-allowed', opacity: 0.8
+                  }}>
+                    Salvar primeiro
+                  </button>
+                ) : !isPublicado ? (
+                  <button onClick={() => setShowPublishModal(true)} style={{
+                    padding: '6px 12px', borderRadius: tokens.radius.sm,
+                    background: '#2563eb', color: '#fff', border: 'none',
+                    fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+                  }}>
+                    Publicar
+                  </button>
+                ) : (
+                  <button onClick={() => setShowUnpublishModal(true)} style={{
+                    padding: '6px 12px', borderRadius: tokens.radius.sm,
+                    background: 'transparent', color: '#16a34a', border: '1px solid #16a34a',
+                    fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                  }}>
+                    <Check size={12} /> Atualizado
+                  </button>
+                )}
               </>
             )}
             <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex' }}>
@@ -2114,13 +2289,117 @@ export default function QuizBuilderPage() {
                 </SortableContext>
               </DndContext>
 
-              {/* Fixed: Approval, Collect, Rejection */}
+              {/* Fixed: Analise, Approval */}
               {[
                 { id: 'analise', icon: '⌛', label: 'Análise', sub: 'Página de transição' },
                 { id: 'approval', icon: '✅', label: 'Aprovação', sub: 'Tela de sucesso' },
-                { id: 'collect', icon: '📝', label: 'Coleta de dados', sub: 'Formulário' },
-                { id: 'rejection', icon: '❌', label: 'Reprovação', sub: 'Tela de reprova' },
               ].map(({ id, icon, label, sub }) => {
+                const active = fixedCardActive(id);
+                return (
+                  <div key={id} onClick={() => setSelectedPageId(id)} style={{
+                    padding: '10px 10px 10px 8px', borderRadius: '10px', marginBottom: '3px',
+                    cursor: 'pointer', border: `1.5px solid ${active ? '#2563eb' : 'transparent'}`,
+                    background: active ? hexToRgba('#2563eb', 0.06) : 'transparent',
+                    opacity: selectedPageType === 'question' ? 0.4 : 1,
+                    transition: `${tokens.transition}, opacity 150ms ease`,
+                  }}
+                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
+                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                      <span style={{ fontSize: '14px' }}>{icon}</span>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: active ? 700 : 500, color: active ? '#2563eb' : textMain }}>{label}</div>
+                        <div style={{ fontSize: '10px', color: textMut }}>{sub}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Collect with expandable sub-items */}
+              {(() => {
+                const isCollectActive = selectedPageId === 'collect';
+                const dimmed = selectedPageType === 'question';
+                return (
+                  <div style={{ marginBottom: '3px', opacity: dimmed ? 0.4 : 1, transition: 'opacity 150ms ease' }}>
+                    <div onClick={() => {
+                        setSelectedPageId('collect');
+                        const first = currentColetaConfig[0];
+                        if (first) { setExpandedColetaCampo(first.campo); setPreviewColetaIdx(0); setPreviewPhase('coleta'); }
+                      }} style={{
+                      padding: '10px 10px 10px 8px', borderRadius: '10px',
+                      cursor: 'pointer', border: `1.5px solid ${isCollectActive ? '#2563eb' : 'transparent'}`,
+                      background: isCollectActive ? hexToRgba('#2563eb', 0.06) : 'transparent',
+                      transition: tokens.transition,
+                    }}
+                      onMouseEnter={e => { if (!isCollectActive) (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f9fafb'; }}
+                      onMouseLeave={e => { if (!isCollectActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                        <span style={{ fontSize: '14px' }}>📝</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '12px', fontWeight: isCollectActive ? 700 : 500, color: isCollectActive ? '#2563eb' : textMain }}>Coleta de dados</div>
+                          <div style={{ fontSize: '10px', color: textMut }}>Formulário</div>
+                        </div>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transform: isCollectActive ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                          <path d="M2 4l4 4 4-4" stroke={textMut} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {isCollectActive && (
+                      <div style={{ paddingLeft: '10px', paddingBottom: '2px' }}>
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => {
+                          const { active, over } = event;
+                          if (!over || active.id === over.id) return;
+                          const idA = String(active.id).replace('sidebar-coleta-', '');
+                          const idB = String(over.id).replace('sidebar-coleta-', '');
+                          const idxA = currentColetaConfig.findIndex(c => c.campo === idA);
+                          const idxB = currentColetaConfig.findIndex(c => c.campo === idB);
+                          if (idxA < 0 || idxB < 0) return;
+                          const reordered = arrayMove([...currentColetaConfig], idxA, idxB).map((c, i) => ({ ...c, ordem: i + 1 }));
+                          updateColetaConfig(reordered);
+                        }}>
+                          <SortableContext items={currentColetaConfig.map(c => `sidebar-coleta-${c.campo}`)} strategy={verticalListSortingStrategy}>
+                            {currentColetaConfig.map((cfg, i) => (
+                              <SortableColetaSidebarItem
+                                key={cfg.campo}
+                                cfg={cfg}
+                                index={i}
+                                isActive={expandedColetaCampo === cfg.campo}
+                                isDark={isDark}
+                                textMain={textMain}
+                                textMut={textMut}
+                                border={border}
+                                primary={primary}
+                                onClick={() => {
+                                  setExpandedColetaCampo(cfg.campo);
+                                  setPreviewColetaIdx(i);
+                                  setPreviewPhase('coleta');
+                                }}
+                                onDelete={() => {
+                                  const next = currentColetaConfig.filter(c => c.campo !== cfg.campo).map((c, j) => ({ ...c, ordem: j + 1 }));
+                                  updateColetaConfig(next);
+                                  const fallback = next[Math.max(0, i - 1)];
+                                  if (fallback) { setExpandedColetaCampo(fallback.campo); setPreviewColetaIdx(Math.max(0, i - 1)); }
+                                  else setExpandedColetaCampo(null);
+                                }}
+                              />
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+                        <button
+                          onClick={() => { setSelectedPageId('collect'); setShowAddColeta(true); setExpandedColetaCampo(null); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 7px', borderRadius: '8px', border: `1px dashed ${border}`, background: 'transparent', color: textMut, fontSize: '10px', fontWeight: 600, cursor: 'pointer', width: '100%', marginTop: '2px' }}>
+                          <Plus style={{ width: '9px', height: '9px' }} /> Adicionar campo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Fixed: Rejection */}
+              {[{ id: 'rejection', icon: '❌', label: 'Reprovação', sub: 'Tela de reprova' }].map(({ id, icon, label, sub }) => {
                 const active = fixedCardActive(id);
                 return (
                   <div key={id} onClick={() => setSelectedPageId(id)} style={{
@@ -2216,7 +2495,7 @@ export default function QuizBuilderPage() {
                 </div>
               </div>
               {/* Phone frame */}
-              <div style={{ width: '260px', height: '520px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: isDark ? '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 40px 80px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.5)', overflow: 'hidden', background: '#fff', position: 'relative', flexShrink: 0 }}>
+              <div style={{ width: '320px', height: '640px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: isDark ? '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 40px 80px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.5)', overflow: 'hidden', background: '#fff', position: 'relative', flexShrink: 0 }}>
                 <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20 }} />
                 <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
                   <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
@@ -2228,7 +2507,12 @@ export default function QuizBuilderPage() {
                         onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                         onOpcaoClick={handlePreviewOpcaoClick as any}
                         onContinue={advancePreview}
-                        onGoToColeta={() => setPreviewPhase('coleta')}
+                        onGoToColeta={() => { setPreviewPhase('coleta'); setPreviewColetaIdx(0); }}
+                        coletaStep={previewPhase === 'coleta' ? previewColetaIdx : undefined}
+                        onColetaNext={() => setPreviewColetaIdx(i => Math.min(i + 1, currentColetaConfig.length - 1))}
+                        isBuilderPreview={selectedPageType === 'collect'}
+                        selectedColetaElement={selectedColetaElement}
+                        onSelectColetaElement={setSelectedColetaElement}
                         isPreview />
                     )}
                   </div>
@@ -2245,13 +2529,9 @@ export default function QuizBuilderPage() {
                 {selectedPageType === 'cover' ? '📋 Capa' :
                   selectedPageType === 'approval' ? '✅ Aprovação' :
                     selectedPageType === 'analise' ? '⌛ Análise' :
-                      selectedPageType === 'collect' ? '📝 Coleta' :
+                      selectedPageType === 'collect' ? (showAddColeta ? '📝 Novo campo' : expandedColetaCampo ? `📝 ${currentColetaConfig.find(c => c.campo === expandedColetaCampo)?.label ?? 'Coleta'}` : '📝 Coleta') :
                         selectedPageType === 'rejection' ? '❌ Reprovação' :
                           `Etapa ${selectedPergunta?.globalIndex ?? ''}`}
-              </span>
-              <span style={{ fontSize: '11px', color: textMut, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                {saving && <><Loader2 style={{ width: '11px', height: '11px', animation: 'spin 0.7s linear infinite' }} /> Auto...</>}
-                {!saving && savedRecently && <><Check style={{ width: '11px', height: '11px', color: '#16a34a' }} /> <span style={{ color: '#16a34a' }}>Salvo</span></>}
               </span>
             </div>
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -2327,6 +2607,18 @@ export default function QuizBuilderPage() {
                     </div>
                   </div>
 
+                  <div style={{ borderTop: `1px solid ${border}`, paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: textMain }}>Rastreamento de Anúncios</span>
+                    <p style={{ fontSize: '12px', color: textMut, margin: 0, lineHeight: '1.4' }}>Copie os parâmetros UTM para seus anúncios no Facebook:</p>
+                    <button
+                      onClick={() => { const utm = 'utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}'; navigator.clipboard.writeText(utm); toast.success('Parâmetros UTM copiados!'); }}
+                      style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1.5px dashed ${isDark ? '#333' : '#cbd5e1'}`, background: 'transparent', color: textMain, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.background = hexToRgba('#2563eb', 0.05); }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = isDark ? '#333' : '#cbd5e1'; e.currentTarget.style.color = textMain; e.currentTarget.style.background = 'transparent'; }}>
+                      <Copy size={14} /> Copiar parâmetros de UTM
+                    </button>
+                  </div>
+
                   <div style={{ borderTop: `1px solid ${border}`, paddingTop: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: textMain, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avançado (Scripts)</span>
@@ -2373,7 +2665,7 @@ export default function QuizBuilderPage() {
             </button>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-            <div style={{ width: '260px', height: '520px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: '0 32px 64px rgba(0,0,0,0.3)', overflow: 'hidden', background: '#fff', position: 'relative' }}>
+            <div style={{ width: '320px', height: '640px', borderRadius: '44px', border: `9px solid ${isDark ? '#1c1c20' : '#111111'}`, boxShadow: '0 32px 64px rgba(0,0,0,0.3)', overflow: 'hidden', background: '#fff', position: 'relative' }}>
               <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '72px', height: '17px', background: isDark ? '#1c1c20' : '#111111', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', zIndex: 20 }} />
               <div style={{ width: '100%', height: '100%', paddingTop: '17px', overflow: 'hidden', position: 'relative' }}>
                 <div style={{ position: 'absolute', top: '17px', left: 0, width: `${480}px`, height: `${CONTENT_H}px`, transformOrigin: 'top left', transform: `scale(${SCALE})` }}>
@@ -2385,7 +2677,9 @@ export default function QuizBuilderPage() {
                       onStart={() => { setPreviewPhase('quiz'); setPreviewIdx(0); setPreviewSelectedOpcao(null); }}
                       onOpcaoClick={handlePreviewOpcaoClick as any}
                       onContinue={advancePreview}
-                      onGoToColeta={() => setPreviewPhase('coleta')}
+                      onGoToColeta={() => { setPreviewPhase('coleta'); setPreviewColetaIdx(0); }}
+                      coletaStep={previewPhase === 'coleta' ? previewColetaIdx : undefined}
+                      onColetaNext={() => setPreviewColetaIdx(i => Math.min(i + 1, currentColetaConfig.length - 1))}
                       isPreview />
                   )}
                 </div>
@@ -2421,16 +2715,16 @@ export default function QuizBuilderPage() {
           onClick={() => setShowPublishModal(false)}>
           <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Publicar quiz?</h3>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>Publicar alterações?</h3>
             <p style={{ margin: 0, fontSize: '13px', color: textMut }}>
-              <span style={{ color: '#2563eb', fontWeight: 600 }}>{quizLink}</span> ficará público e visível para todos.
+              Publicar alterações salvas para quem acessa o link?
             </p>
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
               <button onClick={() => setShowPublishModal(false)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Cancelar
               </button>
               <button onClick={handlePublish} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Publicar agora
+                Publicar
               </button>
             </div>
           </div>

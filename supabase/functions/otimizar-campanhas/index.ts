@@ -72,6 +72,33 @@ async function analisarOrg(orgId: string) {
   campUrl.searchParams.set("access_token", token);
 
   const campData = await (await fetch(campUrl.toString())).json();
+
+  if (campData.error) {
+    const { code, error_subcode, type } = campData.error;
+    if ((code === 100 && error_subcode) || code === 190 || code === 17 || code === 4 || type === "OAuthException") {
+      return {
+        skip: false,
+        log: {
+          org_id: orgId,
+          status: "erro",
+          acoes_sugeridas: [],
+          acoes_executadas: [],
+          decisao_principal: "Análise interrompida devido a problema na integração",
+          frase_do_dia: "⚠️ Erro na sincronização com Facebook Ads",
+          resumo: "Sem dados recebidos da Meta",
+          insights: [],
+          alerta: "⚠️ Sua conta de anúncios está bloqueada ou o token expirou. Verifique o Gerenciador de Negócios do Facebook.",
+          total_gasto: 0,
+          total_leads: 0,
+          cpl_medio: 0,
+          ritmo_mensal: 0,
+          revendedoras_mes: 0,
+          dias_restantes: 0,
+        }
+      };
+    }
+  }
+
   const campanhas: any[] = campData.data || [];
   if (!campanhas.length) return { skip: true, motivo: "Sem campanhas com dados" };
 

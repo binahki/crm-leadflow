@@ -12,19 +12,39 @@ function getDispositivo(): string {
   return 'desktop';
 }
 
-function getUTMs() {
+const UTM_SESSION_KEY = 'quiz_last_utms';
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+
+function getUTMs(): Record<string, string> {
+  let stored: Record<string, string> = {};
+  try {
+    const storedStr = sessionStorage.getItem(UTM_SESSION_KEY);
+    if (storedStr) stored = JSON.parse(storedStr);
+  } catch {}
+
   const href = window.location.href;
   const searchPart = href.includes('?') ? href.substring(href.indexOf('?')) : '';
   const p = new URLSearchParams(searchPart);
   
-  const captured: Record<string, string> = {};
-  const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
-  utmKeys.forEach(key => {
+  const fromUrl: Record<string, string> = {};
+  UTM_KEYS.forEach(key => {
     const val = p.get(key);
-    if (val) captured[key] = val;
+    if (val) fromUrl[key] = val;
   });
-  return captured;
+
+  const merged = { ...fromUrl, ...stored };
+
+  // Nunca omitir os campos principais do payload - enviar string vazia se não houver valor
+  const coreKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+  coreKeys.forEach(key => {
+    if (!merged[key]) {
+      merged[key] = '';
+    }
+  });
+
+  return merged;
 }
+
 
 export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEtapas?: number) {
   const sessionIdRef = useRef<string>(generateSessionId());
@@ -149,24 +169,31 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
     const total = totalEtapasRef.current;
 
     enqueue(async () => {
-      const updatePayload: any = {
-        concluiu: true,
+      const upsertPayload: any = {
+        session_id: sessionIdRef.current,
+        quiz_slug: quizSlugRef.current,
+        org_id: orgIdRef.current || null,
         ultima_etapa: etapaAtual !== undefined ? etapaAtual : (total > 0 ? total : undefined),
         total_etapas: total > 0 ? total : undefined,
+        concluiu: true,
         virou_lead: virouLead ?? !!leadId,
         lead_id: leadId || null,
+        dispositivo: getDispositivo(),
+        user_agent: navigator.userAgent.slice(0, 200),
         updated_at: new Date().toISOString(),
+        ...utmsCapturedRef.current,
       };
-      if (orgIdRef.current) {
-        updatePayload.org_id = orgIdRef.current;
+
+      if (Object.keys(respostasRef.current).length > 0) {
+        upsertPayload.respostas = { ...respostasRef.current };
       }
+
       const { error } = await supabase
         .from('quiz_sessoes')
-        .update(updatePayload)
-        .eq('session_id', sessionIdRef.current);
+        .upsert(upsertPayload, { onConflict: 'session_id' });
 
       if (error) {
-        console.error("useQuizTracker: Error in marcarConcluido update", error);
+        console.error("useQuizTracker: Error in marcarConcluido upsert", error);
       }
     });
   }, [enqueue]);

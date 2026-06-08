@@ -5,6 +5,13 @@ import { Check, X, Instagram, MessageCircle } from 'lucide-react';
 export interface ColetaCampo {
   campo: string; label: string; placeholder: string;
   obrigatorio: boolean; ordem: number;
+  subtitulo?: string | null;
+  tipo?: 'texto' | 'telefone' | 'email' | 'numero' | 'cpf' | null;
+  show_whatsapp_warning?: boolean;
+  whatsapp_warning_text?: string | null;
+  botao_texto?: string | null;
+  botao_acao?: 'proxima_etapa' | 'redirecionar' | 'pagina_sucesso' | 'whatsapp' | null;
+  botao_target?: string | null;
 }
 
 export const DEFAULT_COLETA_CONFIG: ColetaCampo[] = [
@@ -42,6 +49,8 @@ export interface QuizConfig {
   analise_depoimentos?: any[] | null;
   whatsapp_mensagem_personalizada?: string | null;
   whatsapp_redirecionar_direto?: boolean | null;
+  published_at?: string | null;
+  updated_at?: string | null;
 }
 export interface Bloco { id: string; titulo: string; ordem: number; emoji?: string | null; }
 export interface Opcao {
@@ -83,6 +92,13 @@ export interface QuizRendererProps {
   onGoToColeta?: () => void;
   isPreview?: boolean;
   whatsappEnabled?: boolean;
+  coletaStep?: number;
+  onColetaNext?: () => void;
+  extraFieldValues?: Record<string, string>;
+  onExtraFieldChange?: (campo: string, value: string) => void;
+  isBuilderPreview?: boolean;
+  selectedColetaElement?: 'texto' | 'campo' | 'botao' | 'aviso' | null;
+  onSelectColetaElement?: (element: 'texto' | 'campo' | 'botao' | 'aviso' | null) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,6 +109,14 @@ export function hexRgba(hex: string, a: number): string {
   const g = parseInt(full.slice(2, 4), 16);
   const b = parseInt(full.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${a})`;
+}
+
+function maskCpf(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
 function maskWhatsapp(value: string): string {
@@ -137,11 +161,29 @@ export function QuizRenderer({
   onGoToColeta,
   isPreview = false,
   whatsappEnabled = false,
+  coletaStep, onColetaNext,
+  extraFieldValues, onExtraFieldChange,
+  isBuilderPreview = false,
+  selectedColetaElement = null,
+  onSelectColetaElement,
 }: QuizRendererProps) {
   const [cities, setCities] = React.useState<string[]>([]);
   const [citySearch, setCitySearch] = React.useState('');
   const [showCitySugg, setShowCitySugg] = React.useState(false);
   const [analiseProgress, setAnaliseProgress] = React.useState(0);
+  const [internalColetaStep, setInternalColetaStep] = React.useState(0);
+  const [coletaFieldError, setColetaFieldError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (phase !== 'coleta') {
+      setInternalColetaStep(0);
+      setColetaFieldError(null);
+    }
+  }, [phase]);
+
+  React.useEffect(() => {
+    setColetaFieldError(null);
+  }, [coletaStep]);
 
   React.useEffect(() => {
     if (phase === 'analise') {
@@ -434,79 +476,236 @@ export function QuizRenderer({
         </div>
       )}
 
-      {phase === 'coleta' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
-          <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', padding: '24px' }}>
-            <p style={{ fontSize: '14px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 20px', textAlign: 'center', lineHeight: 1.6 }}>Preencha seus dados para concluir o cadastro.</p>
-            <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {coletaConfig.map(cfg => {
-                const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
-                const val = fieldValues[cfg.campo] ?? '';
-                return (
-                  <div key={cfg.campo}>
-                    <label style={lblS}>{cfg.label} <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.obrigatorio ? '*' : '(opcional)'}</span></label>
-                    {cfg.campo === 'cidade' ? (
-                      <input 
-                        value={cidade}
-                        onChange={e => onCidadeChange?.(e.target.value.replace(/[0-9]/g, ''))}
-                        placeholder="Ex: São Paulo" 
-                        style={inpS} 
-                      />
-                    ) : cfg.campo === 'whatsapp' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <input 
-                          value={maskWhatsapp(whatsapp)}
-                          onChange={e => onWhatsappChange?.(e.target.value)}
-                          placeholder="(00) 00000-0000" 
-                          style={inpS} 
-                        />
-                        <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          ⚠️ Se o número estiver errado, você perderá sua vaga
-                        </span>
-                      </div>
-                    ) : (
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          value={fieldValues[cfg.campo] ?? ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (cfg.campo === 'nome') {
-                              onNomeChange?.(val);
-                            } else if (cfg.campo === 'instagram') {
-                              onInstagramChange?.(val);
-                            }
-                          }}
-                          placeholder={cfg.placeholder}
-                          style={{ ...inpS, borderColor: cfg.campo === 'nome' && nome.length > 2 ? '#10b981' : '#e2e8f0' }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <button
-                type="submit"
-                disabled={submitting || !canSubmit}
-                style={{
-                  width: '100%', padding: '16px', marginTop: '4px', borderRadius: '12px',
-                  border: 'none',
-                  background: !canSubmit || submitting ? '#9ca3af' : isGreen ? '#25d366' : btnColor,
-                  color: '#fff', fontSize: '15px', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  cursor: submitting || !canSubmit ? 'not-allowed' : 'pointer',
-                  opacity: submitting ? 0.6 : 1,
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => { if (!submitting && canSubmit) e.currentTarget.style.background = isGreen ? '#20c75a' : '#1d4ed8'; }}
-                onMouseLeave={e => { if (!submitting && canSubmit) e.currentTarget.style.background = isGreen ? '#25d366' : btnColor; }}
+      {phase === 'coleta' && (() => {
+        const effectiveStep = coletaStep !== undefined ? coletaStep : internalColetaStep;
+        const capped = Math.min(effectiveStep, coletaConfig.length - 1);
+        const cfg = coletaConfig[capped];
+        if (!cfg) return null;
+        const isLast = capped >= coletaConfig.length - 1;
+        const stepNum = capped + 1;
+        const totalSteps = coletaConfig.length;
+        const pct = Math.round((capped / Math.max(totalSteps, 1)) * 100);
+
+        const effectiveTipo: string = cfg.tipo || (cfg.campo === 'whatsapp' ? 'telefone' : 'texto');
+        const allVals: Record<string, string> = { nome, whatsapp, cidade, instagram, ...(extraFieldValues || {}) };
+        const rawVal = allVals[cfg.campo] ?? '';
+        const displayVal = effectiveTipo === 'telefone' ? maskWhatsapp(rawVal)
+          : effectiveTipo === 'cpf' ? maskCpf(rawVal)
+          : rawVal;
+
+        const handleFieldChange = (raw: string) => {
+          let val = raw;
+          if (effectiveTipo === 'telefone') val = raw.replace(/\D/g, '').slice(0, 11);
+          else if (effectiveTipo === 'cpf') val = raw.replace(/\D/g, '').slice(0, 11);
+          else if (effectiveTipo === 'numero') val = raw.replace(/\D/g, '');
+          else if (cfg.campo === 'cidade') val = raw.replace(/[0-9]/g, '');
+          setColetaFieldError(null);
+          if (cfg.campo === 'nome') onNomeChange?.(val);
+          else if (cfg.campo === 'whatsapp') onWhatsappChange?.(val);
+          else if (cfg.campo === 'cidade') onCidadeChange?.(val);
+          else if (cfg.campo === 'instagram') onInstagramChange?.(val);
+          else onExtraFieldChange?.(cfg.campo, val);
+        };
+
+        const checkValid = (): string | null => {
+          if (!cfg.obrigatorio) return null;
+          if (effectiveTipo === 'telefone' || cfg.campo === 'whatsapp')
+            return rawVal.replace(/\D/g, '').length === 11 ? null : 'Informe um WhatsApp válido com DDD (11 dígitos).';
+          if (effectiveTipo === 'email')
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawVal) ? null : 'Informe um e-mail válido.';
+          if (effectiveTipo === 'cpf')
+            return rawVal.replace(/\D/g, '').length === 11 ? null : 'Informe um CPF válido (11 dígitos).';
+          return rawVal.trim().length > 0 ? null : 'Este campo é obrigatório.';
+        };
+
+        const isWALast = isLast && isWhatsAppUrl;
+
+        const advance = () => {
+          const err = checkValid();
+          if (err) { setColetaFieldError(err); return; }
+          setColetaFieldError(null);
+          if (coletaStep !== undefined) onColetaNext?.();
+          else setInternalColetaStep(s => s + 1);
+        };
+
+        const rawBotaoAcao = cfg.botao_acao || (isWALast ? 'redirecionar' : isLast ? 'pagina_sucesso' : 'proxima_etapa');
+        const effectiveBotaoAcao = rawBotaoAcao === 'whatsapp' ? 'redirecionar' : rawBotaoAcao;
+        const btnLabel = cfg.botao_texto || (effectiveBotaoAcao === 'pagina_sucesso' ? buttonText : 'Continuar →');
+        const isSubmitAction = effectiveBotaoAcao === 'pagina_sucesso' || isLast;
+
+        const executeAction = () => {
+          if (effectiveBotaoAcao === 'redirecionar') {
+            if (!isPreview) {
+              const err = checkValid();
+              if (err) { setColetaFieldError(err); return; }
+              setColetaFieldError(null);
+            }
+            if (isSubmitAction) {
+              return; // handled by onSubmit in form
+            }
+            const url = cfg.botao_target || redirectUrl || '';
+            if (url) window.location.href = url;
+          } else {
+            if (cfg.botao_target && cfg.botao_target !== 'proxima') {
+              const err = checkValid();
+              if (err) { setColetaFieldError(err); return; }
+              setColetaFieldError(null);
+              const targetIdx = coletaConfig.findIndex(c => c.campo === cfg.botao_target);
+              if (targetIdx >= 0) {
+                if (coletaStep !== undefined) onColetaNext?.();
+                else setInternalColetaStep(targetIdx);
+                return;
+              }
+            }
+            advance();
+          }
+        };
+
+        const getWrapperStyle = (type: 'texto' | 'campo' | 'botao' | 'aviso'): React.CSSProperties => {
+          if (!isBuilderPreview) return {};
+          const isSelected = selectedColetaElement === type;
+          return {
+            position: 'relative',
+            cursor: 'pointer',
+            border: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+            borderRadius: '12px',
+            padding: isBuilderPreview ? '12px' : '0',
+            margin: isBuilderPreview ? '-12px -12px 4px -12px' : '0',
+            transition: 'opacity 0.2s',
+            outline: 0,
+            opacity: (selectedColetaElement && !isSelected) ? 0.5 : 1,
+          };
+        };
+
+        const BuilderBadge = ({ type, label }: { type: 'texto' | 'campo' | 'botao' | 'aviso', label: string }) => {
+          if (!isBuilderPreview) return null;
+          return (
+            <div style={{ position: 'absolute', top: '-10px', left: '12px', background: selectedColetaElement === type ? '#3b82f6' : '#94a3b8', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', zIndex: 10 }}>
+              {label}
+            </div>
+          );
+        };
+
+        return (
+          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
+            <form onSubmit={e => {
+              if (isBuilderPreview) { e.preventDefault(); return; }
+              if (isSubmitAction) {
+                if (!isPreview) {
+                  const err = checkValid();
+                  if (err) { e.preventDefault(); setColetaFieldError(err); return; }
+                  setColetaFieldError(null);
+                }
+                onSubmit?.(e);
+              } else {
+                e.preventDefault();
+              }
+            }}>
+              <div
+                style={getWrapperStyle('texto')}
+                onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('texto'); } }}
               >
-                {isWhatsAppUrl && !submitting && <MessageCircle size={20} strokeWidth={2.5} />}
-                {submitting ? 'Enviando...' : buttonText}
-              </button>
+                <BuilderBadge type="texto" label="TEXTOS" />
+                <label style={{ display: 'block', fontSize: '22px', fontWeight: 700, color: quiz.cor_titulo || '#111111', marginBottom: '4px', textAlign: 'center' as const }}>
+                  {cfg.label}{cfg.obrigatorio && <span style={{ color: '#ef4444', marginLeft: '3px' }}>*</span>}
+                </label>
+                {cfg.subtitulo && (
+                  <p style={{ fontSize: '14px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 14px', lineHeight: 1.5, textAlign: 'center' as const }}>
+                    {cfg.subtitulo}
+                  </p>
+                )}
+              </div>
+
+              <div
+                style={{ ...getWrapperStyle('campo'), marginTop: isBuilderPreview ? '16px' : '16px' }}
+                onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('campo'); } }}
+              >
+                <BuilderBadge type="campo" label="CAMPO" />
+                {effectiveTipo === 'email' ? (
+                  <input
+                    key={cfg.campo}
+                    type="email"
+                    autoFocus
+                    value={rawVal}
+                    onChange={e => handleFieldChange(e.target.value)}
+                    placeholder={cfg.placeholder}
+                    style={{ ...inpS, borderColor: coletaFieldError ? '#ef4444' : '#e5e7eb' }}
+                  />
+                ) : (
+                  <input
+                    key={cfg.campo}
+                    autoFocus
+                    type={effectiveTipo === 'telefone' ? 'tel' : 'text'}
+                    inputMode={effectiveTipo === 'numero' || effectiveTipo === 'cpf' ? 'numeric' : undefined}
+                    value={displayVal}
+                    onChange={e => handleFieldChange(e.target.value)}
+                    placeholder={cfg.placeholder}
+                    style={{ ...inpS, borderColor: coletaFieldError ? '#ef4444' : '#e5e7eb' }}
+                  />
+                )}
+
+                {coletaFieldError && (
+                  <p style={{ fontSize: '12px', color: '#ef4444', margin: '6px 0 0', fontWeight: 600 }}>{coletaFieldError}</p>
+                )}
+              </div>
+
+              <div
+                style={{ ...getWrapperStyle('botao'), marginTop: isBuilderPreview ? '22px' : '22px' }}
+                onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('botao'); } }}
+              >
+                <BuilderBadge type="botao" label="BOTÃO" />
+                {isSubmitAction ? (
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    style={{
+                      width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
+                      background: submitting ? '#9ca3af' : btnColor,
+                      color: '#fff', fontSize: '15px', fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      opacity: submitting ? 0.6 : 1, transition: 'all 0.2s',
+                    }}
+                  >
+                    {submitting ? 'Enviando...' : btnLabel}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('botao'); }
+                      else executeAction();
+                    }}
+                    style={{
+                      width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
+                      background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+                      cursor: 'pointer', transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                  >
+                    {btnLabel}
+                  </button>
+                )}
+              </div>
+
+              {cfg.campo === 'whatsapp' && cfg.show_whatsapp_warning !== false && (
+                <div
+                  style={{ ...getWrapperStyle('aviso'), marginTop: isBuilderPreview ? '14px' : '14px' }}
+                  onClick={e => { if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('aviso'); } }}
+                >
+                  <BuilderBadge type="aviso" label="AVISO WA" />
+                  <div style={{ padding: '14px', borderRadius: '12px', background: '#dcfce7', border: '1px solid #86efac', textAlign: 'center' as const }}>
+                    <p style={{ fontSize: '13px', color: '#166534', margin: 0, lineHeight: 1.5 }}>
+                      {cfg.whatsapp_warning_text || '📲 Ao clicar, você será direcionada para o WhatsApp. Envie a mensagem para garantir sua vaga — a mensagem já vem preenchida ✓'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {phase === 'reprovado' && (
         <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>

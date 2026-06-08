@@ -778,6 +778,7 @@ export default function CampanhasPage() {
           const horasLimiteExecutado = 24;
           if (log.status === 'pendente' && horas <= horasLimitePendente) setAiLog(log);
           else if (log.status === 'executado' && horas <= horasLimiteExecutado) setAiLog(log);
+          else if (log.status === 'erro' && log.alerta) setAiLog(log);
           // sem_acao e outros: não mostrar no banner
         }
       });
@@ -1814,29 +1815,38 @@ export default function CampanhasPage() {
         {aiLog && (() => {
           const isPendente = aiLog.status === 'pendente';
           const isSemAcao = aiLog.status === 'sem_acao';
+          const isErro = aiLog.status === 'erro';
           if (aiLog.status === 'ignorado') return null;
           let ignoredIds = new Set<string>();
           try { ignoredIds = new Set(JSON.parse(localStorage.getItem(`ravena_ignored_${aiLog.id}`) || '[]')); } catch {}
           const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && !ignoredIds.has(a.id)).length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
           const pendenteAtivo = isPendente && numSugestoes > 0;
-          const bannerBg = isSemAcao
+          const bannerBg = isErro
+            ? (dark ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.08))' : 'linear-gradient(135deg, #fef2f2, #fef2f2)')
+            : isSemAcao
             ? (dark ? 'rgba(255,255,255,0.03)' : '#f9fafb')
             : pendenteAtivo
               ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
               : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
-          const bannerBorder = isSemAcao
+          const bannerBorder = isErro
+            ? (dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.25)')
+            : isSemAcao
             ? (dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb')
             : pendenteAtivo
               ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
               : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
-          const textColor = isSemAcao
+          const textColor = isErro
+            ? (dark ? '#fca5a5' : '#dc2626')
+            : isSemAcao
             ? (dark ? '#a1a1aa' : '#6b7280')
             : pendenteAtivo ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
-          const subColor = isSemAcao
+          const subColor = isErro
+            ? (dark ? '#f87171' : '#b91c1c')
+            : isSemAcao
             ? (dark ? '#71717a' : '#9ca3af')
             : pendenteAtivo ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
-          const badgeBg   = pendenteAtivo ? '#f59e0b' : '#8b5cf6';
+          const badgeBg   = isErro ? '#ef4444' : pendenteAtivo ? '#f59e0b' : '#8b5cf6';
           const badgeNum  = pendenteAtivo ? numSugestoes : numExecutadas;
           const badgeText = pendenteAtivo
             ? (badgeNum === 1 ? '1 sugestão' : `${badgeNum} sugestões`)
@@ -1848,13 +1858,15 @@ export default function CampanhasPage() {
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isSemAcao ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
+              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 12px rgba(239,68,68,0.4)' : isSemAcao ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
+                  {isErro ? 'Erro de sincronização' : isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {isSemAcao
+                  {isErro
+                    ? aiLog.alerta
+                    : isSemAcao
                     ? 'Nenhuma ação necessária hoje. Próxima análise às 8h'
                     : isPendente
                       ? (numSugestoes === 0 ? 'Clique para ver o histórico de ações' : numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
