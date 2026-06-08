@@ -73,7 +73,7 @@ export default function LoginPage() {
   };
 
   const onFocus = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = '#366fec'; };
-  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; };
+  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; };
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -214,11 +214,11 @@ export default function LoginPage() {
           <form onSubmit={handleCadastro} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={lbl}>Nome da empresa</label>
-              <input style={inp} type="text" required placeholder="Ex: Minha Loja de Joias" value={nomeEmpresa} onChange={e => setNomeEmpresa(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
+              <input style={inp} type="text" required placeholder="Nome da sua empresa" value={nomeEmpresa} onChange={e => setNomeEmpresa(e.target.value)} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
-              <label style={lbl}>CNPJ / CPF <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
-              <input style={inp} type="text" placeholder="000.000.000-00 ou 00.000.000/0000-00" maxLength={18} value={documento} onChange={e => setDocumento(mascaraDocumento(e.target.value))} onFocus={onFocus} onBlur={onBlur} />
+              <label style={lbl}>CNPJ / CPF</label>
+              <input style={inp} type="text" required placeholder="000.000.000-00 ou 00.000.000/0000-00" maxLength={18} value={documento} onChange={e => setDocumento(mascaraDocumento(e.target.value))} onFocus={onFocus} onBlur={onBlur} />
             </div>
             <div>
               <label style={lbl}>Email</label>
@@ -267,9 +267,6 @@ export default function LoginPage() {
             <button type="submit" disabled={submitting} style={{ width: '100%', height: '44px', borderRadius: '8px', border: 'none', background: submitting ? '#27272a' : '#366fec', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'default' : 'pointer', fontFamily: FONT, marginTop: '4px' }}>
               {submitting ? 'Criando conta…' : 'Criar minha conta'}
             </button>
-            <p style={{ fontSize: '11.5px', color: '#52525b', textAlign: 'center', margin: 0 }}>
-              R$ 99,90/mês após o período de teste. Cancele quando quiser.
-            </p>
           </form>
         )}
 
