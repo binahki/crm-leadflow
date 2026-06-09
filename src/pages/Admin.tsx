@@ -17,7 +17,7 @@ const CRIAR_GESTOR_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/cri
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
 
 const PLANOS = ['gratuito', 'starter', 'pro', 'enterprise'];
-const PLANO_LABELS: Record<string, string> = { gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
+const PLANO_LABELS: Record<string, string> = { basic: 'Gratuito', gratuito: 'Gratuito', starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
 const STATUS_ORG = ['ativo', 'inadimplente', 'suspenso', 'cancelado'] as const;
 type OrgStatus = typeof STATUS_ORG[number];
 

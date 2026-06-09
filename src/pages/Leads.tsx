@@ -6,7 +6,8 @@ import { useAppStore, Lead, STATUS_LABELS, STATUS_CONFIG, calcularFaixa } from '
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrgId } from '@/hooks/useOrgId';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology, useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useTags, Tag as OrgTag, CORES_TAGS } from '@/hooks/useTags';
@@ -280,42 +281,36 @@ function PhoneInput({ value, onChange, style: st }: { value:string; onChange:(v:
     else masked = `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
     onChange(masked);
   }
-  return <input type="tel" value={value} placeholder="(XX) XXXXX-XXXX" onChange={handleChange} style={st}/>;
+  return <input type="tel" value={value} placeholder="(11) 91234-5678" onChange={handleChange} style={st}/>;
 }
 
-function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:number; onChange:(v:number)=>void; dark:boolean; aprovadoLabel?: string }) {
+function FormStatusSelect({ value, onChange, dark, statusItems }: { value:number; onChange:(v:number)=>void; dark:boolean; statusItems: Array<{id:number;label:string;cor:string;ordem:number}> }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const options = [
-    { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
-    { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
-    { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
-    { value: 3, label: aprovadoLabel || 'Aprovado', dot: STATUS_CONFIG[3].dot },
-    { value: 6, label: 'Sem Retorno',   dot: STATUS_CONFIG[6].dot },
-    { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
-  ];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const options = [...statusItems].sort((a, b) => a.ordem - b.ordem).map(s => ({ value: s.id, label: s.label, dot: s.cor }));
   const selected = options.find(o => o.value === value) || options[0];
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const bg = dark ? '#1a1a1e' : '#f9fafb';
   const txt = dark ? '#f4f4f5' : '#111827';
-  function handleOpen() {
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     }
-    setOpen(v => !v);
-  }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
   return (
-    <div style={{ position: 'relative' }}>
-      <button ref={btnRef} type="button" onClick={handleOpen} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} style={{ width:'100%', padding:'9px 12px', borderRadius:'9px', border:`1px solid ${border}`, background:bg, color:txt, fontSize:'13.5px', outline:'none', fontFamily:'inherit', cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', textAlign:'left' }}>
         <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:selected.dot, flexShrink:0 }}/>
         <span style={{ flex: 1 }}>{selected.label}</span>
         <ChevronDown style={{ width:'14px', height:'14px', color:txt }}/>
       </button>
-      {open && <>
-        <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998 }}/>
-        <div style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, zIndex:9999, background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
+      {open && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, marginTop:'4px', zIndex:9999, background:dark?'#111113':'#ffffff', border:`1px solid ${border}`, borderRadius:'10px', padding:'4px', boxShadow:dark?'0 8px 32px rgba(0,0,0,0.5)':'0 8px 24px rgba(0,0,0,0.1)' }}>
           {options.map(o => (
             <button type="button" key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', border:'none', background:value===o.value?(dark?'rgba(255,255,255,0.07)':'#eff6ff'):'transparent', color:value===o.value?(dark?'#fff':'#0044fd'):(dark?'#a1a1aa':'#374151'), fontSize:'13px', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
               <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:o.dot, flexShrink:0 }}/>
@@ -323,7 +318,7 @@ function FormStatusSelect({ value, onChange, dark, aprovadoLabel }: { value:numb
             </button>
           ))}
         </div>
-      </>}
+      )}
     </div>
   );
 }
@@ -346,29 +341,58 @@ function DeleteConfirmDialog({ count, onConfirm, onCancel, loading, dark }: { co
   );
 }
 
+function isColorTooLight(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.7;
+}
+function darkenColor(hex: string): string {
+  const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - 80);
+  const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - 80);
+  const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - 80);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+function lightenColor(hex: string): string {
+  const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + 60);
+  const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + 60);
+  const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + 60);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
 function ObsTooltip({ text, dark }: { text: string; dark: boolean }) {
   const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, below: false });
   const ref = useRef<HTMLDivElement>(null);
-  function handleEnter() {
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect();
-      setPos({ top: r.top - 8, left: r.left + r.width / 2 });
-    }
-    setShow(true);
+  function calcPos() {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const tooltipWidth = 240;
+    const tooltipHeight = 60;
+    let left = r.left + r.width / 2;
+    if (left - tooltipWidth / 2 < 8) left = tooltipWidth / 2 + 8;
+    if (left + tooltipWidth / 2 > window.innerWidth - 8) left = window.innerWidth - tooltipWidth / 2 - 8;
+    const spaceAbove = r.top;
+    const below = spaceAbove < tooltipHeight + 16;
+    const top = below ? r.bottom + 6 : r.top - 6;
+    setPos({ top, left, below });
   }
+  function handleEnter() { calcPos(); setShow(true); }
   return (
     <>
-      <div ref={ref} style={{ position:'relative', display:'inline-flex', flexShrink:0 }} onMouseEnter={handleEnter} onMouseLeave={() => setShow(false)} onClick={e => { e.stopPropagation(); if (ref.current) { const r=ref.current.getBoundingClientRect(); setPos({top:r.top-8,left:r.left+r.width/2}); } setShow(v=>!v); }}>
+      <div ref={ref} style={{ position:'relative', display:'inline-flex', flexShrink:0 }} onMouseEnter={handleEnter} onMouseLeave={() => setShow(false)} onClick={e => { e.stopPropagation(); calcPos(); setShow(v=>!v); }}>
         <div style={{ width:'16px', height:'16px', borderRadius:'50%', background:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
           <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={dark?'#9ca3af':'#6b7280'} strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
       </div>
-      {show && (
-        <div style={{ position:'fixed', top:pos.top, left:pos.left, transform:'translate(-50%,-100%)', zIndex:99999, background:'#1f2937', color:'#f9fafb', fontSize:'12px', lineHeight:1.5, padding:'8px 12px', borderRadius:'9px', maxWidth:'240px', minWidth:'120px', whiteSpace:'pre-wrap', wordBreak:'break-word', boxShadow:'0 4px 16px rgba(0,0,0,0.3)', pointerEvents:'none' }}>
+      {show && createPortal(
+        <div style={{ position:'fixed', top:pos.top, left:pos.left, transform:pos.below?'translate(-50%,0)':'translate(-50%,-100%)', zIndex:99999, background:'#1f2937', color:'#f9fafb', fontSize:'12px', lineHeight:1.5, padding:'8px 12px', borderRadius:'9px', maxWidth:'240px', minWidth:'120px', whiteSpace:'pre-wrap', wordBreak:'break-word', boxShadow:'0 4px 16px rgba(0,0,0,0.3)', pointerEvents:'none' }}>
           {text}
-          <div style={{ position:'absolute', top:'100%', left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'5px solid transparent', borderRight:'5px solid transparent', borderTop:'5px solid #1f2937' }}/>
-        </div>
+          {pos.below
+            ? <div style={{ position:'absolute', bottom:'100%', left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'5px solid transparent', borderRight:'5px solid transparent', borderBottom:'5px solid #1f2937' }}/>
+            : <div style={{ position:'absolute', top:'100%', left:'50%', transform:'translateX(-50%)', width:0, height:0, borderLeft:'5px solid transparent', borderRight:'5px solid transparent', borderTop:'5px solid #1f2937' }}/>}
+        </div>,
+        document.body
       )}
     </>
   );
@@ -686,7 +710,7 @@ function BulkTagModal({ dark, tags, ids, leadTagsMap, selectedCount, onApply, on
 }
 
 // ── Unified Selection + Actions Bar ───────────────────────────────────────────
-function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilters, filteredCount, totalCount, allSelectedAreEvaluated, dark, isMobile, aprovadoLabel, onSelectAll, onClearSelection, onMoveStatus, onToggleAvaliado, onBulkTag, onDelete }: {
+function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilters, filteredCount, totalCount, allSelectedAreEvaluated, dark, isMobile, statusItems, onSelectAll, onClearSelection, onMoveStatus, onToggleAvaliado, onBulkTag, onDelete }: {
   selectedCount: number;
   allSystemSelected: boolean;
   hasActiveFilters: boolean;
@@ -695,7 +719,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
   allSelectedAreEvaluated: boolean;
   dark: boolean;
   isMobile: boolean;
-  aprovadoLabel: string;
+  statusItems: Array<{id:number;label:string;cor:string;ordem:number}>;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onMoveStatus: (status: number) => void;
@@ -713,13 +737,7 @@ function UnifiedSelectionBar({ selectedCount, allSystemSelected, hasActiveFilter
   const btnBorder = dark ? '#2d3748' : '#d1d5db';
   const btnTxt = dark ? '#cbd5e1' : '#374151';
 
-  const statusOpts = [
-    { value: 1, label: 'Em atendimento', dot: STATUS_CONFIG[1].dot },
-    { value: 2, label: 'Reunião',        dot: STATUS_CONFIG[2].dot },
-    { value: 5, label: 'Contrato/App',   dot: STATUS_CONFIG[5].dot },
-    { value: 3, label: aprovadoLabel,    dot: STATUS_CONFIG[3].dot },
-    { value: 4, label: 'Reprovado',      dot: STATUS_CONFIG[4].dot },
-  ];
+  const statusOpts = [...statusItems].sort((a, b) => a.ordem - b.ordem).map(s => ({ value: s.id, label: s.label, dot: s.cor }));
 
   function openDrop() {
     if (btnRef.current) {
@@ -840,15 +858,43 @@ function LeadsPage() {
   const { user } = useAuth();
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
   const dark = theme === 'dark';
   const { plano, features, loading: planLoading } = usePlanFeatures();
 
   const [campDropPos, setCampDropPos] = useState({ top: 0, left: 0 });
   const [tagDropPos, setTagDropPos] = useState({ top: 0, left: 0 });
 
-  const statusOptions = useMemo(() => STATUS_OPTIONS.map(o =>
-    o.value === '3' ? { ...o, label: t.statusConvertidoLabel } : o
-  ), [t.statusConvertidoLabel]);
+  const statusOptions = useMemo(() => {
+    const sorted = [...statusConfig.statuses].sort((a, b) => a.ordem - b.ordem);
+    return [
+      { label: 'Todos os status', value: 'all' },
+      { label: '🆕 Novo', value: 'novo' },
+      ...sorted.map(s => ({ label: s.label, value: String(s.id), dot: s.cor })),
+    ];
+  }, [statusConfig]);
+
+  const getStatusLabel = useCallback((statusId: number) => {
+    return statusConfig.statuses.find(s => s.id === statusId)?.label
+      ?? (STATUS_LABELS as Record<number, string>)[statusId]
+      ?? String(statusId);
+  }, [statusConfig]);
+
+  const getStatusPillStyle = useCallback((statusId: number, isDark: boolean) => {
+    const configStatus = statusConfig.statuses.find(s => s.id === statusId);
+    if (configStatus) {
+      const cor = configStatus.cor;
+      const displayCor = isColorTooLight(cor) && !isDark ? darkenColor(cor) : cor;
+      return {
+        bg: isDark ? `${displayCor}25` : `${displayCor}18`,
+        color: isDark ? lightenColor(displayCor) : darkenColor(displayCor),
+        dot: displayCor,
+        border: `${displayCor}30`,
+      };
+    }
+    return isDark ? (DARK_STATUS_PILL[statusId] || DARK_STATUS_PILL[1]) : (LIGHT_STATUS_PILL[statusId] || LIGHT_STATUS_PILL[1]);
+  }, [statusConfig]);
 
   const { hasWA } = useWhatsAppAccount();
 
@@ -913,7 +959,7 @@ function LeadsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
-  const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status:1, observacoes:'' });
+  const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status: statusConfig.entrada_status, observacoes:'' });
   const ORIGENS = ['Indicação', 'Tráfego Pago', 'Instagram Orgânico', 'Outro'];
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -1513,7 +1559,11 @@ function LeadsPage() {
   async function handleBulkMoveStatus(newStatus: number) {
     setBulkLoading(true);
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
+    const tsField: Record<number, string> = {
+      1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at',
+      3: 'status_aprovado_at', 6: 'status_sem_retorno_at',
+      [statusConfig.convertido_status]: 'status_aprovado_at',
+    };
     const updates: any = { status: newStatus, ultimo_status_change: now };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
 
@@ -1525,7 +1575,7 @@ function LeadsPage() {
       }
       const idSet = new Set(ids);
       setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, ...updates } : l));
-      const label = newStatus === 3 ? t.statusConvertidoLabel : STATUS_LABELS[newStatus];
+      const label = statusConfig.statuses.find(s => s.id === newStatus)?.label ?? STATUS_LABELS[newStatus];
       toast.success(`${ids.length} lead${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para "${label}"`);
       setSelectedIds(new Set());
       setAllSystemSelected(false);
@@ -1689,7 +1739,7 @@ function LeadsPage() {
 
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
-    setNewLead({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status:1, observacoes:'' });
+    setNewLead({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status: statusConfig.entrada_status, observacoes:'' });
     setIsAddOpen(false);
     toast.success('Lead adicionado!');
   };
@@ -1758,7 +1808,7 @@ function LeadsPage() {
   const activeBulkCount = allSystemSelected ? filtered.length : selectedIds.size;
   const showSelectionBar = selectedIds.size > 0 || allSystemSelected;
   const pendingMoveStatusLabel = pendingMoveStatus != null
-    ? (pendingMoveStatus === 3 ? t.statusConvertidoLabel : STATUS_LABELS[pendingMoveStatus] || '')
+    ? (statusConfig.statuses.find(s => s.id === pendingMoveStatus)?.label ?? STATUS_LABELS[pendingMoveStatus] ?? '')
     : '';
 
   // Add Lead dialog content (shared between mobile/desktop)
@@ -1779,7 +1829,7 @@ function LeadsPage() {
       </div>
       <div>
         <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Status inicial</label>
-        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} aprovadoLabel={t.statusConvertidoLabel}/>
+        <FormStatusSelect value={newLead.status} onChange={v => setNewLead(n => ({ ...n, status: v }))} dark={dark} statusItems={statusConfig.statuses}/>
       </div>
       <div>
         <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Observações</label>
@@ -2028,7 +2078,7 @@ function LeadsPage() {
             allSelectedAreEvaluated={allSelectedAreEvaluated}
             dark={dark}
             isMobile={isMobile}
-            aprovadoLabel={t.statusConvertidoLabel}
+            statusItems={statusConfig.statuses}
             onSelectAll={handleSelectAllFiltered}
             onClearSelection={handleClearSelection}
             onMoveStatus={status => { setPendingMoveStatus(status); setShowMoveStatusConfirm(true); }}
@@ -2081,11 +2131,10 @@ function LeadsPage() {
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', flexShrink:0 }}>
                         {(() => {
-                          const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
-                          const lp = LIGHT_STATUS_PILL[s] || LIGHT_STATUS_PILL[0];
+                          const pill = getStatusPillStyle(s, dark);
                           return (
-                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : lp.bg, color:dark ? dp.color : lp.color, border: dark ? `1px solid ${dp.border}` : `1px solid ${lp.border}` }}>
-                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : lp.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                            <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'110px', padding:'4px 8px', borderRadius:'6px', fontSize:'11px', fontWeight:600, whiteSpace:'nowrap', background:pill.bg, color:pill.color, border:`1px solid ${pill.border}` }}>
+                              <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:pill.dot, flexShrink:0, display:'inline-block' }}/>{getStatusLabel(s)}
                             </span>
                           );
                         })()}
@@ -2111,8 +2160,8 @@ function LeadsPage() {
                 <col style={{ width:'23%' }}/>
                 <col style={{ width:'88px' }}/>
                 <col style={{ width:'14%' }}/>
-                <col style={{ width:'18%' }}/>
-                <col style={{ width:'120px' }}/>
+                <col style={{ width:'12%' }}/>
+                <col style={{ width:'16%' }}/>
                 <col style={{ width:'120px' }}/>
                 <col style={{ width:'72px' }}/>
               </colgroup>
@@ -2127,9 +2176,10 @@ function LeadsPage() {
                       Score {sortByScore === 'asc' ? '↑' : '↓'}
                     </button>
                   </th>
-                  {(['WhatsApp', 'Cidade', 'Status'] as string[]).map(h => (
+                  {(['WhatsApp', 'Cidade'] as string[]).map(h => (
                     <th key={h} className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>{h}</th>
                   ))}
+                  <th className={`text-center px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Status</th>
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
                     <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#6b6b75' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
                       Entrada {sortByDate === 'desc' ? '↓' : '↑'}
@@ -2154,7 +2204,7 @@ function LeadsPage() {
                     return (
                       <tr key={lead.id}
                         className={`${sel ? (dark ? 'bg-blue-950/30' : 'bg-blue-50/60') : ''} ${hov} transition-colors cursor-pointer ${dark ? '' : `border-b ${divider}`}`}
-                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'both', animationDelay:`${Math.min(idx * 20, 300)}ms`, ...(idx === paginatedLeads.length - 1 ? { borderBottom: 'none' } : {}) }}
+                        style={{ background: sel ? undefined : (idx % 2 === 0 ? 'transparent' : dark ? '#141416' : '#f5f5f5'), animationName:'rowIn', animationDuration:'0.25s', animationTimingFunction:'ease', animationFillMode:'backwards', animationDelay:`${Math.min(idx * 20, 300)}ms`, ...(idx === paginatedLeads.length - 1 ? { borderBottom: 'none' } : {}) }}
                         onClick={() => handleViewLead(lead)}>
                         <td className="pl-4 pr-2 py-3" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={sel} onChange={e => { const n = new Set(selectedIds); e.target.checked ? n.add(lead.id) : n.delete(lead.id); setSelectedIds(n); if (!e.target.checked) setAllSystemSelected(false); }} onClick={e => e.stopPropagation()} style={{ width:'15px', height:'15px', accentColor:'#0044fd', opacity:0.5, cursor:'pointer' }}/>
@@ -2203,13 +2253,12 @@ function LeadsPage() {
                         </td>
                         <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}</td>
                         <td className="px-3 py-3" style={{ color: dark ? '#9090a0' : '#374151', fontSize:'12.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeName(lead.cidade) ? normalizeCity(safeName(lead.cidade)) : '—'}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-3" style={{ textAlign:'center' }}>
                           {(() => {
-                            const dp = DARK_STATUS_PILL[s] || DARK_STATUS_PILL[0];
-                            const lp = LIGHT_STATUS_PILL[s] || LIGHT_STATUS_PILL[0];
+                            const pill = getStatusPillStyle(s, dark);
                             return (
-                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:dark ? dp.bg : lp.bg, color:dark ? dp.color : lp.color, border: dark ? `1px solid ${dp.border}` : `1px solid ${lp.border}` }}>
-                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? dp.dot : lp.dot, flexShrink:0, display:'inline-block' }}/>{STATUS_LABELS[s]}
+                              <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth:'130px', padding:'4px 10px', borderRadius:'6px', fontSize:'11.5px', fontWeight:600, whiteSpace:'nowrap', background:pill.bg, color:pill.color, border:`1px solid ${pill.border}` }}>
+                                <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:pill.dot, flexShrink:0, display:'inline-block' }}/>{getStatusLabel(s)}
                               </span>
                             );
                           })()}

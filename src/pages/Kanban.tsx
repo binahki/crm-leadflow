@@ -2,15 +2,22 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
-  DragStartEvent, DragEndEvent, useDroppable,
+  DragStartEvent, DragEndEvent, useDroppable, closestCenter,
 } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
+import {
+  SortableContext, horizontalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { AppLayout } from '@/components/AppLayout';
-import { useAppStore, Lead, calcularFaixa, STATUS_CONFIG, STATUS_SEQUENCE } from '@/stores/appStore';
+import { useAppStore, Lead, calcularFaixa } from '@/stores/appStore';
+import { useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig, invalidateStatusConfigCache, StatusConfig, StatusItem } from '@/hooks/useStatusConfig';
 import { supabase } from '@/integrations/supabase/client';
 import {
   MessageCircle, Eye, Clock, MapPin, ChevronLeft, ChevronRight, Check,
   Search, X, Tag as TagIcon, Megaphone, ChevronDown,
+  Settings2, GripVertical, LayoutGrid, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRelativeTime, formatarWhatsapp } from '@/utils/relativeTime';
@@ -25,16 +32,11 @@ import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { Tag } from '@/hooks/useTags';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const COLUMNS = STATUS_SEQUENCE.map(status => ({
-  status,
-  label: STATUS_CONFIG[status].label,
-  border: STATUS_CONFIG[status].dot,
-  dot: STATUS_CONFIG[status].dot,
-  bg: `${STATUS_CONFIG[status].dot}10`
-}));
+type ColumnDef = { status: number; label: string; border: string; dot: string; bg: string };
 
 const MOTIVOS = ['Desistiu','Fora de SP','Nome sujo','Sem reserva','Não compareceu à reunião','Outro'];
 const COL_PAGE = 50;
+const PALETTE = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#f43f5e','#06b6d4','#f97316','#71717a','#6366f1','#84cc16','#14b8a6'];
 
 const PERIOD_OPTIONS = [
   { label: 'Todos', value: 'all' },
@@ -318,6 +320,33 @@ function ObsBadge({ text }: { text: string }) {
   );
 }
 
+// ── Static Lead Card (edit mode) ──────────────────────────────
+function StaticLeadCard({ lead, dark }: { lead: Lead; dark: boolean }) {
+  const color = getAvatarColor(lead.nome, dark, lead.id);
+  return (
+    <div style={{
+      background: dark ? '#222225' : '#ffffff',
+      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.09)'}`,
+      borderRadius: '12px', padding: '10px 12px',
+      opacity: 0.45, userSelect: 'none', pointerEvents: 'none',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: getAvatarTextColor(color), fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
+          {initials(lead.nome)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '12.5px', fontWeight: 600, color: dark ? '#f0f0f0' : '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {safeName(lead.nome) || 'Lead'}
+          </p>
+          <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>
+            {lead.whatsapp ? formatarWhatsapp(lead.whatsapp) : '—'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Draggable Card ────────────────────────────────────────────
 function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile, leadTags }: {
   lead: Lead; onCardClick: ()=>void;
@@ -419,9 +448,129 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
   );
 }
 
+// ── Editable Sortable Column (edit mode) ──────────────────────
+function EditableSortableColumn({ status, editConfig, setEditConfig, dark, colorPickerOpenId, setColorPickerOpenId, onRemove, leads, isMobile }: {
+  status: StatusItem;
+  editConfig: StatusConfig;
+  setEditConfig: React.Dispatch<React.SetStateAction<StatusConfig | null>>;
+  dark: boolean;
+  colorPickerOpenId: number | null;
+  setColorPickerOpenId: (id: number | null) => void;
+  onRemove: (id: number) => void;
+  leads: Lead[];
+  isMobile: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `col-${status.id}`,
+    disabled: isMobile,
+  });
+
+  const isEntrada = status.id === editConfig.entrada_status;
+  const isConvertido = status.id === editConfig.convertido_status;
+  const canRemove = !isEntrada && !isConvertido;
+  const isPickerOpen = colorPickerOpenId === status.id;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        flex: '0 0 260px',
+        minWidth: '220px',
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <div style={{
+        display: 'flex', flexDirection: 'column', borderRadius: '16px',
+        border: `1px solid ${status.cor}50`,
+        borderTop: `3px solid ${status.cor}`,
+        background: dark ? '#1b1b1d' : '#fafafa',
+        overflow: 'hidden',
+        boxShadow: isDragging
+          ? `0 20px 40px rgba(0,0,0,0.25), 0 0 0 2px ${status.cor}60`
+          : `0 0 0 2px ${status.cor}20`,
+        transition: 'box-shadow 0.2s',
+      }}>
+        {/* Edit header */}
+        <div style={{
+          padding: '9px 10px', display: 'flex', alignItems: 'center', gap: '6px',
+          borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
+          background: dark ? '#141416' : '#ffffff',
+        }}>
+          {!isMobile && (
+            <span
+              {...attributes} {...listeners}
+              style={{ cursor: isDragging ? 'grabbing' : 'grab', color: dark ? '#52525b' : '#9ca3af', display: 'flex', flexShrink: 0 }}
+            >
+              <GripVertical style={{ width: '13px', height: '13px' }} />
+            </span>
+          )}
+          {/* Color picker trigger */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setColorPickerOpenId(isPickerOpen ? null : status.id)}
+              style={{ width: '16px', height: '16px', borderRadius: '50%', background: status.cor, border: `2px solid ${dark ? '#374151' : '#d1d5db'}`, cursor: 'pointer', padding: 0 }}
+            />
+            {isPickerOpen && (
+              <>
+                <div onClick={() => setColorPickerOpenId(null)} style={{ position: 'fixed', inset: 0, zIndex: 500 }} />
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 501, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '10px', padding: '8px', boxShadow: dark ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.15)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '5px' }}>
+                  {PALETTE.map(cor => (
+                    <button
+                      key={cor}
+                      onClick={() => {
+                        setEditConfig(prev => prev ? { ...prev, statuses: prev.statuses.map(s => s.id === status.id ? { ...s, cor } : s) } : prev);
+                        setColorPickerOpenId(null);
+                      }}
+                      style={{ width: '22px', height: '22px', borderRadius: '50%', background: cor, border: status.cor === cor ? `2.5px solid ${dark ? '#fff' : '#111'}` : '2.5px solid transparent', cursor: 'pointer', padding: 0 }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          {/* Label input */}
+          <input
+            value={status.label}
+            onChange={e => setEditConfig(prev => prev ? { ...prev, statuses: prev.statuses.map(s => s.id === status.id ? { ...s, label: e.target.value } : s) } : prev)}
+            style={{ flex: 1, padding: '3px 6px', borderRadius: '5px', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, background: dark ? '#0d0d0f' : '#f8fafc', color: dark ? '#f4f4f5' : '#111827', fontSize: '12px', outline: 'none', fontFamily: 'inherit', fontWeight: 600, minWidth: 0 }}
+          />
+          {isEntrada && <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 5px', borderRadius: '4px', background: 'rgba(59,130,246,0.15)', color: '#3b82f6', whiteSpace: 'nowrap', flexShrink: 0 }}>entrada</span>}
+          {isConvertido && <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 5px', borderRadius: '4px', background: 'rgba(16,185,129,0.15)', color: '#10b981', whiteSpace: 'nowrap', flexShrink: 0 }}>conversão</span>}
+          <button
+            onClick={() => canRemove && onRemove(status.id)}
+            disabled={!canRemove}
+            title={canRemove ? 'Remover etapa' : 'Não é possível remover'}
+            style={{ background: 'none', border: 'none', cursor: canRemove ? 'pointer' : 'default', opacity: canRemove ? 0.7 : 0.15, color: '#ef4444', padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+          >
+            <X style={{ width: '12px', height: '12px' }} />
+          </button>
+        </div>
+        {/* Static leads */}
+        <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '80px', maxHeight: '52vh', overflowY: 'auto' }}>
+          {leads.length === 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', fontSize: '11px', color: dark ? '#52525b' : '#d1d5db', borderRadius: '8px', border: `1px dashed ${status.cor}40` }}>
+              Sem leads
+            </div>
+          )}
+          {leads.slice(0, 5).map(lead => (
+            <StaticLeadCard key={lead.id} lead={lead} dark={dark} />
+          ))}
+          {leads.length > 5 && (
+            <div style={{ fontSize: '11px', color: dark ? '#52525b' : '#9ca3af', textAlign: 'center', padding: '4px 0' }}>
+              +{leads.length - 5} mais
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Droppable Column ──────────────────────────────────────────
 function DroppableColumn({ col, children, count, isOver, isMobile }: {
-  col: typeof COLUMNS[0]; children: React.ReactNode; count: number; isOver: boolean; isMobile: boolean;
+  col: ColumnDef; children: React.ReactNode; count: number; isOver: boolean; isMobile: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id: String(col.status) });
   const { theme } = useTheme();
@@ -469,6 +618,19 @@ export default function KanbanPage() {
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const { hasWA } = useWhatsAppAccount();
   const { metaToken, metaAccount } = useMetaConfig();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig, reload: reloadStatusConfig } = useStatusConfig(modelo);
+  const columns = useMemo((): ColumnDef[] => {
+    return [...statusConfig.statuses]
+      .sort((a, b) => a.ordem - b.ordem)
+      .map(s => ({
+        status: s.id,
+        label: s.label,
+        border: s.cor,
+        dot: s.cor,
+        bg: `${s.cor}18`,
+      }));
+  }, [statusConfig]);
 
   // ── Filter state ─────────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -495,6 +657,20 @@ export default function KanbanPage() {
   const [motivoCtx, setMotivoCtx] = useState<{ lead: Lead; targetStatus: number; currentStatus: number } | null>(null);
   const orgTagsRef = useRef<Tag[]>([]);
 
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [editConfig, setEditConfig] = useState<StatusConfig | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [colorPickerOpenId, setColorPickerOpenId] = useState<number | null>(null);
+  const [migrateModal, setMigrateModal] = useState<{ fromStatus: number; count: number } | null>(null);
+  const [migrateToStatus, setMigrateToStatus] = useState<number | null>(null);
+  const [activeColId, setActiveColId] = useState<string | null>(null);
+
+  const editColumns = useMemo(() => {
+    if (!editConfig) return [];
+    return [...editConfig.statuses].sort((a, b) => a.ordem - b.ordem);
+  }, [editConfig]);
+
   const handleWhatsApp = useCallback((lead: Lead) => {
     if (!lead.whatsapp) return;
     const clean = lead.whatsapp.replace(/\D/g, '');
@@ -508,6 +684,10 @@ export default function KanbanPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
+  );
+
+  const colSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   // ── Fetch all leads ──────────────────────────────────────────
@@ -679,7 +859,7 @@ export default function KanbanPage() {
   // ── Column leads memoizado (7 filter+sort por render → 1 vez) ──
   const colLeadsMap = useMemo(() => {
     const map = new Map<number, Lead[]>();
-    for (const col of COLUMNS) {
+    for (const col of columns) {
       const leads = filteredLeads
         .filter(l => {
           let s = l.status === null || l.status === undefined ? 1 : Number(l.status);
@@ -690,7 +870,7 @@ export default function KanbanPage() {
       map.set(col.status, leads);
     }
     return map;
-  }, [filteredLeads]);
+  }, [filteredLeads, columns]);
 
   // ── Column helpers ───────────────────────────────────────────
   function getColLeads(status: number): Lead[] {
@@ -707,22 +887,104 @@ export default function KanbanPage() {
   useEffect(() => {
     if (!isMobile || !scrollRef.current) return;
     const el = scrollRef.current;
-    const fn = () => setActiveColIndex(Math.min(Math.round(el.scrollLeft / el.clientWidth), COLUMNS.length-1));
+    const fn = () => setActiveColIndex(Math.min(Math.round(el.scrollLeft / el.clientWidth), columns.length-1));
     el.addEventListener('scroll', fn, { passive: true });
     return () => el.removeEventListener('scroll', fn);
   }, [isMobile]);
 
+  // ── Edit mode handlers ───────────────────────────────────────
+  function handleEnterEditMode() {
+    setEditConfig(JSON.parse(JSON.stringify(statusConfig)));
+    setEditMode(true);
+  }
+
+  function handleCancelEdit() {
+    setEditConfig(null);
+    setEditMode(false);
+    setColorPickerOpenId(null);
+  }
+
+  async function handleSaveConfig() {
+    if (!editConfig || !orgId) return;
+    setSavingConfig(true);
+    const configToSave: StatusConfig = {
+      ...editConfig,
+      statuses: editConfig.statuses.map((s, i) => ({ ...s, ordem: i + 1 })),
+    };
+    const { error } = await (supabase as any).from('organizations').update({ status_config: configToSave }).eq('id', orgId);
+    if (error) {
+      toast.error('Erro ao salvar funil');
+    } else {
+      invalidateStatusConfigCache(orgId);
+      setEditMode(false);
+      setEditConfig(null);
+      setColorPickerOpenId(null);
+      reloadStatusConfig();
+      toast.success('Funil atualizado!');
+    }
+    setSavingConfig(false);
+  }
+
+  async function handleRemoveStatus(statusId: number) {
+    if (!orgId) return;
+    const { count } = await (supabase as any).from('leads').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', statusId);
+    const n = count as number | null;
+    if ((n || 0) > 0) {
+      const others = editColumns.filter(s => s.id !== statusId);
+      setMigrateToStatus(others[0]?.id ?? null);
+      setMigrateModal({ fromStatus: statusId, count: n || 0 });
+    } else {
+      setEditConfig(prev => prev ? {
+        ...prev,
+        statuses: prev.statuses.filter(s => s.id !== statusId).map((s, i) => ({ ...s, ordem: i + 1 })),
+      } : prev);
+    }
+  }
+
+  async function handleConfirmMigrate() {
+    if (!migrateModal || !orgId || migrateToStatus === null) return;
+    await (supabase as any).from('leads').update({ status: migrateToStatus }).eq('org_id', orgId).eq('status', migrateModal.fromStatus);
+    setEditConfig(prev => prev ? {
+      ...prev,
+      statuses: prev.statuses.filter(s => s.id !== migrateModal.fromStatus).map((s, i) => ({ ...s, ordem: i + 1 })),
+    } : prev);
+    toast.success(`${migrateModal.count} lead${migrateModal.count !== 1 ? 's' : ''} movido${migrateModal.count !== 1 ? 's' : ''}.`);
+    setMigrateModal(null);
+  }
+
+  function handleColDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    setActiveColId(null);
+    if (!over || active.id === over.id) return;
+    const oldIdx = editColumns.findIndex(s => `col-${s.id}` === active.id);
+    const newIdx = editColumns.findIndex(s => `col-${s.id}` === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove([...editColumns], oldIdx, newIdx).map((s, i) => ({ ...s, ordem: i + 1 }));
+    setEditConfig(prev => prev ? { ...prev, statuses: reordered } : prev);
+  }
+
+  function handleAddColumn() {
+    if (!editConfig) return;
+    const maxId = editConfig.statuses.length > 0 ? Math.max(...editConfig.statuses.map(s => s.id)) : 0;
+    const newItem: StatusItem = { id: maxId + 1, label: 'Nova etapa', cor: '#6b7280', ordem: editConfig.statuses.length + 1 };
+    setEditConfig(prev => prev ? { ...prev, statuses: [...prev.statuses, newItem] } : prev);
+  }
+
   // ── Status change ────────────────────────────────────────────
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
+    const tsField: Record<number, string> = {
+      0: 'status_atendimento_at', 1: 'status_atendimento_at',
+      2: 'status_reuniao_at', 5: 'status_contrato_at',
+      [statusConfig.convertido_status]: 'status_aprovado_at',
+    };
     const patch: any = { status: newStatus, ultimo_status_change: now };
     if (tsField[newStatus]) patch[tsField[newStatus]] = now;
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;
     updateLead(lead.id, patch);
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
     if (error) { updateLead(lead.id, { status: currentStatus }); toast.error('Erro ao mover lead'); }
-    else { const col = COLUMNS.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 }); }
+    else { const col = columns.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 }); }
   }
 
   function handleDragStart(e: DragStartEvent) {
@@ -748,8 +1010,12 @@ export default function KanbanPage() {
     let currentStatus = lead.status === null || lead.status === undefined ? 1 : Number(lead.status);
     if (currentStatus === 0) currentStatus = 1;
     if (currentStatus === targetStatus) return;
-    if (targetStatus === 4) { setMotivoCtx({ lead, targetStatus, currentStatus }); }
-    else { applyStatus(lead, targetStatus, currentStatus); }
+    const targetLabel = statusConfig.statuses.find(s => s.id === targetStatus)?.label ?? '';
+    if (targetLabel.toLowerCase().includes('reprovado')) {
+      setMotivoCtx({ lead, targetStatus, currentStatus });
+    } else {
+      applyStatus(lead, targetStatus, currentStatus);
+    }
   }
 
   async function handleMotivoConfirm(motivo: string) {
@@ -774,9 +1040,27 @@ export default function KanbanPage() {
 
         {/* Header + inline filter bar */}
         <div style={{ marginBottom:'16px' }}>
+          {editMode ? (
+            <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'4px' }}>
+              <LayoutGrid style={{ width:'18px', height:'18px', color:'#3b82f6', flexShrink:0 }}/>
+              <span style={{ fontSize:isMobile?'18px':'22px', fontWeight:700, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', letterSpacing:'-0.035em' }}>Editando funil</span>
+              <div style={{ marginLeft:'auto', display:'flex', gap:'8px', alignItems:'center' }}>
+                <button onClick={handleCancelEdit} style={{ padding:'7px 14px', borderRadius:'8px', border:`1px solid ${dark?'rgba(255,255,255,0.1)':border}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+                <button onClick={handleSaveConfig} disabled={savingConfig} style={{ padding:'7px 14px', borderRadius:'8px', border:'none', background:savingConfig?(dark?'#27272a':'#e5e7eb'):'#2563eb', color:savingConfig?(dark?'#52525b':'#9ca3af'):'#fff', fontSize:'13px', fontWeight:600, cursor:savingConfig?'default':'pointer', fontFamily:'inherit' }}>
+                  {savingConfig ? 'Salvando…' : 'Salvar funil'}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Row 1: title + realtime */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-            <h1 style={{ fontSize:isMobile?'22px':'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+              <h1 style={{ fontSize:isMobile?'22px':'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
+              <button onClick={handleEnterEditMode} style={{ display:'flex', alignItems:'center', gap:'4px', padding:'5px 10px', borderRadius:'7px', border:`1px solid ${dark?'rgba(255,255,255,0.08)':border}`, background:'transparent', color:dark?'#52525b':'#9ca3af', fontSize:'11px', cursor:'pointer', fontFamily:'inherit' }}>
+                <Settings2 style={{ width:'11px', height:'11px' }}/> Editar funil
+              </button>
+            </div>
             <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#8a8a96':'#9ca3af' }}>
               <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
             </div>
@@ -868,34 +1152,83 @@ export default function KanbanPage() {
               </button>
             )}
           </div>
+          </>
+          )}
         </div>
 
         {/* Mobile nav dots */}
-        {isMobile && (
+        {isMobile && !editMode && (
           <>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
               <button onClick={() => scrollToCol(Math.max(0, activeColIndex-1))} disabled={activeColIndex===0} style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#a1a1aa':'#374151', cursor:activeColIndex===0?'default':'pointer', opacity:activeColIndex===0?0.3:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <ChevronLeft style={{ width:'16px', height:'16px' }}/>
               </button>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-                {COLUMNS.map((col,i) => <button key={i} onClick={() => scrollToCol(i)} style={{ width:i===activeColIndex?'24px':'7px', height:'7px', borderRadius:'99px', border:'none', background:i===activeColIndex?col.dot:(dark?'#27272a':'#d1d5db'), cursor:'pointer', padding:0, transition:'all 0.2s ease' }}/>)}
+                {columns.map((col,i) => <button key={i} onClick={() => scrollToCol(i)} style={{ width:i===activeColIndex?'24px':'7px', height:'7px', borderRadius:'99px', border:'none', background:i===activeColIndex?col.dot:(dark?'#27272a':'#d1d5db'), cursor:'pointer', padding:0, transition:'all 0.2s ease' }}/>)}
               </div>
-              <button onClick={() => scrollToCol(Math.min(COLUMNS.length-1, activeColIndex+1))} disabled={activeColIndex===COLUMNS.length-1} style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#a1a1aa':'#374151', cursor:activeColIndex===COLUMNS.length-1?'default':'pointer', opacity:activeColIndex===COLUMNS.length-1?0.3:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <button onClick={() => scrollToCol(Math.min(columns.length-1, activeColIndex+1))} disabled={activeColIndex===columns.length-1} style={{ width:'32px', height:'32px', borderRadius:'8px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:dark?'#111113':'#fff', color:dark?'#a1a1aa':'#374151', cursor:activeColIndex===columns.length-1?'default':'pointer', opacity:activeColIndex===columns.length-1?0.3:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <ChevronRight style={{ width:'16px', height:'16px' }}/>
               </button>
             </div>
             <div style={{ textAlign:'center', marginBottom:'10px' }}>
-              <span style={{ fontSize:'13px', fontWeight:600, color:COLUMNS[activeColIndex].dot }}>{COLUMNS[activeColIndex].label}</span>
-              <span style={{ fontSize:'12px', color:dark?'#8a8a96':'#9ca3af', marginLeft:'6px' }}>({getColLeads(COLUMNS[activeColIndex].status).length} leads)</span>
+              <span style={{ fontSize:'13px', fontWeight:600, color:columns[activeColIndex].dot }}>{columns[activeColIndex].label}</span>
+              <span style={{ fontSize:'12px', color:dark?'#8a8a96':'#9ca3af', marginLeft:'6px' }}>({getColLeads(columns[activeColIndex].status).length} leads)</span>
             </div>
           </>
         )}
 
         {/* Kanban board */}
+        {editMode && editConfig ? (
+          <DndContext
+            sensors={isMobile ? undefined : colSensors}
+            collisionDetection={closestCenter}
+            onDragStart={e => setActiveColId(e.active.id as string)}
+            onDragEnd={handleColDragEnd}
+            onDragCancel={() => setActiveColId(null)}
+          >
+            <SortableContext items={editColumns.map(s => `col-${s.id}`)} strategy={horizontalListSortingStrategy}>
+              <div className="kanban-desktop" style={{ display:'flex', gap:'14px', alignItems:'start', overflowX:'auto', paddingBottom:'12px', minWidth:0 }}>
+                {editColumns.map(s => (
+                  <EditableSortableColumn
+                    key={s.id}
+                    status={s}
+                    editConfig={editConfig}
+                    setEditConfig={setEditConfig}
+                    dark={dark}
+                    colorPickerOpenId={colorPickerOpenId}
+                    setColorPickerOpenId={setColorPickerOpenId}
+                    onRemove={handleRemoveStatus}
+                    leads={getColLeads(s.id)}
+                    isMobile={isMobile}
+                  />
+                ))}
+                <div style={{ flex:'0 0 180px', minWidth:'160px', alignSelf:'stretch', display:'flex', alignItems:'center' }}>
+                  <button onClick={handleAddColumn} style={{ width:'100%', minHeight:'100px', borderRadius:'16px', border:`2px dashed ${dark?'#27272a':'#d1d5db'}`, background:'transparent', color:dark?'#52525b':'#9ca3af', fontSize:'12px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'6px', fontFamily:'inherit' }}>
+                    <Plus style={{ width:'18px', height:'18px' }}/> Adicionar etapa
+                  </button>
+                </div>
+              </div>
+            </SortableContext>
+            <DragOverlay>
+              {activeColId && (() => {
+                const s = editColumns.find(c => `col-${c.id}` === activeColId);
+                if (!s) return null;
+                return (
+                  <div style={{ borderRadius:'16px', border:`2px solid ${s.cor}`, background:dark?'#1b1b1d':'#fafafa', width:'260px', padding:'12px', opacity:0.85, transform:'rotate(2deg) scale(1.02)', boxShadow:'0 16px 40px rgba(0,0,0,0.25)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                      <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:s.cor, flexShrink:0 }}/>
+                      <span style={{ fontSize:'13px', fontWeight:700, color:dark?'#f4f4f5':'#1f2937' }}>{s.label}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </DragOverlay>
+          </DndContext>
+        ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={e=>setOverColId(e.over?.id?String(e.over.id):null)} onDragEnd={handleDragEnd} onDragCancel={()=>{setActiveLead(null);setOverColId(null);}}>
           {isMobile ? (
             <div ref={scrollRef} className="kanban-mobile" style={{ display:'flex', gap:'12px', overflowX:'auto', overflowY:'hidden', scrollSnapType: activeLead ? 'none' : 'x mandatory', scrollBehavior: activeLead ? 'auto' : 'smooth', WebkitOverflowScrolling:'touch', paddingBottom:'8px', msOverflowStyle:'none', scrollbarWidth:'none' }}>
-              {COLUMNS.map(col => {
+              {columns.map(col => {
                 const colLeads = getColLeads(col.status);
                 const limit = colLimits.get(col.status) || COL_PAGE;
                 const visibleLeads = colLeads.slice(0, limit);
@@ -927,7 +1260,7 @@ export default function KanbanPage() {
             </div>
           ) : (
             <div className="kanban-desktop" style={{ display:'flex', gap:'14px', alignItems:'start', overflowX:'auto', paddingBottom:'12px', minWidth:0 }}>
-              {COLUMNS.map(col => {
+              {columns.map(col => {
                 const colLeads = getColLeads(col.status);
                 const limit = colLimits.get(col.status) || COL_PAGE;
                 const visibleLeads = colLeads.slice(0, limit);
@@ -962,10 +1295,37 @@ export default function KanbanPage() {
             {activeLead ? <OverlayCard lead={activeLead}/> : null}
           </DragOverlay>
         </DndContext>
+        )}
       </div>
 
       {motivoCtx && createPortal(
         <MotivoModal dark={dark} motivoAtual={(motivoCtx.lead as any).motivo_reprovacao} onConfirm={handleMotivoConfirm} onCancel={() => setMotivoCtx(null)}/>,
+        document.body
+      )}
+
+      {migrateModal && createPortal(
+        <>
+          <div onClick={() => setMigrateModal(null)} style={{ position:'fixed', inset:0, zIndex:999998, background:'rgba(0,0,0,0.55)' }}/>
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:999999, background:dark?'#111113':'#fff', borderRadius:'16px', padding:'24px', width:'90%', maxWidth:'340px', boxShadow:'0 24px 60px rgba(0,0,0,0.3)', fontFamily:'inherit' }}>
+            <h3 style={{ fontSize:'15px', fontWeight:700, color:dark?'#f4f4f5':'#111827', margin:'0 0 8px' }}>Remover etapa</h3>
+            <p style={{ fontSize:'13px', color:dark?'#a1a1aa':'#6b7280', margin:'0 0 16px' }}>
+              <strong style={{ color:dark?'#f4f4f5':'#111827' }}>{migrateModal.count} lead{migrateModal.count !== 1 ? 's' : ''}</strong> {migrateModal.count !== 1 ? 'estão' : 'está'} nesta etapa. Mover para:
+            </p>
+            <select
+              value={migrateToStatus ?? ''}
+              onChange={e => setMigrateToStatus(Number(e.target.value))}
+              style={{ width:'100%', padding:'8px 10px', borderRadius:'8px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:dark?'#0d0d0f':'#f8fafc', color:dark?'#f4f4f5':'#111827', fontSize:'13px', marginBottom:'16px', fontFamily:'inherit', outline:'none' }}
+            >
+              {editColumns.filter(s => s.id !== migrateModal.fromStatus).map(s => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+            <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+              <button onClick={() => setMigrateModal(null)} style={{ padding:'8px 16px', borderRadius:'8px', border:`1px solid ${dark?'#27272a':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+              <button onClick={handleConfirmMigrate} style={{ padding:'8px 16px', borderRadius:'8px', border:'none', background:'#ef4444', color:'#fff', fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>Mover e remover</button>
+            </div>
+          </div>
+        </>,
         document.body
       )}
 

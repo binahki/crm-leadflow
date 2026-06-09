@@ -8,7 +8,8 @@ import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTheme } from '@/hooks/useTheme';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology, useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
 import { AppLayout } from '@/components/AppLayout';
 import { LeadDrawer } from '@/components/ui/lead-drawer';
 import { useAppStore, calcularFaixa } from '@/stores/appStore';
@@ -165,7 +166,7 @@ function buildChartData(leads: Lead[], period: string, from?: string, to?: strin
   });
 }
 
-function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?: string) {
+function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?: string, convertidoStatus = 3) {
   const today = todayBR();
   let days = 30;
   let startDate = subDays(today, 29);
@@ -192,7 +193,7 @@ function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?
         if (k in slots) slots[k].leads++;
       } catch { }
     });
-    allLeads.filter(l => toNum(l.status) === 3).forEach(l => {
+    allLeads.filter(l => toNum(l.status) === convertidoStatus).forEach(l => {
       try {
         const ref = (l as any).ultimo_status_change || l.created_at;
         if (leadDateBR(ref) !== startDate) return;
@@ -353,6 +354,16 @@ export default function Dashboard() {
   const { orgId, ready: orgReady } = useOrgId();
   const { theme } = useTheme();
   const t = useTerminology();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
+  const funnelConfig = useMemo(() => {
+    const sorted = [...statusConfig.statuses].sort((a, b) => a.ordem - b.ordem);
+    const convertidoIdx = sorted.findIndex(s => s.id === statusConfig.convertido_status);
+    const stages = convertidoIdx >= 0 ? sorted.slice(0, convertidoIdx + 1) : sorted.slice(0, 4);
+    return stages.map(s => ({ stage: s.label, statusId: s.id, color: s.cor }));
+  }, [statusConfig]);
+  const statusLabelFn = (st: number) =>
+    statusConfig.statuses.find(s => s.id === st)?.label ?? STATUS_LABEL[st] ?? 'Aguardando';
   const navigate = useNavigate();
   const location = useLocation();
   const dark = theme === 'dark';
@@ -596,6 +607,10 @@ export default function Dashboard() {
   // Quando metaReady muda para true, tenta carregar Meta se já tiver leads
   useEffect(() => {
     if (!metaReady) return;
+    if (!metaToken || !metaAccount) {
+      setMetaLoading(false);
+      return;
+    }
     const leads = allLeadsRef.current;
     if (leads.length > 0) loadMeta(leads);
   }, [metaReady]); // eslint-disable-line
@@ -686,7 +701,7 @@ export default function Dashboard() {
       return !!d && d >= from && d <= to;
     };
     return allLeads.filter(l => {
-      if (toNum(l.status) !== 3) return false;
+      if (toNum(l.status) !== statusConfig.convertido_status) return false;
       const changeDate = (l as any).ultimo_status_change || l.created_at;
       switch (selectedPeriod) {
         case 'today': { const t = today; return ok(changeDate, t, t); }
@@ -698,22 +713,22 @@ export default function Dashboard() {
         default: return true;
       }
     }).length;
-  }, [allLeads, selectedPeriod, customFrom, customTo]);
+  }, [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
   const approvedThisMonth = useMemo(() => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     return allLeads.filter(l => {
-      if (toNum(l.status) !== 3) return false;
+      if (toNum(l.status) !== statusConfig.convertido_status) return false;
       const ref = (l as any).ultimo_status_change || (l as any).status_aprovado_at || l.created_at;
       if (!ref) return false;
       return String(ref).slice(0, 7) === currentMonth;
     }).length;
-  }, [allLeads]);
+  }, [allLeads, statusConfig]);
   const convRate = totalLeads > 0 ? safe((approved / totalLeads) * 100).toFixed(1) : '0.0';
   const spend = metaMetrics.spend || 0;
-  const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo), [allLeads, selectedPeriod, customFrom, customTo]);
+  const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo, statusConfig.convertido_status), [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
   // Funil: cada status conta pelo timestamp específico daquele status
   const funnelData = useMemo(() => {
-    return FUNNEL_CONFIG.map(f => {
+    return funnelConfig.map(f => {
       const today = todayBR();
       const ok = (dateStr: string | null | undefined, from: string, to: string) => {
         const d = leadDateBR(dateStr); return !!d && d >= from && d <= to;
@@ -734,7 +749,7 @@ export default function Dashboard() {
       }).length;
       return { ...f, value };
     });
-  }, [allLeads, selectedPeriod, customFrom, customTo]);
+  }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig]);
   const recentLeads = useMemo(() => [...allLeads].sort((a, b) => parseLeadDate(b.created_at).getTime() - parseLeadDate(a.created_at).getTime()).slice(0, 5), [allLeads]);
   const campRows = useMemo(() => {
     if (!metaCampaigns.length) return [];
@@ -774,7 +789,7 @@ export default function Dashboard() {
     if (!loading) {
       const timer = setTimeout(() => {
         setMetaTimeout(true);
-      }, 4000);
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [loading]);
@@ -1134,7 +1149,7 @@ export default function Dashboard() {
                         })()}
                         <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 8px' : '4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
                           {!isMobile && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>}
-                          {STATUS_LABEL[st] ?? 'Aguardando'}
+                          {statusLabelFn(st)}
                         </span>
                         {!isMobile && <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>}
                         <button

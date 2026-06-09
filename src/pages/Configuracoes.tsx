@@ -5,11 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useAuth } from '@/hooks/useAuth';
-import { Save, Building2, Lock, User } from 'lucide-react';
+import { Save, Building2, Lock, User, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
+import { TERMINOLOGY_PRESETS, DEFAULT_TERMINOLOGY, toDb, invalidateTerminologyCache, invalidateModeloCache } from '@/hooks/useTerminology';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, sans-serif';
-const ATUALIZAR_USUARIO_URL = 'https://obguidmfvfjaekaskgob.functions.supabase.co/atualizar-usuario';
+
 
 function mascaraDocumento(valor: string): string {
   const digits = valor.replace(/\D/g, '');
@@ -41,25 +42,67 @@ export default function ConfiguracoesPage() {
   const [confirmSenha, setConfirmSenha] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving]       = useState(false);
+  const [modeloNegocio, setModeloNegocio] = useState('');
+  const [savingModelo, setSavingModelo] = useState(false);
+
 
   useEffect(() => {
-    if (!orgReady || !orgId || !user) return;
-    
-    setUserName(user.user_metadata?.full_name || '');
+    if (!orgReady || !orgId) return;
 
-    supabase
-      .from('organizations')
-      .select('nome, documento')
-      .eq('id', orgId)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          setNome((data as any).nome || '');
-          setDocumento((data as any).documento || '');
+    if (user) setUserName(user.user_metadata?.full_name || '');
+    invalidateModeloCache(orgId);
+
+    const fetchOrg = async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('organizations')
+          .select('nome, modelo_negocio')
+          .eq('id', orgId)
+          .limit(1);
+
+        if (error) {
+          console.error('[Config] erro:', error);
+          return;
         }
+
+        const org = Array.isArray(data) ? data[0] : data;
+        console.log('[Config] org completo:', org);
+        console.log('[Config] modelo_negocio:', org?.modelo_negocio);
+        if (org) {
+          setNome(org.nome || '');
+          setModeloNegocio(org.modelo_negocio || 'revenda');
+        } else {
+          setModeloNegocio('revenda');
+        }
+      } catch (e) {
+        console.error('[Config] catch:', e);
+      } finally {
         setLoadingData(false);
-      });
-  }, [orgId, orgReady, user]);
+      }
+    };
+
+    fetchOrg();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, orgReady]);
+
+  async function handleSaveModelo() {
+    if (!orgId) { toast.error('Organização não encontrada'); return; }
+    setSavingModelo(true);
+    try {
+      const preset = TERMINOLOGY_PRESETS[modeloNegocio] ?? DEFAULT_TERMINOLOGY;
+      const { error } = await (supabase as any)
+        .from('organizations')
+        .update({ modelo_negocio: modeloNegocio, terminology: toDb(preset) })
+        .eq('id', orgId);
+      if (error) throw error;
+      invalidateTerminologyCache(orgId);
+      invalidateModeloCache(orgId);
+      toast.success('Modelo de negócio atualizado!');
+    } catch (err: any) {
+      toast.error(`Erro ao salvar: ${err.message}`);
+    }
+    setSavingModelo(false);
+  }
 
   async function handleSave() {
     if (!orgId) { toast.error('Organização não encontrada'); return; }
@@ -85,7 +128,7 @@ export default function ConfiguracoesPage() {
       }
 
       // 2. Atualiza dados da empresa
-      const { error: orgError } = await supabase
+      const { error: orgError } = await (supabase as any)
         .from('organizations')
         .update({ nome: nome.trim(), documento: documento.replace(/\D/g, '') || null })
         .eq('id', orgId);
@@ -203,6 +246,54 @@ export default function ConfiguracoesPage() {
               </div>
             </div>
 
+            {/* Modelo de Negócio */}
+            <div style={card}>
+              <div style={cardHeader}>
+                <Briefcase style={{ width: '16px', height: '16px', color: '#f59e0b' }} />
+                <span style={{ fontSize: '14px', fontWeight: 600, color: txt }}>Modelo de Negócio</span>
+              </div>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <p style={{ fontSize: '12px', color: txtMid, margin: 0 }}>Define a terminologia usada no CRM (leads, conversões, status).</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {([
+                    { key: 'revenda', label: 'Revenda de produtos' },
+                    { key: 'b2b', label: 'Vendas B2B' },
+                    { key: 'corretor', label: 'Corretor / imóveis' },
+                    { key: 'outro', label: 'Outro' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setModeloNegocio(opt.key)}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: `1px solid ${modeloNegocio === opt.key ? '#366fec' : (dark ? '#27272a' : '#e5e7eb')}`,
+                        background: modeloNegocio === opt.key ? 'rgba(54,111,236,0.12)' : (dark ? '#0d0d0f' : '#f8fafc'),
+                        color: modeloNegocio === opt.key ? '#7aa6f5' : txtMid,
+                        fontSize: '12px',
+                        fontWeight: modeloNegocio === opt.key ? 600 : 400,
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                        textAlign: 'left',
+                        transition: 'border-color 0.15s, background 0.15s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSaveModelo}
+                  disabled={savingModelo}
+                  style={{ alignSelf: 'flex-start', padding: '9px 20px', borderRadius: '10px', border: 'none', background: savingModelo ? (dark ? '#27272a' : '#e5e7eb') : '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: savingModelo ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontFamily: FONT, transition: 'background 0.15s' }}
+                >
+                  <Save style={{ width: '13px', height: '13px' }} />
+                  {savingModelo ? 'Salvando…' : 'Salvar modelo'}
+                </button>
+              </div>
+            </div>
+
             {/* Segurança */}
             <div style={card}>
               <div style={cardHeader}>
@@ -245,6 +336,7 @@ export default function ConfiguracoesPage() {
           </>
         )}
       </div>
+
     </AppLayout>
   );
 }

@@ -151,7 +151,7 @@ export default function LoginPage() {
                 const preset = TERMINOLOGY_PRESETS[modeloNegocio] ?? DEFAULT_TERMINOLOGY;
                 await (supabase as any)
                   .from('organizations')
-                  .update({ terminology: toDb(preset) })
+                  .update({ terminology: toDb(preset), modelo_negocio: modeloNegocio })
                   .eq('id', membership.org_id);
               }
             }
@@ -238,7 +238,7 @@ export default function LoginPage() {
                 {([
                   { key: 'revenda', label: 'Revenda de produtos' },
                   { key: 'b2b', label: 'Vendas B2B' },
-                  { key: 'ecommerce', label: 'E-commerce / varejo' },
+                  { key: 'corretor', label: 'Corretor / imóveis' },
                   { key: 'outro', label: 'Outro' },
                 ] as const).map(opt => (
                   <button

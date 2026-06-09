@@ -766,6 +766,8 @@ export default function CampanhasPage() {
   // Busca log de otimização da IA — pendente sempre, executado só dentro de 24h
   useEffect(()=>{
     if (!orgReady || !orgId) return;
+    setAiLog(null);
+    setShowAiPanel(false);
     (supabase as any).from('ai_optimization_logs').select('*')
       .eq('org_id', orgId)
       .order('created_at',{ascending:false})
@@ -774,9 +776,15 @@ export default function CampanhasPage() {
         if(data&&data.length>0){
           const log=data[0];
           const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
-          const horasLimitePendente = 168; // 7 dias
           const horasLimiteExecutado = 24;
-          if (log.status === 'pendente' && horas <= horasLimitePendente) setAiLog(log);
+          if (log.status === 'pendente') {
+            const sugestoesPendentes = (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter');
+            if (sugestoesPendentes.length > 0 && horas <= 168) {
+              setAiLog(log);
+            } else if (sugestoesPendentes.length === 0 && horas <= 168) {
+              (supabase as any).from('ai_optimization_logs').update({ status: 'executado' }).eq('id', log.id);
+            }
+          }
           else if (log.status === 'executado' && horas <= horasLimiteExecutado) setAiLog(log);
           else if (log.status === 'erro' && log.alerta) setAiLog(log);
           // sem_acao e outros: não mostrar no banner
@@ -3055,16 +3063,18 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     const uid = acao.id;
     const novas = sugestoes.filter((a: any) => a.id !== uid);
     setSugestoes(novas);
+    const novoStatus = novas.length === 0 ? 'executado' : log.status;
     try {
       const { error } = await (supabase as any)
         .from('ai_optimization_logs')
-        .update({ acoes_sugeridas: novas })
+        .update({ acoes_sugeridas: novas, status: novoStatus })
         .eq('id', log.id);
       if (error) console.warn('ignorarSugestao: DB update failed', error);
     } catch (e) {
       console.warn('ignorarSugestao: DB update error', e);
     }
-    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas });
+    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novoStatus });
+    if (novas.length === 0) setTimeout(() => onClose(), 1000);
   }
 
   return (

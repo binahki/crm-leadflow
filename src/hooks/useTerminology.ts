@@ -46,6 +46,26 @@ export const TERMINOLOGY_PRESETS: Record<string, Terminology> = {
     custoConversaoSigla: 'CPA',
     custoConversaoCompleto: 'Custo por Aquisição',
   },
+  corretor: {
+    leadSingular: 'lead',
+    leadPlural: 'leads',
+    convertidoSingular: 'cliente',
+    convertidoPlural: 'clientes',
+    convertidoCurto: 'cli',
+    statusConvertidoLabel: 'Contrato',
+    custoConversaoSigla: 'CPC',
+    custoConversaoCompleto: 'Custo por Contrato',
+  },
+  outro: {
+    leadSingular: 'lead',
+    leadPlural: 'leads',
+    convertidoSingular: 'cliente',
+    convertidoPlural: 'clientes',
+    convertidoCurto: 'cli',
+    statusConvertidoLabel: 'Convertido',
+    custoConversaoSigla: 'CAC',
+    custoConversaoCompleto: 'Custo de Aquisição',
+  },
 };
 
 function fromDb(raw: Record<string, string>): Terminology {
@@ -108,21 +128,73 @@ export function useTerminology(): Terminology {
   return t;
 }
 
-/** Retorna o label de exibição para um status numérico, usando a terminologia da org. */
-export function getStatusLabel(status: number, t: Terminology): string {
+/** Labels de status por modelo de negócio. */
+export const STATUS_PRESETS: Record<string, Record<number, string>> = {
+  revenda:   { 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovada',    4: 'Reprovado',  5: 'Contrato/App', 6: 'Sem Retorno' },
+  corretor:  { 1: 'Em atendimento', 2: 'Visita',  3: 'Simulação',   4: 'Fechamento', 5: 'Sem Retorno',  6: 'Reprovado'   },
+  b2b:       { 1: 'Em atendimento', 2: 'Reunião', 3: 'Proposta',    4: 'Fechado',    5: 'Sem Retorno',  6: 'Reprovado'   },
+  outro:     { 1: 'Em atendimento', 2: 'Reunião', 3: 'Negociação',  4: 'Concluído',  5: 'Sem Retorno',  6: 'Reprovado'   },
+  ecommerce: { 1: 'Em atendimento', 2: 'Reunião', 3: 'Carrinho',    4: 'Comprou',    5: 'Sem Retorno',  6: 'Reprovado'   },
+};
+
+/** Retorna o label de exibição para um status numérico. */
+export function getStatusLabel(status: number, t: Terminology, modelo?: string): string {
+  if (modelo && STATUS_PRESETS[modelo]) return STATUS_PRESETS[modelo][status] ?? String(status);
   const labels: Record<number, string> = {
-    0: 'Em atendimento',
+    0: 'Aguardando',
     1: 'Em atendimento',
     2: 'Reunião',
     3: t.statusConvertidoLabel,
-    4: 'Reprovada',
-    5: 'Aguardando retorno',
+    4: 'Reprovado',
+    5: 'Contrato/App',
     6: 'Sem Retorno',
   };
   return labels[status] ?? String(status);
 }
 
-/** Invalida o cache de uma org (útil após salvar nova terminologia em Settings). */
+// ── Modelo de negócio ───────────────────────────────────────────────────────
+const modeloCache: Record<string, string> = {};
+
+export function useModeloNegocio(): string {
+  const { orgId, ready } = useOrgId();
+  const [modelo, setModelo] = useState(orgId && modeloCache[orgId] ? modeloCache[orgId] : 'revenda');
+
+  useEffect(() => {
+    if (!ready || !orgId) return;
+    if (modeloCache[orgId]) { setModelo(modeloCache[orgId]); return; }
+    (supabase as any)
+      .from('organizations')
+      .select('modelo_negocio')
+      .eq('id', orgId)
+      .single()
+      .then(({ data }: any) => {
+        const m = data?.modelo_negocio || 'revenda';
+        modeloCache[orgId] = m;
+        setModelo(m);
+      })
+      .catch(() => { modeloCache[orgId] = 'revenda'; setModelo('revenda'); });
+  }, [orgId, ready]);
+
+  return modelo;
+}
+
+export function invalidateModeloCache(orgId: string) {
+  delete modeloCache[orgId];
+}
+
+/** Invalida o cache de terminologia de uma org. */
 export function invalidateTerminologyCache(orgId: string) {
   delete cache[orgId];
+}
+
+/** Retorna os IDs dos status intermediários entre entrada e conversão (exclusive ambos). */
+export function getPotenciaisStatus(statusConfig: {
+  statuses: Array<{ id: number; ordem: number }>;
+  convertido_status: number;
+  entrada_status: number;
+}): number[] {
+  const sorted = [...statusConfig.statuses].sort((a, b) => a.ordem - b.ordem);
+  const convertidoIdx = sorted.findIndex(s => s.id === statusConfig.convertido_status);
+  if (convertidoIdx <= 0) return [];
+  return sorted.slice(1, convertidoIdx).map(s => s.id);
 }

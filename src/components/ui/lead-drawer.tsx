@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Lead, useAppStore, calcularFaixa, STATUS_CONFIG } from '@/stores/appStore';
+import { Lead, useAppStore, calcularFaixa } from '@/stores/appStore';
+import { useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
 import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -24,21 +26,6 @@ interface LeadDrawerProps {
   onTagsChange?: (leadId: string, tags: Tag[]) => void;
 }
 
-const STATUS_SEQUENCE = [1, 2, 5, 3, 6, 4];
-
-const STATUS = STATUS_SEQUENCE.map(idx => {
-  const s = STATUS_CONFIG[idx];
-  return {
-    id: idx,
-    label: s.label,
-    color: s.dot,
-    bg: s.lightBg,
-    text: s.lightText,
-    border: s.lightBg,
-    darkBg: s.darkBg,
-    darkText: s.darkText
-  };
-});
 
 const MOTIVOS = ['Desistiu', 'Região não atendida', 'Perfil não elegível', 'Nome sujo', 'Sem reserva', 'Não compareceu à reunião', 'Outro'];
 
@@ -198,6 +185,22 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const { updateLead, configuracoes } = useAppStore();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
+  const STATUS = useMemo(() => {
+    return [...statusConfig.statuses]
+      .sort((a, b) => a.ordem - b.ordem)
+      .map(s => ({
+        id: s.id,
+        label: s.label,
+        color: s.cor,
+        bg: `${s.cor}15`,
+        text: s.cor,
+        border: `${s.cor}30`,
+        darkBg: `${s.cor}20`,
+        darkText: s.cor,
+      }));
+  }, [statusConfig]);
   const { orgId } = useOrgId();
   const { hasWA } = useWhatsAppAccount();
   const navigate = useNavigate();
@@ -416,11 +419,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     setStatus(newStatus);
     setAvaliado(true);
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', 6: 'status_sem_retorno_at' };
+    const tsField: Record<number, string> = {
+      0: 'status_atendimento_at', 1: 'status_atendimento_at',
+      2: 'status_reuniao_at', 5: 'status_contrato_at',
+      [statusConfig.convertido_status]: 'status_aprovado_at',
+    };
+    const targetLabel = STATUS.find(s => s.id === newStatus)?.label ?? '';
     const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
-    if (newStatus === 6) updates.motivo_reprovacao = null;
+    if (targetLabel.toLowerCase().includes('sem retorno')) updates.motivo_reprovacao = null;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); setAvaliado(avaliado); toast.error('Erro ao atualizar status'); }
     else { setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
@@ -428,8 +436,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
 
   function handleStatus(i: number) {
     if (!lead) return;
-    if (i === 4) { setPendingStatus(4); setShowMotivo(true); return; }
-    if (i === 6) { applyStatus(6); return; }
+    const targetLabel = STATUS.find(s => s.id === i)?.label ?? '';
+    if (targetLabel.toLowerCase().includes('reprovado')) { setPendingStatus(i); setShowMotivo(true); return; }
     if (status === i) return;
     applyStatus(i);
   }
@@ -617,7 +625,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
           })()}
         </div>
 
-        {status === 4 && lead.motivo_reprovacao && (
+        {STATUS.find(s => s.id === status)?.label?.toLowerCase().includes('reprovado') && lead.motivo_reprovacao && (
           <div style={{ margin: '0 22px 8px', padding: '6px 10px', borderRadius: '7px', background: dark ? 'rgba(239,68,68,0.08)' : '#fff1f2', border: `1px solid ${dark ? 'rgba(239,68,68,0.2)' : '#fecaca'}`, display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500, fontFamily: FONT }}>Motivo:</span>
             <span style={{ fontSize: '11.5px', color: dark ? '#f87171' : '#dc2626', fontFamily: FONT }}>{lead.motivo_reprovacao}</span>
