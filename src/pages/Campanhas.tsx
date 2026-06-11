@@ -699,6 +699,7 @@ export default function CampanhasPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [expandedAdsets, setExpandedAdsets] = useState<Set<string>>(new Set());
+  const [ravenaAtivaNoBanco, setRavenaAtivaNoBanco] = useState<boolean | null>(null);
 
   useEffect(()=>{const check=()=>setIsMobile(window.innerWidth<768);check();window.addEventListener('resize',check);return()=>window.removeEventListener('resize',check);},[]);
 
@@ -768,26 +769,33 @@ export default function CampanhasPage() {
     if (!orgReady || !orgId) return;
     setAiLog(null);
     setShowAiPanel(false);
+    console.log('[Ravena] buscando log para orgId:', orgId);
     (supabase as any).from('ai_optimization_logs').select('*')
       .eq('org_id', orgId)
       .order('created_at',{ascending:false})
       .limit(1)
-      .then(({data})=>{
+      .then(({data, error}: any)=>{
+        console.log('[Ravena] resultado fetch:', { data, error, orgId });
         if(data&&data.length>0){
           const log=data[0];
           const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
-          const horasLimiteExecutado = 24;
+          console.log('[Ravena] log encontrado:', { status: log.status, horas: Math.round(horas), id: log.id });
+          const horasLimiteExecutado = 72;
           if (log.status === 'pendente') {
             const sugestoesPendentes = (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter');
+            console.log('[Ravena] pendente, sugestoes:', sugestoesPendentes.length);
             if (sugestoesPendentes.length > 0 && horas <= 168) {
               setAiLog(log);
             } else if (sugestoesPendentes.length === 0 && horas <= 168) {
               (supabase as any).from('ai_optimization_logs').update({ status: 'executado' }).eq('id', log.id);
             }
           }
-          else if (log.status === 'executado' && horas <= horasLimiteExecutado) setAiLog(log);
-          else if (log.status === 'erro' && log.alerta) setAiLog(log);
-          // sem_acao e outros: não mostrar no banner
+          else if (log.status === 'executado' && horas <= horasLimiteExecutado) { console.log('[Ravena] setando executado'); setAiLog(log); }
+          else if (log.status === 'sem_acao' && horas <= horasLimiteExecutado) { console.log('[Ravena] setando sem_acao'); setAiLog(log); }
+          else if (log.status === 'erro' && log.alerta) { console.log('[Ravena] setando erro'); setAiLog(log); }
+          else { console.log('[Ravena] nenhuma condição bateu — aiLog permanece null'); }
+        } else {
+          console.log('[Ravena] nenhum log encontrado para esta org');
         }
       });
   },[orgId, orgReady]); // eslint-disable-line
@@ -803,6 +811,18 @@ export default function CampanhasPage() {
         if (data) setMetaRevsOrg(Number((data as any).ravena_meta_revendedoras) || 0);
       });
   },[orgId, orgReady]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!orgReady || !orgId) return;
+    supabase
+      .from('organizations')
+      .select('ravena_ativa')
+      .eq('id', orgId)
+      .single()
+      .then(({ data }) => {
+        setRavenaAtivaNoBanco(data?.ravena_ativa === true);
+      });
+  }, [orgId, orgReady]); // eslint-disable-line
 
   const load=async()=>{if(!metaToken||!metaAccount){setLoading(false);return;}const key=`meta_camp_v2_${orgId}_${datePreset}`;setLoading(true);setError(false);const data=await fetchCampaignsWithChildren(datePreset,metaToken,metaAccount);if(data.length>0){setMetaCache(key,data);setCampaigns(data);}setLoading(false);setLastLoadTime(new Date());};
   useEffect(()=>{
@@ -1831,26 +1851,26 @@ export default function CampanhasPage() {
           const bannerBg = isErro
             ? (dark ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.08))' : 'linear-gradient(135deg, #fef2f2, #fef2f2)')
             : isSemAcao
-            ? (dark ? 'rgba(255,255,255,0.03)' : '#f9fafb')
+            ? (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.10), rgba(59,130,246,0.06))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)')
             : pendenteAtivo
               ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
               : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
           const bannerBorder = isErro
             ? (dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.25)')
             : isSemAcao
-            ? (dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb')
+            ? (dark ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.18)')
             : pendenteAtivo
               ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
               : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
           const textColor = isErro
             ? (dark ? '#fca5a5' : '#dc2626')
             : isSemAcao
-            ? (dark ? '#a1a1aa' : '#6b7280')
+            ? (dark ? '#c4b5fd' : '#6d28d9')
             : pendenteAtivo ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
           const subColor = isErro
             ? (dark ? '#f87171' : '#b91c1c')
             : isSemAcao
-            ? (dark ? '#71717a' : '#9ca3af')
+            ? (dark ? '#8b5cf6' : '#7c3aed')
             : pendenteAtivo ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
           const badgeBg   = isErro ? '#ef4444' : pendenteAtivo ? '#f59e0b' : '#8b5cf6';
           const badgeNum  = pendenteAtivo ? numSugestoes : numExecutadas;
@@ -1867,13 +1887,13 @@ export default function CampanhasPage() {
               <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 12px rgba(239,68,68,0.4)' : isSemAcao ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isErro ? 'Erro de sincronização' : isSemAcao ? 'Ravena analisou suas campanhas — tudo estável' : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
+                  {isErro ? 'Erro de sincronização' : isSemAcao ? `Ravena analisou ${(aiLog.insights || []).length > 0 ? (aiLog.insights || []).length + ' campanhas' : 'suas campanhas'} — tudo estável` : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isErro
                     ? aiLog.alerta
                     : isSemAcao
-                    ? 'Nenhuma ação necessária hoje. Próxima análise às 8h'
+                    ? (() => { const n = (aiLog.insights || []).length; return n > 0 ? `${n} campanha${n !== 1 ? 's' : ''} analisada${n !== 1 ? 's' : ''} — nenhuma ação necessária` : 'Nenhuma ação necessária hoje'; })()
                     : isPendente
                       ? (numSugestoes === 0 ? 'Clique para ver o histórico de ações' : numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
                       : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de orçamento realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
@@ -1899,7 +1919,9 @@ export default function CampanhasPage() {
           }}>
             <img src="/ravena.png" alt="Ravena" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed' }}>
-              Ative a Ravena em Integrações &gt; Meta Ads
+              {ravenaAtivaNoBanco === true
+                ? 'Ravena ativa — análise será exibida em breve'
+                : 'Ative a Ravena em Integrações → Meta Ads'}
             </p>
           </div>
         )}
@@ -3063,7 +3085,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     const uid = acao.id;
     const novas = sugestoes.filter((a: any) => a.id !== uid);
     setSugestoes(novas);
-    const novoStatus = novas.length === 0 ? 'executado' : log.status;
+    const novoStatus = novas.length === 0 ? 'ignorado' : log.status;
     try {
       const { error } = await (supabase as any)
         .from('ai_optimization_logs')
@@ -3341,15 +3363,18 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   const isIncrease = tipo.includes('aumentar') || (tipo === 'reduzir' && acao.direcao === 'aumento');
   const isDecrease = (tipo.includes('reduzir') && acao.direcao !== 'aumento') || (tipo === 'reduzir' && !acao.direcao);
   const isConjunto = tipo.includes('conjunto');
+  const isReativar = tipo === 'reativar_conjunto';
 
-  const color   = isPause ? '#ef4444' : isIncrease ? '#10b981' : '#f97316';
-  const headerBg = isPause ? 'rgba(239,68,68,0.08)' : isIncrease ? 'rgba(16,185,129,0.08)' : 'rgba(249,115,22,0.08)';
-  const headerIcon = isPause ? '⏸' : isIncrease ? '↑' : '↓';
-  const headerLabel = isPause
-    ? (isConjunto ? 'Pausar conjunto' : 'Pausar campanha')
-    : isIncrease
-    ? (isConjunto ? 'Aumentar orçamento do conjunto' : 'Aumentar orçamento da campanha')
-    : (isConjunto ? 'Reduzir orçamento do conjunto' : 'Reduzir orçamento da campanha');
+  const color   = isReativar ? '#10b981' : isPause ? '#ef4444' : isIncrease ? '#10b981' : '#f97316';
+  const headerBg = isReativar ? 'rgba(16,185,129,0.08)' : isPause ? 'rgba(239,68,68,0.08)' : isIncrease ? 'rgba(16,185,129,0.08)' : 'rgba(249,115,22,0.08)';
+  const headerIcon = isReativar ? '▶' : isPause ? '⏸' : isIncrease ? '↑' : '↓';
+  const headerLabel = isReativar
+    ? 'Reativar grupo de anúncios'
+    : isPause
+      ? (isConjunto ? 'Pausar grupo de anúncios' : 'Pausar campanha')
+      : isIncrease
+        ? (isConjunto ? 'Aumentar orçamento do grupo' : 'Aumentar orçamento da campanha')
+        : (isConjunto ? 'Reduzir orçamento do grupo' : 'Reduzir orçamento da campanha');
 
   const bdr    = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
   const sepClr = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
@@ -3394,7 +3419,7 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
       </div>
 
       {/* Budget */}
-      {ant != null && nov != null && (
+      {!isReativar && ant != null && nov != null && (
         <div style={{ padding: '10px 14px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '13px', color: txtMid }}>R$ {ant}</span>
           <span style={{ fontSize: '12px', color: txtMid }}>→</span>

@@ -8,6 +8,7 @@ import {
   DEFAULT_COLETA_CONFIG,
   type ColetaCampo, type QuizConfig, type Bloco, type Opcao, type Pergunta, type Phase,
 } from '@/components/quiz/QuizRenderer';
+import { QuizBlockRenderer } from '@/components/quiz/QuizBlockRenderer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -90,6 +91,9 @@ export default function QuizPublico() {
   const [networkError, setNetworkError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [quiz, setQuiz] = useState<QuizConfig | null>(null);
+  const [quizBlocks, setQuizBlocks] = useState<any[]>([]);
+  const [currentBlockPageId, setCurrentBlockPageId] = useState('cover');
+  const [blockSelectedOpcaoId, setBlockSelectedOpcaoId] = useState<string | null>(null);
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [todasPerguntas, setTodasPerguntas] = useState<Pergunta[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -106,6 +110,7 @@ export default function QuizPublico() {
   const [cidade, setCidade] = useState('');
   const [instagram, setInstagram] = useState('');
   const [coletaStep, setColetaStep] = useState(0);
+  const [blockCampoStep, setBlockCampoStep] = useState(0);
   const [extraFields, setExtraFields] = useState<Record<string, string>>({});
 
   const { iniciarSessao, registrarEtapa, marcarConcluido, atualizarTotalEtapas, sessionIdRef } = useQuizTracker(
@@ -120,6 +125,11 @@ export default function QuizPublico() {
   useEffect(() => {
     if (phase === 'coleta') setColetaStep(0);
   }, [phase]); // eslint-disable-line
+
+  // ── Reset block campo step when page changes ──────────────────────────────────
+  useEffect(() => {
+    setBlockCampoStep(0);
+  }, [currentBlockPageId]);
 
   function handleColetaNext() {
     setColetaStep(s => s + 1);
@@ -156,6 +166,50 @@ export default function QuizPublico() {
         if (!mounted) return;
         if (error || !quizData) { clearTimeout(timeoutId); setPhase('not_found'); return; }
         setQuiz(quizData);
+
+        if (quizData.use_block_editor) {
+          const [blocksRes, blocoRes] = await Promise.all([
+            db.from('quiz_page_blocks').select('*').eq('quiz_id', quizData.id).order('ordem'),
+            db.from('quiz_blocos').select('*').eq('quiz_id', quizData.id).order('ordem'),
+          ]);
+          if (!mounted) return;
+          setQuizBlocks(blocksRes.data || []);
+
+          const blocoData: Bloco[] = blocoRes.data || [];
+          const blocoIds = blocoData.map((b: Bloco) => b.id);
+
+          if (blocoIds.length > 0) {
+            const { data: pergs } = await db
+              .from('quiz_perguntas').select('*').in('bloco_id', blocoIds).order('ordem');
+            if (!mounted) return;
+            if (pergs?.length) {
+              const pergIds = (pergs as Pergunta[]).map((p: Pergunta) => p.id);
+              const { data: ops } = await db
+                .from('quiz_opcoes').select('*').in('pergunta_id', pergIds).order('ordem');
+              if (!mounted) return;
+              const blocoOrder: Record<string, number> = {};
+              blocoData.forEach((b: Bloco) => { blocoOrder[b.id] = b.ordem; });
+              const perguntasComOpcoes: Pergunta[] = [...(pergs as Pergunta[])]
+                .sort((a: Pergunta, b: Pergunta) => {
+                  const bA = blocoOrder[a.bloco_id] ?? 0;
+                  const bB = blocoOrder[b.bloco_id] ?? 0;
+                  return bA !== bB ? bA - bB : a.ordem - b.ordem;
+                })
+                .map((p: Pergunta) => ({
+                  ...p,
+                  opcoes: ((ops || []) as Opcao[])
+                    .filter((o: Opcao) => o.pergunta_id === p.id)
+                    .sort((a: Opcao, b: Opcao) => a.ordem - b.ordem),
+                }));
+              setTodasPerguntas(perguntasComOpcoes);
+            }
+          }
+
+          setCurrentBlockPageId('cover');
+          clearTimeout(timeoutId);
+          setPhase('capa');
+          return;
+        }
 
         const { data: blocoData } = await db
           .from('quiz_blocos').select('*').eq('quiz_id', quizData.id).order('ordem');
@@ -779,7 +833,76 @@ export default function QuizPublico() {
     );
   }
 
-  // ── Render via QuizRenderer ───────────────────────────────────────────────────
+  // ── Render via QuizBlockRenderer (novo sistema) ──────────────────────────────
+  if ((quiz as any)?.use_block_editor) {
+    return (
+      <QuizBlockRenderer
+        quiz={quiz!}
+        blocks={quizBlocks}
+        pageId={currentBlockPageId}
+        phase={currentBlockPageId === 'cover' ? 'cover' : 'special'}
+        onStart={() => {
+          iniciarSessao();
+          const firstPerg = todasPerguntas.find(p =>
+            !['analise', 'aprovacao', 'coleta', 'reprovacao'].includes(p.tipo_resposta || '')
+          );
+          if (firstPerg) {
+            setCurrentBlockPageId(firstPerg.id);
+            setPhase('quiz');
+          }
+        }}
+        onNext={() => {
+          const allPageIds = ['cover', ...todasPerguntas.map(p => p.id)];
+          const idx = allPageIds.indexOf(currentBlockPageId);
+          const nextId = allPageIds[idx + 1];
+          if (nextId) setCurrentBlockPageId(nextId);
+        }}
+        onNavigateTo={id => setCurrentBlockPageId(id)}
+        onSubmit={handleSubmitLead}
+        onFieldChange={(campo, val) => {
+          if (campo === 'nome') setNome(val);
+          else if (campo === 'whatsapp') setWhatsapp(val);
+          else if (campo === 'cidade') setCidade(val);
+          else if (campo === 'instagram') setInstagram(val);
+          else setExtraFields(prev => ({ ...prev, [campo]: val }));
+        }}
+        fieldValues={{ nome, whatsapp, cidade, instagram, ...extraFields }}
+        submitting={submitting}
+        flatPerguntas={todasPerguntas}
+        opcoesPorPergunta={Object.fromEntries(todasPerguntas.map(p => [p.id, (p as any).opcoes || []]))}
+        selectedOpcaoId={blockSelectedOpcaoId}
+        onOpcaoClick={(pergId, opcaoId, _reprova) => {
+          setBlockSelectedOpcaoId(opcaoId);
+          const perg = todasPerguntas.find(p => p.id === pergId);
+          const isMultipla = perg?.tipo_resposta === 'multipla';
+          if (!isMultipla) {
+            setTimeout(() => {
+              setBlockSelectedOpcaoId(null);
+              const allPageIds = ['cover', ...todasPerguntas.map(p => p.id)];
+              const idx = allPageIds.indexOf(currentBlockPageId);
+              const nextId = allPageIds[idx + 1];
+              if (nextId) setCurrentBlockPageId(nextId);
+            }, 350);
+          }
+        }}
+        campoStep={blockCampoStep}
+        onCampoNext={() => {
+          const campoBlocks = quizBlocks.filter(b => b.page_id === currentBlockPageId && b.tipo === 'campo_input');
+          const isLast = blockCampoStep >= campoBlocks.length - 1;
+          if (isLast) {
+            const allPageIds = ['cover', ...todasPerguntas.map(p => p.id)];
+            const idx = allPageIds.indexOf(currentBlockPageId);
+            const nextId = allPageIds[idx + 1];
+            if (nextId) setCurrentBlockPageId(nextId);
+          } else {
+            setBlockCampoStep(s => s + 1);
+          }
+        }}
+      />
+    );
+  }
+
+  // ── Render via QuizRenderer (sistema legado) ──────────────────────────────────
   return (
     <QuizRenderer
       quiz={quiz!}
