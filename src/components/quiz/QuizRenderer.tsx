@@ -208,6 +208,15 @@ export function QuizRenderer({
     }
   }, [phase, quiz.analise_duracao]);
 
+  const rawColetaCampos = coleta || (quiz.coleta_campos as string[] | null);
+  const coletaCampos = rawColetaCampos?.length ? rawColetaCampos : ['nome', 'whatsapp', 'cidade', 'instagram'];
+  const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
+    ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
+    : DEFAULT_COLETA_CONFIG.filter(d => coletaCampos.includes(d.campo));
+  const isMultipla = currentPergunta?.tipo_resposta === 'multipla';
+  const hasSelection = isMultipla ? selectedOpcoes.length > 0 : !!selectedOpcao;
+  const imgAltura = quiz.capa_imagem_height || 200;
+
   const totalJourneySteps = 3 + totalVisible + coletaConfig.length;
 
   React.useEffect(() => {
@@ -280,14 +289,6 @@ export function QuizRenderer({
   const isWhatsAppUrl = redirectUrl.toLowerCase().includes('wa.me') || redirectUrl.toLowerCase().includes('whatsapp');
   const isGreen = whatsappEnabled && isWhatsAppUrl;
   const buttonText = (quiz as any).whatsapp_mensagem_personalizada || (whatsappEnabled ? 'Enviar e falar no WhatsApp' : 'Enviar meus dados →');
-  const rawColetaCampos = coleta || (quiz.coleta_campos as string[] | null);
-  const coletaCampos = rawColetaCampos?.length ? rawColetaCampos : ['nome', 'whatsapp', 'cidade', 'instagram'];
-  const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
-    ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
-    : DEFAULT_COLETA_CONFIG.filter(d => coletaCampos.includes(d.campo));
-  const isMultipla = currentPergunta?.tipo_resposta === 'multipla';
-  const hasSelection = isMultipla ? selectedOpcoes.length > 0 : !!selectedOpcao;
-  const imgAltura = quiz.capa_imagem_height || 200;
 
   const continueBtnPos: React.CSSProperties = isPreview
     ? {}

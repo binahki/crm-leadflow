@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useQuizTracker } from '@/hooks/useQuizTracker';
@@ -8,7 +8,9 @@ import {
   DEFAULT_COLETA_CONFIG,
   type ColetaCampo, type QuizConfig, type Bloco, type Opcao, type Pergunta, type Phase,
 } from '@/components/quiz/QuizRenderer';
-import { QuizBlockRenderer } from '@/components/quiz/QuizBlockRenderer';
+const QuizBlockRenderer = lazy(() =>
+  import('@/components/quiz/QuizBlockRenderer').then(m => ({ default: m.QuizBlockRenderer }))
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -923,6 +925,12 @@ export default function QuizPublico() {
   // ── Render via QuizBlockRenderer (novo sistema) ──────────────────────────────
   if ((quiz as any)?.use_block_editor) {
     return (
+      <Suspense fallback={
+        <div style={{ minHeight: '100vh', background: quiz?.cor_fundo || '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '2.5px solid #e5e7eb', borderTopColor: quiz?.cor_primaria || '#2563eb', animation: 'spin 0.7s linear infinite' }} />
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      }>
       <QuizBlockRenderer
         quiz={quiz!}
         blocks={quizBlocks}
@@ -1008,6 +1016,7 @@ export default function QuizPublico() {
           }
         }}
       />
+      </Suspense>
     );
   }
 
