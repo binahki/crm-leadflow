@@ -146,10 +146,9 @@ export const DEFAULT_DEPOIMENTOS = [
   { nome: 'Fernanda Costa',    handle: '@fernanda.costa', texto: 'A melhor decisão que tomei foi dar esse primeiro passo. Mudou completamente minha vida financeira.' },
 ];
 
-function easedProgress(idx: number, total: number): number {
-  if (total === 0) return 0;
-  const raw = idx / total;
-  return Math.round(Math.pow(raw, 0.62) * 100);
+function journeyProgress(currentStep: number, totalSteps: number): number {
+  if (totalSteps <= 0) return 0;
+  return Math.min(Math.round((currentStep / totalSteps) * 100), 100);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -180,6 +179,9 @@ export function QuizRenderer({
   const [coletaFieldError, setColetaFieldError] = React.useState<string | null>(null);
   const [hoveredColetaElement, setHoveredColetaElement] = React.useState<'texto' | 'campo' | 'botao' | 'aviso' | null>(null);
   const [internalHoveredEl, setInternalHoveredEl] = React.useState<string | null>(null);
+  const [maxProgressReached, setMaxProgressReached] = React.useState(0);
+
+  const effectiveColetaStep = coletaStep !== undefined ? coletaStep : internalColetaStep;
 
   React.useEffect(() => {
     if (phase !== 'coleta') {
@@ -206,6 +208,62 @@ export function QuizRenderer({
     }
   }, [phase, quiz.analise_duracao]);
 
+  const totalJourneySteps = 3 + totalVisible + coletaConfig.length;
+
+  React.useEffect(() => {
+    if (phase === 'capa') {
+      setMaxProgressReached(0);
+      return;
+    }
+
+    let currentStep: number;
+    switch (phase) {
+      case 'quiz':
+        currentStep = 1 + currentIdx;
+        break;
+      case 'analise':
+        currentStep = 1 + totalVisible;
+        break;
+      case 'aprovado_form':
+        currentStep = 2 + totalVisible;
+        break;
+      case 'coleta':
+        currentStep = 3 + totalVisible + effectiveColetaStep;
+        break;
+      default:
+        return;
+    }
+
+    const target = journeyProgress(currentStep, totalJourneySteps);
+    setMaxProgressReached(prev => Math.max(prev, target));
+  }, [phase, currentIdx, totalVisible, effectiveColetaStep, totalJourneySteps]);
+
+  React.useEffect(() => {
+    if (phase !== 'aprovado_form' || isPreview) return;
+    const container = document.createElement('div');
+    container.id = 'quiz-confetti';
+    container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;';
+    const colors = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4'];
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('div');
+      const color = colors[i % colors.length];
+      const size = 5 + Math.random() * 9;
+      const left = Math.random() * 100;
+      const delay = Math.random() * 1.2;
+      const dur = 2.2 + Math.random() * 1.5;
+      const isRect = Math.random() > 0.5;
+      p.style.cssText = `position:absolute;top:-20px;left:${left}%;width:${size}px;height:${isRect ? size * 2.5 : size}px;background:${color};border-radius:${isRect ? '2px' : '50%'};animation:quizConfettiFall ${dur}s ease-in ${delay}s forwards;`;
+      container.appendChild(p);
+    }
+    const styleEl = document.createElement('style');
+    styleEl.id = 'quiz-confetti-style';
+    styleEl.textContent = `@keyframes quizConfettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}85%{opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}`;
+    document.head.appendChild(styleEl);
+    document.body.appendChild(container);
+    const t = setTimeout(() => { document.getElementById('quiz-confetti')?.remove(); document.getElementById('quiz-confetti-style')?.remove(); }, 5000);
+    return () => { clearTimeout(t); document.getElementById('quiz-confetti')?.remove(); document.getElementById('quiz-confetti-style')?.remove(); };
+  }, [phase, isPreview]);
+
 
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
@@ -227,7 +285,6 @@ export function QuizRenderer({
   const coletaConfig: ColetaCampo[] = quiz.coleta_config?.length
     ? [...quiz.coleta_config].sort((a, b) => a.ordem - b.ordem)
     : DEFAULT_COLETA_CONFIG.filter(d => coletaCampos.includes(d.campo));
-  const progress = easedProgress(currentIdx, totalVisible);
   const isMultipla = currentPergunta?.tipo_resposta === 'multipla';
   const hasSelection = isMultipla ? selectedOpcoes.length > 0 : !!selectedOpcao;
   const imgAltura = quiz.capa_imagem_height || 200;
@@ -279,8 +336,12 @@ export function QuizRenderer({
   return (
     <div style={{
       minHeight: isPreview ? '100%' : '100vh',
+      width: '100%',
       background: quiz.cor_fundo || '#ffffff',
       fontFamily: "'DM Sans', system-ui, sans-serif",
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
@@ -304,27 +365,37 @@ export function QuizRenderer({
         input,textarea,button,select{font-family:inherit;}
       `}</style>
 
-      <div style={{ background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: isPreview ? '40px' : 'env(safe-area-inset-top, 12px)' }}>
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 20,
+        width: '100%',
+        background: quiz.cor_fundo || '#ffffff',
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        paddingTop: isPreview ? '40px' : 'env(safe-area-inset-top, 12px)',
+      }}>
         {quiz.logo_url && (
-          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '8px 24px 6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '8px 24px 6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <img src={quiz.logo_url} alt={quiz.titulo}
               style={{ maxHeight: `${quiz.logo_altura || 32}px`, maxWidth: '160px', objectFit: 'contain' }} />
           </div>
         )}
-        <div style={{ padding: '0 24px 10px' }}>
-          <div style={{ maxWidth: '480px', margin: '0 auto', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', background: primary,
-              width: `${phase === 'capa' ? 0 : phase === 'quiz' ? Math.max(progress, 2) : 100}%`,
-              borderRadius: '999px',
-              transition: 'width 800ms cubic-bezier(0.65, 0, 0.35, 1)',
-            }} />
+        {phase !== 'reprovado' && phase !== 'sucesso' && (
+          <div style={{ padding: '0 24px 10px' }}>
+            <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', background: primary,
+                width: `${maxProgressReached}%`,
+                borderRadius: '999px',
+                transition: 'width 800ms cubic-bezier(0.65, 0, 0.35, 1)',
+              }} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {phase === 'capa' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px 80px', animation: 'fadeIn 0.35s ease' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '32px 24px 80px', animation: 'fadeIn 0.35s ease' }}>
           {(() => {
             const ordem = (quiz.capa_ordem as string[]) || ['titulo', 'subtitulo', 'imagem', 'beneficios', 'botao'];
             return ordem.map(key => {
@@ -334,7 +405,7 @@ export function QuizRenderer({
                 'imagem'
               );
               if (key === 'titulo') return wrapElement('capa_titulo', 'TÍTULO',
-                <h1 key="titulo" style={{ fontSize: '28px', fontWeight: 800, color: quiz.cor_titulo || '#111111', lineHeight: 1.15, margin: '0 0 10px', textAlign: 'center' }}>
+                <h1 key="titulo" style={{ fontSize: '32px', fontWeight: 800, color: quiz.cor_titulo || '#111111', letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 10px', textAlign: 'center' }}>
                   {quiz.capa_titulo || quiz.titulo}
                 </h1>,
                 'titulo'
@@ -359,11 +430,20 @@ export function QuizRenderer({
                 'beneficios'
               );
               if (key === 'botao') return wrapElement('capa_botao', 'BOTÃO',
-                <button key="botao" onClick={isBuilderPreview ? undefined : onStart} style={{
-                  width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-                  background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
-                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                }}>
+                <button
+                  key="botao"
+                  onClick={isBuilderPreview ? undefined : onStart}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
+                  onMouseDown={e => { e.currentTarget.style.transform = 'translateY(0) scale(0.98)'; }}
+                  onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  style={{
+                    width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+                    background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+                    cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                    transition: 'all 0.15s ease-out',
+                  }}
+                >
                   {quiz.capa_botao_texto || 'Clique para iniciar →'}
                 </button>,
                 'botao'
@@ -375,7 +455,7 @@ export function QuizRenderer({
       )}
 
       {phase === 'quiz' && currentPergunta && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 140px' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '28px 24px 140px', userSelect: 'none' }}>
             <div
               key={questionKey}
               style={{ 
@@ -394,7 +474,7 @@ export function QuizRenderer({
               </div>
             )}
             {wrapElement('perg_texto', 'TEXTO',
-              <h2 style={{ fontSize: '22px', fontWeight: 700, color: quiz.cor_titulo || '#111111', lineHeight: 1.35, margin: '0 0 8px', textAlign: 'center' }}>{currentPergunta.texto}</h2>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, color: quiz.cor_titulo || '#111111', lineHeight: 1.3, margin: '0 0 8px', textAlign: 'center' }}>{currentPergunta.texto}</h2>
             )}
             {currentPergunta.tipo_resposta === 'informativa' ? (() => {
               const rawSub = currentPergunta.subtexto || '';
@@ -408,11 +488,19 @@ export function QuizRenderer({
               return wrapElement('inf_botao', 'BOTÃO', (
                 <>
                   <div style={{ height: '20px' }} />
-                  <button onClick={isBuilderPreview ? undefined : handleBtnClick} style={{
-                    width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-                    background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
-                    cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', marginTop: '8px',
-                  }}>
+                  <button
+                    onClick={isBuilderPreview ? undefined : handleBtnClick}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
+                    onMouseDown={e => { e.currentTarget.style.transform = 'translateY(0) scale(0.98)'; }}
+                    onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    style={{
+                      width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+                      background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+                      cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', marginTop: '8px',
+                      transition: 'all 0.15s ease-out',
+                    }}
+                  >
                     {btnTexto || 'Continuar →'}
                   </button>
                 </>
@@ -470,7 +558,7 @@ export function QuizRenderer({
                               </div>
                             )
                           )}
-                          {opcao.emoji && <span style={{ fontSize: '64px', lineHeight: 1, flexShrink: 0, transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{opcao.emoji}</span>}
+                          {opcao.emoji && <span style={{ fontSize: '28px', lineHeight: 1, flexShrink: 0 }}>{opcao.emoji}</span>}
                           <span style={{ flex: 1, fontSize: '15px', color: quiz.cor_titulo || '#111', fontWeight: 500, lineHeight: 1.4 }}>{opcao.texto}</span>
                         </button>
                       );
@@ -485,18 +573,30 @@ export function QuizRenderer({
 
       {phase === 'quiz' && isMultipla && hasSelection && (
         <div style={{ ...continueBtnPos, display: 'flex', justifyContent: 'center', padding: '12px 24px 28px', background: 'linear-gradient(to top, #fff 60%, transparent)', animation: 'slideUp 200ms ease-out' }}>
-          <button onClick={onContinue} style={{ width: '100%', maxWidth: '432px', padding: '16px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+          <button
+            onClick={onContinue}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
+            onMouseDown={e => { e.currentTarget.style.transform = 'translateY(0) scale(0.98)'; }}
+            onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            style={{
+              width: '100%', maxWidth: '432px', padding: '16px', borderRadius: '12px', border: 'none',
+              background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 600,
+              cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              transition: 'all 0.15s ease-out',
+            }}
+          >
             Continuar ({selectedOpcoes.length} selecionada{selectedOpcoes.length !== 1 ? 's' : ''}) →
           </button>
         </div>
       )}
 
       {phase === 'analise' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px 100px', animation: 'fadeIn 0.4s ease' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '32px 24px 100px' }}>
           {wrapElement('analise_texto', 'TEXTOS',
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '42px', marginBottom: '12px' }}>⌛</div>
-              <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', lineHeight: 1.25, margin: '0 0 10px' }}>
+              <h2 style={{ fontSize: '26px', fontWeight: 800, color: quiz.cor_titulo || '#111111', lineHeight: 1.25, margin: '0 0 10px' }}>
                 {quiz.analise_titulo || 'Estamos analisando seu perfil...'}
               </h2>
               <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', lineHeight: 1.6, margin: '0' }}>
@@ -521,9 +621,9 @@ export function QuizRenderer({
           </div>
 
           {wrapElement('analise_depoimentos', 'DEPOIMENTOS',
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', userSelect: 'none' }}>
               {(quiz.analise_depoimentos && quiz.analise_depoimentos.length > 0 ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS).map((d, i) => (
-                <div key={i} style={{ padding: '16px', borderRadius: '16px', border: '1.5px solid #f1f5f9', background: '#fff' }}>
+                <div key={i} style={{ padding: '16px', borderRadius: '16px', border: '1.5px solid #f1f5f9', background: '#fff', animation: 'none', transition: 'none' }}>
                   <div style={{ display: 'flex', gap: '2px', marginBottom: '8px' }}>
                     {[...Array(5)].map((_, j) => (
                       <span key={j} style={{ fontSize: '14px', color: '#fbbf24' }}>⭐</span>
@@ -540,11 +640,11 @@ export function QuizRenderer({
       )}
 
       {phase === 'aprovado_form' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '40px 24px 80px', animation: 'fadeIn 0.4s ease' }}>
           {wrapElement('aprovado_texto', 'TEXTOS',
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
               <div style={{ fontSize: '64px', lineHeight: 1, marginBottom: '18px' }}>{quiz.emoji_aprovado || '🎉'}</div>
-              <h2 style={{ fontSize: '24px', fontWeight: 800, color: quiz.cor_titulo || '#111111', margin: '0 0 10px', textAlign: 'center' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 800, color: quiz.cor_titulo || '#111111', margin: '0 0 10px', textAlign: 'center' }}>
                 {quiz.mensagem_aprovado || 'Parabéns! Você foi aprovada.'}
               </h2>
               {quiz.mensagem_aprovado_subtitulo && (
@@ -555,7 +655,19 @@ export function QuizRenderer({
             </div>
           )}
           {wrapElement('aprovado_botao', 'BOTÃO',
-            <button onClick={isBuilderPreview ? undefined : onGoToColeta} style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+            <button
+              onClick={isBuilderPreview ? undefined : onGoToColeta}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
+              onMouseDown={e => { e.currentTarget.style.transform = 'translateY(0) scale(0.98)'; }}
+              onMouseUp={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              style={{
+                width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+                background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                transition: 'all 0.15s ease-out',
+              }}
+            >
               Preencher meus dados →
             </button>
           )}
@@ -674,7 +786,7 @@ export function QuizRenderer({
 
         return (
           <div
-            style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 24px 80px', animation: 'fadeIn 0.4s ease' }}
+            style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '24px 24px 80px', animation: 'fadeIn 0.4s ease' }}
             onClick={e => { if (isBuilderPreview && e.target === e.currentTarget) onSelectColetaElement?.(null); }}
           >
             <form onSubmit={e => {
@@ -753,13 +865,35 @@ export function QuizRenderer({
                   <button
                     type="submit"
                     disabled={submitting}
+                    onMouseEnter={e => {
+                      if (submitting) return;
+                      e.currentTarget.style.opacity = '0.88';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+                    }}
+                    onMouseLeave={e => {
+                      if (submitting) return;
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseDown={e => {
+                      if (submitting) return;
+                      e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+                    }}
+                    onMouseUp={e => {
+                      if (submitting) return;
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
                     style={{
                       width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
                       background: submitting ? '#9ca3af' : btnColor,
                       color: '#fff', fontSize: '15px', fontWeight: 700,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                       cursor: submitting ? 'not-allowed' : 'pointer',
-                      opacity: submitting ? 0.6 : 1, transition: 'all 0.2s',
+                      opacity: submitting ? 0.6 : 1,
+                      transition: 'all 0.15s ease-out',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
                     }}
                   >
                     {submitting ? 'Enviando...' : btnLabel}
@@ -771,13 +905,29 @@ export function QuizRenderer({
                       if (isBuilderPreview) { e.stopPropagation(); onSelectColetaElement?.('botao'); }
                       else executeAction();
                     }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.opacity = '0.88';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseDown={e => {
+                      e.currentTarget.style.transform = 'translateY(0) scale(0.98)';
+                    }}
+                    onMouseUp={e => {
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
                     style={{
                       width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
                       background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700,
-                      cursor: 'pointer', transition: 'all 0.2s',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease-out',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                   >
                     {btnLabel}
                   </button>
@@ -805,7 +955,7 @@ export function QuizRenderer({
       })()}
 
       {phase === 'reprovado' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
           {wrapElement('reprovado_texto', 'TEXTOS', (
             <>
               <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
@@ -846,7 +996,7 @@ export function QuizRenderer({
         </div>
       )}
       {phase === 'sucesso' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '40px 24px', textAlign: 'center', animation: 'fadeIn 0.35s ease' }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#d1fae5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <Check style={{ width: '32px', height: '32px', strokeWidth: 3 }} />
           </div>

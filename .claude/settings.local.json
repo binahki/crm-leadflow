@@ -40,7 +40,9 @@
       "Skill(impeccable:impeccable)",
       "Skill(impeccable:impeccable:*)",
       "Bash(grep -v \"//\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }

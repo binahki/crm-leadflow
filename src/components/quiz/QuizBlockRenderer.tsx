@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Check, GripVertical, HelpCircle, Hourglass, ImageIcon, Trash2 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -53,6 +53,8 @@ export interface BlockRendererProps {
   previewBlock?: { tipo: QuizBlock['tipo']; conteudo: Record<string, any> } | null;
 
   onDeleteBlock?: (blockId: string) => void;
+  onDeleteConfirm?: (id: string, fn: () => void) => void;
+  pendingDeleteId?: string | null;
   onReorderBlocks?: (pageId: string, orderedIds: string[]) => void;
 
   flatPerguntas?: PerguntaInfo[];
@@ -66,6 +68,9 @@ export interface BlockRendererProps {
   /** Which campo_input to show in production (step-by-step) */
   campoStep?: number;
   onCampoNext?: () => void;
+
+  /** Fire confetti on approval page. Only pass true from the live quiz (QuizPublico). */
+  confettiEnabled?: boolean;
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -103,12 +108,12 @@ function BlockTitulo({ block, quiz }: {
   return (
     <div>
       {texto && (
-        <h2 style={{ fontSize: '22px', fontWeight: 700, color: quiz.cor_titulo || '#111111', lineHeight: 1.35, margin: '0 0 8px', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-0.03em', color: quiz.cor_titulo || '#111111', lineHeight: 1.1, margin: '0 0 12px', textAlign: 'center' }}>
           {texto}
         </h2>
       )}
       {subtexto && (
-        <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 8px', lineHeight: 1.6, textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 20px', lineHeight: 1.6, textAlign: 'center' }}>
           {subtexto}
         </p>
       )}
@@ -165,9 +170,9 @@ function BlockBotao({ block, quiz, onAction, submitting }: {
         setTimeout(() => setClicked(false), 200);
         if (!isSubmit) onAction(acao, target);
       }}
-      style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: submitting && isSubmit ? '#9ca3af' : btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: submitting && isSubmit ? 'not-allowed' : 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', transition: 'opacity 0.15s, transform 0.1s', opacity: clicked ? 0.7 : 1, transform: clicked ? 'scale(0.97)' : 'scale(1)' }}
-      onMouseEnter={e => { if (!(submitting && isSubmit)) e.currentTarget.style.opacity = '0.88'; }}
-      onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+      style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: submitting && isSubmit ? '#9ca3af' : btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: submitting && isSubmit ? 'not-allowed' : 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', transition: 'opacity 0.15s, transform 0.15s ease-out, box-shadow 0.15s', opacity: clicked ? 0.7 : 1, transform: clicked ? 'scale(0.97)' : 'scale(1)' }}
+      onMouseEnter={e => { if (!(submitting && isSubmit)) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; } }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
     >
       {submitting && isSubmit ? 'Enviando...' : texto}
     </button>
@@ -183,17 +188,19 @@ function BlockCampoInput({ block, quiz, fieldValues = {}, fieldErrors = {}, onFi
   onCampoNext?: () => void;
 }) {
   const [clicked, setClicked] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const { campo, label, placeholder, tipo_campo = 'texto', obrigatorio, botao_texto, botao_acao, botao_target, subtitulo } = block.conteudo;
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
   const rawVal = fieldValues[campo] ?? '';
-  const error = fieldErrors[campo];
+  const error = fieldErrors[campo] || localError;
   const displayVal = tipo_campo === 'telefone' ? maskPhone(rawVal) : tipo_campo === 'cpf' ? maskCpf(rawVal) : rawVal;
   const isSubmit = botao_acao === 'submit';
   const isUrl = botao_acao === 'url';
 
   const handleChange = (raw: string) => {
     if (isBuilderPreview) return;
+    setLocalError(null);
     let val = raw;
     if (tipo_campo === 'telefone') val = raw.replace(/\D/g, '').slice(0, 11);
     else if (tipo_campo === 'cpf') val = raw.replace(/\D/g, '').slice(0, 11);
@@ -229,6 +236,11 @@ function BlockCampoInput({ block, quiz, fieldValues = {}, fieldErrors = {}, onFi
         <button
           type={isSubmit ? 'submit' : 'button'}
           onClick={() => {
+            if (obrigatorio && !isBuilderPreview && !rawVal.trim()) {
+              setLocalError('Este campo é obrigatório');
+              return;
+            }
+            setLocalError(null);
             setClicked(true);
             setTimeout(() => setClicked(false), 200);
             if (isUrl && botao_target) window.location.href = botao_target;
@@ -241,10 +253,12 @@ function BlockCampoInput({ block, quiz, fieldValues = {}, fieldErrors = {}, onFi
             cursor: 'pointer',
             boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
             marginTop: '16px',
-            transition: 'opacity 0.15s, transform 0.1s',
+            transition: 'opacity 0.15s, transform 0.15s ease-out, box-shadow 0.15s',
             opacity: clicked ? 0.7 : 1,
             transform: clicked ? 'scale(0.97)' : 'scale(1)',
           }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
         >
           {botao_texto}
         </button>
@@ -255,6 +269,55 @@ function BlockCampoInput({ block, quiz, fieldValues = {}, fieldErrors = {}, onFi
 
 function BlockSeparador({ block }: { block: QuizBlock }) {
   return <div style={{ height: `${block.conteudo.altura || 16}px` }} />;
+}
+
+function BlockAlerta({ block }: { block: QuizBlock }) {
+  const { cor = '#16a34a', texto = '' } = block.conteudo;
+  return (
+    <div style={{ padding: '14px 16px', borderRadius: '12px', background: `${cor}18`, border: `1.5px solid ${cor}40` }}>
+      <p style={{ margin: 0, fontSize: '13px', color: cor, lineHeight: 1.5, fontWeight: 500, textAlign: 'center' }}>{texto}</p>
+    </div>
+  );
+}
+
+function BlockQuestao({ block, quiz }: {
+  block: QuizBlock; quiz: BlockRendererProps['quiz'];
+}) {
+  const c = block.conteudo || {};
+  const texto: string = c.texto || '';
+  const subtexto: string | null = c.subtexto || null;
+  const opcoes: any[] = c.opcoes || [];
+  const isMultipla = c.tipo_resposta === 'multipla';
+
+  return (
+    <div>
+      <h2 style={{ fontSize: '18px', fontWeight: 700, textAlign: 'center', color: quiz.cor_titulo || '#111111', margin: '0 0 6px', letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+        {texto || 'Adicione sua pergunta aqui'}
+      </h2>
+      {subtexto && (
+        <p style={{ fontSize: '13px', textAlign: 'center', color: quiz.cor_subtitulo || '#6b7280', margin: '0 0 16px', lineHeight: 1.5 }}>
+          {subtexto}
+        </p>
+      )}
+      <div style={{ marginTop: subtexto ? 0 : '12px' }}>
+        {opcoes.length > 0 ? opcoes.map((op, i) => (
+          <div key={op.id} style={{ padding: '12px 16px', borderRadius: '10px', border: '1.5px solid #e5e7eb', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff' }}>
+            {isMultipla && (
+              <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: '1.5px solid #d1d5db', flexShrink: 0 }} />
+            )}
+            <span style={{ fontSize: '14px', color: '#111111', flex: 1 }}>{op.texto || `Opção ${i + 1}`}</span>
+          </div>
+        )) : ['Opção 1', 'Opção 2', 'Opção 3'].map((text, i) => (
+          <div key={i} style={{ padding: '12px 16px', borderRadius: '10px', border: '1.5px solid #e5e7eb', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px', background: '#fff' }}>
+            {isMultipla && (
+              <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: '1.5px solid #d1d5db', flexShrink: 0 }} />
+            )}
+            <span style={{ fontSize: '14px', color: '#9ca3af' }}>{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoClick, selectedOpcaoId, isBuilderPreview, onNext }: {
@@ -269,19 +332,28 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
   const [continueClicked, setContinueClicked] = useState(false);
 
-  const pergId = block.conteudo.pergunta_id as string;
-  const perg = flatPerguntas?.find(p => p.id === pergId);
+  const isSelfContained = block.tipo === 'questao';
   const primary = quiz.cor_primaria || '#2563eb';
   const btnColor = quiz.cor_botao || primary;
-  const opcoes = (opcoesPorPergunta?.[pergId] || []).sort((a, b) => a.ordem - b.ordem);
-  const isMultipla = perg?.tipo_resposta === 'multipla';
 
-  const questionTitle = perg?.texto || block.conteudo._preview_texto || 'Adicione sua pergunta aqui';
-  const questionSub = perg?.subtexto;
+  // Self-contained questão: read from block.conteudo directly
+  const pergId = isSelfContained ? block.id : (block.conteudo.pergunta_id as string);
+  const perg = isSelfContained ? null : flatPerguntas?.find(p => p.id === pergId);
+  const opcoes = isSelfContained
+    ? (block.conteudo.opcoes || [])
+    : (opcoesPorPergunta?.[pergId] || []).sort((a: any, b: any) => a.ordem - b.ordem);
+  const isMultipla = isSelfContained
+    ? block.conteudo.tipo_resposta === 'multipla'
+    : perg?.tipo_resposta === 'multipla';
+
+  const questionTitle = isSelfContained
+    ? (block.conteudo.texto || 'Adicione sua pergunta aqui')
+    : (perg?.texto || block.conteudo._preview_texto || 'Adicione sua pergunta aqui');
+  const questionSub = isSelfContained ? (block.conteudo.subtexto || null) : perg?.subtexto;
 
   return (
     <div>
-      <h2 style={{ fontSize: '22px', fontWeight: 700, color: quiz.cor_titulo || '#111111', lineHeight: 1.35, margin: '0 0 8px', textAlign: 'center' }}>
+      <h2 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.01em', color: quiz.cor_titulo || '#111111', lineHeight: 1.3, margin: '0 0 8px', textAlign: 'center' }}>
         {questionTitle}
       </h2>
       {questionSub ? (
@@ -296,7 +368,7 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
 
       {opcoes.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {opcoes.map(op => {
+          {(opcoes as any[]).map(op => {
             const isSel = isMultipla ? selectedMulti.includes(op.id) : (selectedOpcaoId === op.id);
             return (
               <button key={op.id} type="button"
@@ -308,7 +380,7 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
                     onOpcaoClick?.(pergId, op.id, op.reprova_imediato);
                   }
                 }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '12px', textAlign: 'left', border: `${isSel ? '2.5px' : '1.5px'} solid ${isSel ? primary : '#e2e8f0'}`, background: isSel ? hexRgba(primary, 0.08) : '#fff', cursor: isBuilderPreview ? 'default' : 'pointer', transition: 'all 0.2s', fontFamily: 'inherit', transform: isSel ? 'scale(1.01)' : 'scale(1)', boxShadow: isSel ? `0 4px 16px ${hexRgba(primary, 0.12)}` : 'none' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px', borderRadius: '16px', textAlign: 'left', border: `${isSel ? '2.5px' : '1.5px'} solid ${isSel ? primary : '#e2e8f0'}`, background: isSel ? hexRgba(primary, 0.08) : '#fff', cursor: isBuilderPreview ? 'default' : 'pointer', transition: 'all 200ms ease', fontFamily: 'inherit', transform: isSel ? 'scale(1.01)' : 'scale(1)', boxShadow: isSel ? `0 8px 24px ${hexRgba(primary, 0.12)}` : 'none' }}
                 onMouseEnter={e => {
                   if (isBuilderPreview || isSel) return;
                   const btn = e.currentTarget;
@@ -327,13 +399,13 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
                 }}
               >
                 {isMultipla ? (
-                  <div style={{ width: '20px', height: '20px', borderRadius: '5px', flexShrink: 0, border: `2px solid ${isSel ? primary : '#d1d5db'}`, background: isSel ? primary : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {isSel && <Check style={{ width: '11px', height: '11px', color: '#fff', strokeWidth: 3 }} />}
+                  <div style={{ width: '22px', height: '22px', borderRadius: '6px', flexShrink: 0, border: `2px solid ${isSel ? primary : '#d1d5db'}`, background: isSel ? primary : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isSel && <Check style={{ width: '12px', height: '12px', color: '#fff', strokeWidth: 3 }} />}
                   </div>
                 ) : op.emoji ? (
-                  <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0 }}>{op.emoji}</span>
+                  <span style={{ fontSize: '36px', lineHeight: 1, flexShrink: 0 }}>{op.emoji}</span>
                 ) : null}
-                <span style={{ flex: 1, fontSize: '15px', color: '#111111', fontWeight: isSel ? 600 : 400 }}>{op.texto}</span>
+                <span style={{ flex: 1, fontSize: '15px', color: '#111111', fontWeight: isSel ? 600 : 500 }}>{op.texto}</span>
                 {!isMultipla && isSel && <Check style={{ width: '16px', height: '16px', color: primary, flexShrink: 0 }} />}
               </button>
             );
@@ -343,7 +415,7 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {isBuilderPreview ? (
             ['Opção A', 'Opção B', 'Opção C'].map((text, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e5e7eb', background: '#fff' }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '16px', border: '1.5px solid #e5e7eb', background: '#fff' }}>
                 <span style={{ flex: 1, fontSize: '15px', color: '#9ca3af' }}>{text}</span>
               </div>
             ))
@@ -364,11 +436,11 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
             setTimeout(() => setContinueClicked(false), 200);
             onNext?.();
           }}
-          style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', marginTop: '16px', transition: 'opacity 0.15s, transform 0.1s', opacity: continueClicked ? 0.7 : 1, transform: continueClicked ? 'scale(0.97)' : 'scale(1)' }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+          style={{ width: '100%', padding: '18px', borderRadius: '12px', border: 'none', background: btnColor, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', marginTop: '16px', transition: 'opacity 0.15s, transform 0.15s ease-out, box-shadow 0.15s', opacity: continueClicked ? 0.7 : 1, transform: continueClicked ? 'scale(0.97)' : 'scale(1)' }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)'; }}
         >
-          Continuar →
+          Continuar ({selectedMulti.length} selecionada{selectedMulti.length !== 1 ? 's' : ''}) →
         </button>
       )}
     </div>
@@ -377,47 +449,70 @@ function BlockPergunta({ block, quiz, flatPerguntas, opcoesPorPergunta, onOpcaoC
 
 // ── Análise loading + testimonials ────────────────────────────────────────────
 
-function AnaliseContent({ quiz, isBuilderPreview }: { quiz: BlockRendererProps['quiz']; isBuilderPreview?: boolean }) {
+function AnaliseContent({ quiz, isBuilderPreview, onComplete, selectedBlock, onSelectBlock, hoveredBlock, onHoverBlock }: {
+  quiz: BlockRendererProps['quiz']; isBuilderPreview?: boolean; onComplete?: () => void;
+  selectedBlock?: string | null; onSelectBlock?: (id: string | null) => void;
+  hoveredBlock?: string | null; onHoverBlock?: (id: string | null) => void;
+}) {
   const [progress, setProgress] = useState(isBuilderPreview ? 65 : 0);
-  const [showDepoimentos, setShowDepoimentos] = useState(isBuilderPreview ? true : false);
-  const [hoveredDep, setHoveredDep] = useState<number | null>(null);
-  const primary = quiz.cor_primaria || '#2563eb';
+  const primary = quiz.analise_cor || quiz.cor_primaria || '#2563eb';
   const depoimentos: Array<{ nome: string; handle?: string; texto: string }> =
     (quiz.analise_depoimentos && (quiz.analise_depoimentos as any[]).length > 0) ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
-  const [target] = useState(() => isBuilderPreview ? 65 : 70 + Math.floor(Math.random() * 20));
+
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     if (isBuilderPreview) return;
+    const dur = (quiz.analise_duracao || 4) * 1000;
     const start = Date.now();
-    const duration = 2400;
     const timer = setInterval(() => {
       const elapsed = Date.now() - start;
-      const p = Math.min((elapsed / duration) * target, target);
-      setProgress(Math.round(p));
-      if (elapsed >= duration) {
+      const p = Math.min(Math.round((elapsed / dur) * 100), 100);
+      setProgress(p);
+      if (p >= 100) {
         clearInterval(timer);
-        setTimeout(() => setShowDepoimentos(true), 400);
+        setTimeout(() => onCompleteRef.current?.(), 300);
       }
-    }, 40);
+    }, 50);
     return () => clearInterval(timer);
   }, []); // eslint-disable-line
 
   const loadingLabel = isBuilderPreview ? 'Analisando seu perfil...' :
     progress < 30 ? 'Verificando perfil...' :
-    progress < 60 ? 'Cruzando informações...' :
-    progress < 88 ? 'Quase lá...' : 'Finalizando análise...';
+      progress < 60 ? 'Cruzando informações...' :
+        progress < 88 ? 'Quase lá...' : 'Finalizando análise...';
+
+  const selStyle = (id: string): React.CSSProperties => {
+    if (!isBuilderPreview) return {};
+    const isSel = selectedBlock === id;
+    const isHov = hoveredBlock === id;
+    return {
+      borderRadius: '8px',
+      outline: isSel ? '2px solid #2563eb' : isHov ? '1.5px dashed #2563eb' : '2px solid transparent',
+      outlineOffset: '3px',
+      cursor: 'pointer',
+      transition: 'outline 0.1s',
+    };
+  };
+
+  const bindSel = (id: string) => !isBuilderPreview ? {} : {
+    onClick: (e: React.MouseEvent) => { e.stopPropagation(); onSelectBlock?.(id); },
+    onMouseEnter: () => onHoverBlock?.(id),
+    onMouseLeave: () => onHoverBlock?.(null),
+  };
 
   return (
     <div style={{ paddingBottom: '8px' }}>
-      {/* Hourglass icon */}
-      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+      {/* Ícone/texto — clicável no builder */}
+      <div style={{ ...selStyle('__analise_texto__'), textAlign: 'center', marginBottom: '16px' }} {...bindSel('__analise_texto__')}>
         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '50%', background: `${primary}18` }}>
           <Hourglass style={{ width: '22px', height: '22px', color: primary }} />
         </div>
       </div>
 
-      {/* Loading bar */}
-      <div style={{ marginBottom: '20px', borderRadius: '8px', padding: '4px', outline: isBuilderPreview ? `1.5px solid transparent` : undefined, transition: 'outline 0.1s' }}>
+      {/* Barra de progresso — clicável no builder */}
+      <div style={{ ...selStyle('__analise_barra__'), marginBottom: '20px', padding: '4px' }} {...bindSel('__analise_barra__')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600, color: primary, marginBottom: '7px' }}>
           <span>Carregando...</span>
           <span>{progress}%</span>
@@ -428,42 +523,21 @@ function AnaliseContent({ quiz, isBuilderPreview }: { quiz: BlockRendererProps['
         <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '7px', textAlign: 'center' }}>{loadingLabel}</p>
       </div>
 
-      {/* Testimonials */}
-      {showDepoimentos && (
-        <div style={isBuilderPreview ? undefined : { animation: 'appleIn 0.4s ease both' }}>
-          {depoimentos.map((d, i) => (
-            <div key={i}
-              onMouseEnter={() => setHoveredDep(i)}
-              onMouseLeave={() => setHoveredDep(null)}
-              style={{
-                background: '#f9fafb', borderRadius: '14px', padding: '16px', marginBottom: '12px',
-                border: `1.5px solid ${hoveredDep === i ? '#2563eb' : '#f3f4f6'}`,
-                outline: hoveredDep === i ? '2px solid rgba(37,99,235,0.2)' : '2px solid transparent',
-                outlineOffset: '1px',
-                cursor: isBuilderPreview ? 'pointer' : undefined,
-                transition: 'border-color 0.15s, outline 0.15s',
-                position: 'relative',
-              }}
-            >
-              {isBuilderPreview && hoveredDep === i && (
-                <div style={{ position: 'absolute', top: '-18px', right: '4px', zIndex: 5 }}>
-                  <div style={{ background: '#2563eb', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.04em' }}>
-                    DEPOIMENTO
-                  </div>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: '2px', marginBottom: '8px' }}>
-                {[...Array(5)].map((_, si) => <span key={si} style={{ color: '#f59e0b', fontSize: '14px' }}>★</span>)}
-              </div>
-              <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 10px', lineHeight: 1.6, fontStyle: 'italic' }}>"{d.texto}"</p>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#111' }}>{d.nome}</span>
-                {d.handle && <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '5px' }}>{d.handle}</span>}
-              </div>
+      {/* Depoimentos — clicáveis no builder */}
+      <div style={selStyle('__analise_depoimentos__')} {...bindSel('__analise_depoimentos__')}>
+        {depoimentos.map((d, i) => (
+          <div key={i} style={{ background: '#f9fafb', borderRadius: '14px', padding: '16px', marginBottom: '12px', border: '1.5px solid #f3f4f6' }}>
+            <div style={{ display: 'flex', gap: '2px', marginBottom: '8px' }}>
+              {[...Array(5)].map((_, si) => <span key={si} style={{ color: '#f59e0b', fontSize: '14px' }}>★</span>)}
             </div>
-          ))}
-        </div>
-      )}
+            <p style={{ fontSize: '13px', color: '#374151', margin: '0 0 10px', lineHeight: 1.6, fontStyle: 'italic' }}>"{d.texto}"</p>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#111' }}>{d.nome}</span>
+              {d.handle && <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '5px' }}>{d.handle}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -474,13 +548,16 @@ const BLOCK_LABELS: Record<string, string> = {
   titulo: 'TEXTO', imagem: 'IMAGEM', botao: 'BOTÃO',
   beneficios: 'BENEFÍCIOS', campo_input: 'CAMPO',
   opcoes: 'QUESTÃO', separador: 'ESPAÇO', pergunta: 'QUESTÃO',
+  questao: 'QUESTÃO', // FIX: tipo 'questao' do banco
 };
 
-function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, onSelect, onHover, onDelete, children }: {
+function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, onSelect, onHover, onDelete, onDeleteConfirm, pendingDeleteId, children }: {
   block: QuizBlock; isBuilderPreview?: boolean;
   isSelected: boolean; isHovered: boolean;
   onSelect: () => void; onHover: (v: boolean) => void;
   onDelete?: () => void;
+  onDeleteConfirm?: (id: string, fn: () => void) => void;
+  pendingDeleteId?: string | null;
   children: React.ReactNode;
 }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({
@@ -504,7 +581,6 @@ function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, 
     <div
       ref={setNodeRef}
       style={sortStyle}
-      data-block-order={block.ordem}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
     >
@@ -520,7 +596,6 @@ function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, 
         {/* Drag handle */}
         <div
           data-drag-handle="true"
-          onPointerDown={e => e.stopPropagation()}
           style={{ color: '#fff', cursor: 'grab', display: 'flex', padding: '3px', touchAction: 'none' }}
           {...attributes}
           {...listeners}
@@ -530,14 +605,20 @@ function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, 
         {onDelete && (
           <button
             onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); e.preventDefault(); onDelete(); }}
-            title="Remover bloco"
+            onClick={e => {
+              e.stopPropagation(); e.preventDefault();
+              if (onDeleteConfirm) onDeleteConfirm(block.id, onDelete);
+              else onDelete();
+            }}
+            title={pendingDeleteId === block.id ? 'Clique para confirmar' : 'Remover bloco'}
             style={{
-              color: '#fff', background: 'none', border: 'none',
-              cursor: 'pointer', display: 'flex', padding: '3px',
+              color: pendingDeleteId === block.id ? '#ef4444' : '#fff',
+              background: pendingDeleteId === block.id ? '#fff' : 'none',
+              border: 'none', cursor: 'pointer', display: 'flex', padding: '3px', borderRadius: '3px',
+              transition: 'color 0.15s, background 0.15s',
             }}
           >
-            <Trash2 size={13} />
+            {pendingDeleteId === block.id ? <Check size={13} /> : <Trash2 size={13} />}
           </button>
         )}
       </div>
@@ -547,21 +628,23 @@ function SortableBlockWrapper({ block, isBuilderPreview, isSelected, isHovered, 
         onClick={e => { e.stopPropagation(); onSelect(); }}
         style={{ display: 'flex', alignItems: 'flex-start' }}
       >
-        {/* Block content */}
-        <div style={{
-          flex: 1,
-          position: 'relative',
-          minWidth: 0,
-          borderRadius: '8px',
-          outline: isSelected
-            ? '2px solid #2563eb'
-            : isHovered
-              ? '1.5px dashed #2563eb'
-              : '2px solid transparent',
-          outlineOffset: '2px',
-          transition: 'outline 0.1s',
-          padding: '8px',
-        }}>
+        <div
+          data-block-order={block.ordem}
+          style={{
+            flex: 1,
+            position: 'relative',
+            minWidth: 0,
+            borderRadius: '8px',
+            outline: isSelected
+              ? '2px solid #2563eb'
+              : isHovered
+                ? '1.5px dashed #2563eb'
+                : '2px solid transparent',
+            outlineOffset: '2px',
+            transition: 'outline 0.1s',
+            padding: '8px',
+          }}
+        >
           {children}
         </div>
       </div>
@@ -582,28 +665,180 @@ export function QuizBlockRenderer({
   dropAfterOrder,
   previewBlock,
   onDeleteBlock,
+  onDeleteConfirm,
+  pendingDeleteId,
   onReorderBlocks,
   flatPerguntas,
   opcoesPorPergunta, onOpcaoClick, selectedOpcaoId,
   campoStep = 0,
   onCampoNext,
+  confettiEnabled = false,
 }: BlockRendererProps) {
   const [internalHovered, setInternalHovered] = useState<string | null>(null);
 
   const primary = quiz.cor_primaria || '#2563eb';
+
+  // ── Confetes na aprovação ───────────────────────────────────────────────────
+  const currentPageInfo = flatPerguntas?.find(p => p.id === pageId);
+  const isAprovacaoPage = currentPageInfo?.tipo_resposta === 'aprovacao';
+
+  useEffect(() => {
+    if (!isAprovacaoPage || !confettiEnabled) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    document.getElementById('quiz-confetti-canvas')?.remove();
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const canvas = document.createElement('canvas');
+    canvas.id = 'quiz-confetti-canvas';
+    Object.assign(canvas.style, {
+      position: 'fixed', top: '0', left: '0',
+      width: `${W}px`, height: `${H}px`,
+      pointerEvents: 'none', zIndex: '9999',
+    });
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    document.body.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { canvas.remove(); return; }
+    ctx.scale(dpr, dpr);
+
+    const brand = quiz.cor_primaria || '#2563eb';
+    // High-contrast palette — works on both light and dark quiz backgrounds
+    const palette = [
+      brand, brand, brand,
+      '#f59e0b', '#fbbf24',   // amber — festive, visible on white
+      '#10b981',               // emerald
+      '#f472b6',               // pink
+      '#a78bfa',               // violet
+      '#fb923c',               // orange
+    ];
+
+    type Shape = 'circle' | 'square' | 'ribbon';
+    interface P {
+      x: number; y: number; vx: number; vy: number;
+      angle: number; spin: number; w: number; h: number;
+      color: string; shape: Shape;
+    }
+
+    function burst(cx: number, cy: number, n: number): P[] {
+      return Array.from({ length: n }, (): P => {
+        const shape: Shape = Math.random() < 0.35 ? 'circle' : Math.random() < 0.5 ? 'ribbon' : 'square';
+        const speed = 10 + Math.random() * 18;
+        const spread = Math.PI * 0.75;
+        const baseAngle = -Math.PI / 2;
+        const a = baseAngle + (Math.random() - 0.5) * spread;
+        const baseSize = 5 + Math.random() * 7;
+        return {
+          x: cx + (Math.random() - 0.5) * 60,
+          y: cy,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          angle: Math.random() * Math.PI * 2,
+          spin: (Math.random() - 0.5) * 0.35,
+          w: shape === 'ribbon' ? baseSize * 0.35 : baseSize,
+          h: shape === 'ribbon' ? baseSize * 4 : baseSize,
+          color: palette[Math.floor(Math.random() * palette.length)],
+          shape,
+        };
+      });
+    }
+
+    // Three burst sources near the bottom
+    const particles: P[] = [
+      ...burst(W * 0.5, H * 0.82, 70),
+      ...burst(W * 0.2, H * 0.88, 50),
+      ...burst(W * 0.8, H * 0.88, 50),
+    ];
+
+    // Second wave after 350ms
+    let wave2Added = false;
+
+    const TOTAL = 4200;
+    const FADE_START = 3000;
+    const t0 = performance.now();
+    let raf = 0;
+
+    function frame(now: number) {
+      const elapsed = now - t0;
+
+      if (!wave2Added && elapsed >= 350) {
+        wave2Added = true;
+        particles.push(
+          ...burst(W * 0.35, H * 0.80, 40),
+          ...burst(W * 0.65, H * 0.80, 40),
+        );
+      }
+
+      ctx.clearRect(0, 0, W, H);
+      let live = false;
+
+      for (const p of particles) {
+        p.vy += 0.5;
+        p.vx *= 0.988;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.angle += p.spin;
+
+        const alpha = elapsed < FADE_START
+          ? 1
+          : Math.max(0, 1 - (elapsed - FADE_START) / (TOTAL - FADE_START));
+
+        if (alpha <= 0 || p.y > H + 80) continue;
+        live = true;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+
+        if (p.shape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        }
+        ctx.restore();
+      }
+
+      if (live && elapsed < TOTAL) raf = requestAnimationFrame(frame);
+      else canvas.remove();
+    }
+
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); canvas.remove(); };
+  }, [isAprovacaoPage, confettiEnabled, quiz.cor_primaria]);
+
+  // ── Barra de progresso: posição global (cover + todas as páginas) ───────────
+  const currentTipoResposta = currentPageInfo?.tipo_resposta || '';
+  const allPages = flatPerguntas || [];
+  const totalSteps = 1 + allPages.length; // 1 (cover) + restante
+
+  let progressWidth: number;
+  if (pageId === 'cover') {
+    progressWidth = Math.max(4, Math.round((1 / Math.max(totalSteps, 1)) * 100));
+  } else {
+    const pageIdx = allPages.findIndex(p => p.id === pageId);
+    progressWidth = pageIdx >= 0
+      ? Math.round(((pageIdx + 2) / Math.max(totalSteps, 1)) * 100) // +2: 1 por cover + 1 base-1
+      : 4;
+  }
+
+  const hideProgressBar = false;
+
   const pageBlocks = blocks
     .filter(b => b.page_id === pageId)
     .sort((a, b) => a.ordem - b.ordem);
 
   const currentHovered = hoveredBlock ?? internalHovered;
-  void hexRgba;
 
   // Check page type
-  const pageInfo = flatPerguntas?.find(p => p.id === pageId);
-  const isAnalisePage = (pageInfo?.tipo_resposta === 'analise') || pageId === 'analise' || pageId === '__analise__';
-  const perguntaDaPagina = flatPerguntas?.find(
-    p => p.id === pageId && (p.tipo_resposta === 'unica' || p.tipo_resposta === 'multipla')
-  );
+  const isAnalisePage = (currentPageInfo?.tipo_resposta === 'analise') || pageId === 'analise' || pageId === '__analise__';
 
   // In production: show campo_input blocks one at a time
   const campoInputBlocks = pageBlocks.filter(b => b.tipo === 'campo_input');
@@ -659,6 +894,23 @@ export function QuizBlockRenderer({
         );
       case 'separador':
         return <BlockSeparador block={block} />;
+      case 'alerta':
+        return <BlockAlerta block={block} />;
+      case 'questao':
+        if (isBuilderPreview) {
+          return <BlockQuestao block={block} quiz={quiz} />;
+        }
+        return (
+          <BlockPergunta
+            block={block} quiz={quiz}
+            flatPerguntas={flatPerguntas}
+            opcoesPorPergunta={opcoesPorPergunta}
+            onOpcaoClick={onOpcaoClick}
+            selectedOpcaoId={selectedOpcaoId}
+            isBuilderPreview={false}
+            onNext={onNext}
+          />
+        );
       case 'pergunta':
       case 'opcoes':
         return (
@@ -679,186 +931,161 @@ export function QuizBlockRenderer({
 
   return (
     <div
-      style={{ minHeight: '100%', background: quiz.cor_fundo || '#ffffff', fontFamily: "'DM Sans', system-ui, sans-serif" }}
+      style={{ minHeight: isBuilderPreview ? '100%' : '100vh', width: '100%', background: quiz.cor_fundo || '#ffffff', fontFamily: "'DM Sans', system-ui, sans-serif", display: 'flex', flexDirection: 'column', alignItems: 'center' }}
       onClick={() => { if (isBuilderPreview) onSelectBlock?.(null); }}
     >
-      {/* Header: logo + progress — always same height regardless of logo */}
-      <div style={{ background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: isBuilderPreview ? '40px' : 'env(safe-area-inset-top, 12px)' }}>
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '8px 24px 6px', display: 'flex', justifyContent: 'center', minHeight: quiz.logo_url ? 'auto' : '38px' }}>
-          {quiz.logo_url && (
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
+        @keyframes appleIn {
+          0% { opacity: 0; transform: scale(0.985) translateY(10px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes dropIn {
+          0% { opacity: 0; transform: scaleX(0.5); }
+          100% { opacity: 1; transform: scaleX(1); }
+        }
+        .quiz-option {
+          backface-visibility: hidden;
+          -webkit-font-smoothing: antialiased;
+          transform: perspective(1px) translateZ(0);
+        }
+        .quiz-option:active { transform: perspective(1px) scale(0.98) translateZ(0) !important; }
+        * { box-sizing: border-box; }
+        input, textarea, button, select { font-family: inherit; }
+      `}</style>
+
+      {/* Header: logo + progress */}
+      <div style={{ width: '100%', background: quiz.cor_fundo || '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: isBuilderPreview ? '40px' : 'max(14px, env(safe-area-inset-top))' }}>
+        {quiz.logo_url && (
+          <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', padding: '4px 24px 6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <img src={quiz.logo_url} alt="" style={{ maxHeight: `${quiz.logo_altura || 32}px`, maxWidth: '160px', objectFit: 'contain' }} />
-          )}
-        </div>
-        <div style={{ padding: '0 24px 10px' }}>
-          <div style={{ maxWidth: '480px', margin: '0 auto', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: primary, width: phase === 'cover' ? '2%' : '100%', borderRadius: '999px', transition: 'width 800ms cubic-bezier(0.65, 0, 0.35, 1)' }} />
           </div>
-        </div>
+        )}
+        {!hideProgressBar && (
+          <div style={{ padding: quiz.logo_url ? '4px 24px 12px' : '8px 24px 12px' }}>
+            <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', height: '10px', background: '#e5e7eb', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: primary, width: `${progressWidth}%`, borderRadius: '999px', transition: 'width 800ms cubic-bezier(0.65, 0, 0.35, 1)' }} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Blocks */}
+      <div style={{ maxWidth: '480px', width: '100%' }}>
       <form
         onSubmit={e => { if (isBuilderPreview) { e.preventDefault(); return; } onSubmit?.(e); }}
-        style={{ maxWidth: '480px', margin: '0 auto', padding: '28px 24px 80px' }}
+        style={{ padding: '32px 24px 80px' }}
       >
-        {/* Auto-rendered question block (no DB block needed) */}
-        {perguntaDaPagina && (() => {
-          const isAutoSelected = selectedBlock === '__auto_pergunta__';
-          const isAutoHovered = currentHovered === '__auto_pergunta__';
-          return (
-            <div
-              data-block-order="0"
-              style={{ position: 'relative', paddingTop: '6px', marginBottom: '16px' }}
-              onMouseEnter={() => { setInternalHovered('__auto_pergunta__'); onHoverBlock?.('__auto_pergunta__'); }}
-              onMouseLeave={() => { setInternalHovered(null); onHoverBlock?.(null); }}
-            >
-              {isBuilderPreview && (
-                <div style={{
-                  position: 'absolute', top: '-1px', left: '-1px', zIndex: 5,
-                  display: 'flex', alignItems: 'center',
-                  background: isAutoSelected || isAutoHovered ? '#2563eb' : 'transparent',
-                  borderRadius: '6px', padding: '2px', gap: '1px',
-                  opacity: isAutoSelected || isAutoHovered ? 1 : 0.35,
-                  transition: 'opacity 0.12s, background 0.12s',
-                }}>
-                  <div style={{ color: '#fff', padding: '3px', display: 'flex' }}>
-                    <GripVertical size={13} style={{ opacity: 0.4 }} />
-                  </div>
-                </div>
-              )}
-              <div
-                onClick={e => { e.stopPropagation(); if (isBuilderPreview) onSelectBlock?.('__auto_pergunta__'); }}
-                style={{ display: 'flex', alignItems: 'flex-start', cursor: isBuilderPreview ? 'pointer' : undefined }}
-              >
-                <div style={{
-                  flex: 1, position: 'relative', minWidth: 0, borderRadius: '8px',
-                  outline: isAutoSelected ? '2px solid #2563eb' : isAutoHovered ? '1.5px dashed #2563eb' : '2px solid transparent',
-                  outlineOffset: '2px', transition: 'outline 0.1s', padding: '8px',
-                }}>
-                  <BlockPergunta
-                    block={{ id: '__auto_pergunta__', quiz_id: '', page_id: pageId, tipo: 'pergunta', ordem: 0, conteudo: { pergunta_id: pageId } } as QuizBlock}
-                    quiz={quiz}
-                    flatPerguntas={flatPerguntas}
-                    opcoesPorPergunta={opcoesPorPergunta}
-                    onOpcaoClick={onOpcaoClick}
-                    selectedOpcaoId={selectedOpcaoId}
-                    isBuilderPreview={isBuilderPreview}
-                    onNext={onNext}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
         <DndContext sensors={sortSensors} collisionDetection={closestCenter} onDragEnd={handleSortEnd}>
           <SortableContext
             items={pageBlocks.map(b => `preview-block-${b.id}`)}
             strategy={verticalListSortingStrategy}
           >
             {(() => {
-            const ghost: QuizBlock | null = (previewBlock && isBuilderPreview)
-              ? { id: '__preview__', quiz_id: '', page_id: '', tipo: previewBlock.tipo, ordem: -1, conteudo: previewBlock.conteudo }
-              : null;
+              const ghost: QuizBlock | null = (previewBlock && isBuilderPreview)
+                ? { id: '__preview__', quiz_id: '', page_id: '', tipo: previewBlock.tipo, ordem: -1, conteudo: previewBlock.conteudo }
+                : null;
 
-            const ghostEl = ghost ? (() => {
-              const c = renderBlockContent(ghost);
-              if (!c) return null;
-              return (
-                <div key="__preview__" style={{ opacity: 0.55, pointerEvents: 'none', animation: 'dropIn 0.15s ease both' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                    <div style={{ flexShrink: 0, width: '18px' }} />
-                    <div style={{ flex: 1, minWidth: 0, outline: '2px dashed #2563eb', outlineOffset: '2px', borderRadius: '8px', paddingRight: '4px' }}>
-                      <div style={{ marginBottom: '16px' }}>{c}</div>
+              const ghostEl = ghost ? (() => {
+                const c = renderBlockContent(ghost);
+                if (!c) return null;
+                return (
+                  <div key="__preview__" style={{ opacity: 0.55, pointerEvents: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                      <div style={{ flexShrink: 0, width: '18px' }} />
+                      <div style={{ flex: 1, minWidth: 0, outline: '2px dashed #2563eb', outlineOffset: '2px', borderRadius: '8px', paddingRight: '4px' }}>
+                        <div style={{ marginBottom: '20px' }}>{c}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                );
+              })() : null;
+
+              const showGhostAtEnd = ghost && ghostEl && dropAfterOrder != null &&
+                pageBlocks.length > 0 && dropAfterOrder >= pageBlocks[pageBlocks.length - 1].ordem;
+
+              return (
+                <>
+                  {ghost && ghostEl && pageBlocks.length === 0 && ghostEl}
+
+                  {pageBlocks.map((block, idx) => {
+                    if (activeCampoBlock && block.tipo === 'campo_input' && block.id !== activeCampoBlock.id) {
+                      return null;
+                    }
+
+                    const showDropBefore = isBuilderPreview && dropAfterOrder != null && (
+                      (idx === 0 && block.ordem > dropAfterOrder + 1) ||
+                      block.ordem === dropAfterOrder + 1
+                    );
+
+                    const isSelected = selectedBlock === block.id;
+                    const isHovered = currentHovered === block.id;
+                    const content = renderBlockContent(block);
+                    if (!content) return null;
+
+                    return (
+                      <React.Fragment key={block.id}>
+                        {showDropBefore && (
+                          ghost && ghostEl ? ghostEl : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', marginBottom: '8px' }}>
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
+                              <div style={{ flex: 1, height: '2px', background: '#2563eb', borderRadius: '1px' }} />
+                            </div>
+                          )
+                        )}
+                        <SortableBlockWrapper
+                          block={block}
+                          isBuilderPreview={isBuilderPreview}
+                          isSelected={isSelected}
+                          isHovered={isHovered}
+                          onSelect={() => onSelectBlock?.(block.id)}
+                          onHover={v => {
+                            setInternalHovered(v ? block.id : null);
+                            onHoverBlock?.(v ? block.id : null);
+                          }}
+                          onDelete={onDeleteBlock ? () => onDeleteBlock(block.id) : undefined}
+                          onDeleteConfirm={onDeleteConfirm}
+                          pendingDeleteId={pendingDeleteId}
+                        >
+                          <div style={{ marginBottom: '20px' }}>{content}</div>
+                        </SortableBlockWrapper>
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {showGhostAtEnd && ghostEl}
+                  {isBuilderPreview && !ghost && dropAfterOrder != null && pageBlocks.length > 0 && dropAfterOrder >= pageBlocks[pageBlocks.length - 1].ordem && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', marginTop: '8px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
+                      <div style={{ flex: 1, height: '2px', background: '#2563eb', borderRadius: '1px' }} />
+                    </div>
+                  )}
+                </>
               );
-            })() : null;
-
-            const showGhostAtEnd = ghost && ghostEl && dropAfterOrder != null &&
-              pageBlocks.length > 0 && dropAfterOrder >= pageBlocks[pageBlocks.length - 1].ordem;
-
-            return (
-              <>
-                {/* Empty page ghost */}
-                {ghost && ghostEl && pageBlocks.length === 0 && ghostEl}
-
-                {pageBlocks.map((block, idx) => {
-                  // In production: skip non-active campo_input blocks
-                  if (activeCampoBlock && block.tipo === 'campo_input' && block.id !== activeCampoBlock.id) {
-                    return null;
-                  }
-
-                  const showDropBefore = isBuilderPreview && dropAfterOrder != null && (
-                    (idx === 0 && block.ordem > dropAfterOrder + 1) ||
-                    block.ordem === dropAfterOrder + 1
-                  );
-
-                  const isSelected = selectedBlock === block.id;
-                  const isHovered = currentHovered === block.id;
-                  const content = renderBlockContent(block);
-                  if (!content) return null;
-
-                  return (
-                    <React.Fragment key={block.id}>
-                      {showDropBefore && (
-                        ghost && ghostEl ? ghostEl : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', marginBottom: '8px', animation: 'dropIn 0.2s ease both' }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
-                            <div style={{ flex: 1, height: '2px', background: '#2563eb', borderRadius: '1px' }} />
-                          </div>
-                        )
-                      )}
-                      <SortableBlockWrapper
-                        block={block}
-                        isBuilderPreview={isBuilderPreview}
-                        isSelected={isSelected}
-                        isHovered={isHovered}
-                        onSelect={() => onSelectBlock?.(block.id)}
-                        onHover={v => {
-                          setInternalHovered(v ? block.id : null);
-                          onHoverBlock?.(v ? block.id : null);
-                        }}
-                        onDelete={onDeleteBlock ? () => onDeleteBlock(block.id) : undefined}
-                      >
-                        <div style={{ marginBottom: '16px' }}>{content}</div>
-                      </SortableBlockWrapper>
-                    </React.Fragment>
-                  );
-                })}
-
-                {/* Drop ghost/indicator after last block */}
-                {showGhostAtEnd && ghostEl}
-                {isBuilderPreview && !ghost && dropAfterOrder != null && pageBlocks.length > 0 && dropAfterOrder >= pageBlocks[pageBlocks.length - 1].ordem && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', marginTop: '8px', animation: 'dropIn 0.2s ease both' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
-                    <div style={{ flex: 1, height: '2px', background: '#2563eb', borderRadius: '1px' }} />
-                  </div>
-                )}
-              </>
-            );
-          })()}
+            })()}
           </SortableContext>
         </DndContext>
 
-        {/* Analysis page special content (loading bar + testimonials) */}
-        {isAnalisePage && <AnaliseContent quiz={quiz} isBuilderPreview={isBuilderPreview} />}
+        {isAnalisePage && (
+          <AnaliseContent
+            quiz={quiz}
+            isBuilderPreview={isBuilderPreview}
+            onComplete={onNext}
+            selectedBlock={selectedBlock}
+            onSelectBlock={onSelectBlock}
+            hoveredBlock={currentHovered}
+            onHoverBlock={v => {
+              setInternalHovered(v);
+              onHoverBlock?.(v);
+            }}
+          />
+        )}
       </form>
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        @keyframes appleIn {
-          0% { opacity: 0; transform: scale(0.985) translateY(10px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes dropIn {
-          0% { opacity: 0; transform: scaleX(0.5); }
-          100% { opacity: 1; transform: scaleX(1); }
-        }
-        * { box-sizing: border-box; }
-        input, button { font-family: inherit; }
-      `}</style>
+      </div>
     </div>
   );
 }

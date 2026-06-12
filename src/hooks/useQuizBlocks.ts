@@ -7,7 +7,7 @@ export interface QuizBlock {
   id: string;
   quiz_id: string;
   page_id: string;
-  tipo: 'titulo' | 'imagem' | 'botao' | 'beneficios' | 'opcoes' | 'campo_input' | 'separador' | 'pergunta';
+  tipo: 'titulo' | 'imagem' | 'botao' | 'beneficios' | 'opcoes' | 'campo_input' | 'separador' | 'pergunta' | 'questao' | 'alerta';
   ordem: number;
   conteudo: Record<string, any>;
 }

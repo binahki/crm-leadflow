@@ -94,6 +94,8 @@ export default function QuizPublico() {
   const [quizBlocks, setQuizBlocks] = useState<any[]>([]);
   const [currentBlockPageId, setCurrentBlockPageId] = useState('cover');
   const [blockSelectedOpcaoId, setBlockSelectedOpcaoId] = useState<string | null>(null);
+  const [blockAnswers, setBlockAnswers] = useState<Record<string, string>>({});
+  const [blockPoints, setBlockPoints] = useState<Record<string, number>>({});
   const [blocos, setBlocos] = useState<Bloco[]>([]);
   const [todasPerguntas, setTodasPerguntas] = useState<Pergunta[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -130,6 +132,61 @@ export default function QuizPublico() {
   useEffect(() => {
     setBlockCampoStep(0);
   }, [currentBlockPageId]);
+
+  // ── Confetti on approval page (block-editor live quiz) ────────────────────────
+  useEffect(() => {
+    if (!(quiz as any)?.use_block_editor) return;
+    const page = todasPerguntas.find(p => p.id === currentBlockPageId);
+    if (page?.tipo_resposta !== 'aprovacao') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    document.getElementById('quiz-confetti-canvas')?.remove();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = window.innerWidth, H = window.innerHeight;
+    const canvas = document.createElement('canvas');
+    canvas.id = 'quiz-confetti-canvas';
+    Object.assign(canvas.style, { position: 'fixed', top: '0', left: '0', width: `${W}px`, height: `${H}px`, pointerEvents: 'none', zIndex: '9999' });
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { canvas.remove(); return; }
+    ctx.scale(dpr, dpr);
+    const brand = quiz?.cor_primaria || '#2563eb';
+    const pal = [brand, brand, brand, '#f59e0b', '#fbbf24', '#10b981', '#f472b6', '#a78bfa', '#fb923c'];
+    type Shape = 'circle' | 'square' | 'ribbon';
+    interface P { x: number; y: number; vx: number; vy: number; angle: number; spin: number; w: number; h: number; color: string; shape: Shape }
+    function burst(cx: number, cy: number, n: number): P[] {
+      return Array.from({ length: n }, (): P => {
+        const shape: Shape = Math.random() < 0.35 ? 'circle' : Math.random() < 0.5 ? 'ribbon' : 'square';
+        const speed = 10 + Math.random() * 18;
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.75;
+        const sz = 5 + Math.random() * 7;
+        return { x: cx + (Math.random() - 0.5) * 60, y: cy, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, angle: Math.random() * Math.PI * 2, spin: (Math.random() - 0.5) * 0.35, w: shape === 'ribbon' ? sz * 0.35 : sz, h: shape === 'ribbon' ? sz * 4 : sz, color: pal[Math.floor(Math.random() * pal.length)], shape };
+      });
+    }
+    const particles: P[] = [...burst(W * 0.5, H * 0.82, 70), ...burst(W * 0.2, H * 0.88, 50), ...burst(W * 0.8, H * 0.88, 50)];
+    let wave2 = false;
+    const t0 = performance.now(), TOTAL = 4200, FADE = 3000;
+    let raf = 0;
+    function frame(now: number) {
+      const el = now - t0;
+      if (!wave2 && el >= 350) { wave2 = true; particles.push(...burst(W * 0.35, H * 0.80, 40), ...burst(W * 0.65, H * 0.80, 40)); }
+      ctx.clearRect(0, 0, W, H);
+      let live = false;
+      for (const p of particles) {
+        p.vy += 0.5; p.vx *= 0.988; p.x += p.vx; p.y += p.vy; p.angle += p.spin;
+        const alpha = el < FADE ? 1 : Math.max(0, 1 - (el - FADE) / (TOTAL - FADE));
+        if (alpha <= 0 || p.y > H + 80) continue;
+        live = true;
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = p.color; ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+        if (p.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2); ctx.fill(); }
+        else { ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); }
+        ctx.restore();
+      }
+      if (live && el < TOTAL) raf = requestAnimationFrame(frame); else canvas.remove();
+    }
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); canvas.remove(); };
+  }, [currentBlockPageId, todasPerguntas, quiz]); // eslint-disable-line
 
   function handleColetaNext() {
     setColetaStep(s => s + 1);
@@ -600,28 +657,44 @@ export default function QuizPublico() {
   // ── Submit lead ───────────────────────────────────────────────────────────────
   async function handleSubmitLead(e: React.FormEvent) {
     e.preventDefault();
-    if (!quiz || !faixa) return;
-    const rawWa = whatsapp.replace(/\D/g, '');
-    
-    // Validações
-    if (rawWa.length !== 11) {
-      alert('Por favor, informe um WhatsApp válido com DDD (11 dígitos).');
-      return;
-    }
-    if (rawWa[2] !== '9') {
-      alert('O número de WhatsApp deve ser um celular (começar com 9).');
-      return;
+    if (!quiz) return;
+
+    const isBlockEditor = !!(quiz as any).use_block_editor;
+
+    // FIX 4: Para block editor, calcular score somando pontos capturados em onOpcaoClick
+    let submitScore = score;
+    let submitFaixa: string | null = faixa;
+    if (isBlockEditor) {
+      submitScore = Object.values(blockPoints).reduce((sum, pts) => sum + pts, 0);
+      const corteVerde: number = (quiz as any).corte_verde ?? 35;
+      const corteAmarelo: number = (quiz as any).corte_amarelo ?? 25;
+      submitFaixa = submitScore >= corteVerde ? 'verde' : submitScore >= corteAmarelo ? 'amarelo' : 'verde';
+    } else {
+      if (!submitFaixa) return;
     }
 
-    // Validate all required coleta fields
-    const fieldValues: Record<string, string> = { nome, whatsapp, cidade, instagram };
-    for (const cfg of coletaConfig) {
-      if (!cfg.obrigatorio) continue;
-      if (cfg.campo === 'whatsapp') continue; // already validated above
-      const val = (fieldValues[cfg.campo] ?? '').trim();
-      if (!val) {
-        alert(`Por favor, preencha o campo "${cfg.label}".`);
+    const rawWa = whatsapp.replace(/\D/g, '');
+
+    // WhatsApp validation — block-editor quizzes validate per-field inline
+    if (!isBlockEditor) {
+      if (rawWa.length !== 11) {
+        alert('Por favor, informe um WhatsApp válido com DDD (11 dígitos).');
         return;
+      }
+      if (rawWa[2] !== '9') {
+        alert('O número de WhatsApp deve ser um celular (começar com 9).');
+        return;
+      }
+      // Validate required coleta fields (legacy flow only)
+      const fvLegacy: Record<string, string> = { nome, whatsapp, cidade, instagram };
+      for (const cfg of coletaConfig) {
+        if (!cfg.obrigatorio) continue;
+        if (cfg.campo === 'whatsapp') continue;
+        const val = (fvLegacy[cfg.campo] ?? '').trim();
+        if (!val) {
+          alert(`Por favor, preencha o campo "${cfg.label}".`);
+          return;
+        }
       }
     }
 
@@ -630,31 +703,45 @@ export default function QuizPublico() {
 
     const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
 
+    // FIX 3: Construir quizRespostas separado por fluxo
     const quizRespostas: Record<string, string> = {};
-    for (const perg of todasPerguntas) {
-      const opcId = answers[perg.id];
-      if (!opcId) continue;
-      
-      if (perg.tipo_resposta === 'multipla') {
-        const selectedIds = multipleAnswers[perg.id] || [opcId as string];
-        const textos = selectedIds
-          .map(id => perg.opcoes.find(o => o.id === id)?.texto)
-          .filter(Boolean).map(t => stripEmojis(t!)).join(', ');
-        quizRespostas[perg.texto] = textos;
-      } else {
-        const op = perg.opcoes.find(o => o.id === opcId as string);
-        if (op) quizRespostas[perg.texto] = stripEmojis(op.texto);
+    if (isBlockEditor) {
+      // Respostas dos blocos questão (capturadas no onOpcaoClick)
+      Object.entries(blockAnswers).forEach(([pergId, texto]) => {
+        const blk = quizBlocks.find((b: any) => b.page_id === pergId || b.id === pergId);
+        const pergTexto = blk?.conteudo?.texto || todasPerguntas.find(p => p.id === pergId)?.texto || pergId;
+        if (texto) quizRespostas[pergTexto] = texto;
+      });
+      if (nome) quizRespostas['Nome'] = nome;
+      if (cidade) quizRespostas['Cidade'] = cidade;
+      if (instagram) quizRespostas['Instagram'] = instagram;
+      Object.entries(extraFields).forEach(([campo, val]) => {
+        if (val.trim()) quizRespostas[campo] = val.trim();
+      });
+    } else {
+      for (const perg of todasPerguntas) {
+        const opcId = answers[perg.id];
+        if (!opcId) continue;
+        if (perg.tipo_resposta === 'multipla') {
+          const selectedIds = multipleAnswers[perg.id] || [opcId as string];
+          const textos = selectedIds
+            .map(id => perg.opcoes.find(o => o.id === id)?.texto)
+            .filter(Boolean).map(t => stripEmojis(t!)).join(', ');
+          quizRespostas[perg.texto] = textos;
+        } else {
+          const op = perg.opcoes.find(o => o.id === opcId as string);
+          if (op) quizRespostas[perg.texto] = stripEmojis(op.texto);
+        }
       }
+      // Campos extras (não-padrão da coleta) vão em quiz_respostas
+      const defaultCampos = new Set(['nome', 'whatsapp', 'cidade', 'instagram']);
+      Object.entries(extraFields).forEach(([campo, val]) => {
+        if (!defaultCampos.has(campo) && val.trim()) {
+          const cfg = coletaConfig.find(c => c.campo === campo);
+          quizRespostas[cfg?.label || campo] = val.trim();
+        }
+      });
     }
-
-    // Campos extras (não-padrão da coleta) vão em quiz_respostas
-    const defaultCampos = new Set(['nome', 'whatsapp', 'cidade', 'instagram']);
-    Object.entries(extraFields).forEach(([campo, val]) => {
-      if (!defaultCampos.has(campo) && val.trim()) {
-        const cfg = coletaConfig.find(c => c.campo === campo);
-        quizRespostas[cfg?.label || campo] = val.trim();
-      }
-    });
 
     const leadData = {
       org_id: quiz.org_id,
@@ -664,8 +751,8 @@ export default function QuizPublico() {
       instagram: instagram.trim(),
       status: 1,
       quiz_respostas: quizRespostas,
-      score: score,
-      faixa: faixa!,
+      score: submitScore,
+      faixa: submitFaixa,
       created_at: new Date().toISOString(),
       ...getUtmsPayload()
     };
@@ -868,16 +955,38 @@ export default function QuizPublico() {
         }}
         fieldValues={{ nome, whatsapp, cidade, instagram, ...extraFields }}
         submitting={submitting}
+        confettiEnabled={false}
         flatPerguntas={todasPerguntas}
         opcoesPorPergunta={Object.fromEntries(todasPerguntas.map(p => [p.id, (p as any).opcoes || []]))}
         selectedOpcaoId={blockSelectedOpcaoId}
         onOpcaoClick={(pergId, opcaoId, _reprova) => {
           setBlockSelectedOpcaoId(opcaoId);
+
+          // Capturar texto e pontos — pode estar no bloco (questao) ou no banco (pergunta)
+          const block = quizBlocks.find((b: any) => b.page_id === pergId || b.id === pergId);
+          const opcaoNoBloco = block?.conteudo?.opcoes?.find((o: any) => o.id === opcaoId);
           const perg = todasPerguntas.find(p => p.id === pergId);
-          const isMultipla = perg?.tipo_resposta === 'multipla';
+          const opcaoNoBanco = perg?.opcoes?.find((o: any) => o.id === opcaoId);
+          const opcaoTexto = opcaoNoBloco?.texto || opcaoNoBanco?.texto || '';
+          const opcaoPontos = opcaoNoBloco?.pontos ?? opcaoNoBanco?.pontos ?? 0;
+
+          setBlockAnswers(prev => ({ ...prev, [pergId]: opcaoTexto }));
+          setBlockPoints(prev => ({ ...prev, [pergId]: opcaoPontos }));
+
+          const isMultipla = perg?.tipo_resposta === 'multipla' || block?.conteudo?.tipo_resposta === 'multipla';
           if (!isMultipla) {
             setTimeout(() => {
               setBlockSelectedOpcaoId(null);
+              const targetPageId = opcaoNoBloco?.target_page_id || (opcaoNoBanco as any)?.target_page_id || null;
+              const reprova = opcaoNoBloco?.reprova_imediato || (opcaoNoBanco as any)?.reprova_imediato || false;
+              if (reprova) {
+                const reprovaPerg = todasPerguntas.find(p => p.tipo_resposta === 'reprovacao');
+                if (reprovaPerg) { setCurrentBlockPageId(reprovaPerg.id); return; }
+              }
+              if (targetPageId) {
+                setCurrentBlockPageId(targetPageId);
+                return;
+              }
               const allPageIds = ['cover', ...todasPerguntas.map(p => p.id)];
               const idx = allPageIds.indexOf(currentBlockPageId);
               const nextId = allPageIds[idx + 1];

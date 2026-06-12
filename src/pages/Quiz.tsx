@@ -25,7 +25,7 @@ import {
   MessageCircle, Instagram, MapPin, Sparkles, BrainCircuit,
   Clock, Share2, MoreHorizontal, TrendingDown,
   LayoutDashboard,
-  AlignLeft, ImageIcon, MousePointer, Type, List, HelpCircle,
+  AlignLeft, ImageIcon, MousePointer, Type, List, HelpCircle, Bell,
 } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, DragOverlay } from '@dnd-kit/core';
 
@@ -141,18 +141,27 @@ interface SortableCardProps {
   isActive: boolean; isHovered: boolean;
   primary: string; textMain: string; textMut: string; isDark: boolean;
   useBlockEditor?: boolean;
+  pendingDeleteId?: string | null;
+  label?: string;
+  isRenaming?: boolean;
+  renamingText?: string;
   onSelect: () => void; onHover: (id: string | null) => void;
   onDuplicate: () => void; onDelete: () => void;
+  onDeleteConfirm: (id: string, fn: () => void) => void;
+  onStartRename?: () => void;
+  onRenameChange?: (t: string) => void;
+  onCommitRename?: () => void;
 }
-function SortablePerguntaCard({ perg, isActive, isHovered, primary, textMain, textMut, isDark, useBlockEditor, onSelect, onHover, onDuplicate, onDelete }: SortableCardProps) {
+function SortablePerguntaCard({ perg, isActive, isHovered, primary, textMain, textMut, isDark, useBlockEditor, pendingDeleteId, label, isRenaming, renamingText, onSelect, onHover, onDuplicate, onDelete, onDeleteConfirm, onStartRename, onRenameChange, onCommitRename }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: perg.id });
   const dndStyle: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : undefined };
   const isEspecial = TIPOS_ESPECIAIS.has(perg.tipo_resposta || '') || perg.tipo_resposta === 'informativa';
+  const displayLabel = label || (useBlockEditor && !isEspecial ? `Etapa ${perg.globalIndex + 1}` : (perg.texto ? perg.texto.slice(0, 30) : 'Sem texto'));
   return (
     <div ref={setNodeRef} style={dndStyle} {...attributes}>
-      <div onClick={onSelect} onMouseEnter={() => onHover(perg.id)} onMouseLeave={() => onHover(null)}
+      <div onClick={isRenaming ? undefined : onSelect} onMouseEnter={() => onHover(perg.id)} onMouseLeave={() => onHover(null)}
         style={{
-          padding: '10px 8px 10px 6px', borderRadius: '10px', marginBottom: '3px', cursor: 'pointer',
+          padding: '10px 8px 10px 6px', borderRadius: '10px', marginBottom: '3px', cursor: isRenaming ? 'default' : 'pointer',
           border: `1.5px solid ${isActive ? '#2563eb' : 'transparent'}`,
           background: isActive ? hexToRgba('#2563eb', 0.06) : isHovered ? (isDark ? '#1a1a1e' : '#f0f4ff') : 'transparent',
           opacity: isDragging ? 0.5 : 1,
@@ -168,10 +177,26 @@ function SortablePerguntaCard({ perg, isActive, isHovered, primary, textMain, te
           ) : (
             <span style={{ fontSize: '11px', fontWeight: 700, color: isActive ? '#2563eb' : textMut, flexShrink: 0 }}>{useBlockEditor ? perg.globalIndex + 1 : perg.globalIndex}.</span>
           )}
-          <span style={{ flex: 1, fontSize: '12px', fontWeight: isActive ? 700 : 500, color: isActive ? '#2563eb' : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {useBlockEditor && !isEspecial ? `Etapa ${perg.globalIndex + 1}` : perg.texto ? perg.texto.slice(0, 30) : 'Sem texto'}
-          </span>
-          {(isHovered || isActive) && (
+          {isRenaming ? (
+            <input
+              autoFocus
+              value={renamingText || ''}
+              onChange={e => onRenameChange?.(e.target.value)}
+              onBlur={onCommitRename}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onCommitRename?.(); } if (e.key === 'Escape') onCommitRename?.(); }}
+              onClick={e => e.stopPropagation()}
+              style={{ flex: 1, fontSize: '12px', fontWeight: 700, color: isActive ? '#2563eb' : textMain, background: 'transparent', border: 'none', borderBottom: `1px solid ${isActive ? '#2563eb' : textMut}`, outline: 'none', padding: '0', fontFamily: 'inherit' }}
+            />
+          ) : (
+            <span
+              onDoubleClick={e => { e.stopPropagation(); onStartRename?.(); }}
+              title={onStartRename ? 'Duplo clique para renomear' : undefined}
+              style={{ flex: 1, fontSize: '12px', fontWeight: isActive ? 700 : 500, color: isActive ? '#2563eb' : textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {displayLabel}
+            </span>
+          )}
+          {!isRenaming && (isHovered || isActive) && (
             <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <button onClick={onDuplicate} title="Duplicar"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
@@ -179,11 +204,11 @@ function SortablePerguntaCard({ perg, isActive, isHovered, primary, textMain, te
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                 <Copy style={{ width: '11px', height: '11px' }} />
               </button>
-              <button onClick={onDelete} title="Excluir"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
-                <Trash2 style={{ width: '11px', height: '11px' }} />
+              <button onClick={() => onDeleteConfirm(perg.id, onDelete)} title={pendingDeleteId === perg.id ? 'Clique para confirmar' : 'Excluir'}
+                style={{ background: pendingDeleteId === perg.id ? '#fee2e2' : 'none', border: 'none', cursor: 'pointer', color: pendingDeleteId === perg.id ? '#ef4444' : textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                onMouseEnter={e => { if (pendingDeleteId !== perg.id) { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; } }}
+                onMouseLeave={e => { if (pendingDeleteId !== perg.id) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; } }}>
+                {pendingDeleteId === perg.id ? <Check style={{ width: '11px', height: '11px' }} /> : <Trash2 style={{ width: '11px', height: '11px' }} />}
               </button>
             </div>
           )}
@@ -193,10 +218,73 @@ function SortablePerguntaCard({ perg, isActive, isHovered, primary, textMain, te
   );
 }
 
-function SortableCoverCard({ isActive, isHovered, isDark, textMain, textMut, primary, useBlockEditor, onSelect, onHover, onDuplicate, onDelete }: {
+// ── Sortable questao opcao row (dnd-kit) ──────────────────────────────────────
+function SortableQuestaoOpcaoRow({ op, idx, isDark, border, textMut, iStyle, lbl, isEditing, allPages, onUpdate, onRemove, onToggleEdit }: {
+  op: any; idx: number; isDark: boolean; border: string; textMut: string;
+  iStyle: React.CSSProperties; lbl: React.CSSProperties; isEditing: boolean;
+  allPages: { id: string; label: string }[];
+  onUpdate: (field: string, val: any) => void; onRemove: () => void; onToggleEdit: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: op.id });
+  const dndStyle: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 999 : undefined };
+  return (
+    <div ref={setNodeRef} style={dndStyle} {...attributes}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div {...listeners} style={{ color: textMut, cursor: isDragging ? 'grabbing' : 'grab', flexShrink: 0, touchAction: 'none', display: 'flex' }}>
+            <GripVertical style={{ width: '13px', height: '13px' }} />
+          </div>
+          <input
+            value={op.texto || ''}
+            onChange={e => onUpdate('texto', e.target.value)}
+            placeholder={`Opção ${idx + 1}`}
+            style={{ ...iStyle, flex: 1, padding: '6px 8px' }}
+          />
+          <input
+            type="number"
+            value={op.pontos ?? 0}
+            onChange={e => onUpdate('pontos', Number(e.target.value))}
+            style={{ ...iStyle, width: '52px', textAlign: 'center' as const, padding: '6px 4px' }}
+          />
+          <button
+            onClick={onToggleEdit}
+            title="Configurar redirecionamento"
+            style={{ background: isEditing ? hexToRgba('#2563eb', 0.1) : 'none', border: 'none', cursor: 'pointer', color: isEditing ? '#2563eb' : textMut, display: 'flex', padding: '5px', borderRadius: '4px' }}
+          >
+            <Settings style={{ width: '13px', height: '13px' }} />
+          </button>
+          <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: '4px' }}>
+            <Trash2 style={{ width: '12px', height: '12px' }} />
+          </button>
+        </div>
+        {isEditing && (
+          <div style={{ margin: '2px 0 4px 18px', padding: '10px', borderRadius: '8px', background: isDark ? '#1a1a1e' : '#f9fafb', border: `1px solid ${border}`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div>
+              <label style={{ ...lbl, fontSize: '10px' }}>Ir para qual página?</label>
+              <select
+                value={op.target_page_id || 'next'}
+                onChange={e => onUpdate('target_page_id', e.target.value === 'next' ? null : e.target.value)}
+                style={{ ...iStyle, fontSize: '12px', padding: '5px' }}
+              >
+                <option value="next">Próxima página (padrão)</option>
+                {allPages.map(p => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SortableCoverCard({ isActive, isHovered, isDark, textMain, textMut, primary, useBlockEditor, pendingDeleteId, onSelect, onHover, onDuplicate, onDelete, onDeleteConfirm }: {
   isActive: boolean; isHovered: boolean; isDark: boolean; textMain: string; textMut: string; primary: string;
   useBlockEditor?: boolean;
+  pendingDeleteId?: string | null;
   onSelect: () => void; onHover: (id: string | null) => void; onDuplicate: () => void; onDelete: () => void;
+  onDeleteConfirm: (id: string, fn: () => void) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: 'cover' });
   const dndStyle: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 999 : undefined };
@@ -228,11 +316,11 @@ function SortableCoverCard({ isActive, isHovered, isDark, textMain, textMut, pri
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                 <Copy style={{ width: '11px', height: '11px' }} />
               </button>
-              <button onClick={onDelete} title="Excluir"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; }}>
-                <Trash2 style={{ width: '11px', height: '11px' }} />
+              <button onClick={() => onDeleteConfirm('cover', onDelete)} title={pendingDeleteId === 'cover' ? 'Clique para confirmar' : 'Excluir'}
+                style={{ background: pendingDeleteId === 'cover' ? '#fee2e2' : 'none', border: 'none', cursor: 'pointer', color: pendingDeleteId === 'cover' ? '#ef4444' : textMut, display: 'flex', padding: '2px', borderRadius: '4px' }}
+                onMouseEnter={e => { if (pendingDeleteId !== 'cover') { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; } }}
+                onMouseLeave={e => { if (pendingDeleteId !== 'cover') { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = textMut; } }}>
+                {pendingDeleteId === 'cover' ? <Check style={{ width: '11px', height: '11px' }} /> : <Trash2 style={{ width: '11px', height: '11px' }} />}
               </button>
             </div>
           )}
@@ -421,7 +509,7 @@ export default function QuizBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishDone, setPublishDone] = useState(false);
   const [showUnpublishModal, setShowUnpublishModal] = useState(false);
@@ -432,6 +520,9 @@ export default function QuizBuilderPage() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [editingBlocoId, setEditingBlocoId] = useState<string | null>(null);
   const [editingOpcaoId, setEditingOpcaoId] = useState<string | null>(null);
+  const [pageLabels, setPageLabels] = useState<Record<string, string>>({});
+  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
+  const [renamingPageText, setRenamingPageText] = useState('');
   const [expandedColetaCampo, setExpandedColetaCampo] = useState<string | null>(null);
   const [settingsTab, setSettingsTab] = useState<'Geral' | 'Pixel/Scripts'>('Geral');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -443,7 +534,7 @@ export default function QuizBuilderPage() {
 
   // DnD sensors
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const blockDndSensors = useSensors(useSensor(NoPreviewPointerSensor, { activationConstraint: { distance: 8 } }));
+  const blockDndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // Block palette drag state
   const [activeDragItem, setActiveDragItem] = useState<{ tipo: string; label: string; conteudo: Record<string, any> } | null>(null);
@@ -459,6 +550,7 @@ export default function QuizBuilderPage() {
   const [previewColetaIdx, setPreviewColetaIdx] = useState(0);
   const [previewSelectedOpcao, setPreviewSelectedOpcao] = useState<string | null>(null);
   const previewAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Collect panel state
   const [showAddColeta, setShowAddColeta] = useState(false);
@@ -1013,6 +1105,24 @@ export default function QuizBuilderPage() {
               { pergunta_id: defaultPerg.id, texto: 'Opção B', pontos: 1, reprova_imediato: false, ordem: 2 },
               { pergunta_id: defaultPerg.id, texto: 'Opção C', pontos: 0, reprova_imediato: false, ordem: 3 },
             ]);
+            if (newQuiz?.use_block_editor) {
+              await db.from('quiz_page_blocks').insert({
+                quiz_id: newQuiz.id,
+                page_id: defaultPerg.id,
+                tipo: 'questao',
+                ordem: 1,
+                conteudo: {
+                  texto: 'Adicione sua pergunta aqui',
+                  subtexto: null,
+                  tipo_resposta: 'unica',
+                  opcoes: [
+                    { id: `op_default_1`, texto: 'Opção A', pontos: 3, reprova_imediato: false, emoji: null },
+                    { id: `op_default_2`, texto: 'Opção B', pontos: 1, reprova_imediato: false, emoji: null },
+                    { id: `op_default_3`, texto: 'Opção C', pontos: 0, reprova_imediato: false, emoji: null },
+                  ],
+                },
+              });
+            }
           }
         }
 
@@ -1278,13 +1388,14 @@ export default function QuizBuilderPage() {
     }
     markDirty();
     setPerguntas(p => ({ ...p, [targetBlocoId]: [...(p[targetBlocoId] || []), np] }));
-    const { data: defaultOpcoes } = await db.from('quiz_opcoes').insert([
+    setSelectedPageId(np.id);
+    db.from('quiz_opcoes').insert([
       { pergunta_id: np.id, texto: 'Opção A', pontos: 0, reprova_imediato: false, ordem: 1, emoji: null },
       { pergunta_id: np.id, texto: 'Opção B', pontos: 0, reprova_imediato: false, ordem: 2, emoji: null },
       { pergunta_id: np.id, texto: 'Opção C', pontos: 0, reprova_imediato: false, ordem: 3, emoji: null },
-    ]).select();
-    setOpcoes(o => ({ ...o, [np.id]: defaultOpcoes || [] }));
-    setSelectedPageId(np.id);
+    ]).select().then(({ data: defaultOpcoes }: { data: any[] | null }) => {
+      setOpcoes(o => ({ ...o, [np.id]: defaultOpcoes || [] }));
+    });
     if (!(quiz as any).use_block_editor) {
       setTimeout(() => pageListRef.current?.scrollTo({ top: pageListRef.current.scrollHeight, behavior: 'smooth' }), 80);
     }
@@ -1354,6 +1465,18 @@ export default function QuizBuilderPage() {
     if (newBlocks) setBlocks(prev => [...prev, ...newBlocks]);
     setSelectedPageId(newPageId);
     toast.success('Capa duplicada');
+  }
+
+  function handleDeleteWithConfirm(id: string, deleteFn: () => void) {
+    if (pendingDelete === id) {
+      if (pendingDeleteTimer.current) clearTimeout(pendingDeleteTimer.current);
+      setPendingDelete(null);
+      deleteFn();
+    } else {
+      if (pendingDeleteTimer.current) clearTimeout(pendingDeleteTimer.current);
+      setPendingDelete(id);
+      pendingDeleteTimer.current = setTimeout(() => setPendingDelete(null), 3000);
+    }
   }
 
   async function deleteCover() {
@@ -1436,16 +1559,26 @@ export default function QuizBuilderPage() {
   async function handleBlockDrop(e: any, overPhone: boolean, capturedDropOrder: number | null) {
     if (e.active?.id?.toString().startsWith('preview-block-') || e.active?.data?.current?.type === 'preview-block') return;
     const data = e.active?.data?.current as { tipo: string; conteudo: Record<string, any>; label: string } | undefined;
+    console.log('[blockDrop] tipo:', data?.tipo, 'overPhone:', overPhone);
 
     if (!data?.tipo || !quiz || !overPhone) return;
 
-    if (data.tipo === 'questao_multipla') {
-      if (selectedPageType !== 'question') {
-        toast.error('Selecione uma etapa de pergunta primeiro');
-        return;
-      }
-      setSelectedBlockId('__auto_pergunta__');
-      toast.success('Clique no bloco de questão para editar');
+    if (data.tipo === 'questao') {
+      const pageId = selectedPageId === 'cover' ? 'cover' : selectedPageId;
+      const t = Date.now();
+      const result = await addBlock(pageId, 'questao', {
+        texto: 'Adicione sua pergunta aqui',
+        subtexto: null,
+        tipo_resposta: 'unica',
+        opcoes: [
+          { id: `op_${t}_1`, texto: 'Opção A', pontos: 0, reprova_imediato: false, emoji: null },
+          { id: `op_${t}_2`, texto: 'Opção B', pontos: 0, reprova_imediato: false, emoji: null },
+          { id: `op_${t}_3`, texto: 'Opção C', pontos: 0, reprova_imediato: false, emoji: null },
+        ],
+      }, capturedDropOrder ?? undefined);
+      if (!result) { toast.error('Erro ao adicionar bloco'); return; }
+      setSelectedBlockId(result.id);
+      toast.success('Questão adicionada');
       return;
     }
 
@@ -1980,8 +2113,7 @@ export default function QuizBuilderPage() {
                   type="range" min={20} max={80} step={4}
                   value={quiz.logo_altura || 32}
                   onChange={e => {
-                    const val = Number(e.target.value);
-                    setQuiz(q => q ? { ...q, logo_altura: val } : q);
+                    updateQuizField('logo_altura', Number(e.target.value));
                   }}
                   style={{ width: '100%', marginTop: '4px', accentColor: '#2563eb' }}
                 />
@@ -2013,7 +2145,7 @@ export default function QuizBuilderPage() {
     const LABELS: Record<string, string> = {
       titulo: 'Texto', imagem: 'Imagem', botao: 'Botão',
       beneficios: 'Benefícios', campo_input: 'Campo', separador: 'Espaço',
-      opcoes: 'Questão', pergunta: 'Questão',
+      opcoes: 'Questão', pergunta: 'Questão', questao: 'Questão', alerta: 'Alerta',
     };
 
     return (
@@ -2177,6 +2309,11 @@ export default function QuizBuilderPage() {
                     placeholder="Ex: Qual o seu nome?" style={iStyle} />
                 </div>
                 <div>
+                  <label style={lbl}>Subtítulo (opcional)</label>
+                  <input value={c.subtitulo || ''} onChange={e => update('subtitulo', e.target.value || undefined)}
+                    placeholder="Ex: Informe o número com DDD" style={iStyle} />
+                </div>
+                <div>
                   <label style={lbl}>Placeholder</label>
                   <input value={c.placeholder || ''} onChange={e => update('placeholder', e.target.value)}
                     placeholder="Texto de exemplo" style={iStyle} />
@@ -2238,6 +2375,23 @@ export default function QuizBuilderPage() {
             </div>
           )}
 
+          {tipo === 'alerta' && <>
+            <div>
+              <label style={lbl}>Texto</label>
+              <textarea value={c.texto || ''} rows={3} onChange={e => update('texto', e.target.value)}
+                placeholder="Texto do alerta" style={{ ...iStyle, resize: 'vertical' as const }} />
+            </div>
+            <div>
+              <label style={lbl}>Cor do alerta</label>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="color" value={c.cor || '#16a34a'} onChange={e => update('cor', e.target.value)}
+                  style={{ width: '36px', height: '34px', borderRadius: '8px', border: `1px solid ${border}`, cursor: 'pointer', padding: '2px' }} />
+                <input value={c.cor || '#16a34a'} onChange={e => update('cor', e.target.value)}
+                  style={{ ...iStyle, flex: 1 }} />
+              </div>
+            </div>
+          </>}
+
           {tipo === 'opcoes' && (() => {
             const pergId = c.pergunta_id as string;
             const blocoSelectedPergunta = flatPerguntas.find(p => p.id === pergId);
@@ -2288,150 +2442,127 @@ export default function QuizBuilderPage() {
             );
           })()}
 
-          {(tipo === 'pergunta') && (() => {
-            const pergId = c.pergunta_id as string;
-            const blocoSelectedPergunta = flatPerguntas.find(p => p.id === pergId);
-            const pergOpcoes = pergId ? (opcoes[pergId] || []) : [];
+          {tipo === 'questao' && (() => {
+            const opcoes: any[] = c.opcoes || [];
+
+            const updateOpcaoField = (idx: number, field: string, valor: any) => {
+              const next = [...opcoes];
+              next[idx] = { ...next[idx], [field]: valor };
+              update('opcoes', next);
+            };
+
+            const addOpcao = () => {
+              update('opcoes', [...opcoes, { id: `op_${Date.now()}`, texto: '', pontos: 0, reprova_imediato: false, emoji: null, target_page_id: null }]);
+            };
+
+            const removeOpcao = (idx: number) => {
+              update('opcoes', opcoes.filter((_: any, i: number) => i !== idx));
+            };
+
+            const handleOpcaoDragEnd = (event: any) => {
+              const { active, over } = event;
+              if (!over || active.id === over.id) return;
+              const oldIdx = opcoes.findIndex((o: any) => o.id === active.id);
+              const newIdx = opcoes.findIndex((o: any) => o.id === over.id);
+              if (oldIdx !== -1 && newIdx !== -1) update('opcoes', arrayMove([...opcoes], oldIdx, newIdx));
+            };
+
+            const allPages = flatPerguntas.map(p => {
+              const customLabel = pageLabels[p.id];
+              const questaoBlock = blocks.find(b => b.page_id === p.id && b.tipo === 'questao');
+              const lbl2 = customLabel || questaoBlock?.conteudo?.texto || (TIPOS_ESPECIAIS.has(p.tipo_resposta || '') ? (p.tipo_resposta || 'Página') : `Etapa ${p.globalIndex + 1}`);
+              return { id: p.id, label: lbl2.slice(0, 40) };
+            });
+
             return (
               <>
-                {blocoSelectedPergunta && (<>
-                  <div>
-                    <label style={lbl}>Texto da pergunta</label>
-                    <textarea value={blocoSelectedPergunta.texto || ''} rows={2}
-                      onChange={e => updatePergunta(blocoSelectedPergunta.id, 'texto', e.target.value)}
-                      placeholder="Digite a pergunta..." style={{ ...iStyle, resize: 'vertical' }} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Subtítulo <span style={{ fontWeight: 400, color: textMut }}>(opcional)</span></label>
-                    <textarea value={blocoSelectedPergunta.subtexto || ''} rows={2}
-                      onChange={e => updatePergunta(blocoSelectedPergunta.id, 'subtexto', e.target.value || null)}
-                      placeholder="Subtítulo de apoio..." style={{ ...iStyle, resize: 'vertical' }} />
-                  </div>
-                  <div>
-                    <label style={lbl}>Tipo de resposta</label>
-                    <select value={blocoSelectedPergunta.tipo_resposta || 'unica'}
-                      onChange={e => updatePergunta(blocoSelectedPergunta.id, 'tipo_resposta', e.target.value)}
-                      style={iStyle}>
-                      <option value="unica">Seleção única (avança automático)</option>
-                      <option value="multipla">Múltipla escolha (botão continuar)</option>
-                    </select>
-                  </div>
-                </>)}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', margin: '0 0 2px', paddingLeft: '19px', paddingRight: '28px' }}>
-                  <span style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opções</span>
-                  <span style={{ width: '48px', textAlign: 'center', fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Score</span>
+                <div>
+                  <label style={lbl}>Texto da pergunta</label>
+                  <textarea value={c.texto || ''} rows={2}
+                    onChange={e => update('texto', e.target.value)}
+                    placeholder="Digite a pergunta..."
+                    style={{ ...iStyle, resize: 'vertical' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={pergOpcoes.map(o => o.id)} strategy={verticalListSortingStrategy}>
-                      {pergOpcoes.map(op => (
-                        <SortableOpcaoCard
-                          key={op.id} op={op} isDark={isDark} border={border} textMut={textMut} primary={primary} iStyle={iStyle} lbl={lbl}
-                          isEditing={editingOpcaoId === op.id}
-                          onToggleEdit={() => setEditingOpcaoId(editingOpcaoId === op.id ? null : op.id)}
-                          onUpdate={(f: string, v: any) => updateOpcao(op.id, f, v)}
-                          onDelete={() => deleteOpcao(op.id)}
-                          allPages={flatPerguntas}
-                        />
-                      ))}
+                <div>
+                  <label style={lbl}>Subtítulo <span style={{ fontWeight: 400, color: textMut }}>(opcional)</span></label>
+                  <textarea value={c.subtexto || ''} rows={2}
+                    onChange={e => update('subtexto', e.target.value || null)}
+                    placeholder="Subtítulo de apoio..."
+                    style={{ ...iStyle, resize: 'vertical' }} />
+                </div>
+                <div>
+                  <label style={lbl}>Tipo de resposta</label>
+                  <select value={c.tipo_resposta || 'unica'} onChange={e => update('tipo_resposta', e.target.value)} style={iStyle}>
+                    <option value="unica">Seleção única (avança automático)</option>
+                    <option value="multipla">Múltipla escolha (botão continuar)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                    <span style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>Opções</span>
+                    <span style={{ width: '52px', textAlign: 'center' as const, fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>Score</span>
+                  </div>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleOpcaoDragEnd}>
+                    <SortableContext items={opcoes.map((o: any) => o.id)} strategy={verticalListSortingStrategy}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {opcoes.map((op: any, idx: number) => (
+                          <SortableQuestaoOpcaoRow
+                            key={op.id || idx}
+                            op={op}
+                            idx={idx}
+                            isDark={isDark}
+                            border={border}
+                            textMut={textMut}
+                            iStyle={iStyle}
+                            lbl={lbl}
+                            isEditing={editingOpcaoId === `questao_${block.id}_${idx}`}
+                            allPages={allPages}
+                            onUpdate={(field, val) => updateOpcaoField(idx, field, val)}
+                            onRemove={() => removeOpcao(idx)}
+                            onToggleEdit={() => setEditingOpcaoId(editingOpcaoId === `questao_${block.id}_${idx}` ? null : `questao_${block.id}_${idx}`)}
+                          />
+                        ))}
+                      </div>
                     </SortableContext>
                   </DndContext>
-                </div>
-                {blocoSelectedPergunta && (
-                  <button onClick={() => addOpcao(blocoSelectedPergunta.id)} style={{
-                    display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px',
-                    borderRadius: tokens.radius.sm, border: `1px dashed ${border}`,
-                    background: 'transparent', color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
+                  <button
+                    onClick={addOpcao}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', padding: '6px 10px', borderRadius: tokens.radius.sm, border: `1px dashed ${border}`, background: 'transparent', color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
                     <Plus style={{ width: '11px', height: '11px' }} /> Adicionar opção
                   </button>
-                )}
+                </div>
+
+                <div style={{ paddingTop: '8px', borderTop: `1px solid ${border}`, marginTop: '8px' }}>
+                  <button
+                    onClick={() => handleDeleteWithConfirm(block.id, async () => { deleteBlock(block.id); setSelectedBlockId(null); })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1.5px solid #ef4444', background: pendingDelete === block.id ? '#fee2e2' : 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontFamily: 'inherit' }}
+                  >
+                    {pendingDelete === block.id
+                      ? <><Check style={{ width: '14px', height: '14px' }} /> Confirmar remoção</>
+                      : <><Trash2 style={{ width: '14px', height: '14px' }} /> Remover bloco</>}
+                  </button>
+                </div>
               </>
             );
           })()}
 
-          {tipo !== 'opcoes' && (
+          {tipo !== 'opcoes' && tipo !== 'questao' && (
             <div style={{ paddingTop: '8px', borderTop: `1px solid ${border}`, marginTop: '8px' }}>
               <button
-                onClick={() => { deleteBlock(block.id); setSelectedBlockId(null); }}
-                style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1.5px solid #ef4444', background: 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontFamily: 'inherit' }}>
-                <Trash2 style={{ width: '14px', height: '14px' }} /> Remover bloco
+                onClick={() => handleDeleteWithConfirm(block.id, async () => {
+                  deleteBlock(block.id);
+                  setSelectedBlockId(null);
+                })}
+                style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1.5px solid #ef4444', background: pendingDelete === block.id ? '#fee2e2' : 'transparent', color: '#ef4444', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontFamily: 'inherit' }}>
+                {pendingDelete === block.id
+                  ? <><Check style={{ width: '14px', height: '14px' }} /> Confirmar remoção</>
+                  : <><Trash2 style={{ width: '14px', height: '14px' }} /> Remover bloco</>}
               </button>
             </div>
           )}
 
-        </div>
-      </div>
-    );
-  }
-
-  // ── Right panel: auto question (no DB block) ──────────────────────────────
-  function renderRightPanelQuestion(p: Pergunta) {
-    const pergId = p.id;
-    const pergOpcoes = pergId ? (opcoes[pergId] || []) : [];
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ padding: '8px 12px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          <button
-            onClick={() => setSelectedBlockId(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: textMut, display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isDark ? '#1a1a1e' : '#f3f4f6'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <ChevronLeft style={{ width: '12px', height: '12px' }} /> Voltar
-          </button>
-          <span style={{ fontSize: '11px', color: textMut }}>/</span>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: textMain }}>Questão</span>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={lbl}>Texto da pergunta</label>
-            <textarea value={p.texto || ''} rows={2}
-              onChange={e => updatePergunta(p.id, 'texto', e.target.value)}
-              placeholder="Digite a pergunta..." style={{ ...iStyle, resize: 'vertical' }} />
-          </div>
-          <div>
-            <label style={lbl}>Subtítulo <span style={{ fontWeight: 400, color: textMut }}>(opcional)</span></label>
-            <textarea value={p.subtexto || ''} rows={2}
-              onChange={e => updatePergunta(p.id, 'subtexto', e.target.value || null)}
-              placeholder="Subtítulo de apoio..." style={{ ...iStyle, resize: 'vertical' }} />
-          </div>
-          <div>
-            <label style={lbl}>Tipo de resposta</label>
-            <select value={p.tipo_resposta || 'unica'}
-              onChange={e => updatePergunta(p.id, 'tipo_resposta', e.target.value)}
-              style={iStyle}>
-              <option value="unica">Seleção única (avança automático)</option>
-              <option value="multipla">Múltipla escolha (botão continuar)</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', margin: '0 0 2px', paddingLeft: '19px', paddingRight: '28px' }}>
-            <span style={{ flex: 1, fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Opções</span>
-            <span style={{ width: '48px', textAlign: 'center', fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Score</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={pergOpcoes.map(o => o.id)} strategy={verticalListSortingStrategy}>
-                {pergOpcoes.map(op => (
-                  <SortableOpcaoCard
-                    key={op.id} op={op} isDark={isDark} border={border} textMut={textMut} primary={primary} iStyle={iStyle} lbl={lbl}
-                    isEditing={editingOpcaoId === op.id}
-                    onToggleEdit={() => setEditingOpcaoId(editingOpcaoId === op.id ? null : op.id)}
-                    onUpdate={(f: string, v: any) => updateOpcao(op.id, f, v)}
-                    onDelete={() => deleteOpcao(op.id)}
-                    allPages={flatPerguntas}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </div>
-          <button onClick={() => addOpcao(p.id)} style={{
-            display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px',
-            borderRadius: tokens.radius.sm, border: `1px dashed ${border}`,
-            background: 'transparent', color: textMut, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <Plus style={{ width: '11px', height: '11px' }} /> Adicionar opção
-          </button>
         </div>
       </div>
     );
@@ -2443,13 +2574,67 @@ export default function QuizBuilderPage() {
 
     // Block editor — novo sistema
     if ((quiz as any).use_block_editor) {
+      if (selectedBlockId === '__analise_texto__') {
+        return (
+          <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ fontSize: '11px', color: textMut, padding: '10px 12px', background: isDark ? '#1a1a1e' : '#f8fafc', borderRadius: '8px', border: `1px solid ${border}` }}>
+              Ícone decorativo da página de análise. O título e subtítulo são editados no bloco de Texto acima.
+            </div>
+          </div>
+        );
+      }
+      if (selectedBlockId === '__analise_barra__') {
+        return (
+          <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label style={lbl}>Cor da barra</label>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="color" value={quiz.analise_cor || quiz.cor_primaria || '#2563eb'}
+                  onChange={e => updateQuizField('analise_cor', e.target.value)}
+                  style={{ width: '36px', height: '34px', borderRadius: '8px', border: `1px solid ${border}`, cursor: 'pointer', padding: '2px' }} />
+                <input value={quiz.analise_cor || quiz.cor_primaria || '#2563eb'}
+                  onChange={e => updateQuizField('analise_cor', e.target.value)}
+                  style={{ ...iStyle, flex: 1 }} />
+              </div>
+            </div>
+            <div>
+              <label style={lbl}>Tempo de análise (segundos)</label>
+              <input type="number" min={1} max={30} value={quiz.analise_duracao || 4}
+                onChange={e => updateQuizField('analise_duracao', Number(e.target.value))}
+                style={iStyle} />
+            </div>
+          </div>
+        );
+      }
+      if (selectedBlockId === '__analise_depoimentos__') {
+        return (
+          <div style={{ overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: textMut, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Depoimentos</div>
+            {(quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS).map((d, i) => (
+              <div key={i} style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${border}`, background: isDark ? '#1a1a1e' : '#f8fafc', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input value={d.nome} onChange={e => {
+                  const cur = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                  const nd = [...cur]; nd[i] = { ...nd[i], nome: e.target.value };
+                  updateQuizField('analise_depoimentos', nd);
+                }} placeholder="Nome" style={iStyle} />
+                <input value={d.handle || ''} onChange={e => {
+                  const cur = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                  const nd = [...cur]; nd[i] = { ...nd[i], handle: e.target.value };
+                  updateQuizField('analise_depoimentos', nd);
+                }} placeholder="@handle" style={{ ...iStyle, fontSize: '11px' }} />
+                <textarea value={d.texto} onChange={e => {
+                  const cur = quiz.analise_depoimentos?.length ? quiz.analise_depoimentos : DEFAULT_DEPOIMENTOS;
+                  const nd = [...cur]; nd[i] = { ...nd[i], texto: e.target.value };
+                  updateQuizField('analise_depoimentos', nd);
+                }} placeholder="Texto do depoimento" style={{ ...iStyle, height: '60px', resize: 'none' as const }} />
+              </div>
+            ))}
+          </div>
+        );
+      }
       if (selectedBlockId) {
         const block = blocks.find(b => b.id === selectedBlockId);
         if (block) return renderBlockEditor(block);
-      }
-      // Auto-rendered question page (no DB block)
-      if (selectedBlockId === '__auto_pergunta__' && _selectedQ) {
-        return renderRightPanelQuestion(_selectedQ);
       }
       // Analysis page config when no block selected
       if (selectedPageType === 'analise') {
@@ -2518,7 +2703,7 @@ export default function QuizBuilderPage() {
         capa_titulo: 'Título & Subtítulo', capa_subtitulo: 'Título & Subtítulo',
         capa_imagem: 'Imagem de capa', capa_beneficios: 'Benefícios', capa_botao: 'Botão da capa',
         perg_texto: 'Texto da etapa', perg_opcoes: 'Respostas', inf_botao: 'Botão',
-        analise_texto: 'Textos da análise', analise_depoimentos: 'Depoimentos',
+        analise_texto: 'Textos da análise', analise_barra: 'Barra de Análise', analise_depoimentos: 'Depoimentos',
         aprovado_texto: 'Textos', aprovado_botao: 'Textos',
         reprovado_texto: 'Textos', reprovado_dicas: 'Dicas', reprovado_botao: 'Botão',
       };
@@ -2696,6 +2881,21 @@ export default function QuizBuilderPage() {
                   <option value="collect">Formulário de Coleta 📝</option>
                   <option value="rejection">Página de Reprovação ❌</option>
                 </select>
+              </div>
+            </>}
+
+            {selectedElement === 'analise_barra' && <>
+              <div>
+                <label style={lbl}>Tempo de análise (segundos)</label>
+                <input type="number" min={1} max={30} value={quiz.analise_duracao || 4}
+                  onChange={e => updateQuizField('analise_duracao', Number(e.target.value))}
+                  style={iStyle} />
+              </div>
+              <div>
+                <label style={lbl}>Texto de carregamento</label>
+                <input value={(quiz as any).analise_texto_carregando || 'Carregando...'}
+                  onChange={e => updateQuizField('analise_texto_carregando', e.target.value)}
+                  placeholder="Carregando..." style={iStyle} />
               </div>
             </>}
 
@@ -3707,7 +3907,9 @@ export default function QuizBuilderPage() {
                   onSelect={() => setSelectedPageId('cover')}
                   onHover={setHoveredCard}
                   onDuplicate={duplicateCover}
-                  onDelete={() => setShowDeleteModal('cover')}
+                  onDelete={() => deleteCover()}
+                  pendingDeleteId={pendingDelete}
+                  onDeleteConfirm={handleDeleteWithConfirm}
                 />
               ) : (
                 <div onClick={() => setSelectedPageId('cover')} style={{
@@ -3767,23 +3969,47 @@ export default function QuizBuilderPage() {
                                 Bloco vazio — arraste etapas aqui ou exclua
                               </div>
                             )}
-                            {blocoFlatPergs.map(perg => (
-                              <SortablePerguntaCard
-                                key={perg.id}
-                                perg={perg}
-                                isActive={selectedPageId === perg.id}
-                                isHovered={hoveredCard === perg.id}
-                                primary={primary}
-                                textMain={textMain}
-                                textMut={textMut}
-                                isDark={isDark}
-                                useBlockEditor={!!(quiz as any)?.use_block_editor}
-                                onSelect={() => setSelectedPageId(perg.id)}
-                                onHover={setHoveredCard}
-                                onDuplicate={() => duplicatePergunta(perg.id)}
-                                onDelete={() => setShowDeleteModal(perg.id)}
-                              />
-                            ))}
+                            {blocoFlatPergs.map(perg => {
+                              const isBlockEditor = !!(quiz as any)?.use_block_editor;
+                              const isEspecialPerg = TIPOS_ESPECIAIS.has(perg.tipo_resposta || '') || perg.tipo_resposta === 'informativa';
+                              let pageLabel: string | undefined;
+                              if (isBlockEditor && !isEspecialPerg) {
+                                const customLabel = pageLabels[perg.id];
+                                const questaoBlock = blocks.find(b => b.page_id === perg.id && b.tipo === 'questao');
+                                pageLabel = (customLabel || questaoBlock?.conteudo?.texto || '').slice(0, 35) || undefined;
+                              }
+                              return (
+                                <SortablePerguntaCard
+                                  key={perg.id}
+                                  perg={perg}
+                                  isActive={selectedPageId === perg.id}
+                                  isHovered={hoveredCard === perg.id}
+                                  primary={primary}
+                                  textMain={textMain}
+                                  textMut={textMut}
+                                  isDark={isDark}
+                                  useBlockEditor={isBlockEditor}
+                                  onSelect={() => setSelectedPageId(perg.id)}
+                                  onHover={setHoveredCard}
+                                  onDuplicate={() => duplicatePergunta(perg.id)}
+                                  onDelete={() => deletePergunta(perg.id)}
+                                  pendingDeleteId={pendingDelete}
+                                  onDeleteConfirm={handleDeleteWithConfirm}
+                                  label={pageLabel}
+                                  isRenaming={renamingPageId === perg.id}
+                                  renamingText={renamingPageId === perg.id ? renamingPageText : undefined}
+                                  onStartRename={isBlockEditor && !isEspecialPerg ? () => {
+                                    setRenamingPageId(perg.id);
+                                    setRenamingPageText(pageLabel || `Etapa ${perg.globalIndex + 1}`);
+                                  } : undefined}
+                                  onRenameChange={t => setRenamingPageText(t)}
+                                  onCommitRename={() => {
+                                    if (renamingPageText.trim()) setPageLabels(prev => ({ ...prev, [perg.id]: renamingPageText.trim() }));
+                                    setRenamingPageId(null);
+                                  }}
+                                />
+                              );
+                            })}
                           </div>
                         );
                       })}
@@ -4253,7 +4479,8 @@ export default function QuizBuilderPage() {
                   { tipo: 'botao',          icon: <MousePointer size={16} />, label: 'Botão',      sub: 'Ação ou link',        conteudo: { texto: 'Continuar →', acao: 'proxima' } },
                   { tipo: 'campo_input',    icon: <Type size={16} />,         label: 'Campo',      sub: 'Input de dados',      conteudo: { campo: '', label: 'Qual o seu nome?', placeholder: 'Digite aqui...', tipo_campo: 'texto', obrigatorio: false, botao_texto: 'Continuar →', botao_acao: 'proxima' } },
                   { tipo: 'beneficios',     icon: <List size={16} />,         label: 'Benefícios', sub: 'Lista com check',     conteudo: { items: ['Primeiro benefício aqui', 'Segundo benefício aqui', 'Terceiro benefício aqui'] } },
-                  { tipo: 'questao_multipla', icon: <HelpCircle size={16} />, label: 'Questão',    sub: 'Múltipla escolha',    conteudo: {} },
+                  { tipo: 'questao',          icon: <HelpCircle size={16} />, label: 'Questão',    sub: 'Múltipla escolha',    conteudo: {} },
+                  { tipo: 'alerta',           icon: <Bell size={16} />,       label: 'Alerta',     sub: 'Caixa de destaque',   conteudo: { cor: '#16a34a', texto: 'Ao clicar, você será direcionada para o WhatsApp. Envie a mensagem para garantir sua vaga.' } },
                 ] as { tipo: string; icon: React.ReactNode; label: string; sub: string; conteudo: Record<string, any> }[]).map(item => (
                   <DraggableBlockItem
                     key={item.tipo}
@@ -4319,6 +4546,8 @@ export default function QuizBuilderPage() {
                             : undefined
                         }
                         onDeleteBlock={blockId => { deleteBlock(blockId); setSelectedBlockId(null); }}
+                        onDeleteConfirm={handleDeleteWithConfirm}
+                        pendingDeleteId={pendingDelete}
                         onReorderBlocks={reorderBlocks}
                         flatPerguntas={flatPerguntas}
                       />
@@ -4529,26 +4758,6 @@ export default function QuizBuilderPage() {
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── BUG 4: DELETE MODAL ─────────────────────────────────────────────── */}
-      {showDeleteModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
-          onClick={() => setShowDeleteModal(null)}>
-          <div style={{ background: cardBg, borderRadius: '16px', boxShadow: tokens.shadow.modal, width: '100%', maxWidth: '360px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}
-            onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: textMain }}>{showDeleteModal === 'cover' ? 'Remover capa?' : 'Excluir etapa?'}</h3>
-            <p style={{ margin: 0, fontSize: '13px', color: textMut }}>{showDeleteModal === 'cover' ? 'Todos os blocos da capa serão removidos.' : 'Esta ação não pode ser desfeita.'}</p>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-              <button onClick={() => setShowDeleteModal(null)} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: `1px solid ${border}`, background: 'transparent', color: textMain, fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Cancelar
-              </button>
-              <button onClick={async () => { const id = showDeleteModal; setShowDeleteModal(null); if (id === 'cover') await deleteCover(); else await deletePergunta(id); }} style={{ flex: 1, padding: '10px', borderRadius: tokens.radius.sm, border: 'none', background: '#ef4444', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                {showDeleteModal === 'cover' ? 'Remover' : 'Excluir'}
-              </button>
             </div>
           </div>
         </div>
