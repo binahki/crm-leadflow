@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useQuizTracker } from '@/hooks/useQuizTracker';
-import { supabase } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import {
   QuizRenderer,
   DEFAULT_COLETA_CONFIG,
@@ -12,8 +12,14 @@ const QuizBlockRenderer = lazy(() =>
   import('@/components/quiz/QuizBlockRenderer').then(m => ({ default: m.QuizBlockRenderer }))
 );
 
+// Cliente anon dedicado para submissões públicas — sem sessão persistida para evitar
+// que JWTs expirados do dashboard causem 401 em browsers restritivos (ex: Instagram WebView)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any;
+const db = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+) as any;
 
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
 const UTM_SESSION_KEY = 'quiz_last_utms';
@@ -745,6 +751,7 @@ export default function QuizPublico() {
       });
     }
 
+    const { src: _src, gclid: _gclid, ...utmPayload } = getUtmsPayload();
     const leadData = {
       org_id: quiz.org_id,
       nome: nome.trim(),
@@ -756,15 +763,15 @@ export default function QuizPublico() {
       score: submitScore,
       faixa: submitFaixa,
       created_at: new Date().toISOString(),
-      ...getUtmsPayload()
+      ...utmPayload
     };
 
     console.log('LeadData final:', leadData);
     console.log('Inserindo no banco...');
 
     try {
-      const { data: novoLead, error } = await db.from('leads').insert(leadData).select('id').single();
-      console.log('Resultado insert:', { novoLead, error });
+      const { error } = await db.from('leads').insert(leadData);
+      console.log('Resultado insert:', { error });
 
       if (error) {
         console.error('ERRO SUPABASE:', error);
@@ -778,12 +785,12 @@ export default function QuizPublico() {
         return;
       }
 
-      console.log('Lead salvo com sucesso.', novoLead?.id);
+      console.log('Lead salvo com sucesso.');
       // Pixel Lead — dispara APÓS o insert para garantir que o lead chegou ao banco
       if (quiz?.pixel_id && (quiz as any).pixel_fire_lead_event !== false) {
         if ((window as any).fbq) (window as any).fbq('track', 'Lead');
       }
-      await finalizarQuiz(novoLead?.id);
+      await finalizarQuiz(undefined);
     } catch (err) {
       console.error('ERRO CATCH:', err);
       setSubmitting(false);

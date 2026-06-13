@@ -1,5 +1,12 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+// Cliente anon dedicado — sem sessão persistida para evitar 401 por JWTs expirados do dashboard
+const db = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
+);
 
 function generateSessionId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -13,7 +20,7 @@ function getDispositivo(): string {
 }
 
 const UTM_SESSION_KEY = 'quiz_last_utms';
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'fbclid', 'gclid'];
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 
 function getUTMs(): Record<string, string> {
   let stored: Record<string, string> = {};
@@ -94,7 +101,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         ...utmsCapturedRef.current,
       };
       
-      const { error } = await supabase.from('quiz_sessoes').upsert(payload, { onConflict: 'session_id' });
+      const { error } = await db.from('quiz_sessoes').upsert(payload, { onConflict: 'session_id' });
       if (error) {
         console.error("useQuizTracker: Error in iniciarSessao upsert", error);
       }
@@ -133,7 +140,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         upsertPayload.total_etapas = totalEtapasRef.current;
       }
 
-      const { error } = await supabase
+      const { error } = await db
         .from('quiz_sessoes')
         .upsert(upsertPayload, { onConflict: 'session_id' });
 
@@ -154,7 +161,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
       if (orgIdRef.current) {
         updatePayload.org_id = orgIdRef.current;
       }
-      const { error } = await supabase
+      const { error } = await db
         .from('quiz_sessoes')
         .update(updatePayload)
         .eq('session_id', sessionIdRef.current);
@@ -188,7 +195,7 @@ export function useQuizTracker(quizSlug: string, orgId?: string | null, totalEta
         upsertPayload.respostas = { ...respostasRef.current };
       }
 
-      const { error } = await supabase
+      const { error } = await db
         .from('quiz_sessoes')
         .upsert(upsertPayload, { onConflict: 'session_id' });
 
