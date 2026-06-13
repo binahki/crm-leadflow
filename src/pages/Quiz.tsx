@@ -1438,9 +1438,9 @@ export default function QuizBuilderPage() {
           origBlocks.map((b: any) => ({
             quiz_id: b.quiz_id,
             page_id: np.id,
-            tipo: b.tipo,
+            tipo: (b.tipo === 'pergunta' || b.tipo === 'opcoes') ? 'questao' : b.tipo,
             ordem: b.ordem,
-            conteudo: (b.tipo === 'opcoes' || b.tipo === 'pergunta') ? { ...b.conteudo, pergunta_id: np.id } : b.conteudo,
+            conteudo: (b.tipo === 'opcoes' || b.tipo === 'pergunta' || b.tipo === 'questao') ? { ...b.conteudo, pergunta_id: np.id } : b.conteudo,
           }))
         );
       }

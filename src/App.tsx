@@ -26,6 +26,7 @@ import QuizBuilder from "./pages/Quiz";
 import QuizRespostas from "./pages/QuizRespostas";
 import AssinaturaPage from "./pages/Assinatura";
 import GestorPage from "./pages/Gestor";
+import OrigenPage from "./pages/Origens";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
           <Route path="/convidar" element={<ProtectedRoute><InvitePage /></ProtectedRoute>} />
           <Route path="/quiz-builder" element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
           <Route path="/quiz/respostas" element={<ProtectedRoute><QuizRespostas /></ProtectedRoute>} />
+          <Route path="/origens" element={<ProtectedRoute><OrigenPage /></ProtectedRoute>} />
           <Route path="/assinatura" element={<ProtectedRoute><AssinaturaPage /></ProtectedRoute>} />
           <Route path="/gestor" element={<GestorPage />} />
           <Route path="/quiz/:slug" element={<QuizPublico />} />

@@ -769,7 +769,7 @@ export default function QuizPublico() {
       if (error) {
         console.error('ERRO SUPABASE:', error);
         if (error.code === '23505') {
-          console.log('Lead já existe, continuando...');
+          console.error('Lead duplicado (23505) — já existe no banco, continuando sem novo insert:', error);
           await finalizarQuiz(undefined);
           return;
         }
@@ -779,6 +779,10 @@ export default function QuizPublico() {
       }
 
       console.log('Lead salvo com sucesso.', novoLead?.id);
+      // Pixel Lead — dispara APÓS o insert para garantir que o lead chegou ao banco
+      if (quiz?.pixel_id && (quiz as any).pixel_fire_lead_event !== false) {
+        if ((window as any).fbq) (window as any).fbq('track', 'Lead');
+      }
       await finalizarQuiz(novoLead?.id);
     } catch (err) {
       console.error('ERRO CATCH:', err);
@@ -856,14 +860,9 @@ export default function QuizPublico() {
   }, [quiz?.id]);
 
   useEffect(() => {
-    // Fire Lead Event on Approval
+    // Eventos na tela de aprovação — Lead é disparado só após insert (ver handleSubmitLead)
     if (phase === 'aprovado_form' && quiz?.pixel_id) {
-      // 1. Standard Lead event
-      if ((quiz as any).pixel_fire_lead_event !== false) {
-        if ((window as any).fbq) (window as any).fbq('track', 'Lead');
-      }
-
-      // 2. Custom Script / Event from Approval Page
+      // Custom Script / Event from Approval Page
       const custom = (quiz as any).pixel_custom_event_name;
       if (custom) {
         // If it looks like a script or complex JS, inject it

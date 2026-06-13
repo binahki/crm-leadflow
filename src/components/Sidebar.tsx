@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
   Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2, ClipboardList,
-  ChevronDown, Zap, User as UserIcon, CreditCard, ChevronUp, CircleDot
+  ChevronDown, Zap, User as UserIcon, CreditCard, ChevronUp, CircleDot, GitBranch
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +27,7 @@ const NAV_MAIN = [
     ]
   },
   { icon: BarChart3, label: 'Funil CRM', href: '/kanban', badge: false },
+  { icon: GitBranch, label: 'Origens', href: '/origens', badge: false },
 ];
 
 const NAV_META = [

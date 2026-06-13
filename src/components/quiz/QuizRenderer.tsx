@@ -730,7 +730,8 @@ export function QuizRenderer({
         const rawBotaoAcao = cfg.botao_acao || (isWALast ? 'redirecionar' : isLast ? 'pagina_sucesso' : 'proxima_etapa');
         const effectiveBotaoAcao = rawBotaoAcao === 'whatsapp' ? 'redirecionar' : rawBotaoAcao;
         const btnLabel = cfg.botao_texto || (effectiveBotaoAcao === 'pagina_sucesso' ? buttonText : 'Continuar →');
-        const isSubmitAction = effectiveBotaoAcao === 'pagina_sucesso' || isLast;
+        // Último campo sempre submete — redirect acontece no finalizarQuiz após salvar o lead
+        const isSubmitAction = isLast;
 
         const executeAction = () => {
           if (effectiveBotaoAcao === 'redirecionar') {

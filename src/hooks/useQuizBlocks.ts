@@ -58,11 +58,12 @@ export function useQuizBlocks(quizId: string | null) {
       ));
     }
 
+    const tipoNorm: QuizBlock['tipo'] = tipo === 'pergunta' ? 'questao' : tipo;
     // Optimistic insert — add a temp block immediately, replace with real data
     const tempId = `temp_${Date.now()}`;
     const tempBlock: QuizBlock = {
       id: tempId, quiz_id: quizId,
-      page_id: pageId, tipo,
+      page_id: pageId, tipo: tipoNorm,
       ordem: novaOrdem, conteudo,
     };
     setBlocks(prev => [...prev, tempBlock]);
@@ -70,7 +71,7 @@ export function useQuizBlocks(quizId: string | null) {
     const { data, error } = await db.from('quiz_page_blocks').insert({
       quiz_id: quizId,
       page_id: pageId,
-      tipo,
+      tipo: tipoNorm,
       ordem: novaOrdem,
       conteudo,
     }).select().single();

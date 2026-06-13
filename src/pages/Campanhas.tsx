@@ -683,6 +683,7 @@ export default function CampanhasPage() {
   // Leads direto do Supabase com select('*') para garantir utm_campaign
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const [aiLog, setAiLog] = useState<any>(null);
+  const aiLogJustClearedRef = useRef(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [executandoOtimizacao, setExecutandoOtimizacao] = useState(false);
   const [metaRevsOrg, setMetaRevsOrg] = useState(0);
@@ -764,40 +765,37 @@ export default function CampanhasPage() {
     return () => { supabase.removeChannel(ch); };
   },[orgId, orgReady]); // eslint-disable-line
 
-  // Busca log de otimização da IA — pendente sempre, executado só dentro de 24h
-  useEffect(()=>{
-    if (!orgReady || !orgId) return;
+  // Resetar painel ao trocar de org
+  useEffect(() => {
     setAiLog(null);
     setShowAiPanel(false);
-    console.log('[Ravena] buscando log para orgId:', orgId);
-    (supabase as any).from('ai_optimization_logs').select('*')
-      .eq('org_id', orgId)
-      .order('created_at',{ascending:false})
-      .limit(1)
-      .then(({data, error}: any)=>{
-        console.log('[Ravena] resultado fetch:', { data, error, orgId });
-        if(data&&data.length>0){
-          const log=data[0];
-          const horas=(Date.now()-new Date(log.created_at).getTime())/(1000*60*60);
-          console.log('[Ravena] log encontrado:', { status: log.status, horas: Math.round(horas), id: log.id });
-          const horasLimiteExecutado = 72;
-          if (log.status === 'pendente') {
-            const sugestoesPendentes = (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter');
-            console.log('[Ravena] pendente, sugestoes:', sugestoesPendentes.length);
-            if (sugestoesPendentes.length > 0 && horas <= 168) {
-              setAiLog(log);
-            } else if (sugestoesPendentes.length === 0 && horas <= 168) {
-              (supabase as any).from('ai_optimization_logs').update({ status: 'executado' }).eq('id', log.id);
-            }
-          }
-          else if (log.status === 'executado' && horas <= horasLimiteExecutado) { console.log('[Ravena] setando executado'); setAiLog(log); }
-          else if (log.status === 'sem_acao' && horas <= horasLimiteExecutado) { console.log('[Ravena] setando sem_acao'); setAiLog(log); }
-          else if (log.status === 'erro' && log.alerta) { console.log('[Ravena] setando erro'); setAiLog(log); }
-          else { console.log('[Ravena] nenhuma condição bateu — aiLog permanece null'); }
+  }, [orgId]);
+
+  // Busca log de otimização da IA — pendente mais recente (máx 36h)
+  useEffect(()=>{
+    if (!orgReady || !orgId) return;
+    if (aiLogJustClearedRef.current) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('ai_optimization_logs')
+        .select('*')
+        .eq('org_id', orgId)
+        .in('status', ['pendente', 'executado', 'sem_acao'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        const diasAtras = (Date.now() - new Date(data.created_at).getTime()) / 86400000;
+        if (diasAtras <= 1.5) {
+          setAiLog(data);
         } else {
-          console.log('[Ravena] nenhum log encontrado para esta org');
+          setAiLog(null);
         }
-      });
+      } else {
+        setAiLog(null);
+      }
+    })();
   },[orgId, orgReady]); // eslint-disable-line
 
   // Busca meta de revendedoras da org para barra de progresso do painel Ravena
@@ -2805,7 +2803,13 @@ export default function CampanhasPage() {
           onClose={() => setShowAiPanel(false)}
           metaRevs={metaRevsOrg}
           setToast={setToast}
-          onLogUpdate={(updatedLog) => setAiLog(updatedLog)}
+          onLogUpdate={(updatedLog) => {
+            setAiLog(updatedLog);
+            const sugestoesPendentes = (updatedLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter');
+            if (sugestoesPendentes.length === 0 && updatedLog.status === 'pendente') {
+              setAiLog({ ...updatedLog, status: 'executado' });
+            }
+          }}
           onCampaignStatusChange={(id, tipo, status) => {
             if (tipo === 'pausar_campanha' || tipo === 'pausar') {
               setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status } : c));
@@ -3180,21 +3184,21 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* SEÇÃO 1a: Feito automaticamente (automatico !== false — inclui true e legado sem campo) */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico !== false).length > 0 && (
+            {/* Feito automaticamente — automatico === true */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).length > 0 && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
                   Feito automaticamente
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico !== false).map((acao: any, i: number) => (
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).map((acao: any, i: number) => (
                     <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* SEÇÃO 1b: Aprovado por você (automatico === false explícito) */}
+            {/* Aprovado por você — automatico === false */}
             {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).length > 0 && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
@@ -3203,6 +3207,20 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).map((acao: any, i: number) => (
                     <ActionCard key={i} acao={acao} dark={dark} origem="usuario" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Legado — sem campo automatico (logs antigos) */}
+            {(log.acoes_executadas || []).filter((a: any) => a.automatico === undefined || a.automatico === null).length > 0 && (
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+                  Feito automaticamente
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === undefined || a.automatico === null).map((acao: any, i: number) => (
+                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
                   ))}
                 </div>
               </div>
@@ -3524,9 +3542,6 @@ function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?:
           <span style={{ fontSize: '11px', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {label}
           </span>
-          {origem === 'usuario' && (
-            <span style={{ fontSize: '10px', fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '1px 7px', borderRadius: '99px' }}>✓ Você aprovou</span>
-          )}
         </div>
 
         {isRedistribuir && (
