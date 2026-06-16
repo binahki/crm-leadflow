@@ -43,12 +43,12 @@ const FUNNEL_CONFIG = [
 
 const STATUS_LABEL: Record<number, string> = { 0: 'Em atendimento', 1: 'Em atendimento', 2: 'Reunião', 3: 'Aprovado', 4: 'Reprovado', 5: 'Contrato/App', 6: 'Sem Retorno' };
 const STATUS_DARK_COLOR: Record<number, string> = { 0: '#93c5fd', 1: '#93c5fd', 2: '#c4b5fd', 3: '#6ee7b7', 4: '#fda4af', 5: '#fdba74', 6: '#a1a1aa' };
-const STATUS_DARK_BG: Record<number, string>    = { 0: 'rgba(59,130,246,0.20)', 1: 'rgba(59,130,246,0.20)', 2: 'rgba(139,92,246,0.28)', 3: 'rgba(16,185,129,0.20)', 4: 'rgba(244,63,94,0.20)', 5: 'rgba(249,115,22,0.20)', 6: 'rgba(113,113,122,0.20)' };
+const STATUS_DARK_BG: Record<number, string> = { 0: 'rgba(59,130,246,0.20)', 1: 'rgba(59,130,246,0.20)', 2: 'rgba(139,92,246,0.28)', 3: 'rgba(16,185,129,0.20)', 4: 'rgba(244,63,94,0.20)', 5: 'rgba(249,115,22,0.20)', 6: 'rgba(113,113,122,0.20)' };
 const STATUS_DARK_PILL_BORDER: Record<number, string> = { 0: 'rgba(59,130,246,0.22)', 1: 'rgba(59,130,246,0.22)', 2: 'rgba(139,92,246,0.30)', 3: 'rgba(16,185,129,0.22)', 4: 'rgba(244,63,94,0.22)', 5: 'rgba(249,115,22,0.22)', 6: 'rgba(113,113,122,0.22)' };
-const STATUS_DARK_DOT: Record<number, string>   = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
-const STATUS_LIGHT_BG: Record<number, string>          = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#ffedd5', 6: '#f4f4f5' };
-const STATUS_LIGHT_TEXT: Record<number, string>        = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#6d28d9', 3: '#065f46', 4: '#991b1b', 5: '#9a3412', 6: '#3f3f46' };
-const STATUS_LIGHT_DOT: Record<number, string>         = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
+const STATUS_DARK_DOT: Record<number, string> = { 0: '#3b82f6', 1: '#3b82f6', 2: '#8b5cf6', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
+const STATUS_LIGHT_BG: Record<number, string> = { 0: '#dbeafe', 1: '#dbeafe', 2: '#ede9fe', 3: '#d1fae5', 4: '#fee2e2', 5: '#ffedd5', 6: '#f4f4f5' };
+const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#6d28d9', 3: '#065f46', 4: '#991b1b', 5: '#9a3412', 6: '#3f3f46' };
+const STATUS_LIGHT_DOT: Record<number, string> = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
 const STATUS_LIGHT_PILL_BORDER: Record<number, string> = { 0: 'rgba(29,78,216,0.12)', 1: 'rgba(29,78,216,0.12)', 2: 'rgba(109,40,217,0.15)', 3: 'rgba(6,95,70,0.12)', 4: 'rgba(153,27,27,0.12)', 5: 'rgba(154,52,18,0.12)', 6: 'rgba(63,63,70,0.12)' };
 
 // ── Utilitários de data — Brasília ────────────────────────────
@@ -387,10 +387,10 @@ export default function Dashboard() {
   const [metaOrg, setMetaOrg] = useState({ revs: 0, budget: 0 });
 
   // Modal de configuração inicial de metas
-  const [showMetaModal, setShowMetaModal]       = useState(false);
-  const [metaModalBudget, setMetaModalBudget]   = useState(5000);
-  const [metaModalRevs, setMetaModalRevs]       = useState(50);
-  const [metaModalSaving, setMetaModalSaving]   = useState(false);
+  const [showMetaModal, setShowMetaModal] = useState(false);
+  const [metaModalBudget, setMetaModalBudget] = useState(5000);
+  const [metaModalRevs, setMetaModalRevs] = useState(50);
+  const [metaModalSaving, setMetaModalSaving] = useState(false);
 
   useEffect(() => {
     if (!orgId) return;
@@ -400,7 +400,7 @@ export default function Dashboard() {
       .then(({ data }: any) => {
         if (data) {
           setNomeEmpresa(data.nome || '');
-          const revs   = Number(data.ravena_meta_revendedoras) || 0;
+          const revs = Number(data.ravena_meta_revendedoras) || 0;
           const budget = Number(data.ravena_budget_mensal) || 0;
           setMetaOrg({ revs, budget });
           // Mostra modal na primeira visita se metas não configuradas
@@ -492,7 +492,7 @@ export default function Dashboard() {
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
   useEffect(() => { function close(e: MouseEvent) { if (dropRef.current && !dropRef.current.contains(e.target as Node)) setShowDropdown(false); if (customRef.current && !customRef.current.contains(e.target as Node)) setShowCustom(false); } document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, []);
 
-  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, score, avaliado, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, instagram';
+  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, score, avaliado, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, instagram, custo_indicacao';
 
   const fetchLeads = async (): Promise<Lead[]> => {
     if (!orgId) { setLoading(false); return []; }
@@ -724,7 +724,13 @@ export default function Dashboard() {
     }).length;
   }, [allLeads, statusConfig]);
   const convRate = totalLeads > 0 ? safe((approved / totalLeads) * 100).toFixed(1) : '0.0';
-  const spend = metaMetrics.spend || 0;
+  const metaSpend = metaMetrics.spend || 0;
+  const custoTotalIndicacao = useMemo(() =>
+    filtered
+      .filter(l => (l as any).status_aprovado_at != null)
+      .reduce((sum, l) => sum + (Number((l as any).custo_indicacao) || 0), 0),
+    [filtered]);
+  const spend = metaSpend + custoTotalIndicacao;
   const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo, statusConfig.convertido_status), [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
   // Funil: cada status conta pelo timestamp específico daquele status
   const funnelData = useMemo(() => {
@@ -809,17 +815,17 @@ export default function Dashboard() {
   );
 
   // Dark tokens — sistema coerente com toda a aplicação
-  const bg        = dark ? '#0f0f10' : '#f4f4f5';
-  const cardBg    = dark ? '#1b1b1d' : '#ffffff';
-  const border    = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const bg = dark ? '#0f0f10' : '#f4f4f5';
+  const cardBg = dark ? '#1b1b1d' : '#ffffff';
+  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
   const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
-  const txtHi  = dark ? '#f0f0f0' : '#111827';
+  const txtHi = dark ? '#f0f0f0' : '#111827';
   const txtMid = dark ? '#a0a0a8' : '#374151';
   const txtLow = dark ? '#8a8a96' : '#6b7280';
   const gridLn = dark ? 'rgba(255,255,255,0.04)' : '#f0f0f0';
   const divCls = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6';
-  const hov    = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
-  const pad    = isMobile ? '16px 18px' : '32px';
+  const hov = dark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
+  const pad = isMobile ? '16px 18px' : '32px';
   const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg, color: txtMid, fontSize: '13px', cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit', boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.4)' : 'none' };
   // statusClass removido — pills usam STATUS_DARK_COLOR/BG/BORDER inline
 
@@ -935,7 +941,7 @@ export default function Dashboard() {
                   {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('80px', '24px')}
                 </div>
               </div>
-              <span style={{ fontSize: '12px', color: txtLow, textAlign: 'right', flexShrink: 0 }}>Meta Ads</span>
+              <span style={{ fontSize: '12px', color: txtLow, textAlign: 'right', flexShrink: 0 }}>Total Período</span>
             </div>
 
             {/* Card 3: LEADS — acento azul */}
@@ -947,7 +953,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>Total período</p>
+                <p style={{ fontSize: '11px', color: txtLow, margin: 0 }}>Total Período</p>
                 {spend > 0 && totalLeads > 0 && <p style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6', margin: '2px 0 0' }}>CPL R$ {safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
               </div>
             </div>
@@ -999,7 +1005,7 @@ export default function Dashboard() {
               <div style={{ fontSize: '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
                 {allLoaded ? <>R$&nbsp;<AnimatedCounter value={spend} decimals={2} /></> : sk('110px', '32px')}
               </div>
-              <span style={{ fontSize: '11px', color: txtLow }}>Meta Ads</span>
+              <span style={{ fontSize: '11px', color: txtLow }}>Total Período</span>
             </div>
 
             {/* Card 3: LEADS + CPL */}
@@ -1009,7 +1015,7 @@ export default function Dashboard() {
                 {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', '32px')}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', color: txtLow }}>Total período</span>
+                <span style={{ fontSize: '11px', color: txtLow }}>Total Período</span>
                 {spend > 0 && totalLeads > 0 && (
                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#3b82f6' }}>
                     CPL R$ {safe(spend / totalLeads).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1147,8 +1153,8 @@ export default function Dashboard() {
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
                           return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '72px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
-                        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 8px' : '4px 10px', borderRadius:'6px', whiteSpace:'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight:600, background:dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color:dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
-                          {!isMobile && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink:0, display:'inline-block' }}/>}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 8px' : '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, background: dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color: dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
+                          {!isMobile && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink: 0, display: 'inline-block' }} />}
                           {statusLabelFn(st)}
                         </span>
                         {!isMobile && <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>}
@@ -1246,7 +1252,7 @@ export default function Dashboard() {
 
       {/* Modal de configuração inicial de metas */}
       {showMetaModal && (() => {
-        const mBg  = dark ? '#18191f' : '#ffffff';
+        const mBg = dark ? '#18191f' : '#ffffff';
         const mBdr = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
         const mTxt = dark ? '#f1f5f9' : '#0f172a';
         const mMid = dark ? '#94a3b8' : '#64748b';

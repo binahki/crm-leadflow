@@ -21,6 +21,7 @@ import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
 import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
+import { aplicarTagOrigem } from '@/utils/tagOrigem';
 
 const STATUS_STYLE = STATUS_CONFIG;
 
@@ -849,6 +850,7 @@ function ConfirmDialog({ title, message, confirmText = 'Confirmar', cancelText =
   );
 }
 
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 function LeadsPage() {
   const navigate = useNavigate();
@@ -960,6 +962,7 @@ function LeadsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
   const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status: statusConfig.entrada_status, observacoes:'' });
+  const [custoIndicacaoInput, setCustoIndicacaoInput] = useState<string>('');
   const ORIGENS = ['Indicação', 'Tráfego Pago', 'Instagram Orgânico', 'Outro'];
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -1713,9 +1716,17 @@ function LeadsPage() {
     if (!newLead.whatsapp.trim()) { toast.error('WhatsApp obrigatório'); return; }
     if (!newLead.cidade.trim()) { toast.error('Cidade obrigatória'); return; }
     if (!newLead.origem || (newLead.origem === 'Outro' && !newLead.origemCustom.trim())) { toast.error('Origem obrigatória'); return; }
+    if (newLead.origem === 'Indicação' && custoIndicacaoInput === '') {
+      toast.error('Informe o custo desta indicação (pode ser R$ 0)'); return;
+    }
 
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
+    const finalUtmSource = newLead.origem === 'Outro'
+      ? (newLead.origemCustom || 'Outro')
+      : newLead.origem === 'Instagram Orgânico'
+      ? 'instagram_organico'
+      : (newLead.origem || null);
 
     const { data, error } = await supabase.from('leads').insert({
       nome: newLead.nome.trim(),
@@ -1725,31 +1736,37 @@ function LeadsPage() {
       score: null,
       faixa: null,
       observacoes: newLead.observacoes || null,
-      utm_source: newLead.origem === 'Outro'
-        ? (newLead.origemCustom || 'Outro')
-        : newLead.origem === 'Tráfego Pago'
-        ? 'FB'
-        : newLead.origem === 'Instagram Orgânico'
-        ? 'instagram_organico'
-        : (newLead.origem || null),
+      utm_source: finalUtmSource,
       utm_campaign: null, utm_medium: null, utm_content: null, utm_term: null, utm_id: null,
       org_id: orgId,
       created_at: new Date().toISOString(),
-    }).select('*').single();
+      ...(newLead.origem === 'Indicação' && custoIndicacaoInput !== ''
+        ? { custo_indicacao: parseFloat(custoIndicacaoInput) || 0 }
+        : {}),
+    } as any).select('*').single();
 
     if (error) { toast.error(`Erro: ${error.message}`); return; }
-    if (data) setAllLeads(prev => [data as unknown as Lead, ...prev]);
+    if (data) {
+      setAllLeads(prev => [data as unknown as Lead, ...prev]);
+      if (orgId) await aplicarTagOrigem(supabase as any, (data as any).id, orgId, finalUtmSource, null);
+    }
     setNewLead({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status: statusConfig.entrada_status, observacoes:'' });
+    setCustoIndicacaoInput('');
     setIsAddOpen(false);
     toast.success('Lead adicionado!');
   };
 
   const handleEditLead = async () => {
     if (!editingLead) return;
+    const editUtmSource = (editingLead as any).utm_source || null;
+    if (editUtmSource === 'Indicação' &&
+        ((editingLead as any).custo_indicacao === null || (editingLead as any).custo_indicacao === undefined || (editingLead as any).custo_indicacao === '')) {
+      toast.error('Informe o custo desta indicação (pode ser R$ 0)'); return;
+    }
     const cidadeNorm = normalizeCity(editingLead.cidade || '');
     const originalLead = allLeads.find(l => l.id === editingLead.id);
     const newStatus = editingLead.status ?? 0;
-    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus, utm_source: (editingLead as any).utm_source || null };
+    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus, utm_source: editUtmSource, custo_indicacao: (editingLead as any).custo_indicacao ?? null };
     if (originalLead && Number(originalLead.status) !== Number(newStatus)) {
       const now = new Date().toISOString();
       const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at', 6:'status_sem_retorno_at' };
@@ -1760,6 +1777,7 @@ function LeadsPage() {
     if (error) { toast.error(`Erro: ${error.message}`); return; }
     setAllLeads(prev => prev.map(l => l.id === editingLead.id ? { ...l, ...updates } : l));
     updateLead(editingLead.id, updates);
+    if (orgId) await aplicarTagOrigem(supabase as any, editingLead.id as any, orgId, editUtmSource, (editingLead as any).utm_campaign ?? null);
     setIsEditOpen(false);
     setEditingLead(null);
     toast.success('Lead atualizado!');
@@ -1825,6 +1843,21 @@ function LeadsPage() {
         </select>
         {newLead.origem === 'Outro' && (
           <input placeholder="Especifique a origem..." value={newLead.origemCustom} onChange={e => setNewLead(n => ({ ...n, origemCustom: e.target.value }))} style={{ ...inputStyle, marginTop:'8px' }}/>
+        )}
+        {newLead.origem === 'Indicação' && (
+          <div style={{ marginTop:'8px' }}>
+            <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Custo da indicação (R$) *</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Ex: 100"
+              value={custoIndicacaoInput}
+              onChange={e => setCustoIndicacaoInput(e.target.value)}
+              style={inputStyle}
+            />
+            <p style={{ fontSize:'11px', color:txtMid, margin:'4px 0 0' }}>Só será contabilizado no gasto quando o lead for convertido.</p>
+          </div>
         )}
       </div>
       <div>
@@ -2352,15 +2385,14 @@ function LeadsPage() {
                     const src = (editingLead as any).utm_source || '';
                     if (src === 'FB') return 'Tráfego Pago';
                     if (src === 'instagram_organico') return 'Instagram Orgânico';
-                    return ['Indicação','Tráfego Pago','Instagram Orgânico','Retorno','Manual','Outro'].includes(src) ? src : src ? 'Outro' : '';
+                    return ['Indicação','Tráfego Pago','Instagram Orgânico','Manual','Outro'].includes(src) ? src : src ? 'Outro' : '';
                   })()}
                   onChange={e => {
                     const val = e.target.value;
                     setEditingLead(l => l && ({
                       ...l,
-                      utm_source: val === 'Tráfego Pago' ? 'FB'
-                        : val === 'Instagram Orgânico' ? 'instagram_organico'
-                        : val
+                      utm_source: val === 'Instagram Orgânico' ? 'instagram_organico' : val,
+                      ...(val !== 'Indicação' ? { custo_indicacao: null } : {}),
                     }));
                   }}
                   style={inputStyle}
@@ -2369,11 +2401,25 @@ function LeadsPage() {
                   <option value="Indicação">Indicação</option>
                   <option value="Tráfego Pago">Tráfego Pago</option>
                   <option value="Instagram Orgânico">Instagram Orgânico</option>
-                  <option value="Retorno">Retorno</option>
                   <option value="Manual">Manual</option>
                   <option value="Outro">Outro</option>
                 </select>
               </div>
+              {(editingLead as any)?.utm_source === 'Indicação' && (
+                <div>
+                  <label style={{ fontSize:'11px', color:txtMid, display:'block', marginBottom:'4px', fontWeight:600, textTransform:'uppercase' }}>Custo da indicação (R$) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ex: 100"
+                    value={(editingLead as any).custo_indicacao ?? ''}
+                    onChange={e => setEditingLead(l => l && ({ ...l, custo_indicacao: e.target.value !== '' ? Number(e.target.value) : null } as any))}
+                    style={inputStyle}
+                  />
+                  <p style={{ fontSize:'11px', color:txtMid, margin:'4px 0 0' }}>Só será contabilizado no gasto quando o lead for convertido.</p>
+                </div>
+              )}
               <div style={{ display:'flex', gap:'8px', marginTop:'4px' }}>
                 <button onClick={handleEditLead} style={{ flex:1, padding:'10px', borderRadius:'9px', border:'none', background:'#0044fd', color:'#fff', fontSize:'13px', fontWeight:500, cursor:'pointer' }}>Salvar</button>
                 <button onClick={() => setIsEditOpen(false)} style={{ flex:1, padding:'10px', borderRadius:'9px', border:`1px solid ${border}`, background:'transparent', color:txtMid, fontSize:'13px', cursor:'pointer' }}>Cancelar</button>

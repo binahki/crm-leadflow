@@ -765,7 +765,13 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
               <Section openKey="traffic" activeKey={activeSection} setActiveKey={setActiveSection} dark={dark}
                 iconColor="#fd4c04" icon={<Megaphone style={{ width: '14px', height: '14px', strokeWidth: 1.8 }} />} title={!l.utm_campaign && l.utm_source ? "Origem do Lead" : "Origem do Tráfego"}>
                 {(!l.utm_campaign && l.utm_source) ? (
-                  <Field label="Origem" value={l.utm_source === 'FB' ? 'Tráfego Pago' : l.utm_source === 'instagram_organico' ? 'Instagram Orgânico' : l.utm_source} dark={dark} />
+                  <Field label="Origem" value={
+                    l.utm_source === 'FB' ? 'Tráfego Pago' :
+                    l.utm_source === 'instagram_organico' ? 'Instagram Orgânico' :
+                    l.utm_source === 'Indicação' && (l as any).custo_indicacao != null
+                      ? `Indicação  •  R$ ${Number((l as any).custo_indicacao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : l.utm_source
+                  } dark={dark} />
                 ) : (
                   <>
                     <Field label="Fonte" value={l.utm_source === 'FB' ? 'Facebook Ads' : l.utm_source === 'instagram_organico' ? 'Instagram' : l.utm_source} dark={dark} />

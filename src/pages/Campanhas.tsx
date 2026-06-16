@@ -4,7 +4,8 @@ import { useAppStore } from '@/stores/appStore';
 import { useTheme } from '@/hooks/useTheme';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology, useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
 import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ChevronUp, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone, Search, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
@@ -35,13 +36,46 @@ interface Campaign {
 const LEAD_ACTIONS = ['lead','offsite_conversion.fb_pixel_lead','onsite_conversion.lead_grouped'];
 const BECKER_ORG_ID = '81b1ba7b-5c03-45c5-a74a-6ea8eb3432ae';
 
+// Retorna a data em que um lead foi movido para determinado status
+function getStatusMovedAt(lead: any, status: number): string | null {
+  switch (status) {
+    case 5: return lead.status_contrato_at || lead.ultimo_status_change || lead.created_at;
+    case 3: return lead.status_aprovado_at  || lead.ultimo_status_change || lead.created_at;
+    case 2: return lead.status_reuniao_at   || lead.ultimo_status_change || lead.created_at;
+    default: return lead.ultimo_status_change || lead.created_at;
+  }
+}
+
+// Filtra leads que foram MOVIDOS para o status no período selecionado
+function filterPotenciaisByPreset(leads: any[], status: number, preset: string): any[] {
+  const today = todayBRCamp();
+  const ok = (ref: string | null | undefined, a: string, b: string) => {
+    const d = leadDateBRCamp(ref);
+    return !!d && d >= a && d <= b;
+  };
+  return leads.filter(l => {
+    if (Number(l.status) !== status) return false;
+    const movedAt = getStatusMovedAt(l, status);
+    switch (preset) {
+      case 'today':      return ok(movedAt, today, today);
+      case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(movedAt, y, y); }
+      case 'last_7d':    return ok(movedAt, subDaysCamp(today, 6), today);
+      case 'last_30d':   return ok(movedAt, subDaysCamp(today, 29), today);
+      case 'this_month': return ok(movedAt, today.slice(0,7)+'-01', today);
+      default: return true;
+    }
+  });
+}
+
 // ── Score inteligente por campanha (0-100) ────────────────────
 function calcScore(
   r: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number },
   allRows: { id: string; leads: number; rev: number; cpl: number; cpr: number; spend: number }[],
   allCampLeadsMap: Map<string, any[]>,
   _campRevsMap: Map<string, any[]>,
-  _datePreset: string
+  _datePreset: string,
+  preConvertidoStatus: number | null = null,
+  potenciaisOverride?: number
 ): number {
   // Usa allCampLeadsMap (todos os leads, sem filtro de período) para calcular idade real
   const campLeads = allCampLeadsMap.get(r.id) || [];
@@ -50,7 +84,11 @@ function calcScore(
     : 0;
   const ageDays = (Date.now() - oldest) / (1000 * 60 * 60 * 24);
   const isNew = ageDays < 3;
-  const potenciais = campLeads.filter(l => [2, 5].includes(Number((l as any).status))).length;
+  const potenciais = potenciaisOverride !== undefined
+    ? potenciaisOverride
+    : (preConvertidoStatus != null
+        ? campLeads.filter(l => Number((l as any).status) === preConvertidoStatus).length
+        : 0);
 
   const maxRevs = Math.max(...allRows.map(x => x.rev), 1);
   const comCPR = allRows.filter(x => x.cpr > 0);
@@ -264,9 +302,9 @@ function filterLeadsByPreset(leads: any[], preset: string) {
 function isPaidTraffic(la: any): boolean {
   const src = (la.utm_source || '').trim();
   const srcNorm = src.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-  return src.toUpperCase() === 'FB'
-    || src.toUpperCase() === 'INSTAGRAM_ORGANICO'
+  return ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META'].includes(src.toUpperCase())
     || srcNorm === 'TRAFEGO PAGO'
+    || srcNorm === 'TRAFEGO ANTIGO'
     || (la.utm_campaign || '').trim().length > 0;
 }
 
@@ -610,6 +648,8 @@ export default function CampanhasPage() {
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
   const { orgId, ready: orgReady } = useOrgId();
   const t = useTerminology();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
   const dark = theme === 'dark';
   const { features, loading: planLoading } = usePlanFeatures();
   const ravenaDesbotada = !planLoading && !features.ravena;
@@ -707,7 +747,6 @@ export default function CampanhasPage() {
   // Busca leads filtrados pelo período selecionado — garante cruzamento correto
   useEffect(()=>{
     if (!orgReady || !orgId) return;
-    setAllLeads([]);
     const today=todayBRCamp();
     let since:string|null=null;
     switch(datePreset){
@@ -740,7 +779,7 @@ export default function CampanhasPage() {
       // Todos os outros leads (não revendedoras) — por created_at
       supabase.from('leads').select(fields).eq('org_id', orgId)
         .neq('status', 3).gte('created_at', fallback)
-        .order('created_at', { ascending: false }).limit(2500),
+        .order('created_at', { ascending: false }).limit(5000),
     ]).then(([{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }]: any[]) => {
       const seen = new Set<string>();
       const combined: any[] = [];
@@ -780,7 +819,7 @@ export default function CampanhasPage() {
         .from('ai_optimization_logs')
         .select('*')
         .eq('org_id', orgId)
-        .in('status', ['pendente', 'executado', 'sem_acao'])
+        .neq('status', 'expirado')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -868,8 +907,9 @@ export default function CampanhasPage() {
       const d = leadDateBRCamp(ref);
       return !!d && d >= a && d <= b;
     };
+    const convertidoStatusAtual = statusConfig?.convertido_status ?? 3;
     const result = allLeads.filter(l => {
-      if (Number((l as any).status) !== 3) return false;
+      if (Number((l as any).status) !== convertidoStatusAtual) return false;
       // Usa status_aprovado_at como referência — quando foi aprovada de fato
       const ref = (l as any).status_aprovado_at
         || (l as any).ultimo_status_change
@@ -880,7 +920,7 @@ export default function CampanhasPage() {
         case 'last_7d':    return ok(ref, subDaysCamp(today, 6), today);
         case 'last_30d':   return ok(ref, subDaysCamp(today, 29), today);
         case 'this_month': return ok(ref, today.slice(0,7)+'-01', today);
-        default: return Number((l as any).status) === 3;
+        default: return Number((l as any).status) === convertidoStatusAtual;
       }
     });
     return result;
@@ -1093,86 +1133,42 @@ export default function CampanhasPage() {
       : 0;
   }, [chartRows]);
 
+  // Status imediatamente anterior à conversão — dinâmico por modelo de negócio
+  const preConvertidoStatus = useMemo(() => {
+    const sorted = [...statusConfig.statuses].sort((a, b) => a.ordem - b.ordem);
+    const convIdx = sorted.findIndex(s => s.id === statusConfig.convertido_status);
+    return convIdx > 0 ? sorted[convIdx - 1].id : null;
+  }, [statusConfig]);
+
   // Scores por campanha — usa allCampLeadsMap para idade real
   const campScores = useMemo(() => {
     const map = new Map<string, number>();
     chartRows.forEach(r => {
-      map.set(r.id, calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset));
+      const allLeadsForCamp = allCampLeadsMap.get(r.id) || [];
+      const potenciaisPeriodo = preConvertidoStatus != null
+        ? filterPotenciaisByPreset(allLeadsForCamp, preConvertidoStatus, datePreset).length
+        : 0;
+      map.set(r.id, calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset, preConvertidoStatus, potenciaisPeriodo));
     });
     return map;
-  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset]);
+  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset, preConvertidoStatus]);
 
-  // Top 5 por score para o ranking lateral — SEMPRE últimos 7 dias
+  // Top 5 por score para o ranking lateral — usa os mesmos dados do período selecionado
   const rankedRows = useMemo(() => {
-    const leads7d = filterLeadsByPreset(allLeads, 'last_7d');
-    const today7d = todayBRCamp();
-    const ok7d = (ref: string | null | undefined) => {
-      const d = leadDateBRCamp(ref);
-      return !!d && d >= subDaysCamp(today7d, 6) && d <= today7d;
-    };
-    const revs7d = allLeads.filter(l => Number((l as any).status) === 3 && ok7d((l as any).status_aprovado_at || (l as any).ultimo_status_change || l.created_at));
-    const leadsCount = new Map<string, number>();
-    const revsCount = new Map<string, number>();
-    campaigns.forEach(c => { leadsCount.set(c.id, 0); revsCount.set(c.id, 0); });
-    for (const l of leads7d) {
-      if (!isPaidTraffic(l)) continue;
-      const la = l as any;
-      const utmRaw = (la.utm_campaign || '').trim();
-      if (!utmRaw) continue;
-      const parts = utmRaw.split('|');
-      const utm = (parts[0] || '').toLowerCase().trim();
-      const utmId = parts.length >= 2 ? parts[1].trim() : '';
-      let best: string | null = null;
-      for (const c of campaigns) {
-        if (utm === c.id) { best = c.id; break; }
-        const cn = c.name.toLowerCase().split('|')[0].trim();
-        if (!cn || cn.length < 3) continue;
-        if (utm === cn) { best = c.id; break; }
-        if (cn.length > 5 && utm.includes(cn.slice(0, 20))) { best = c.id; }
-      }
-      if (!best && utmId) for (const c of campaigns) { if (utmId === c.id) { best = c.id; break; } }
-      if (best) leadsCount.set(best, (leadsCount.get(best) || 0) + 1);
-    }
-    for (const l of revs7d) {
-      if (!isPaidTraffic(l)) continue;
-      const la = l as any;
-      const utmRaw = (la.utm_campaign || '').trim();
-      if (!utmRaw) continue;
-      const parts = utmRaw.split('|');
-      const utm = (parts[0] || '').toLowerCase().trim();
-      const utmId = parts.length >= 2 ? parts[1].trim() : '';
-      let best: string | null = null;
-      for (const c of campaigns) {
-        if (utm === c.id) { best = c.id; break; }
-        const cn = c.name.toLowerCase().split('|')[0].trim();
-        if (!cn || cn.length < 3) continue;
-        if (utm === cn) { best = c.id; break; }
-        if (cn.length > 5 && utm.includes(cn.slice(0, 20))) { best = c.id; }
-      }
-      if (!best && utmId) for (const c of campaigns) { if (utmId === c.id) { best = c.id; break; } }
-      if (best) revsCount.set(best, (revsCount.get(best) || 0) + 1);
-    }
-    const allRows = campaigns
-      .filter(c => c.spend > 0 || c.status === 'ACTIVE')
-      .map(c => {
-        const l = leadsCount.get(c.id) ?? 0;
-        const r = revsCount.get(c.id) ?? 0;
+    return [...chartRows]
+      .map(r => {
+        const allLeadsForCamp = allCampLeadsMap.get(r.id) || [];
+        const potenciaisPeriodo = preConvertidoStatus != null
+          ? filterPotenciaisByPreset(allLeadsForCamp, preConvertidoStatus, datePreset).length
+          : 0;
         return {
-          name: c.name.length > 16 ? c.name.slice(0, 16) + '…' : c.name,
-          fullName: c.name,
-          leads: l,
-          rev: r,
-          cpl: l > 0 && c.spend > 0 ? Math.round(c.spend / l) : 0,
-          cpr: r > 0 && c.spend > 0 ? Math.round(c.spend / r) : 0,
-          spend: c.spend,
-          id: c.id,
+          ...r,
+          score: calcScore(r, chartRows, allCampLeadsMap, campRevsMap, datePreset, preConvertidoStatus, potenciaisPeriodo),
         };
-      });
-    return allRows
-      .map(r => ({ ...r, score: calcScore(r, allRows, allCampLeadsMap, revsCount, 'last_7d') }))
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
-  }, [campaigns, allCampLeadsMap, allLeads]);
+  }, [chartRows, allCampLeadsMap, campRevsMap, datePreset, preConvertidoStatus]);
 
   // ── Performance badge por campanha ───────────────────────────
   function getCampPerf(c: Campaign): 'green'|'yellow'|'red' {
@@ -1278,11 +1274,12 @@ export default function CampanhasPage() {
         const crmLeads = getCampLeads(c.name, c.id);
         const crmRevs  = getCampRevs(c.name, c.id);
         const adsets   = c.adsets || [];
+        const adsetsFiltrados = statusFilter === 'all' ? adsets : adsets.filter(as => as.status === statusFilter);
         const hasCrm   = crmLeads.length > 0;
 
         if (!hasCrm) {
           // Sem leads no CRM: usa API diretamente
-          return adsets.map(as => ({
+          return adsetsFiltrados.map(as => ({
             id: as.id, name: as.name, status: as.status, type: 'adset' as const,
             parentCampId: c.id, parentAdsetId: undefined as string|undefined,
             thumbnail_url: undefined as string|null|undefined,
@@ -1298,7 +1295,7 @@ export default function CampanhasPage() {
         // Com leads no CRM: match direto UTM + proporcional para não-atribuídos
         const { leads: leadsMap, revs: revsMap } = buildAdsetCounts(crmLeads, crmRevs, adsets);
 
-        return adsets.map(as => {
+        return adsetsFiltrados.map(as => {
           const leads = leadsMap.get(as.id) ?? 0;
           const rev   = revsMap.get(as.id)  ?? 0;
           return {
@@ -1368,14 +1365,14 @@ export default function CampanhasPage() {
         return src.flatMap(c => {
           const adsToRender = (c.adsets || [])
             .filter(as => validSelectedAdsetIds.has(as.id))
-            .flatMap(as => as.ads || []);
+            .flatMap(as => statusFilter === 'all' ? (as.ads || []) : (as.ads || []).filter(ad => ad.status === statusFilter));
           return buildRowsForCampaign(c, adsToRender);
         });
       }
-      return src.flatMap(c => buildRowsForCampaign(c, c.ads || []));
+      return src.flatMap(c => buildRowsForCampaign(c, statusFilter === 'all' ? (c.ads || []) : (c.ads || []).filter(ad => ad.status === statusFilter)));
     }
     return [];
-  }, [activeLevel, displayedCampaigns, selectedCampIds, selectedAdsetIds, campScores, getCampLeads, getCampRevs]);
+  }, [activeLevel, displayedCampaigns, selectedCampIds, selectedAdsetIds, campScores, getCampLeads, getCampRevs, statusFilter]);
 
   const sortedTableData = useMemo(() => {
     let data = tableData;
@@ -1842,32 +1839,33 @@ export default function CampanhasPage() {
           const isPendente = aiLog.status === 'pendente';
           const isSemAcao = aiLog.status === 'sem_acao';
           const isErro = aiLog.status === 'erro';
-          if (aiLog.status === 'ignorado') return null;
+          const isIgnorado = aiLog.status === 'ignorado';
+          if (aiLog.status === 'expirado') return null;
           const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
           const pendenteAtivo = isPendente && numSugestoes > 0;
           const bannerBg = isErro
             ? (dark ? 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.08))' : 'linear-gradient(135deg, #fef2f2, #fef2f2)')
-            : isSemAcao
+            : (isSemAcao || isIgnorado)
             ? (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.10), rgba(59,130,246,0.06))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)')
             : pendenteAtivo
               ? (dark ? 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))' : 'linear-gradient(135deg, #fffbeb, #fff7ed)')
               : (dark ? 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.08))' : 'linear-gradient(135deg, #faf5ff, #eff6ff)');
           const bannerBorder = isErro
             ? (dark ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.25)')
-            : isSemAcao
+            : (isSemAcao || isIgnorado)
             ? (dark ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.18)')
             : pendenteAtivo
               ? (dark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.25)')
               : (dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)');
           const textColor = isErro
             ? (dark ? '#fca5a5' : '#dc2626')
-            : isSemAcao
+            : (isSemAcao || isIgnorado)
             ? (dark ? '#c4b5fd' : '#6d28d9')
             : pendenteAtivo ? (dark ? '#fcd34d' : '#d97706') : (dark ? '#c4b5fd' : '#6d28d9');
           const subColor = isErro
             ? (dark ? '#f87171' : '#b91c1c')
-            : isSemAcao
+            : (isSemAcao || isIgnorado)
             ? (dark ? '#8b5cf6' : '#7c3aed')
             : pendenteAtivo ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
           const badgeBg   = isErro ? '#ef4444' : pendenteAtivo ? '#f59e0b' : '#8b5cf6';
@@ -1882,14 +1880,16 @@ export default function CampanhasPage() {
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 12px rgba(239,68,68,0.4)' : isSemAcao ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
+              <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 12px rgba(239,68,68,0.4)' : (isSemAcao || isIgnorado) ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isErro ? 'Erro de sincronização' : isSemAcao ? `Ravena analisou ${(aiLog.insights || []).length > 0 ? (aiLog.insights || []).length + ' campanhas' : 'suas campanhas'} — tudo estável` : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
+                  {isErro ? 'Erro de sincronização' : isIgnorado ? 'Ravena analisou suas campanhas — sugestões descartadas' : isSemAcao ? `Ravena analisou ${(aiLog.insights || []).length > 0 ? (aiLog.insights || []).length + ' campanhas' : 'suas campanhas'} — tudo estável` : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isErro
                     ? aiLog.alerta
+                    : isIgnorado
+                    ? (() => { const n = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length; return n > 0 ? `${n} sugestão${n !== 1 ? 'ões' : ''} descartada${n !== 1 ? 's' : ''} pelo usuário` : 'Clique para ver o histórico'; })()
                     : isSemAcao
                     ? (() => { const n = (aiLog.insights || []).length; return n > 0 ? `${n} campanha${n !== 1 ? 's' : ''} analisada${n !== 1 ? 's' : ''} — nenhuma ação necessária` : 'Nenhuma ação necessária hoje'; })()
                     : isPendente
@@ -1898,7 +1898,7 @@ export default function CampanhasPage() {
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                {!isSemAcao && badgeNum > 0 && (
+                {!isSemAcao && !isIgnorado && badgeNum > 0 && (
                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', background: badgeBg, padding: '2px 8px', borderRadius: '99px' }}>
                     {badgeText}
                   </span>
@@ -1939,8 +1939,10 @@ export default function CampanhasPage() {
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart
                   data={rankedRows.map(r => {
-                    const campLeadsList = campLeadsMap.get(r.id) || [];
-                    const potenciais = campLeadsList.filter(l => [2, 5].includes(Number((l as any).status))).length;
+                    const allLeadsForChart = allCampLeadsMap.get(r.id) || [];
+                    const potenciais = preConvertidoStatus != null
+                      ? filterPotenciaisByPreset(allLeadsForChart, preConvertidoStatus, datePreset).length
+                      : 0;
                     const raw = r.fullName.replace(/\s*-\s*\[CBO\]/gi,'').replace(/\s*-\s*\[ABO\]/gi,'').replace(/\[LEADS?\]/gi,'').trim();
                     return {
                       name: raw.length > 14 ? raw.slice(0, 14) + '…' : raw,
@@ -2036,12 +2038,14 @@ export default function CampanhasPage() {
                   ? Math.min(...allLeadsList.map(l => new Date((l as any).created_at || Date.now()).getTime()))
                   : 0;
                 const ageDays = Math.floor((Date.now() - oldest) / (1000*60*60*24));
-                // potenciais: usa campLeadsMap (filtrado por período) para exibição
-                const periodLeadsList = campLeadsMap.get(r.id) || [];
-                const potenciais = periodLeadsList.filter(l => [2,5].includes(Number((l as any).status))).length;
-                const comCPR = chartRows.filter(x => x.cpr > 0);
+                // potenciais: leads movidos para preConvertidoStatus no período
+                const allLeadsForRanking = allCampLeadsMap.get(r.id) || [];
+                const potenciais = preConvertidoStatus != null
+                  ? filterPotenciaisByPreset(allLeadsForRanking, preConvertidoStatus, datePreset).length
+                  : 0;
+                const comCPR = rankedRows.filter(x => x.cpr > 0);
                 const mCPR = comCPR.length > 0 ? comCPR.reduce((s, x) => s + x.cpr, 0) / comCPR.length : 0;
-                const comCPL = chartRows.filter(x => x.cpl > 0);
+                const comCPL = rankedRows.filter(x => x.cpl > 0);
                 const mCPL = comCPL.length > 0 ? comCPL.reduce((s, x) => s + x.cpl, 0) / comCPL.length : 0;
                 return (
                   <div
@@ -2051,7 +2055,7 @@ export default function CampanhasPage() {
                       isNew,
                       potenciais,
                       ageDays,
-                      criteria: gerarCriterios(r, chartRows, mCPR, mCPL, isNew, potenciais, t),
+                      criteria: gerarCriterios(r, rankedRows, mCPR, mCPL, isNew, potenciais, t),
                     })}
                     style={{ padding: '12px 14px', borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', cursor: 'pointer', overflow: 'hidden', maxWidth: '100%' }}
                   >

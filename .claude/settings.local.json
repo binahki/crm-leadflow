@@ -43,7 +43,8 @@
       "Bash(python3 -c ' *)",
       "mcp__claude_ai_Supabase__execute_sql",
       "mcp__claude_ai_Supabase__apply_migration",
-      "mcp__claude_ai_Supabase__get_logs"
+      "mcp__claude_ai_Supabase__get_logs",
+      "mcp__claude_ai_Supabase__list_tables"
     ]
   }
 }
