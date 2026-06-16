@@ -34,6 +34,14 @@ export default function MetaAdsPage() {
   const [metaRevs, setMetaRevs]         = useState(50);
   const [savingMetas, setSavingMetas]   = useState(false);
 
+  // CAPI state
+  const [pixelId, setPixelId]             = useState('');
+  const [capiDatasetId, setCapiDatasetId] = useState('');
+  const [capiToken, setCapiToken]         = useState('');
+  const [capiAtivo, setCapiAtivo]         = useState(false);
+  const [togglingCapi, setTogglingCapi]   = useState(false);
+  const [savingCapi, setSavingCapi]       = useState(false);
+
   // Ravena state
   const [ravenaAtiva, setRavenaAtiva]     = useState<boolean | null>(null);
   const [togglingRavena, setTogglingRavena] = useState(false);
@@ -59,11 +67,15 @@ export default function MetaAdsPage() {
       setLoadingData(true);
       const { data: org } = await db
         .from('organizations')
-        .select('meta_account_id,meta_token,ravena_ativa,ravena_budget_mensal,ravena_meta_revendedoras,ravena_modo,ravena_notif_ativa,ravena_notif_numero')
+        .select('meta_account_id,meta_token,meta_pixel_id,meta_capi_dataset_id,meta_capi_token,meta_capi_ativo,ravena_ativa,ravena_budget_mensal,ravena_meta_revendedoras,ravena_modo,ravena_notif_ativa,ravena_notif_numero')
         .eq('id', orgId).single();
       if (org) {
         setAccountId(org.meta_account_id || '');
         setToken(org.meta_token || '');
+        setPixelId(org.meta_pixel_id || '');
+        setCapiDatasetId(org.meta_capi_dataset_id || '');
+        setCapiToken(org.meta_capi_token || '');
+        setCapiAtivo(Boolean(org.meta_capi_ativo));
         setRavenaAtiva(org.ravena_ativa === true);
         setBudgetMensal(org.ravena_budget_mensal || 5000);
         setMetaRevs(org.ravena_meta_revendedoras || 50);
@@ -133,6 +145,30 @@ export default function MetaAdsPage() {
     if (error) toast.error('Erro ao salvar: ' + error.message);
     else toast.success('Ravena configurada!');
     setSavingRavena(false);
+  }
+
+  async function handleToggleCapi() {
+    if (!orgId) return;
+    const next = !capiAtivo;
+    setCapiAtivo(next);
+    setTogglingCapi(true);
+    const { error } = await db.from('organizations').update({ meta_capi_ativo: next }).eq('id', orgId);
+    if (error) { setCapiAtivo(!next); toast.error('Erro ao salvar'); }
+    setTogglingCapi(false);
+  }
+
+  async function handleSaveCapi() {
+    if (!orgId) return;
+    setSavingCapi(true);
+    const { error } = await db.from('organizations').update({
+      meta_pixel_id: pixelId,
+      meta_capi_dataset_id: capiDatasetId,
+      meta_capi_token: capiToken,
+      meta_capi_ativo: capiAtivo,
+    }).eq('id', orgId);
+    if (error) toast.error('Erro ao salvar CAPI');
+    else toast.success('CAPI configurado!');
+    setSavingCapi(false);
   }
 
   // ── Design tokens ─────────────────────────────────────────────
@@ -404,6 +440,58 @@ export default function MetaAdsPage() {
             </div>
           </div>
 
+        </div>
+
+        {/* ── CAPI card ──────────────────────────────────────── */}
+        <div style={{ ...card, marginTop: '16px' }}>
+          <div style={{ padding: '13px 20px', borderBottom: `1px solid ${border}`, background: headBg, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: `${ACCENT}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Target style={{ width: '14px', height: '14px', color: ACCENT }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 600, color: txt, lineHeight: 1.25 }}>Conversions API</div>
+                <div style={{ fontSize: '11px', color: txtMid, marginTop: '1px' }}>Eventos server-side para o Meta</div>
+              </div>
+            </div>
+            <Toggle active={capiAtivo} toggling={togglingCapi} onToggle={handleToggleCapi} color={ACCENT} />
+          </div>
+
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: txtMid, lineHeight: 1.6, padding: '10px 12px', borderRadius: '9px', background: dark ? `${ACCENT}10` : '#eef2ff', border: `1px solid ${dark ? `${ACCENT}22` : '#c7d2fe'}` }}>
+              Envia eventos de conversão direto para o Meta quando uma revendedora é aprovada no CRM. Melhora a qualidade do público e reduz o CPR ao longo do tempo.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={lbl}>Pixel ID</label>
+                <input style={inp} value={pixelId} onChange={e => setPixelId(e.target.value)}
+                  placeholder="123456789012345"
+                  onFocus={e => (e.target.style.borderColor = ACCENT)}
+                  onBlur={e => (e.target.style.borderColor = border)} />
+              </div>
+              <div>
+                <label style={lbl}>Dataset ID</label>
+                <input style={inp} value={capiDatasetId} onChange={e => setCapiDatasetId(e.target.value)}
+                  placeholder="123456789012345"
+                  onFocus={e => (e.target.style.borderColor = ACCENT)}
+                  onBlur={e => (e.target.style.borderColor = border)} />
+              </div>
+            </div>
+
+            <div>
+              <label style={lbl}>Token CAPI</label>
+              <input style={inp} type="password" autoComplete="new-password" value={capiToken} onChange={e => setCapiToken(e.target.value)}
+                placeholder="Token de acesso da Conversions API"
+                onFocus={e => (e.target.style.borderColor = ACCENT)}
+                onBlur={e => (e.target.style.borderColor = border)} />
+            </div>
+
+            <button onClick={handleSaveCapi} disabled={savingCapi} style={{ ...primaryBtn(savingCapi), width: isMobile ? '100%' : 'auto', alignSelf: 'flex-start' }}>
+              <Save style={{ width: '13px', height: '13px' }} />
+              {savingCapi ? 'Salvando…' : 'Salvar CAPI'}
+            </button>
+          </div>
         </div>
 
         {showRavenaUpgrade && (

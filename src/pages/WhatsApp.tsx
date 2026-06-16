@@ -4,6 +4,9 @@ import { useAppStore, Lead, STATUS_CONFIG, STATUS_SEQUENCE } from '@/stores/appS
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
+import { useModeloNegocio } from '@/hooks/useTerminology';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
+import { dispararCapiConversao } from '@/utils/capiEvento';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import {
@@ -273,6 +276,8 @@ export default function WhatsAppPage() {
   const { theme } = useTheme();
   const colors = theme === 'dark' ? WA_COLORS.dark : WA_COLORS.light;
   const { orgId, ready: orgReady } = useOrgId();
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -672,6 +677,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
           quickStatusId={quickStatusId} onSetQuickStatus={setQuickStatusId}
           onUpdateLead={() => fetchConvs()}
           orgId={orgId}
+          convertidoStatus={statusConfig.convertido_status}
           onSelect={(id: string) => {
             setSelectedId(id);
             setPendingLead(null);
@@ -822,20 +828,25 @@ function SidebarSearch({ colors, value, onChange }: { colors: any, value: string
   );
 }
 
-function ConversationList({ colors, list, selectedId, onSelect, theme, quickStatusId, onSetQuickStatus, onUpdateLead, orgId }: {
+function ConversationList({ colors, list, selectedId, onSelect, theme, quickStatusId, onSetQuickStatus, onUpdateLead, orgId, convertidoStatus }: {
   colors: any, list: WaConversation[], selectedId: string | null, onSelect: (id: string) => void, theme: string,
-  quickStatusId: string | null, onSetQuickStatus: (id: string | null) => void, onUpdateLead: () => void, orgId: string
+  quickStatusId: string | null, onSetQuickStatus: (id: string | null) => void, onUpdateLead: () => void, orgId: string,
+  convertidoStatus?: number,
 }) {
   const dark = theme === 'dark';
 
-  const handleStatusUpdate = async (leadId: string, status: number, orgId: string) => {
+  const handleStatusUpdate = async (leadId: string, status: number, callOrgId: string, lead?: any) => {
     const now = new Date().toISOString();
     const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
     const patch: any = { status, ultimo_status_change: now };
     if (tsField[status]) patch[tsField[status]] = now;
-    const { error } = await supabase.from('leads').update(patch).eq('id', leadId).eq('org_id', orgId);
+    const { error } = await supabase.from('leads').update(patch).eq('id', leadId).eq('org_id', callOrgId);
     if (error) toast.error('Erro ao atualizar status');
     else {
+      const convStatus = convertidoStatus ?? 3;
+      if (status === convStatus && !lead?.capi_conversao_enviado) {
+        dispararCapiConversao(leadId, callOrgId);
+      }
       toast.success('Status atualizado');
       onUpdateLead();
     }
@@ -924,7 +935,7 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
                           return (
                             <button
                               key={idx}
-                              onClick={() => c.lead_id && c.lead?.org_id && handleStatusUpdate(c.lead_id, idx, c.lead.org_id || orgId)}
+                              onClick={() => c.lead_id && c.lead?.org_id && handleStatusUpdate(c.lead_id, idx, c.lead.org_id || orgId, c.lead)}
                               className="w-full px-3 py-2 text-left text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
                               disabled={!c.lead_id}
                             >

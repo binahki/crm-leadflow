@@ -30,6 +30,7 @@ import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useNavigate } from 'react-router-dom';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { Tag } from '@/hooks/useTags';
+import { dispararCapiConversao } from '@/utils/capiEvento';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 type ColumnDef = { status: number; label: string; border: string; dot: string; bg: string };
@@ -984,7 +985,12 @@ export default function KanbanPage() {
     updateLead(lead.id, patch);
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
     if (error) { updateLead(lead.id, { status: currentStatus }); toast.error('Erro ao mover lead'); }
-    else { const col = columns.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 }); }
+    else {
+      if (newStatus === statusConfig.convertido_status && !(lead as any).capi_conversao_enviado && orgId) {
+        dispararCapiConversao(lead.id, orgId);
+      }
+      const col = columns.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 });
+    }
   }
 
   function handleDragStart(e: DragStartEvent) {

@@ -22,6 +22,7 @@ import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
 import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { aplicarTagOrigem } from '@/utils/tagOrigem';
+import { dispararCapiConversao } from '@/utils/capiEvento';
 
 const STATUS_STYLE = STATUS_CONFIG;
 
@@ -1577,6 +1578,11 @@ function LeadsPage() {
         await supabase.from('leads').update(updates).in('id', ids.slice(i, i + CHUNK));
       }
       const idSet = new Set(ids);
+      if (newStatus === statusConfig.convertido_status && orgId) {
+        const leadsParaCapi = (allSystemSelected ? filtered : allLeads.filter(l => idSet.has(l.id)))
+          .filter(l => !(l as any).capi_conversao_enviado);
+        leadsParaCapi.forEach(l => dispararCapiConversao(l.id, orgId));
+      }
       setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, ...updates } : l));
       const label = statusConfig.statuses.find(s => s.id === newStatus)?.label ?? STATUS_LABELS[newStatus];
       toast.success(`${ids.length} lead${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para "${label}"`);
@@ -1778,6 +1784,9 @@ function LeadsPage() {
     setAllLeads(prev => prev.map(l => l.id === editingLead.id ? { ...l, ...updates } : l));
     updateLead(editingLead.id, updates);
     if (orgId) await aplicarTagOrigem(supabase as any, editingLead.id as any, orgId, editUtmSource, (editingLead as any).utm_campaign ?? null);
+    if (Number(newStatus) === statusConfig.convertido_status && !(editingLead as any).capi_conversao_enviado && orgId) {
+      dispararCapiConversao(editingLead.id, orgId);
+    }
     setIsEditOpen(false);
     setEditingLead(null);
     toast.success('Lead atualizado!');

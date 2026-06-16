@@ -17,6 +17,7 @@ import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
+import { dispararCapiConversao } from '@/utils/capiEvento';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -431,7 +432,12 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     if (targetLabel.toLowerCase().includes('sem retorno')) updates.motivo_reprovacao = null;
     const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
     if (error) { setStatus(prev); setAvaliado(avaliado); toast.error('Erro ao atualizar status'); }
-    else { setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado'); }
+    else {
+      if (newStatus === statusConfig.convertido_status && !(lead as any).capi_conversao_enviado && orgId) {
+        dispararCapiConversao(lead.id, orgId);
+      }
+      setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado');
+    }
   }
 
   function handleStatus(i: number) {
