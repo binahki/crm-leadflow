@@ -24,9 +24,16 @@ export function mapUtmSourceParaNomeTag(
   return 'Outros';
 }
 
+const CORES_ORIGENS: Record<string, string> = {
+  'Meta Ads': '#3b82f6',
+  'Indicação': '#10b981',
+  'Orgânico': '#8b5cf6',
+  'Outros': '#71717a',
+};
+
 export async function aplicarTagOrigem(
   supabase: any,
-  leadId: number,
+  leadId: string | number,
   orgId: string,
   utmSource: string | null | undefined,
   utmCampaign: string | null | undefined,
@@ -35,14 +42,31 @@ export async function aplicarTagOrigem(
   if (!nomeTag) return;
 
   try {
+    let tagId: string | null = null;
+
     const { data: tag } = await supabase
       .from('tags')
       .select('id')
       .eq('org_id', orgId)
       .eq('nome', nomeTag)
-      .single();
+      .maybeSingle();
 
-    if (!tag) return;
+    if (tag) {
+      tagId = tag.id;
+    } else {
+      const cor = CORES_ORIGENS[nomeTag] || '#8b5cf6';
+      const { data: newTag, error: createErr } = await supabase
+        .from('tags')
+        .insert({ org_id: orgId, nome: nomeTag, cor })
+        .select('id')
+        .single();
+
+      if (createErr) {
+        console.error('[tagOrigem] falha ao criar tag:', nomeTag, createErr.message);
+        return;
+      }
+      tagId = newTag.id;
+    }
 
     const { data: tagsOrg } = await supabase
       .from('tags')
@@ -53,7 +77,7 @@ export async function aplicarTagOrigem(
     if (tagsOrg?.length) {
       const idsParaRemover = tagsOrg
         .map((t: any) => t.id)
-        .filter((id: string) => id !== tag.id);
+        .filter((id: string) => id !== tagId);
       if (idsParaRemover.length > 0) {
         await supabase
           .from('lead_tags')
@@ -63,13 +87,14 @@ export async function aplicarTagOrigem(
       }
     }
 
-    await supabase
+    const { error: upsertErr } = await supabase
       .from('lead_tags')
       .upsert(
-        { lead_id: leadId, tag_id: tag.id },
+        { lead_id: leadId, tag_id: tagId },
         { onConflict: 'lead_id,tag_id', ignoreDuplicates: true },
       );
-  } catch {
-    // falha silenciosa — nunca bloqueia o save do lead
+    if (upsertErr) console.error('[tagOrigem] falha ao salvar lead_tag:', upsertErr.message);
+  } catch (err) {
+    console.error('[tagOrigem] erro inesperado:', err);
   }
 }

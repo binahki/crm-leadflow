@@ -2,9 +2,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Megaphone, Image as ImageIcon,
   Webhook, MessageCircle, Settings, LogOut, ChevronLeft, Building2, ClipboardList,
-  ChevronDown, Zap, User as UserIcon, CreditCard, ChevronUp, CircleDot, GitBranch
+  ChevronDown, Zap, User as UserIcon, CreditCard, ChevronUp, CircleDot, GitBranch,
+  Calendar,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useOrgId } from '@/hooks/useOrgId';
@@ -12,6 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { useStatusConfig } from '@/hooks/useStatusConfig';
+import { useModeloNegocio } from '@/hooks/useTerminology';
 
 const NAV_MAIN = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/', badge: false },
@@ -81,6 +84,14 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
 
   const { features, loading } = usePlanFeatures();
   const [lockedFeature, setLockedFeature] = useState<string | null>(null);
+
+  const modelo = useModeloNegocio();
+  const { config: statusConfig } = useStatusConfig(modelo);
+  const navMain = useMemo(() => [
+    ...NAV_MAIN.slice(0, 4),
+    { icon: Calendar, label: 'Calendário', href: '/calendario', badge: false },
+    ...NAV_MAIN.slice(4),
+  ], []);
 
   const [alertBadges, setAlertBadges] = useState<Record<string, boolean>>({});
   const [waUnread, setWaUnread] = useState(0);
@@ -388,7 +399,7 @@ export function Sidebar({ leadCount = 0, onMobileClose }: SidebarProps) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '14px 6px 0', overflowY: 'auto', overflowX: 'hidden' }}>
-        <NavGroup label="Principal" items={NAV_MAIN} />
+        <NavGroup label="Principal" items={navMain} />
         <NavGroup label="Meta Ads" items={NAV_META} />
         <NavGroup label="Integrações" items={NAV_INT} />
         <NavGroup label="Conta" items={NAV_ACCOUNT} />

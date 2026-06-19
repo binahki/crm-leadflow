@@ -44,7 +44,9 @@
       "mcp__claude_ai_Supabase__execute_sql",
       "mcp__claude_ai_Supabase__apply_migration",
       "mcp__claude_ai_Supabase__get_logs",
-      "mcp__claude_ai_Supabase__list_tables"
+      "mcp__claude_ai_Supabase__list_tables",
+      "Bash(powershell -Command \"\\(Get-Content src/pages/Kanban.tsx\\) -replace \\\\\"\\\\.select\\\\\\('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram'\\\\\\)\\\\\", \\\\\".select\\('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram, reuniao_agendada_at, reuniao_link'\\)\\\\\" | Set-Content src/pages/Kanban.tsx\")",
+      "Bash(grep -v \"//\\\\|slotsFiltrados\\\\|slot.dia\\\\|reunião neste\\\\|setDia\\\\|diasSemana\\\\|diaFiltro ===\")"
     ]
   }
 }

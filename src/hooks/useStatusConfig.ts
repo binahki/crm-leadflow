@@ -9,6 +9,9 @@ export interface StatusItem {
   label: string;
   cor: string;
   ordem: number;
+  sla_horas?: number;
+  sla_unidade?: string;
+  tipo?: 'reuniao' | 'padrao';
 }
 
 export interface StatusConfig {
@@ -20,6 +23,21 @@ export interface StatusConfig {
 const REVENDA_SEQUENCE = [1, 2, 5, 3, 6, 4];
 const DEFAULT_SEQUENCE = [1, 2, 3, 4, 5, 6];
 
+function normalizarStatuses(statuses: StatusItem[]): StatusItem[] {
+  // If any status already has tipo defined, trust the existing data
+  if (statuses.some(s => (s as any).tipo)) return statuses;
+  // Auto-detect from label (fallback for orgs without status_config set)
+  return statuses.map(s => {
+    const lbl = (s.label || '').toLowerCase();
+    const isReuniao =
+      lbl.includes('reuni') ||
+      lbl.includes('meeting') ||
+      lbl.includes('onboard') ||
+      lbl.includes('remarcar');
+    return isReuniao ? { ...s, tipo: 'reuniao' as const } : s;
+  });
+}
+
 export function getDefaultStatusConfig(modelo: string): StatusConfig {
   const preset = STATUS_PRESETS[modelo] || STATUS_PRESETS['revenda'];
   const sequence = modelo === 'revenda' ? REVENDA_SEQUENCE : DEFAULT_SEQUENCE;
@@ -27,14 +45,16 @@ export function getDefaultStatusConfig(modelo: string): StatusConfig {
   return {
     entrada_status: 1,
     convertido_status: modelo === 'revenda' ? 3 : 4,
-    statuses: sequence
-      .filter(id => preset[id] != null)
-      .map((id, idx) => ({
-        id,
-        label: preset[id],
-        cor: STATUS_CONFIG[id]?.dot ?? '#6b7280',
-        ordem: idx + 1,
-      })),
+    statuses: normalizarStatuses(
+      sequence
+        .filter(id => preset[id] != null)
+        .map((id, idx) => ({
+          id,
+          label: preset[id],
+          cor: STATUS_CONFIG[id]?.dot ?? '#6b7280',
+          ordem: idx + 1,
+        }))
+    ),
   };
 }
 
@@ -52,9 +72,24 @@ export function useStatusConfig(modelo: string): {
   );
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null);
+
+  if (orgId !== lastOrgId) {
+    setLastOrgId(orgId);
+    setLoading(true);
+    if (orgId && configCache[orgId]) {
+      setConfig(configCache[orgId]);
+    } else {
+      setConfig(defaultCfg);
+    }
+  }
 
   useEffect(() => {
-    if (!ready || !orgId) return;
+    if (!ready) return;
+    if (!orgId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     (supabase as any)
       .from('organizations')
@@ -63,8 +98,12 @@ export function useStatusConfig(modelo: string): {
       .single()
       .then(({ data }: any) => {
         if (data?.status_config?.statuses?.length) {
-          configCache[orgId] = data.status_config as StatusConfig;
-          setConfig(data.status_config as StatusConfig);
+          const normalized: StatusConfig = {
+            ...data.status_config,
+            statuses: normalizarStatuses(data.status_config.statuses),
+          };
+          configCache[orgId] = normalized;
+          setConfig(normalized);
         } else {
           const def = getDefaultStatusConfig(data?.modelo_negocio || modelo);
           configCache[orgId] = def;

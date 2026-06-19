@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle, Users, Check } from 'lucide-react';
+import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle, Users, Check, X as XIcon, Calendar as CalendarIcon, User as UserIcon } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -348,6 +349,637 @@ function AnimatedCounter({ value, duration = 800, decimals = 0 }: { value: numbe
   );
 }
 
+function RitmoTooltip({ dark }: { dark: boolean }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  return (
+    <span
+      ref={ref}
+      onMouseEnter={() => {
+        if (ref.current) {
+          const r = ref.current.getBoundingClientRect();
+          setPos({ top: r.top + window.scrollY, left: r.left + r.width / 2 + window.scrollX });
+        }
+        setVisible(true);
+      }}
+      onMouseLeave={() => setVisible(false)}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', border: '1.2px solid rgba(255,255,255,0.3)', fontSize: '8px', fontWeight: 700, fontFamily: 'serif', color: 'rgba(255,255,255,0.4)', cursor: 'help', flexShrink: 0, lineHeight: 1, userSelect: 'none' }}
+    >
+      ?
+      {visible && createPortal(
+        <div style={{ position: 'absolute', top: pos.top - 10, left: pos.left, transform: 'translateX(-50%) translateY(-100%)', background: dark ? '#1e1e24' : '#1f2937', color: '#f9fafb', fontSize: '11.5px', lineHeight: 1.55, padding: '10px 13px', borderRadius: '9px', width: '230px', whiteSpace: 'normal', textAlign: 'center', zIndex: 999999, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
+          Compara suas revendedoras aprovadas com o ritmo necessário para bater a meta.
+          Calculado em dias úteis, excluindo fins de semana e feriados configurados.
+          <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', borderWidth: '5px', borderStyle: 'solid', borderColor: `${dark ? '#1e1e24' : '#1f2937'} transparent transparent transparent` }}/>
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
+function getDiasUteisMes(feriadosExtras: string[] = []): { total: number; transcorridos: number; restantes: number } {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = hoje.getMonth();
+  const diaHoje = hoje.getDate();
+  const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+  const feriadosSet = new Set(feriadosExtras);
+  let total = 0, transcorridos = 0;
+  for (let d = 1; d <= ultimoDia; d++) {
+    const dow = new Date(ano, mes, d).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const key = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (!isWeekend && !feriadosSet.has(key)) {
+      total++;
+      if (d <= diaHoje) transcorridos++;
+    }
+  }
+  return { total, transcorridos, restantes: total - transcorridos };
+}
+
+function calcularRitmo(aprovadas: number, meta: number, feriados: string[] = []) {
+  const du = getDiasUteisMes(feriados);
+  const metaDiaria = du.total > 0 ? meta / du.total : 0;
+  const esperado = Math.round(metaDiaria * du.transcorridos);
+  const diff = aprovadas - esperado;
+  return {
+    diff,
+    metaDiaria,
+    restantes: du.restantes,
+    status: diff >= 2 ? 'ok' : diff >= -2 ? 'ritmo' : 'atrasado',
+  };
+}
+
+function FunilHorizontal({ funnelData, totalLeads, dark, loading, navigate, selectedPeriod }: {
+  funnelData: { stage: string; statusId: number; color: string; value: number }[];
+  totalLeads: number;
+  dark: boolean;
+  loading: boolean;
+  navigate: (path: string) => void;
+  selectedPeriod: string;
+}) {
+  const cardBg = dark ? '#1b1b1d' : '#ffffff';
+  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const cardShadow = dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)';
+  const txtHi = dark ? '#f0f0f0' : '#111827';
+  const txtLow = dark ? '#8a8a96' : '#6b7280';
+  return (
+    <div style={{
+      background: cardBg, borderRadius: '14px',
+      padding: '20px 24px', border: `1px solid ${border}`,
+      boxShadow: cardShadow, marginBottom: '14px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Funil de leads</h3>
+        <span style={{ fontSize: '11px', color: txtLow }}>{totalLeads} no período</span>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        {funnelData.map(stage => {
+          const pct = totalLeads > 0 ? Math.min(Math.round((stage.value / totalLeads) * 100), 100) : 0;
+          return (
+            <div
+              key={stage.stage}
+              onClick={() => navigate(`/leads?status=${stage.statusId}&periodo=${selectedPeriod}`)}
+              style={{
+                flex: '1 1 0', minWidth: '80px', cursor: 'pointer',
+                padding: '12px', borderRadius: '10px',
+                border: `1px solid ${border}`,
+                background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)'}
+            >
+              <div style={{ height: '3px', borderRadius: '99px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', marginBottom: '10px', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: stage.color, borderRadius: '99px', transition: 'width 0.8s ease' }}/>
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: txtHi, lineHeight: 1, marginBottom: '4px' }}>
+                {loading ? '…' : stage.value}
+              </div>
+              <div style={{ fontSize: '11px', color: txtLow, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '4px' }}>
+                {stage.stage}
+              </div>
+              <div style={{ fontSize: '10px', fontWeight: 700, color: stage.color }}>
+                {loading ? '' : `${pct}%`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
+  dark: boolean;
+  orgId: string | null;
+  reuniaoStatusIds: number[];
+  onDayClick: (data: string) => void;
+}) {
+  const cardBg = dark ? '#1b1b1d' : '#ffffff';
+  const border = dark ? 'rgba(255,255,255,0.07)' : '#e5e7eb';
+  const txtHi = dark ? '#f0f0f0' : '#111827';
+  const txtLow = dark ? '#8a8a96' : '#6b7280';
+  const txtMid = dark ? '#a0a0a8' : '#374151';
+  const rowPar = dark ? '#222225' : '#f9fafb';
+
+  const hojeStr = new Date().toISOString().split('T')[0];
+
+  const navigate = useNavigate();
+
+  const [semanaBase, setSemanaBase] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [diaFiltro, setDiaFiltro] = useState<string | null>(hojeStr);
+  const [leadsCarregados, setLeadsCarregados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalSlot, setModalSlot] = useState<{ hora: string; dia: string; leads: any[] } | null>(null);
+  const [showMesPicker, setShowMesPicker] = useState(false);
+  const [anoPicker, setAnoPicker] = useState(() => new Date().getFullYear());
+  const [horariosOrg, setHorariosOrg] = useState<string[]>(['10:00','12:00','15:00','17:00','19:00']);
+  const [drawerLead, setDrawerLead] = useState<any | null>(null);
+  const [leadReagendando, setLeadReagendando] = useState<string | null>(null);
+  const [reagData, setReagData] = useState('');
+  const [reagHora, setReagHora] = useState('');
+  const [reagMes, setReagMes] = useState<Date>(() => new Date());
+  const [reagSaving, setReagSaving] = useState(false);
+
+  const reuniaoStatusIdsRef = useRef<number[]>([]);
+  reuniaoStatusIdsRef.current = reuniaoStatusIds;
+
+  const diasSemana = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(semanaBase);
+    d.setDate(semanaBase.getDate() + i);
+    return d;
+  }), [semanaBase]);
+
+  const inicioSemana = diasSemana[0].toISOString().split('T')[0];
+  const fimSemana = diasSemana[6].toISOString().split('T')[0];
+  const meioSemana = diasSemana[3];
+  const mesLabel = meioSemana.toLocaleString('pt-BR', { month: 'long' });
+  const anoLabel = meioSemana.getFullYear();
+
+  useEffect(() => {
+    if (!orgId || reuniaoStatusIds.length === 0) return;
+    setLoading(true);
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('leads')
+        .select('id, nome, whatsapp, cidade, reuniao_agendada_at, faixa, score, status')
+        .eq('org_id', orgId)
+        .in('status', reuniaoStatusIds)
+        .gte('reuniao_agendada_at', inicioSemana)
+        .lte('reuniao_agendada_at', fimSemana + 'T23:59:59');
+      setLeadsCarregados((data || []) as any[]);
+      setLoading(false);
+    })();
+  }, [orgId, inicioSemana, reuniaoStatusIds.join(',')]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!orgId) return;
+    (supabase as any).from('organizations').select('reuniao_horarios').eq('id', orgId).single()
+      .then(({ data }: any) => {
+        const h = data?.reuniao_horarios;
+        if (Array.isArray(h) && h.length > 0) setHorariosOrg(h);
+      });
+  }, [orgId]);
+
+  // Ref para janela da semana — evita stale closure na subscription
+  const semanaRef = useRef({ inicio: inicioSemana, fim: fimSemana });
+  useEffect(() => { semanaRef.current = { inicio: inicioSemana, fim: fimSemana }; }, [inicioSemana, fimSemana]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    const ch = (supabase as any)
+      .channel(`mini-cal-${orgId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads', filter: `org_id=eq.${orgId}` }, (payload: any) => {
+        const updated = payload.new;
+        const { inicio, fim } = semanaRef.current;
+        const at: string | null = updated.reuniao_agendada_at ?? null;
+        const inReu = reuniaoStatusIdsRef.current.includes(Number(updated.status));
+        const dentroDaSemana = at && at >= inicio && at <= fim + 'T23:59:59';
+        const deveAparecer = inReu && !!dentroDaSemana;
+        setLeadsCarregados(prev => {
+          const exists = prev.some((l: any) => String(l.id) === String(updated.id));
+          if (exists && deveAparecer) return prev.map((l: any) => String(l.id) === String(updated.id) ? { ...l, ...updated } : l);
+          if (!exists && deveAparecer) return [...prev, updated];
+          if (exists && !deveAparecer) return prev.filter((l: any) => String(l.id) !== String(updated.id));
+          return prev;
+        });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads', filter: `org_id=eq.${orgId}` }, (payload: any) => {
+        const novo = payload.new;
+        const { inicio, fim } = semanaRef.current;
+        const at: string | null = novo.reuniao_agendada_at ?? null;
+        const inReu = reuniaoStatusIdsRef.current.includes(Number(novo.status));
+        if (inReu && at && at >= inicio && at <= fim + 'T23:59:59') {
+          setLeadsCarregados(prev => [...prev, novo]);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [orgId]); // eslint-disable-line
+
+  const slots = useMemo(() => {
+    const slotMap: Record<string, any[]> = {};
+    for (const l of leadsCarregados) {
+      if (!l.reuniao_agendada_at) continue;
+      const dt = new Date(l.reuniao_agendada_at);
+      const dia = (l.reuniao_agendada_at as string).slice(0, 10);
+      const hora = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+      const key = `${dia}|${hora}`;
+      if (!slotMap[key]) slotMap[key] = [];
+      slotMap[key].push(l);
+    }
+    return Object.entries(slotMap)
+      .map(([key, leads]) => { const [dia, hora] = key.split('|'); return { dia, hora, leads }; })
+      .sort((a, b) => (`${a.dia} ${a.hora}` < `${b.dia} ${b.hora}` ? -1 : 1));
+  }, [leadsCarregados]);
+
+  const slotsFiltrados = useMemo(
+    () => diaFiltro ? slots.filter(s => s.dia === diaFiltro) : slots,
+    [slots, diaFiltro]
+  );
+
+  function irSemana(dir: number) {
+    const d = new Date(semanaBase);
+    d.setDate(d.getDate() + dir * 7);
+    d.setHours(0, 0, 0, 0);
+    setSemanaBase(d);
+    setDiaFiltro(d.toISOString().split('T')[0]);
+  }
+
+  function irParaMes(mes: number, ano: number) {
+    const p = new Date(ano, mes, 1);
+    const dom = new Date(p);
+    dom.setDate(p.getDate() - p.getDay());
+    dom.setHours(0, 0, 0, 0);
+    setSemanaBase(dom);
+    setDiaFiltro(dom.toISOString().split('T')[0]);
+    setShowMesPicker(false);
+  }
+
+  const DIAS_ABREV = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  const navBtnSt: React.CSSProperties = {
+    width: '22px', height: '22px', borderRadius: '6px',
+    border: `1px solid ${border}`, background: 'transparent',
+    color: txtMid, cursor: 'pointer', display: 'flex',
+    alignItems: 'center', justifyContent: 'center',
+    fontSize: '13px', fontFamily: 'inherit', padding: 0,
+  };
+
+  return (
+    <div style={{
+      background: cardBg, borderRadius: '14px', padding: '18px 20px 14px',
+      border: `1px solid ${border}`,
+      boxShadow: dark ? '0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 3px rgba(0,0,0,0.06)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Reuniões</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button style={navBtnSt} onClick={() => irSemana(-1)}>‹</button>
+
+          {/* Month label + inline popover */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setAnoPicker(anoLabel); setShowMesPicker(v => !v); }}
+              style={{ fontSize: '12px', color: txtMid, fontWeight: 500, textTransform: 'capitalize', background: dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit', padding: '3px 8px', userSelect: 'none' }}>
+              {mesLabel} {anoLabel} ▾
+            </button>
+
+            {showMesPicker && (
+              <>
+                <div onClick={() => setShowMesPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 9999,
+                  background: dark ? '#1e1f26' : '#ffffff',
+                  border: `1px solid ${border}`,
+                  borderRadius: '12px', padding: '14px',
+                  width: '220px',
+                  boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 8px 32px rgba(0,0,0,0.12)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <button style={navBtnSt} onClick={() => setAnoPicker(v => v - 1)}>‹</button>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi }}>{anoPicker}</span>
+                    <button style={navBtnSt} onClick={() => setAnoPicker(v => v + 1)}>›</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                    {MESES_ABREV.map((m, idx) => {
+                      const isViewed = idx === meioSemana.getMonth() && anoPicker === meioSemana.getFullYear();
+                      const isAtual = idx === new Date().getMonth() && anoPicker === new Date().getFullYear();
+                      return (
+                        <button key={idx} onClick={() => irParaMes(idx, anoPicker)}
+                          style={{ padding: '7px 2px', borderRadius: '7px', border: 'none', background: isViewed ? '#0044fd' : isAtual ? (dark ? 'rgba(0,68,253,0.2)' : 'rgba(0,68,253,0.08)') : 'transparent', color: isViewed ? '#ffffff' : isAtual ? '#0044fd' : txtMid, fontSize: '11.5px', fontWeight: isViewed || isAtual ? 600 : 400, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {m}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button style={navBtnSt} onClick={() => irSemana(1)}>›</button>
+        </div>
+      </div>
+
+      {/* Week strip — pt-BR, clicável, underline no dia selecionado/hoje */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '10px' }}>
+        {diasSemana.map((dia, i) => {
+          const dataStr = dia.toISOString().split('T')[0];
+          const isHoje = dataStr === hojeStr;
+          const isSelecionado = diaFiltro === dataStr;
+          const cor = isSelecionado ? '#8b5cf6' : isHoje ? '#0044fd' : txtLow;
+          return (
+            <div key={i}
+              onClick={() => setDiaFiltro(dataStr)}
+              style={{ textAlign: 'center', padding: '1px 0', cursor: 'pointer' }}>
+              <div style={{ fontSize: '10px', fontWeight: 500, color: cor, marginBottom: '3px', letterSpacing: '0.02em' }}>
+                {DIAS_ABREV[i]}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: (isSelecionado || isHoje) ? 700 : 400, color: cor, lineHeight: '22px' }}>
+                {dia.getDate()}
+              </div>
+              <div style={{ height: '3px', marginTop: '2px', display: 'flex', justifyContent: 'center' }}>
+                {isSelecionado && <div style={{ width: '14px', height: '3px', borderRadius: '2px', background: cor }} />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ height: '1px', background: border, marginBottom: '8px' }} />
+
+      {/* Slots — só horários com leads, cards zebrados */}
+      <div style={{ flex: 1, overflowY: 'auto', maxHeight: '290px' }}>
+        {loading ? (
+          <>
+            {[0, 1].map(i => (
+              <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 0' }}>
+                <div style={{ width: '38px', flexShrink: 0 }}>
+                  <div style={{ width: '32px', height: '10px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} />
+                </div>
+                <div style={{ flex: 1, height: '58px', borderRadius: '8px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }} />
+              </div>
+            ))}
+          </>
+        ) : slotsFiltrados.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 0 16px', gap: '6px' }}>
+            <div style={{ fontSize: '22px', opacity: 0.3 }}>📅</div>
+            <p style={{ fontSize: '12px', color: txtLow, margin: 0, textAlign: 'center' }}>{diaFiltro ? 'Nenhuma reunião neste dia' : 'Nenhuma reunião esta semana'}</p>
+          </div>
+        ) : slotsFiltrados.map((slot, idx) => {
+          const maxAv = 4;
+          const visAv = slot.leads.slice(0, maxAv);
+          const extraAv = slot.leads.length - maxAv;
+          const isZebra = idx % 2 === 1;
+          const cardRowBg = isZebra ? rowPar : cardBg;
+          const avBorder = cardRowBg;
+          return (
+            <div key={`${slot.dia}|${slot.hora}`}
+              style={{ display: 'flex', gap: '0', alignItems: 'stretch', borderRadius: '9px', overflow: 'hidden', marginBottom: '5px', background: cardRowBg, border: `1px solid ${border}` }}>
+              {/* Time label column */}
+              <div style={{ width: '44px', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '12px', borderRight: `1px solid ${border}` }}>
+                <span style={{ fontSize: '10.5px', color: txtLow, fontWeight: 500, lineHeight: 1 }}>{slot.hora}</span>
+              </div>
+              {/* Card */}
+              <div
+                onClick={() => setModalSlot(slot)}
+                style={{ flex: 1, padding: '10px 12px', cursor: 'pointer' }}
+              >
+                <div style={{ fontSize: '12.5px', fontWeight: 600, color: txtHi, marginBottom: '1px' }}>
+                  Reunião ({slot.leads.length} {slot.leads.length === 1 ? 'lead' : 'leads'})
+                </div>
+                <div style={{ fontSize: '11px', color: txtLow, marginBottom: '8px' }}>{slot.hora}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {visAv.map((lead: any, i: number) => {
+                      const ac = getAvatarColor(lead.nome || '', dark, lead.id);
+                      const tc = getAvatarTextColor(ac);
+                      return (
+                        <div key={lead.id} style={{ width: '22px', height: '22px', borderRadius: '50%', background: ac, color: tc, border: `2px solid ${avBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7.5px', fontWeight: 700, marginLeft: i === 0 ? 0 : '-5px', flexShrink: 0, position: 'relative', zIndex: maxAv - i }}>
+                          {safeInitials(lead.nome || '')}
+                        </div>
+                      );
+                    })}
+                    {extraAv > 0 && (
+                      <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: dark ? '#3f3f46' : '#d4d4d8', color: txtMid, border: `2px solid ${avBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, marginLeft: '-5px', flexShrink: 0 }}>
+                        +{extraAv}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div style={{ marginTop: '8px', textAlign: 'center', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, paddingTop: '8px' }}>
+        <button onClick={() => onDayClick('')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#8b5cf6', fontWeight: 500, fontFamily: 'inherit' }}>
+          Ver calendário completo →
+        </button>
+      </div>
+
+      {/* Modal rico de slot de horário */}
+      {modalSlot && createPortal(
+        <>
+          <div onClick={() => { setModalSlot(null); setLeadReagendando(null); }} style={{ position: 'fixed', inset: 0, zIndex: 99990, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 99991, background: dark ? '#18191f' : '#ffffff', borderRadius: '18px', width: '440px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', boxShadow: dark ? '0 24px 64px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.07)' : '0 24px 64px rgba(0,0,0,0.16)', fontFamily: 'inherit' }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 20px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '11px', background: 'rgba(139,92,246,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📅</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3 }}>Reuniões às {modalSlot.hora}</h3>
+                <p style={{ fontSize: '12px', color: txtLow, margin: 0 }}>
+                  {(() => {
+                    const d = new Date(modalSlot.dia + 'T12:00:00');
+                    const nd = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+                    const df = d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+                    return `${nd.charAt(0).toUpperCase() + nd.slice(1)}, ${df}`;
+                  })()}
+                </p>
+              </div>
+              <button onClick={() => { setModalSlot(null); setLeadReagendando(null); }} style={{ width: '30px', height: '30px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: txtLow, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <XIcon style={{ width: '14px', height: '14px' }} />
+              </button>
+            </div>
+
+            {/* Lead list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {modalSlot.leads.map((lead: any, li: number) => {
+                const ac = getAvatarColor(lead.nome || '', dark, lead.id);
+                const tc = getAvatarTextColor(ac);
+                const rawPhone = (lead.whatsapp || '').replace(/\D/g, '');
+                const wPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+                const faixaCor = lead.faixa === 'verde' ? '#22c55e' : lead.faixa === 'amarelo' ? '#f59e0b' : lead.faixa === 'vermelho' ? '#ef4444' : null;
+                const isReag = leadReagendando === lead.id;
+                const rowBg = li % 2 === 1 ? (dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)') : 'transparent';
+                return (
+                  <div key={lead.id} style={{ borderRadius: '12px', border: `1px solid ${isReag ? 'rgba(139,92,246,0.35)' : border}`, background: isReag ? (dark ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.03)') : rowBg, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+
+                    {/* Linha única: avatar + nome + WA + Reagendar */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px' }}>
+                      <div onClick={() => setDrawerLead(lead)} style={{ width: '36px', height: '36px', borderRadius: '50%', background: ac, color: tc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, flexShrink: 0, cursor: 'pointer' }}>
+                        {safeInitials(lead.nome || '')}
+                      </div>
+                      <div onClick={() => setDrawerLead(lead)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeName(lead.nome) || 'Lead'}</div>
+                        {lead.cidade && <div style={{ fontSize: '11px', color: txtLow, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.cidade}</div>}
+                      </div>
+                      {rawPhone && (
+                        <a href={`https://wa.me/${wPhone}`} target="_blank" rel="noreferrer"
+                          style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', background: dark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', textDecoration: 'none', flexShrink: 0 }}>
+                          <MessageCircle style={{ width: '14px', height: '14px' }} />
+                        </a>
+                      )}
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (isReag) { setLeadReagendando(null); return; }
+                          const at = lead.reuniao_agendada_at;
+                          if (at) {
+                            const d = new Date(at);
+                            setReagData(d.toLocaleDateString('pt-BR', { year:'numeric',month:'2-digit',day:'2-digit' }).split('/').reverse().join('-'));
+                            setReagHora(d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }));
+                            setReagMes(new Date(d.getFullYear(), d.getMonth(), 1));
+                          } else {
+                            const hj = new Date();
+                            const hjStr = `${hj.getFullYear()}-${String(hj.getMonth()+1).padStart(2,'0')}-${String(hj.getDate()).padStart(2,'0')}`;
+                            setReagData(hjStr);
+                            setReagHora('');
+                            setReagMes(new Date(hj.getFullYear(), hj.getMonth(), 1));
+                          }
+                          setLeadReagendando(lead.id);
+                        }}
+                        style={{ height: '32px', borderRadius: '8px', padding: '0 12px', background: isReag ? '#8b5cf6' : (dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)'), border: `1px solid ${isReag ? '#8b5cf6' : 'rgba(139,92,246,0.3)'}`, color: isReag ? '#fff' : '#8b5cf6', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, transition: 'all 0.15s' }}>
+                        <CalendarIcon style={{ width: '12px', height: '12px' }} />{isReag ? 'Fechar' : 'Reagendar'}
+                      </button>
+                    </div>
+
+                    {/* Mini-picker de reagendamento */}
+                    {isReag && (() => {
+                      const ano = reagMes.getFullYear();
+                      const mes = reagMes.getMonth();
+                      const mesesPt = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                      const primeiroDia = new Date(ano, mes, 1).getDay();
+                      const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+                      const hoje = new Date();
+                      const hojeStr2 = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+                      const dias: (number | null)[] = Array(primeiroDia).fill(null);
+                      for (let d = 1; d <= diasNoMes; d++) dias.push(d);
+                      return (
+                        <div style={{ borderTop: `1px solid ${border}`, padding: '14px 12px 12px' }}>
+                          {/* Navegação de mês */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <button onClick={() => setReagMes(new Date(ano, mes - 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: txtMid, fontSize: '15px', padding: '2px 6px', borderRadius: '5px' }}>‹</button>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi }}>{mesesPt[mes]} {ano}</span>
+                            <button onClick={() => setReagMes(new Date(ano, mes + 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: txtMid, fontSize: '15px', padding: '2px 6px', borderRadius: '5px' }}>›</button>
+                          </div>
+                          {/* Dias da semana */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '1px', marginBottom: '3px' }}>
+                            {['D','S','T','Q','Q','S','S'].map((d, i) => (
+                              <div key={i} style={{ textAlign: 'center', fontSize: '9.5px', fontWeight: 600, color: txtLow, padding: '3px 0' }}>{d}</div>
+                            ))}
+                          </div>
+                          {/* Grade de dias */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '12px' }}>
+                            {dias.map((d, i) => {
+                              if (!d) return <div key={`e${i}`} />;
+                              const dStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                              const isHoje2 = dStr === hojeStr2;
+                              const isSel = dStr === reagData;
+                              const isPast = dStr < hojeStr2;
+                              return (
+                                <button key={d} disabled={isPast} onClick={() => setReagData(dStr)}
+                                  style={{ aspectRatio: '1', borderRadius: '6px', border: 'none', cursor: isPast ? 'default' : 'pointer', background: isSel ? '#8b5cf6' : isHoje2 ? (dark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)') : 'transparent', color: isSel ? '#fff' : isPast ? (dark ? '#3f3f46' : '#d1d5db') : isHoje2 ? '#3b82f6' : (dark ? '#e4e4e7' : '#374151'), fontSize: '11px', fontWeight: isSel || isHoje2 ? 600 : 400, opacity: isPast ? 0.4 : 1, transition: 'background 0.1s' }}>
+                                  {d}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {/* Chips de horário */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '12px' }}>
+                            {horariosOrg.map(h => (
+                              <button key={h} onClick={() => setReagHora(h)}
+                                style={{ padding: '5px 12px', borderRadius: '99px', border: `1px solid ${reagHora === h ? '#8b5cf6' : (dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb')}`, background: reagHora === h ? '#8b5cf6' : 'transparent', color: reagHora === h ? '#fff' : (dark ? '#a0a0a8' : '#374151'), fontSize: '12px', fontWeight: reagHora === h ? 600 : 400, cursor: 'pointer', transition: 'all 0.1s', fontFamily: 'inherit' }}>
+                                {h}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Botões confirmar/cancelar */}
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => setLeadReagendando(null)}
+                              style={{ flex: 1, padding: '8px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: txtMid, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                              Cancelar
+                            </button>
+                            <button
+                              disabled={!reagData || !reagHora || reagSaving}
+                              onClick={async () => {
+                                if (!reagData || !reagHora) return;
+                                setReagSaving(true);
+                                const novaData = `${reagData}T${reagHora}:00-03:00`;
+                                await (supabase as any).from('leads').update({ reuniao_agendada_at: novaData }).eq('id', lead.id);
+                                setLeadsCarregados(prev => {
+                                  const { inicio, fim } = semanaRef.current;
+                                  return prev
+                                    .map((l: any) => String(l.id) === String(lead.id) ? { ...l, reuniao_agendada_at: novaData } : l)
+                                    .filter((l: any) => {
+                                      if (String(l.id) !== String(lead.id)) return true;
+                                      const at: string = l.reuniao_agendada_at;
+                                      return at && at >= inicio && at <= fim + 'T23:59:59';
+                                    });
+                                });
+                                setModalSlot(null);
+                                setLeadReagendando(null);
+                                setReagSaving(false);
+                              }}
+                              style={{ flex: 2, padding: '8px', borderRadius: '8px', border: 'none', background: (!reagData || !reagHora) ? (dark ? '#27272a' : '#e5e7eb') : '#8b5cf6', color: (!reagData || !reagHora) ? (dark ? '#52525b' : '#9ca3af') : '#fff', fontSize: '12px', fontWeight: 600, cursor: (!reagData || !reagHora || reagSaving) ? 'not-allowed' : 'pointer', transition: 'all 0.15s', fontFamily: 'inherit' }}>
+                              {reagSaving ? 'Salvando…' : 'Confirmar'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* LeadDrawer aberto de dentro do modal */}
+      {drawerLead && createPortal(
+        <LeadDrawer
+          lead={drawerLead}
+          isOpen
+          onClose={() => setDrawerLead(null)}
+          onUpdate={(updated: any) => {
+            setDrawerLead((prev: any) => prev?.id === updated.id ? { ...prev, ...updated } : prev);
+            setLeadsCarregados(prev => prev.map((l: any) => l.id === updated.id ? { ...l, ...updated } : l));
+          }}
+        />,
+        document.body
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { metaToken, metaAccount, ready: metaReady } = useMetaConfig();
@@ -356,12 +988,43 @@ export default function Dashboard() {
   const t = useTerminology();
   const modelo = useModeloNegocio();
   const { config: statusConfig } = useStatusConfig(modelo);
+  const reuniaoStatusIds = useMemo(
+    () => statusConfig.statuses.filter(s => (s as any).tipo === 'reuniao').map(s => s.id),
+    [statusConfig]
+  );
   const funnelConfig = useMemo(() => {
     const sorted = [...statusConfig.statuses].sort((a, b) => a.ordem - b.ordem);
     const convertidoIdx = sorted.findIndex(s => s.id === statusConfig.convertido_status);
     const stages = convertidoIdx >= 0 ? sorted.slice(0, convertidoIdx + 1) : sorted.slice(0, 4);
     return stages.map(s => ({ stage: s.label, statusId: s.id, color: s.cor }));
   }, [statusConfig]);
+
+  const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
+    0: 'status_atendimento_at', 1: 'status_atendimento_at',
+    2: 'status_reuniao_at', 3: 'status_aprovado_at',
+    5: 'status_contrato_at', 6: 'status_sem_retorno_at',
+  };
+
+  function getStatusPillStyle(statusId: number, dark: boolean): React.CSSProperties {
+    const cfg = statusConfig.statuses.find(s => s.id === statusId);
+    if (cfg?.cor && cfg.cor !== '#6b7280' && cfg.cor !== '') {
+      const hex = cfg.cor.replace('#', '');
+      const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+      const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+      if (dark) {
+        return { background: `rgba(${r},${g},${b},0.18)`, color: cfg.cor, border: `1px solid rgba(${r},${g},${b},0.3)`, dotColor: cfg.cor } as any;
+      }
+      if (luminance > 0.6) {
+        const dr = Math.max(0, r - 60), dg = Math.max(0, g - 60), db = Math.max(0, b - 60);
+        const lr = Math.min(255, r + Math.round((255-r)*0.88)), lg = Math.min(255, g + Math.round((255-g)*0.88)), lb = Math.min(255, b + Math.round((255-b)*0.88));
+        return { background: `rgb(${lr},${lg},${lb})`, color: `rgb(${dr},${dg},${db})`, border: `1px solid rgba(${dr},${dg},${db},0.2)`, dotColor: `rgb(${dr},${dg},${db})` } as any;
+      }
+      const lr = Math.min(255, r + Math.round((255-r)*0.82)), lg = Math.min(255, g + Math.round((255-g)*0.82)), lb = Math.min(255, b + Math.round((255-b)*0.82));
+      return { background: `rgb(${lr},${lg},${lb})`, color: cfg.cor, border: `1px solid rgba(${r},${g},${b},0.22)`, dotColor: cfg.cor } as any;
+    }
+    if (dark) return { background: STATUS_DARK_BG[statusId] ?? 'rgba(113,113,122,0.2)', color: STATUS_DARK_COLOR[statusId] ?? '#a1a1aa', border: `1px solid ${STATUS_DARK_PILL_BORDER[statusId] ?? 'rgba(113,113,122,0.22)'}`, dotColor: STATUS_DARK_DOT[statusId] ?? '#71717a' } as any;
+    return { background: STATUS_LIGHT_BG[statusId] ?? '#f4f4f5', color: STATUS_LIGHT_TEXT[statusId] ?? '#3f3f46', border: `1px solid ${STATUS_LIGHT_PILL_BORDER[statusId] ?? 'rgba(0,0,0,0.1)'}`, dotColor: STATUS_LIGHT_DOT[statusId] ?? '#6b7280' } as any;
+  }
   const statusLabelFn = (st: number) =>
     statusConfig.statuses.find(s => s.id === st)?.label ?? STATUS_LABEL[st] ?? 'Aguardando';
   const navigate = useNavigate();
@@ -385,6 +1048,7 @@ export default function Dashboard() {
 
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [metaOrg, setMetaOrg] = useState({ revs: 0, budget: 0 });
+  const [feriadosMes, setFeriadosMes] = useState<string[]>([]);
 
   // Modal de configuração inicial de metas
   const [showMetaModal, setShowMetaModal] = useState(false);
@@ -395,7 +1059,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!orgId) return;
     (supabase as any).from('organizations')
-      .select('nome, ravena_meta_revendedoras, ravena_budget_mensal, meta_account_id')
+      .select('nome, ravena_meta_revendedoras, ravena_budget_mensal, meta_account_id, feriados_mes')
       .eq('id', orgId).single()
       .then(({ data }: any) => {
         if (data) {
@@ -403,6 +1067,7 @@ export default function Dashboard() {
           const revs = Number(data.ravena_meta_revendedoras) || 0;
           const budget = Number(data.ravena_budget_mensal) || 0;
           setMetaOrg({ revs, budget });
+          setFeriadosMes((data as any)?.feriados_mes || []);
           // Mostra modal na primeira visita se metas não configuradas
           const key = `floow_meta_setup_${orgId}`;
           if (!localStorage.getItem(key) && revs === 0 && !data.meta_account_id) {
@@ -492,7 +1157,7 @@ export default function Dashboard() {
   useEffect(() => { const check = () => setIsMobile(window.innerWidth < 768); check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check); }, []);
   useEffect(() => { function close(e: MouseEvent) { if (dropRef.current && !dropRef.current.contains(e.target as Node)) setShowDropdown(false); if (customRef.current && !customRef.current.contains(e.target as Node)) setShowCustom(false); } document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, []);
 
-  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, score, avaliado, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, instagram, custo_indicacao';
+  const DASH_FIELDS = 'id, nome, cidade, whatsapp, status, created_at, utm_source, utm_campaign, faixa, score, avaliado, ultimo_status_change, status_aprovado_at, status_reuniao_at, status_contrato_at, status_atendimento_at, status_sem_retorno_at, instagram, custo_indicacao, reuniao_agendada_at, reuniao_link';
 
   const fetchLeads = async (): Promise<Lead[]> => {
     if (!orgId) { setLoading(false); return []; }
@@ -732,7 +1397,6 @@ export default function Dashboard() {
     [filtered]);
   const spend = metaSpend + custoTotalIndicacao;
   const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo, statusConfig.convertido_status), [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
-  // Funil: cada status conta pelo timestamp específico daquele status
   const funnelData = useMemo(() => {
     return funnelConfig.map(f => {
       const today = todayBR();
@@ -742,7 +1406,8 @@ export default function Dashboard() {
       const value = allLeads.filter(l => {
         let s = toNum(l.status); if (s === 0) s = 1;
         if (s !== f.statusId) return false;
-        const changeDate = (l as any).ultimo_status_change || l.created_at;
+        const tsField = STATUS_TIMESTAMP_FIELD[f.statusId];
+        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : ((l as any).ultimo_status_change || l.created_at);
         switch (selectedPeriod) {
           case 'today': { const t = today; return ok(changeDate, t, t); }
           case 'yesterday': { const y = subDays(today, 1); return ok(changeDate, y, y); }
@@ -755,7 +1420,7 @@ export default function Dashboard() {
       }).length;
       return { ...f, value };
     });
-  }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig]);
+  }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig, STATUS_TIMESTAMP_FIELD]);
   const recentLeads = useMemo(() => [...allLeads].sort((a, b) => parseLeadDate(b.created_at).getTime() - parseLeadDate(a.created_at).getTime()).slice(0, 5), [allLeads]);
   const campRows = useMemo(() => {
     if (!metaCampaigns.length) return [];
@@ -915,22 +1580,35 @@ export default function Dashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
 
             {/* Card 1: META DO MÊS — hero azul */}
-            <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 6px 18px rgba(0,68,253,0.28)', border: 'none', animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <div>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Meta do mês</p>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
-                  <div style={{ fontSize: '28px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                    {showContent ? <AnimatedCounter value={approvedThisMonth} /> : <div style={{ display: 'inline-block', width: '48px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
+            <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 6px 18px rgba(0,68,253,0.28)', border: 'none', animation: showContent ? 'cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0ms both' : 'none', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', margin: '0 0 3px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Meta do mês</p>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                      {showContent ? <AnimatedCounter value={approvedThisMonth} /> : <div style={{ display: 'inline-block', width: '48px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
+                    </div>
+                    {metaOrg.revs > 0 && <span style={{ fontSize: '14px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', paddingBottom: '2px' }}>/{metaOrg.revs}</span>}
+                    {metaOrg.revs > 0 && approvedThisMonth != null && <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.9)', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '99px', verticalAlign: 'middle', flexShrink: 0 }}>{Math.round((approvedThisMonth / metaOrg.revs) * 100)}%</span>}
                   </div>
-                  {metaOrg.revs > 0 && <span style={{ fontSize: '14px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', paddingBottom: '2px' }}>/{metaOrg.revs}</span>}
                 </div>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', margin: '3px 0 0' }}>{t.convertidoPlural}</p>
               </div>
-              {metaOrg.revs > 0 && (
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', background: 'rgba(255,255,255,0.15)', padding: '5px 10px', borderRadius: '8px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {Math.round((approvedThisMonth / metaOrg.revs) * 100)}% da meta
-                </span>
-              )}
+              {metaOrg.revs > 0 && approvedThisMonth != null && (() => {
+                const { diff, metaDiaria, restantes, status } = calcularRitmo(approvedThisMonth, metaOrg.revs, feriadosMes);
+                const pct = Math.round((approvedThisMonth / metaOrg.revs) * 100);
+                const cor = status === 'ok' ? 'rgba(134,239,172,0.95)' : status === 'ritmo' ? 'rgba(253,224,71,0.95)' : 'rgba(255,160,160,1)';
+                const sinal = diff > 0 ? `+${diff}` : `${diff}`;
+                return (
+                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', flexWrap: 'nowrap', lineHeight: 1 }}>
+                    <span style={{ color: cor, fontWeight: 700, flexShrink: 0 }}>{sinal} {t.convertidoCurto}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>·</span>
+                    <span style={{ flexShrink: 0 }}>meta: {metaDiaria.toFixed(1)}/dia</span>
+                    <span style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>·</span>
+                    <span style={{ flexShrink: 0 }}>{restantes}d úteis</span>
+                    <RitmoTooltip dark={dark} />
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Card 2: GASTO TOTAL — acento verde */}
@@ -985,18 +1663,24 @@ export default function Dashboard() {
                   {showContent ? <AnimatedCounter value={approvedThisMonth} /> : <div style={{ display: 'inline-block', width: '56px', height: '36px', borderRadius: '8px', background: 'rgba(255,255,255,0.25)', animation: 'dashSkeleton 1.5s ease-in-out infinite', verticalAlign: 'middle' }} />}
                 </div>
                 {metaOrg.revs > 0 && <span style={{ fontSize: '16px', fontWeight: 400, color: 'rgba(255,255,255,0.7)', paddingBottom: '4px' }}>/{metaOrg.revs}</span>}
+                {metaOrg.revs > 0 && approvedThisMonth != null && <span style={{ marginLeft: '8px', fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.9)', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '99px', verticalAlign: 'middle', flexShrink: 0 }}>{Math.round((approvedThisMonth / metaOrg.revs) * 100)}%</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <TrendingUp style={{ width: '14px', height: '14px', color: '#ffffff', flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', fontWeight: 500 }}>{t.convertidoPlural}</span>
-                </div>
-                {metaOrg.revs > 0 && (
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px' }}>
-                    {Math.round((approvedThisMonth / metaOrg.revs) * 100)}% da meta
-                  </span>
-                )}
-              </div>
+              {metaOrg.revs > 0 && approvedThisMonth != null && (() => {
+                const { diff, metaDiaria, restantes, status } = calcularRitmo(approvedThisMonth, metaOrg.revs, feriadosMes);
+                const pct = Math.round((approvedThisMonth / metaOrg.revs) * 100);
+                const cor = status === 'ok' ? 'rgba(134,239,172,0.95)' : status === 'ritmo' ? 'rgba(253,224,71,0.95)' : 'rgba(255,160,160,1)';
+                const sinal = diff > 0 ? `+${diff}` : `${diff}`;
+                return (
+                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', flexWrap: 'nowrap', lineHeight: 1 }}>
+                    <span style={{ color: cor, fontWeight: 700, flexShrink: 0 }}>{sinal} {t.convertidoCurto}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>·</span>
+                    <span style={{ flexShrink: 0 }}>meta: {metaDiaria.toFixed(1)}/dia</span>
+                    <span style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>·</span>
+                    <span style={{ flexShrink: 0 }}>{restantes}d úteis</span>
+                    <RitmoTooltip dark={dark} />
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Card 2: GASTO TOTAL */}
@@ -1043,8 +1727,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: isMobile ? '8px' : '14px', marginBottom: isMobile ? '12px' : '16px' }}>
+        {/* Gráfico + Calendário */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '14px', marginBottom: '14px' }}>
           <div style={{ background: cardBg, borderRadius: isMobile ? '12px' : '14px', padding: isMobile ? '14px 16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div>
@@ -1075,46 +1759,27 @@ export default function Dashboard() {
               </div>
             </>}
           </div>
-
-          <div style={{ background: cardBg, borderRadius: '14px', padding: isMobile ? '16px' : '24px', border: `1px solid ${border}`, boxShadow: cardShadow, position: 'relative', overflow: 'hidden' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: '0 0 4px' }}>Funil de leads</h3>
-            <p style={{ fontSize: '11px', color: txtLow, marginBottom: '16px' }}>{periodLabel}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {funnelData.map(stage => {
-                const pct = totalLeads > 0 ? Math.min(Math.round((stage.value / Math.max(totalLeads, 1)) * 100), 100) : 0;
-                return (
-                  <div key={stage.stage} style={{ background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)', border: `1px solid ${border}`, borderRadius: '10px', padding: '12px 14px 14px', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: stage.color }} />
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: txtHi }}>{stage.stage}</span>
-                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '24px' }}>
-                        <span style={{ fontSize: '18px', fontWeight: 700, color: txtHi }}>{loading ? '…' : stage.value}</span>
-                        <div title={`${stage.value} leads neste estágio de ${totalLeads} captados no período`} style={{ padding: '4px 10px', borderRadius: '8px', background: stage.color + '10', color: stage.color, fontSize: '11px', fontWeight: 800, minWidth: '40px', textAlign: 'center' }}>{loading ? '…' : `${pct}%`}</div>
-                      </div>
-                    </div>
-                    <div style={{ width: '100%', height: '5px', background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', borderRadius: '10px' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: stage.color, borderRadius: '10px', transition: 'width 0.8s ease' }} />
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={{ marginTop: '4px', background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)', border: `1px solid ${border}`, borderRadius: '10px', padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(34,197,94,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <TrendingUp style={{ width: '18px', height: '18px', color: '#22c55e' }} />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', color: txtLow, fontWeight: 500, display: 'block' }}>Taxa de conversão</span>
-                    <span style={{ fontSize: '22px', fontWeight: 800, color: '#22c55e' }}>{convRate}%</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
+          {!isMobile && (
+            <MiniCalendarioReuniao
+              dark={dark}
+              orgId={orgId}
+              reuniaoStatusIds={reuniaoStatusIds}
+              onDayClick={data => navigate(data === 'sem-data' ? '/calendario?semdata=1' : `/calendario?data=${data}`)}
+            />
+          )}
         </div>
 
-        {/* Bottom */}
+        {/* Funil Horizontal */}
+        <FunilHorizontal
+          funnelData={funnelData}
+          totalLeads={totalLeads}
+          dark={dark}
+          loading={loading}
+          navigate={navigate}
+          selectedPeriod={selectedPeriod}
+        />
+
+        {/* Leads + Campanhas */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '8px' : '14px', minWidth: 0, overflow: 'hidden' }}>
 
           {/* Leads Recentes */}
@@ -1153,10 +1818,12 @@ export default function Dashboard() {
                           const color = faixaLead === 'verde' ? (dark ? '#34d399' : '#10b981') : faixaLead === 'amarelo' ? (dark ? '#fbbf24' : '#f59e0b') : '#9ca3af';
                           return <span style={{ fontSize: '12px', fontWeight: 700, color, flexShrink: 0, whiteSpace: 'nowrap', minWidth: '72px', textAlign: 'center' }}>{score} pts</span>;
                         })()}
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 8px' : '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, background: dark ? STATUS_DARK_BG[st] : STATUS_LIGHT_BG[st] ?? '#f4f4f5', color: dark ? STATUS_DARK_COLOR[st] ?? '#a1a1aa' : STATUS_LIGHT_TEXT[st] ?? '#3f3f46', border: dark ? `1px solid ${STATUS_DARK_PILL_BORDER[st]}` : `1px solid ${STATUS_LIGHT_PILL_BORDER[st] ?? 'rgba(0,0,0,0.1)'}` }}>
-                          {!isMobile && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dark ? STATUS_DARK_DOT[st] ?? '#3b82f6' : STATUS_LIGHT_DOT[st] ?? '#6b7280', flexShrink: 0, display: 'inline-block' }} />}
-                          {statusLabelFn(st)}
-                        </span>
+                        {(() => { const ps = getStatusPillStyle(st, dark); return (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', minWidth: isMobile ? 'auto' : '130px', padding: isMobile ? '2px 8px' : '4px 10px', borderRadius: '6px', whiteSpace: 'nowrap', fontSize: isMobile ? '10px' : '11.5px', fontWeight: 600, background: ps.background, color: ps.color, border: ps.border }}>
+                            {!isMobile && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: (ps as any).dotColor, flexShrink: 0, display: 'inline-block' }} />}
+                            {statusLabelFn(st)}
+                          </span>
+                        ); })()}
                         {!isMobile && <span style={{ fontSize: '11px', color: txtLow, flexShrink: 0, minWidth: '28px', textAlign: 'right' }}>{relativeTime(lead.created_at)}</span>}
                         <button
                           onClick={e => { e.stopPropagation(); handleWhatsApp(lead); }}

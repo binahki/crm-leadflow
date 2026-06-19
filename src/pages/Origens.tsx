@@ -549,9 +549,21 @@ export default function Origens() {
 
   return (
     <AppLayout>
-      <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes _spin{to{transform:rotate(360deg)}}
+        .ori-wrap { max-width: 1160px; margin: 0 auto; padding: 28px 24px 80px; }
+        .ori-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+        .ori-canais  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 28px; align-items: start; }
+        .ori-rank-nome { width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @media (max-width: 640px) {
+          .ori-wrap    { padding: 16px 14px 60px; }
+          .ori-summary { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 18px; }
+          .ori-canais  { grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
+          .ori-rank-nome { width: 100px; }
+        }
+      `}</style>
       <div style={{ background: surface, minHeight: '100vh' }}>
-        <div style={{ maxWidth: '1160px', margin: '0 auto', padding: '28px 24px 80px' }}>
+        <div className="ori-wrap">
 
           {/* ── Header ──────────────────────────────────────────────────── */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px', gap: '16px', flexWrap: 'wrap' }}>
@@ -614,7 +626,7 @@ export default function Origens() {
           ) : (
             <>
               {/* ── 4 summary cards — limpos, sem border-top ────────────────── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
+              <div className="ori-summary">
                 {[
                   {
                     label: 'Valor Gasto',
@@ -647,7 +659,7 @@ export default function Origens() {
               </div>
 
               {/* ── Canal cards — 2 colunas, borda colorida, altura própria ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '28px', alignItems: 'start' }}>
+              <div className="ori-canais">
                 {canaisDisplay.map(d => {
                   const isEmpty = d.leads === 0;
                   const participacao = totalLeads > 0 ? Math.round((d.leads / totalLeads) * 100) : 0;
@@ -748,7 +760,7 @@ export default function Origens() {
                             {i + 1}
                           </div>
                           <RankIcon size={14} style={{ color: d.cor, flexShrink: 0 }} />
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: ink, width: '140px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                          <span className="ori-rank-nome" style={{ fontSize: '13px', fontWeight: 600, color: ink }}>
                             {d.canal}
                           </span>
                           <div style={{ flex: 1, height: '6px', background: track, borderRadius: '3px', overflow: 'hidden' }}>

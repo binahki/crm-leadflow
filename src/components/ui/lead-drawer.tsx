@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   X, MapPin, Phone, Clock, Briefcase,
   ChevronDown, Check, AlertTriangle, Megaphone, Save, Instagram,
-  MessageCircle, Monitor,
+  MessageCircle, Monitor, Calendar as CalendarIcon,
 } from 'lucide-react';
 import { useTags, Tag, CORES_TAGS } from '@/hooks/useTags';
 import { toast } from 'sonner';
@@ -258,6 +258,12 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const [pendingStatus, setPendingStatus] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [horariosOrg, setHorariosOrg] = useState<string[]>(['10:00','12:00','15:00','17:00','19:00']);
+  const [showAgendModal, setShowAgendModal] = useState(false);
+  const [agendData, setAgendData] = useState('');
+  const [agendHora, setAgendHora] = useState('');
+  const [agendMes, setAgendMes] = useState<Date>(() => new Date());
+  const [agendSaving, setAgendSaving] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [exitingTags, setExitingTags] = useState<Tag[]>([]);
   const statusBtnRef = useRef<HTMLButtonElement>(null);
@@ -414,7 +420,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       });
   }, [lead?.id]); // eslint-disable-line
 
-  async function applyStatus(newStatus: number, motivo?: string) {
+  useEffect(() => {
+    if (!orgId) return;
+    (supabase as any).from('organizations').select('reuniao_horarios').eq('id', orgId).single()
+      .then(({ data }: any) => {
+        const h = data?.reuniao_horarios;
+        if (Array.isArray(h) && h.length > 0) setHorariosOrg(h);
+      });
+  }, [orgId]); // eslint-disable-line
+
+  async function applyStatus(newStatus: number, motivo?: string, extra?: Record<string, any>) {
     if (!lead) return;
     const prev = status;
     setStatus(newStatus);
@@ -426,7 +441,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       [statusConfig.convertido_status]: 'status_aprovado_at',
     };
     const targetLabel = STATUS.find(s => s.id === newStatus)?.label ?? '';
-    const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now };
+    const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now, ...(extra || {}) };
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
     if (targetLabel.toLowerCase().includes('sem retorno')) updates.motivo_reprovacao = null;
@@ -436,7 +451,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       if (newStatus === statusConfig.convertido_status && !(lead as any).capi_conversao_enviado && orgId) {
         dispararCapiConversao(lead.id, orgId);
       }
-      setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado');
+      setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}), ...(extra || {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado');
     }
   }
 
@@ -445,6 +460,17 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     const targetLabel = STATUS.find(s => s.id === i)?.label ?? '';
     if (targetLabel.toLowerCase().includes('reprovado')) { setPendingStatus(i); setShowMotivo(true); return; }
     if (status === i) return;
+    const targetItem = statusConfig.statuses.find(s => s.id === i);
+    if ((targetItem as any)?.tipo === 'reuniao') {
+      const hoje = new Date();
+      const dataStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+      setAgendData(dataStr);
+      setAgendHora('');
+      setAgendMes(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+      setPendingStatus(i);
+      setShowAgendModal(true);
+      return;
+    }
     applyStatus(i);
   }
 
@@ -534,19 +560,20 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
   const avatarText = getAvatarTextColor(avatarCor);
   const l = { ...fullLead, ...lead } as any;
   const hasTraffic = l.utm_source || l.utm_campaign || l.utm_medium;
+  const isReuniaoStatus = statusConfig.statuses.some(s => s.id === status && (s as any).tipo === 'reuniao');
   const score = l.score != null ? Number(l.score) : null;
   const faixa = calcularFaixa(lead, configuracoes!) || l.faixa || null;
   const instagramValue = String(l?.instagram || '').trim();
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.18)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', animation: 'ld-fade 0.18s ease' }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99995, background: 'rgba(0,0,0,0.18)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', animation: 'ld-fade 0.18s ease' }} />
       {showMotivo && createPortal(
         <MotivoModal onConfirm={handleMotivoConfirm} onCancel={() => { setShowMotivo(false); setPendingStatus(null); }} dark={dark} motivoAtual={lead.motivo_reprovacao} />,
         document.body
       )}
 
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 51, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(20,20,22,0.97)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '92%', maxWidth: '480px', minHeight: '320px', maxHeight: '90vh', zIndex: 99996, fontFamily: FONT, animation: 'ld-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)', borderRadius: '22px', background: dark ? 'rgba(20,20,22,0.97)' : 'rgba(255,255,255,0.94)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)', boxShadow: dark ? '0 24px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)' : '0 24px 80px rgba(0,0,0,0.13), 0 0 0 1px rgba(255,255,255,0.7)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
         <div style={{ padding: '22px 22px 16px', position: 'relative', flexShrink: 0 }}>
@@ -789,6 +816,158 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
                 {l.ip && <Field label="IP" value={l.ip} dark={dark} />}
               </Section>
             )}
+
+            {/* Reunião — badge inline clicável */}
+            {isReuniaoStatus && (() => {
+              const reuniaoAt: string | null = (l as any).reuniao_agendada_at ?? null;
+              function fmtBadge(iso: string) {
+                const d = new Date(iso);
+                const dia = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+                const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                return `${dia} · ${hora}`;
+              }
+              function openAgend() {
+                if (reuniaoAt) {
+                  const d = new Date(reuniaoAt);
+                  setAgendData(d.toLocaleDateString('pt-BR', { year:'numeric',month:'2-digit',day:'2-digit' }).split('/').reverse().join('-'));
+                  setAgendHora(d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }));
+                  setAgendMes(new Date(d.getFullYear(), d.getMonth(), 1));
+                } else {
+                  const hoje = new Date();
+                  const dataStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+                  setAgendData(dataStr);
+                  setAgendHora('');
+                  setAgendMes(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+                }
+                setShowAgendModal(true);
+              }
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CalendarIcon style={{ width: '14px', height: '14px', strokeWidth: 1.8, color: '#8b5cf6' }} />
+                    <span style={{ fontSize: '13.5px', fontWeight: 500, color: dark ? '#f4f4f5' : '#1f2937', fontFamily: FONT }}>Reunião</span>
+                  </div>
+                  {reuniaoAt ? (
+                    <button onClick={openAgend} style={{ fontSize: '12px', fontWeight: 600, color: '#8b5cf6', background: dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.28)', borderRadius: '99px', padding: '4px 10px', cursor: 'pointer', fontFamily: FONT, lineHeight: 1.4 }}>
+                      {fmtBadge(reuniaoAt)}
+                    </button>
+                  ) : (
+                    <button onClick={openAgend} style={{ fontSize: '12px', fontWeight: 500, color: dark ? '#6b7280' : '#9ca3af', background: 'transparent', border: `1px dashed ${dark ? 'rgba(255,255,255,0.15)' : '#d1d5db'}`, borderRadius: '99px', padding: '4px 10px', cursor: 'pointer', fontFamily: FONT }}>
+                      Agendar →
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Modal de agendamento de reunião */}
+            {showAgendModal && createPortal(
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(0,0,0,0.55)' }} onClick={() => { setShowAgendModal(false); setPendingStatus(null); }} />
+                <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 100001, background: dark ? '#18181b' : '#ffffff', borderRadius: '18px', padding: '22px', width: '90%', maxWidth: '340px', boxShadow: dark ? '0 24px 60px rgba(0,0,0,0.7)' : '0 24px 60px rgba(0,0,0,0.18)', fontFamily: FONT, animation: 'ld-up 0.2s cubic-bezier(0.32,0.72,0,1)' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '15px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', fontFamily: FONT }}>Agendar reunião</span>
+                    <button onClick={() => { setShowAgendModal(false); setPendingStatus(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: dark ? '#71717a' : '#9ca3af', display: 'flex', padding: '2px' }}>
+                      <X style={{ width: '16px', height: '16px' }} />
+                    </button>
+                  </div>
+                  {/* Navegação de mês */}
+                  {(() => {
+                    const ano = agendMes.getFullYear();
+                    const mes = agendMes.getMonth();
+                    const mesesPt = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                    const primeiroDia = new Date(ano, mes, 1).getDay();
+                    const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+                    const hoje = new Date();
+                    const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+                    const dias: (number | null)[] = Array(primeiroDia).fill(null);
+                    for (let d = 1; d <= diasNoMes; d++) dias.push(d);
+                    return (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                          <button onClick={() => setAgendMes(new Date(ano, mes - 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: dark ? '#a1a1aa' : '#6b7280', fontSize: '16px', padding: '4px 8px', borderRadius: '6px' }}>‹</button>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827', fontFamily: FONT }}>{mesesPt[mes]} {ano}</span>
+                          <button onClick={() => setAgendMes(new Date(ano, mes + 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: dark ? '#a1a1aa' : '#6b7280', fontSize: '16px', padding: '4px 8px', borderRadius: '6px' }}>›</button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '4px' }}>
+                          {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => (
+                            <div key={d} style={{ textAlign: 'center', fontSize: '10px', fontWeight: 600, color: dark ? '#52525b' : '#9ca3af', padding: '4px 0', fontFamily: FONT }}>{d}</div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '14px' }}>
+                          {dias.map((d, i) => {
+                            if (!d) return <div key={`e${i}`} />;
+                            const dStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                            const isHoje = dStr === hojeStr;
+                            const isSel = dStr === agendData;
+                            const isPast = dStr < hojeStr;
+                            return (
+                              <button key={d} disabled={isPast} onClick={() => setAgendData(dStr)}
+                                style={{ aspectRatio: '1', borderRadius: '8px', border: 'none', cursor: isPast ? 'default' : 'pointer', background: isSel ? '#8b5cf6' : isHoje ? (dark ? 'rgba(59,130,246,0.18)' : 'rgba(59,130,246,0.1)') : 'transparent', color: isSel ? '#fff' : isPast ? (dark ? '#3f3f46' : '#d1d5db') : isHoje ? '#3b82f6' : (dark ? '#e4e4e7' : '#374151'), fontSize: '12px', fontWeight: isSel || isHoje ? 600 : 400, fontFamily: FONT, opacity: isPast ? 0.4 : 1, transition: 'background 0.12s' }}>
+                                {d}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {/* Chips de horário */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: dark ? '#52525b' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', fontFamily: FONT }}>Horário</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {horariosOrg.map(h => (
+                        <button key={h} onClick={() => setAgendHora(h)}
+                          style={{ padding: '6px 14px', borderRadius: '99px', border: `1px solid ${agendHora === h ? '#8b5cf6' : (dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb')}`, background: agendHora === h ? '#8b5cf6' : 'transparent', color: agendHora === h ? '#fff' : (dark ? '#a0a0a8' : '#374151'), fontSize: '13px', fontWeight: agendHora === h ? 600 : 400, cursor: 'pointer', fontFamily: FONT, transition: 'all 0.12s' }}>
+                          {h}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Botões */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => { setShowAgendModal(false); setPendingStatus(null); }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background: 'transparent', color: dark ? '#a0a0a8' : '#6b7280', fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>
+                      Cancelar
+                    </button>
+                    {pendingStatus !== null && (
+                      <button onClick={async () => {
+                        const ps = pendingStatus;
+                        setPendingStatus(null);
+                        setShowAgendModal(false);
+                        await applyStatus(ps);
+                      }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`, background: 'transparent', color: dark ? '#a0a0a8' : '#6b7280', fontSize: '13px', cursor: 'pointer', fontFamily: FONT }}>
+                        Pular
+                      </button>
+                    )}
+                    <button
+                      disabled={!agendData || !agendHora || agendSaving}
+                      onClick={async () => {
+                        if (!lead || !agendData || !agendHora) return;
+                        setAgendSaving(true);
+                        const newAt = `${agendData}T${agendHora}:00-03:00`;
+                        if (pendingStatus !== null) {
+                          const ps = pendingStatus;
+                          setPendingStatus(null);
+                          await applyStatus(ps, undefined, { reuniao_agendada_at: newAt });
+                        } else {
+                          const updates: any = { reuniao_agendada_at: newAt };
+                          const { error } = await supabase.from('leads').update(updates).eq('id', lead.id);
+                          if (error) { toast.error('Erro ao salvar reunião'); setAgendSaving(false); return; }
+                          updateLead(lead.id, updates);
+                          onUpdate({ ...lead, ...updates } as Lead);
+                        }
+                        setShowAgendModal(false);
+                        setAgendSaving(false);
+                      }}
+                      style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: (!agendData || !agendHora) ? (dark ? '#27272a' : '#e5e7eb') : '#8b5cf6', color: (!agendData || !agendHora) ? (dark ? '#52525b' : '#9ca3af') : '#fff', fontSize: '13px', fontWeight: 600, cursor: (!agendData || !agendHora || agendSaving) ? 'not-allowed' : 'pointer', fontFamily: FONT, transition: 'all 0.15s' }}>
+                      {agendSaving ? 'Salvando…' : 'Confirmar'}
+                    </button>
+                  </div>
+                </div>
+              </>,
+              document.body
+            )}
           </div>
 
           {/* Observações */}
@@ -829,8 +1008,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       {/* Status dropdown portal */}
       {statusOpen && createPortal(
         <>
-          <div onClick={() => setStatusOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9996 }} />
-          <div style={{ position: 'fixed', top: statusDropPos.top, left: statusDropPos.left, width: statusDropPos.width, zIndex: 9997, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '11px', padding: '4px', boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 28px rgba(0,0,0,0.12)', animation: 'dropdownIn 0.18s cubic-bezier(0.16,1,0.3,1)', fontFamily: FONT }}>
+          <div onClick={() => setStatusOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99996 }} />
+          <div style={{ position: 'fixed', top: statusDropPos.top, left: statusDropPos.left, width: statusDropPos.width, zIndex: 99997, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '11px', padding: '4px', boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 28px rgba(0,0,0,0.12)', animation: 'dropdownIn 0.18s cubic-bezier(0.16,1,0.3,1)', fontFamily: FONT }}>
             {STATUS.map(s => {
               const active = status === s.id;
               return (
@@ -849,8 +1028,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       {/* Tag dropdown portal — modal centralizado */}
       {showTagDropdown && createPortal(
         <>
-          <div onClick={() => setShowTagDropdown(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '16px', padding: '16px', width: 'calc(100vw - 48px)', maxWidth: '360px', maxHeight: '60vh', display: 'flex', flexDirection: 'column', boxShadow: dark ? '0 24px 60px rgba(0,0,0,0.6)' : '0 12px 40px rgba(0,0,0,0.15)', fontFamily: FONT }}>
+          <div onClick={() => setShowTagDropdown(false)} style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 99999, background: dark ? '#111113' : '#fff', border: `1px solid ${dark ? '#27272a' : '#e5e7eb'}`, borderRadius: '16px', padding: '16px', width: 'calc(100vw - 48px)', maxWidth: '360px', maxHeight: '60vh', display: 'flex', flexDirection: 'column', boxShadow: dark ? '0 24px 60px rgba(0,0,0,0.6)' : '0 12px 40px rgba(0,0,0,0.15)', fontFamily: FONT }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <span style={{ fontSize: '13.5px', fontWeight: 600, color: dark ? '#f4f4f5' : '#111827' }}>Adicionar tag</span>
               <button onClick={() => setShowTagDropdown(false)} style={{ width: '26px', height: '26px', borderRadius: '50%', border: 'none', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dark ? '#71717a' : '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -890,8 +1069,8 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       {/* Tag manager modal */}
       {showTagManager && createPortal(
         <>
-          <div onClick={() => { setShowTagManager(false); setMgrEditId(null); setMgrDeleteId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 9999, background: dark ? '#111113' : '#fff', borderRadius: '18px', border: `1px solid ${dark ? '#27272a' : 'rgba(0,0,0,0.08)'}`, width: '90%', maxWidth: '420px', maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', fontFamily: FONT }}>
+          <div onClick={() => { setShowTagManager(false); setMgrEditId(null); setMgrDeleteId(null); }} style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 99999, background: dark ? '#111113' : '#fff', borderRadius: '18px', border: `1px solid ${dark ? '#27272a' : 'rgba(0,0,0,0.08)'}`, width: '90%', maxWidth: '420px', maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', fontFamily: FONT }}>
             <div style={{ padding: '18px 20px', borderBottom: `1px solid ${dark ? '#1e1e22' : 'rgba(0,0,0,0.06)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: dark ? '#f4f4f5' : '#111827' }}>Gerenciar Tags</h3>
               <button onClick={() => { setShowTagManager(false); setMgrEditId(null); setMgrDeleteId(null); }} style={{ width: '28px', height: '28px', borderRadius: '7px', border: 'none', background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: dark ? '#71717a' : '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -964,6 +964,7 @@ function LeadsPage() {
   const [editingLead, setEditingLead] = useState<Lead|null>(null);
   const [newLead, setNewLead] = useState({ nome:'', whatsapp:'', cidade:'', origem:'', origemCustom:'', status: statusConfig.entrada_status, observacoes:'' });
   const [custoIndicacaoInput, setCustoIndicacaoInput] = useState<string>('');
+  const addingRef = useRef(false);
   const ORIGENS = ['Indicação', 'Tráfego Pago', 'Instagram Orgânico', 'Outro'];
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -1236,7 +1237,17 @@ function LeadsPage() {
   useEffect(() => {
     if (!orgReady || !orgId) return;
     const ch = supabase.channel(`leads-rt2-${orgId}`)
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ const novo=p.new as Lead; setAllLeads(prev=>[novo,...prev]); setTotalCount(c=>c+1); toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'}); })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{
+        const novo=p.new as Lead;
+        setAllLeads(prev => {
+          if (prev.some(l => l.id === novo.id)) return prev;
+          setTimeout(() => {
+            setTotalCount(c => c + 1);
+            toast.success(`Novo lead: ${novo.nome||'Sem nome'}`,{duration:3000,position:'bottom-left'});
+          }, 0);
+          return [novo, ...prev];
+        });
+      })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads',filter:`org_id=eq.${orgId}`},p=>{ setAllLeads(prev=>prev.map(l=>l.id===(p.new as Lead).id?p.new as Lead:l)); })
       .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{ setAllLeads(prev=>prev.filter(l=>l.id!==(p.old as{id:string}).id)); })
       .subscribe();
@@ -1718,6 +1729,7 @@ function LeadsPage() {
   };
 
   const handleAddLead = async () => {
+    if (addingRef.current) return;
     if (!newLead.nome.trim()) { toast.error('Nome obrigatório'); return; }
     if (!newLead.whatsapp.trim()) { toast.error('WhatsApp obrigatório'); return; }
     if (!newLead.cidade.trim()) { toast.error('Cidade obrigatória'); return; }
@@ -1725,6 +1737,7 @@ function LeadsPage() {
     if (newLead.origem === 'Indicação' && custoIndicacaoInput === '') {
       toast.error('Informe o custo desta indicação (pode ser R$ 0)'); return;
     }
+    addingRef.current = true;
 
     const cidadeNorm = normalizeCity(newLead.cidade);
     const phoneClean = newLead.whatsapp.replace(/\D/g, '');
@@ -1751,7 +1764,7 @@ function LeadsPage() {
         : {}),
     } as any).select('*').single();
 
-    if (error) { toast.error(`Erro: ${error.message}`); return; }
+    if (error) { toast.error(`Erro: ${error.message}`); addingRef.current = false; return; }
     if (data) {
       setAllLeads(prev => [data as unknown as Lead, ...prev]);
       if (orgId) await aplicarTagOrigem(supabase as any, (data as any).id, orgId, finalUtmSource, null);
@@ -1760,6 +1773,7 @@ function LeadsPage() {
     setCustoIndicacaoInput('');
     setIsAddOpen(false);
     toast.success('Lead adicionado!');
+    addingRef.current = false;
   };
 
   const handleEditLead = async () => {

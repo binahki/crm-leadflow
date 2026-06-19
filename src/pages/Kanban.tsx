@@ -30,7 +30,7 @@ import { useWhatsAppAccount } from '@/hooks/useWhatsAppAccount';
 import { useNavigate } from 'react-router-dom';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { Tag } from '@/hooks/useTags';
-import { dispararCapiConversao } from '@/utils/capiEvento';
+import { dispararCapiConversao, dispararCapiReprovacao } from '@/utils/capiEvento';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 type ColumnDef = { status: number; label: string; border: string; dot: string; bg: string };
@@ -348,11 +348,35 @@ function StaticLeadCard({ lead, dark }: { lead: Lead; dark: boolean }) {
   );
 }
 
+// ── SLA helpers ──────────────────────────────────────────────
+function useNow(intervalMs = 60_000): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+function formatarTempoNoQuadro(horas: number): string {
+  if (horas < 1) return `${Math.floor(horas * 60)}min`;
+  if (horas < 24) {
+    const h = Math.floor(horas);
+    const m = Math.floor((horas - h) * 60);
+    return m > 0 ? `${h}h${m}min` : `${h}h`;
+  }
+  const dias = Math.floor(horas / 24);
+  const horasRest = Math.floor(horas % 24);
+  return horasRest > 0 ? `${dias}d ${horasRest}h` : `${dias} dias`;
+}
+
 // ── Draggable Card ────────────────────────────────────────────
-function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile, leadTags }: {
+function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile, leadTags, statusConfig, now }: {
   lead: Lead; onCardClick: ()=>void;
   onWhatsApp: (e:React.MouseEvent)=>void; onViewProfile: (e:React.MouseEvent)=>void; isMobile: boolean;
   leadTags?: Tag[];
+  statusConfig?: StatusConfig;
+  now: number;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
   const { configuracoes } = useAppStore();
@@ -366,24 +390,48 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
   const l = lead as any;
   const score = l.score != null ? Number(l.score) : null;
   const faixa = calcularFaixa(lead, configuracoes!) ?? l.faixa;
+  const statusAtualConfig = statusConfig?.statuses?.find(s => s.id === statusNum);
+  const slaHoras = statusAtualConfig?.sla_horas;
+  const slaUnidade = (statusAtualConfig as any)?.sla_unidade ?? 'horas';
+  const refSla = (lead as any).ultimo_status_change || lead.created_at;
+  const msNoStatus = refSla ? (now - new Date(refSla).getTime()) : 0;
+  const valorNoStatus = slaUnidade === 'min'
+    ? msNoStatus / (1000 * 60)
+    : msNoStatus / (1000 * 60 * 60);
+  const horasNoStatus = msNoStatus / (1000 * 60 * 60);
+  const slaBreach = !!slaHoras && slaHoras > 0 && valorNoStatus > slaHoras;
+  if (slaHoras) {
+    console.log(`[SLA] lead:${lead.id} status:${statusNum} slaHoras:${slaHoras} unidade:${slaUnidade} valor:${valorNoStatus.toFixed(2)} breach:${slaBreach}`);
+  }
 
   return (
     <div ref={setNodeRef} {...attributes} {...listeners}
       onClick={isMobile ? undefined : onCardClick}
       style={{
-        background: dark?'#222225':'#ffffff',
-        border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.1)'}`,
+        background: slaBreach
+          ? (dark ? 'linear-gradient(135deg, #2d1515 0%, #1e0f0f 100%)' : 'linear-gradient(135deg, #fff0f0 0%, #ffe4e4 100%)')
+          : (dark ? '#222225' : '#ffffff'),
+        border: slaBreach ? '1.5px solid rgba(239,68,68,0.5)' : `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.1)'}`,
         borderRadius:'14px', padding:'13px',
-        boxShadow: isDragging
-          ? (dark?'0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.1)':'0 12px 32px rgba(0,0,0,0.18)')
-          : (dark?'0 1px 3px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)':'0 1px 3px rgba(0,0,0,0.07)'),
+        position: 'relative' as const,
+        boxShadow: slaBreach
+          ? (isDragging ? '0 16px 48px rgba(239,68,68,0.4)' : '0 0 0 1px rgba(239,68,68,0.25), 0 4px 16px rgba(239,68,68,0.15)')
+          : (isDragging
+              ? (dark?'0 16px 48px rgba(0,0,0,0.7)':'0 12px 32px rgba(0,0,0,0.18)')
+              : (dark?'0 1px 3px rgba(0,0,0,0.5)':'0 1px 3px rgba(0,0,0,0.07)')),
         cursor: isDragging?'grabbing':'grab',
         opacity: isDragging?0:1,
         touchAction: isMobile ? 'manipulation' : 'none',
         userSelect: 'none', WebkitUserSelect: 'none',
-        transition:'box-shadow 0.2s, border-color 0.2s', outline:'none',
+        transition:'box-shadow 0.2s, border-color 0.2s, background 0.3s', outline:'none',
       }}
     >
+      {slaBreach && (
+        <div style={{ margin: '-13px -13px 10px -13px', padding: '6px 13px', background: '#fb2a51', borderBottom: '1px solid rgba(0,0,0,0.1)', borderRadius: '13px 13px 0 0', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 800, color: '#ffffff', letterSpacing: '0.01em' }}>
+          <Clock style={{ width: '11px', height: '11px', flexShrink: 0, color: '#ffffff' }} />
+          ⏰ {formatarTempoNoQuadro(horasNoStatus)} neste quadro
+        </div>
+      )}
       <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
         <div style={{ position:'relative', flexShrink:0 }}>
           <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:color, display:'flex', alignItems:'center', justifyContent:'center', color:getAvatarTextColor(color), fontSize:'12px', fontWeight:700 }}>{initials(lead.nome)}</div>
@@ -396,12 +444,12 @@ function DraggableCard({ lead, onCardClick, onWhatsApp, onViewProfile, isMobile,
         </div>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'6px' }}>
-            <p style={{ fontSize:'13.5px', fontWeight:600, color:dark?'#f0f0f0':'#111827', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
+            <p style={{ fontSize:'13.5px', fontWeight:600, color:slaBreach?'#ef4444':(dark?'#f0f0f0':'#111827'), margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, minWidth:0 }}>{safeName(lead.nome)||'Lead sem nome'}</p>
             {score != null && (
               <span style={{ fontSize:'11px', fontWeight:700, color:faixa==='verde'?'#10b981':faixa==='amarelo'?'#f59e0b':'#ef4444', background:faixa==='verde'?'rgba(16,185,129,0.12)':faixa==='amarelo'?'rgba(245,158,11,0.12)':'rgba(239,68,68,0.12)', padding:'2px 7px', borderRadius:'99px', flexShrink:0 }}>{score}pts</span>
             )}
           </div>
-          <p style={{ fontSize:'12px', color:'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
+          <p style={{ fontSize:'12px', color:slaBreach?'rgba(239,68,68,0.7)':'#9ca3af', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'1px' }}>{lead.whatsapp?formatarWhatsapp(lead.whatsapp):'—'}</p>
         </div>
       </div>
       <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', overflow:'hidden' }}>
@@ -495,10 +543,11 @@ function EditableSortableColumn({ status, editConfig, setEditConfig, dark, color
       }}>
         {/* Edit header */}
         <div style={{
-          padding: '9px 10px', display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '9px 10px',
           borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
           background: dark ? '#141416' : '#ffffff',
         }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {!isMobile && (
             <span
               {...attributes} {...listeners}
@@ -547,6 +596,85 @@ function EditableSortableColumn({ status, editConfig, setEditConfig, dark, color
           >
             <X style={{ width: '12px', height: '12px' }} />
           </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 0 2px', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, marginTop: '6px' }}>
+            <Clock style={{ width: '10px', height: '10px', color: status.sla_horas ? '#ef4444' : (dark ? '#a0a0a8' : '#6b7280'), flexShrink: 0 }} />
+            <span style={{ fontSize: '10px', color: dark ? '#a0a0a8' : '#6b7280', whiteSpace: 'nowrap' }}>Alerta após</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={status.sla_horas ?? ''}
+              onChange={e => {
+                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                setEditConfig(prev => prev ? {
+                  ...prev,
+                  statuses: prev.statuses.map(s =>
+                    s.id === status.id ? { ...s, sla_horas: val } : s
+                  )
+                } : prev);
+              }}
+              style={{ width: '46px', padding: '2px 4px', borderRadius: '5px', border: `1px solid ${status.sla_horas ? 'rgba(239,68,68,0.4)' : (dark ? '#27272a' : '#e5e7eb')}`, background: dark ? '#0d0d0f' : '#f8fafc', color: status.sla_horas ? '#ef4444' : (dark ? '#f4f4f5' : '#111827'), fontSize: '11px', outline: 'none', fontFamily: 'inherit', textAlign: 'center' as any }}
+            />
+            <select
+              value={status.sla_unidade ?? 'horas'}
+              onChange={e => {
+                setEditConfig(prev => prev ? {
+                  ...prev,
+                  statuses: prev.statuses.map(s =>
+                    s.id === status.id ? { ...s, sla_unidade: e.target.value as 'horas' | 'min' } : s
+                  )
+                } : prev);
+              }}
+              style={{ padding: '2px 4px', borderRadius: '5px', border: `1px solid ${status.sla_horas ? 'rgba(239,68,68,0.4)' : (dark ? '#27272a' : '#e5e7eb')}`, background: dark ? '#0d0d0f' : '#f8fafc', color: status.sla_horas ? '#ef4444' : (dark ? '#a0a0a8' : '#6b7280'), fontSize: '11px', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              <option value="horas">h</option>
+              <option value="min">min</option>
+            </select>
+            {status.sla_horas && (
+              <span style={{ fontSize: '10px', color: '#ef4444' }}>← vermelho</span>
+            )}
+          </div>
+          {/* Toggle tipo reunião */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '5px 0 2px',
+            borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+            marginTop: '6px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontSize: '11px' }}>📅</span>
+              <span style={{ fontSize: '10px', color: (status as any).tipo === 'reuniao' ? '#8b5cf6' : (dark ? '#a0a0a8' : '#6b7280'), whiteSpace: 'nowrap' }}>
+                Quadro de reunião
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const novoTipo = (status as any).tipo === 'reuniao' ? undefined : 'reuniao';
+                setEditConfig(prev => prev ? {
+                  ...prev,
+                  statuses: prev.statuses.map(s =>
+                    s.id === status.id ? { ...s, tipo: novoTipo } : s
+                  )
+                } : prev);
+              }}
+              style={{
+                width: '32px', height: '17px', borderRadius: '99px', border: 'none',
+                background: (status as any).tipo === 'reuniao'
+                  ? '#8b5cf6'
+                  : (dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)'),
+                position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0,
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: '1.5px',
+                left: (status as any).tipo === 'reuniao' ? '16px' : '1.5px',
+                width: '14px', height: '14px', borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+              }}/>
+            </button>
+          </div>
         </div>
         {/* Static leads */}
         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '80px', maxHeight: '52vh', overflowY: 'auto' }}>
@@ -620,7 +748,29 @@ export default function KanbanPage() {
   const { hasWA } = useWhatsAppAccount();
   const { metaToken, metaAccount } = useMetaConfig();
   const modelo = useModeloNegocio();
-  const { config: statusConfig, reload: reloadStatusConfig } = useStatusConfig(modelo);
+  const { config: statusConfig, reload: reloadStatusConfig, loading: statusLoading } = useStatusConfig(modelo);
+  const now = useNow();
+  const [configPronta, setConfigPronta] = useState(false);
+  const orgIdAnterior = useRef<string | null>(null);
+  const [lastLeadsOrgId, setLastLeadsOrgId] = useState<string | null>(null);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+
+  if (orgId !== lastLeadsOrgId) {
+    setLastLeadsOrgId(orgId);
+    setLoadingLeads(true);
+  }
+
+  useEffect(() => {
+    if (orgId !== orgIdAnterior.current) {
+      setConfigPronta(false);
+      orgIdAnterior.current = orgId;
+    }
+    if (orgReady && orgId && !statusLoading && statusConfig.statuses.length > 0) {
+      const t = setTimeout(() => setConfigPronta(true), 50);
+      return () => clearTimeout(t);
+    }
+  }, [orgReady, orgId, statusLoading, statusConfig.statuses.length]);
+  const isLoadingKanban = !configPronta || loadingLeads;
   const columns = useMemo((): ColumnDef[] => {
     return [...statusConfig.statuses]
       .sort((a, b) => a.ordem - b.ordem)
@@ -656,6 +806,17 @@ export default function KanbanPage() {
   const [activeColIndex, setActiveColIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [motivoCtx, setMotivoCtx] = useState<{ lead: Lead; targetStatus: number; currentStatus: number } | null>(null);
+  const [agendamentoCtx, setAgendamentoCtx] = useState<{
+    lead: Lead;
+    targetStatus: number;
+    currentStatus: number;
+  } | null>(null);
+  const [agendamentoData, setAgendamentoData] = useState('');
+  const [agendamentoHora, setAgendamentoHora] = useState('');
+  const [agendandoSaving, setAgendandoSaving] = useState(false);
+  const [horariosOrg, setHorariosOrg] = useState<string[]>(['10:00','12:00','15:00','17:00','19:00']);
+  const [loadingHorarios, setLoadingHorarios] = useState(false);
+  const [mesModal, setMesModal] = useState<Date>(() => new Date());
   const orgTagsRef = useRef<Tag[]>([]);
 
   // Edit mode state
@@ -695,7 +856,7 @@ export default function KanbanPage() {
   const isInitialLoadRef = useRef(true);
   useEffect(() => {
     if (!orgReady || !orgId) return;
-    // Nunca resetar para [] — mantém dados anteriores durante refetch para evitar flash
+    setLoadingLeads(true);
     (async () => {
       let allData: Lead[] = [];
       let from = 0;
@@ -703,7 +864,7 @@ export default function KanbanPage() {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram')
+          .select('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram, reuniao_agendada_at')
           .eq('org_id', orgId)
           .range(from, from + PAGE - 1);
         if (error || !data || data.length === 0) break;
@@ -712,6 +873,7 @@ export default function KanbanPage() {
         from += PAGE;
       }
       setLeads(allData);
+      setLoadingLeads(false);
       isInitialLoadRef.current = false;
     })();
   }, [orgId, orgReady]); // eslint-disable-line
@@ -973,14 +1135,14 @@ export default function KanbanPage() {
 
   // ── Status change ────────────────────────────────────────────
   async function applyStatus(lead: Lead, newStatus: number, currentStatus: number, motivo?: string) {
-    const now = new Date().toISOString();
+    const nowISO = new Date().toISOString();
     const tsField: Record<number, string> = {
       0: 'status_atendimento_at', 1: 'status_atendimento_at',
       2: 'status_reuniao_at', 5: 'status_contrato_at',
       [statusConfig.convertido_status]: 'status_aprovado_at',
     };
-    const patch: any = { status: newStatus, ultimo_status_change: now };
-    if (tsField[newStatus]) patch[tsField[newStatus]] = now;
+    const patch: any = { status: newStatus, ultimo_status_change: nowISO };
+    if (tsField[newStatus]) patch[tsField[newStatus]] = nowISO;
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;
     updateLead(lead.id, patch);
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
@@ -988,6 +1150,11 @@ export default function KanbanPage() {
     else {
       if (newStatus === statusConfig.convertido_status && !(lead as any).capi_conversao_enviado && orgId) {
         dispararCapiConversao(lead.id, orgId);
+      }
+      const targetLabel = statusConfig.statuses.find(s => s.id === newStatus)?.label ?? '';
+      const isReprovacao = targetLabel.toLowerCase().includes('reprov');
+      if (isReprovacao && !(lead as any).capi_reprovacao_enviado && orgId) {
+        dispararCapiReprovacao(lead.id, orgId);
       }
       const col = columns.find(c => c.status === newStatus); toast.success(`${lead.nome} → ${col?.label}`, { duration: 2500 });
     }
@@ -1017,8 +1184,18 @@ export default function KanbanPage() {
     if (currentStatus === 0) currentStatus = 1;
     if (currentStatus === targetStatus) return;
     const targetLabel = statusConfig.statuses.find(s => s.id === targetStatus)?.label ?? '';
+    const targetStatusItem = statusConfig.statuses.find(s => s.id === targetStatus);
+    const isReuniaoStatus = (targetStatusItem as any)?.tipo === 'reuniao';
+
     if (targetLabel.toLowerCase().includes('reprovado')) {
       setMotivoCtx({ lead, targetStatus, currentStatus });
+    } else if (isReuniaoStatus) {
+      const hoje = new Date();
+      const dataStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+      setAgendamentoData(dataStr);
+      setAgendamentoHora('');
+      setMesModal(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+      setAgendamentoCtx({ lead, targetStatus, currentStatus });
     } else {
       applyStatus(lead, targetStatus, currentStatus);
     }
@@ -1029,6 +1206,36 @@ export default function KanbanPage() {
     const { lead, targetStatus, currentStatus } = motivoCtx;
     setMotivoCtx(null);
     await applyStatus(lead, targetStatus, currentStatus, motivo);
+  }
+
+  useEffect(() => {
+    if (!agendamentoCtx || !orgId) return;
+    setLoadingHorarios(true);
+    (supabase as any).from('organizations').select('reuniao_horarios').eq('id', orgId).single()
+      .then(({ data }: any) => {
+        const h = data?.reuniao_horarios;
+        setHorariosOrg(Array.isArray(h) && h.length > 0 ? h : ['10:00','12:00','15:00','17:00','19:00']);
+        setLoadingHorarios(false);
+      });
+  }, [agendamentoCtx, orgId]); // eslint-disable-line
+
+  async function handleAgendamentoConfirm() {
+    if (!agendamentoCtx || !agendamentoData || !agendamentoHora) return;
+    setAgendandoSaving(true);
+    const { lead, targetStatus, currentStatus } = agendamentoCtx;
+    const reuniaoAt = `${agendamentoData}T${agendamentoHora}:00-03:00`;
+    await supabase.from('leads').update({ reuniao_agendada_at: reuniaoAt }).eq('id', lead.id);
+    updateLead(lead.id, { reuniao_agendada_at: reuniaoAt });
+    setAgendamentoCtx(null);
+    setAgendandoSaving(false);
+    await applyStatus(lead, targetStatus, currentStatus);
+  }
+
+  async function handleAgendamentoPular() {
+    if (!agendamentoCtx) return;
+    const { lead, targetStatus, currentStatus } = agendamentoCtx;
+    setAgendamentoCtx(null);
+    await applyStatus(lead, targetStatus, currentStatus);
   }
 
   function clearFilters() {
@@ -1057,108 +1264,85 @@ export default function KanbanPage() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isMobile ? (
+          /* ── Mobile: title row + filter row ─────────────────── */
           <>
-          {/* Row 1: title + realtime */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-              <h1 style={{ fontSize:isMobile?'22px':'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
-              <button onClick={handleEnterEditMode} style={{ display:'flex', alignItems:'center', gap:'4px', padding:'5px 10px', borderRadius:'7px', border:`1px solid ${dark?'rgba(255,255,255,0.08)':border}`, background:'transparent', color:dark?'#52525b':'#9ca3af', fontSize:'11px', cursor:'pointer', fontFamily:'inherit' }}>
-                <Settings2 style={{ width:'11px', height:'11px' }}/> Editar funil
-              </button>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px', gap:'12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                <h1 style={{ fontSize:'22px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em' }}>Funil CRM</h1>
+                <button onClick={handleEnterEditMode} style={{ display:'flex', alignItems:'center', gap:'4px', padding:'5px 10px', borderRadius:'7px', border:`1px solid ${dark?'rgba(255,255,255,0.08)':border}`, background:'transparent', color:dark?'#52525b':'#9ca3af', fontSize:'11px', cursor:'pointer', fontFamily:'inherit' }}>
+                  <Settings2 style={{ width:'11px', height:'11px' }}/> Editar funil
+                </button>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#8a8a96':'#9ca3af' }}>
+                <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
+              </div>
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#8a8a96':'#9ca3af' }}>
-              <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
+              <div style={{ position:'relative', flex:'1 1 100%', width:'100%', marginBottom:'4px' }}>
+                <Search style={{ position:'absolute', left:'8px', top:'50%', transform:'translateY(-50%)', width:'13px', height:'13px', color:dark?'#71717a':'#9ca3af', pointerEvents:'none' }}/>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar lead..." style={{ ...inputStyle, width:'100%', paddingLeft:'28px', boxSizing:'border-box' }}/>
+              </div>
+              <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={v => { setPeriodFilter(v); if (v === 'custom') setShowCustom(true); else { setShowCustom(false); setCustomFrom(''); setCustomTo(''); }}} dark={dark}/>
+              {showCustom && (<><input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/><span style={{ color:dark?'#52525b':'#9ca3af', fontSize:'12px' }}>até</span><input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/></>)}
+              <div style={{ position:'relative' }}>
+                <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(0,68,253,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#7ab0ff':'#0044fd') : (dark?'#d4d4d8':'#374151') }}>
+                  <Megaphone style={{ width:'12px', height:'12px' }}/>
+                  Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#0044fd', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
+                </button>
+                {showCampaignModal && (<CampFilterDropdown dark={dark} campaigns={campaignOptions} pendingSelected={pendingCampaigns} onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }} onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }} onClear={() => { setPendingCampaigns(new Set()); }} onClose={() => setShowCampaignModal(false)} align="right"/>)}
+              </div>
+              {orgTags.length > 0 && (
+                <div style={{ position:'relative' }}>
+                  <button onClick={() => setShowTagFilter(v => !v)} style={{ ...btnGhost, border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark?'rgba(139,92,246,0.12)':'#f5f3ff') : (dark?'#111113':'#fff'), color:selectedTagIds.size > 0 ? (dark?'#c4b5fd':'#7c3aed') : (dark?'#d4d4d8':'#374151') }}>
+                    <TagIcon style={{ width:'12px', height:'12px' }}/>
+                    Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
+                  </button>
+                  {showTagFilter && (<><div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/><div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>{orgTags.map(tag => { const sel = selectedTagIds.has(tag.id); return (<button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); if (sel) n.delete(tag.id); else n.add(tag.id); setSelectedTagIds(n); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:sel?(dark?`${tag.cor}18`:`${tag.cor}12`):'transparent', cursor:'pointer', fontFamily:'inherit', marginBottom:'2px' }}><span style={{ width:'8px', height:'8px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/><span style={{ flex:1, fontSize:'12.5px', color:sel?tag.cor:(dark?'#f4f4f5':'#111827'), fontWeight:sel?600:400, textAlign:'left' }}>{tag.nome}</span>{sel && <Check style={{ width:'11px', height:'11px', color:tag.cor, flexShrink:0 }}/>}</button>); })}</div></>)}
+                </div>
+              )}
+              {hasActiveFilters && (<button onClick={clearFilters} style={{ ...btnGhost, color:dark?'#f87171':'#ef4444', borderColor:'rgba(239,68,68,0.3)', background:dark?'rgba(239,68,68,0.08)':'rgba(239,68,68,0.05)' }}><X style={{ width:'12px', height:'12px' }}/> Limpar</button>)}
             </div>
-          </div>
+          </>
+          ) : (
+          /* ── Desktop: tudo em uma só linha ───────────────────── */
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'nowrap', marginBottom:'16px' }}>
+            <h1 style={{ fontSize:'26px', fontWeight:800, fontFamily:'Inter, sans-serif', color:dark?'#f0f0f0':'#111827', margin:0, letterSpacing:'-0.035em', flexShrink:0 }}>Funil CRM</h1>
+            <button onClick={handleEnterEditMode} style={{ display:'flex', alignItems:'center', gap:'4px', padding:'5px 10px', borderRadius:'7px', border:`1px solid ${dark?'rgba(255,255,255,0.08)':border}`, background:'transparent', color:dark?'#52525b':'#9ca3af', fontSize:'11px', cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>
+              <Settings2 style={{ width:'11px', height:'11px' }}/> Editar funil
+            </button>
 
-          {/* Row 2: filters inline (no box) */}
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
-            {/* Search - expands to fill available space */}
-            <div style={{ position:'relative', flex:'1 1 160px', minWidth:'140px' }}>
+            <div style={{ flex:'1 1 0px' }}/>
+
+            <div style={{ position:'relative', width:'200px', flexShrink:0 }}>
               <Search style={{ position:'absolute', left:'8px', top:'50%', transform:'translateY(-50%)', width:'13px', height:'13px', color:dark?'#71717a':'#9ca3af', pointerEvents:'none' }}/>
-              <input
-                value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar lead..."
-                style={{ ...inputStyle, width:'100%', paddingLeft:'28px', boxSizing:'border-box' }}
-              />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar lead..." style={{ ...inputStyle, width:'100%', paddingLeft:'28px', boxSizing:'border-box' }}/>
             </div>
 
-            {/* Period */}
             <FilterDropdown value={periodFilter} options={PERIOD_OPTIONS} onChange={v => { setPeriodFilter(v); if (v === 'custom') setShowCustom(true); else { setShowCustom(false); setCustomFrom(''); setCustomTo(''); }}} dark={dark}/>
-
-            {/* Custom date range */}
-            {showCustom && (
-              <>
-                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/>
-                <span style={{ color:dark?'#52525b':'#9ca3af', fontSize:'12px' }}>até</span>
-                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/>
-              </>
-            )}
-
-            {/* Campaign filter */}
+            {showCustom && (<><input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={inputStyle}/><span style={{ color:dark?'#52525b':'#9ca3af', fontSize:'12px' }}>até</span><input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={inputStyle}/></>)}
             <div style={{ position:'relative' }}>
-              <button
-                onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }}
-                style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(0,68,253,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#7ab0ff':'#0044fd') : (dark?'#d4d4d8':'#374151') }}
-              >
+              <button onClick={() => { setPendingCampaigns(new Set(selectedCampaigns)); setShowCampaignModal(v => !v); }} style={{ ...btnGhost, border:`1px solid ${selectedCampaigns.size > 0 ? '#0044fd' : border}`, background:selectedCampaigns.size > 0 ? (dark?'rgba(0,68,253,0.12)':'#eff6ff') : (dark?'#111113':'#fff'), color:selectedCampaigns.size > 0 ? (dark?'#7ab0ff':'#0044fd') : (dark?'#d4d4d8':'#374151') }}>
                 <Megaphone style={{ width:'12px', height:'12px' }}/>
                 Campanhas {selectedCampaigns.size > 0 && <span style={{ background:'#0044fd', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedCampaigns.size}</span>}
               </button>
-              {showCampaignModal && (
-                <CampFilterDropdown
-                  dark={dark}
-                  campaigns={campaignOptions}
-                  pendingSelected={pendingCampaigns}
-                  onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }}
-                  onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }}
-                  onClear={() => { setPendingCampaigns(new Set()); }}
-                  onClose={() => setShowCampaignModal(false)}
-                  align="right"
-                />
-              )}
+              {showCampaignModal && (<CampFilterDropdown dark={dark} campaigns={campaignOptions} pendingSelected={pendingCampaigns} onToggle={name => { const n = new Set(pendingCampaigns); if (n.has(name)) n.delete(name); else n.add(name); setPendingCampaigns(n); }} onApply={() => { setSelectedCampaigns(new Set(pendingCampaigns)); setShowCampaignModal(false); }} onClear={() => { setPendingCampaigns(new Set()); }} onClose={() => setShowCampaignModal(false)} align="right"/>)}
             </div>
-
-            {/* Tag filter */}
             {orgTags.length > 0 && (
               <div style={{ position:'relative' }}>
-                <button
-                  onClick={() => setShowTagFilter(v => !v)}
-                  style={{ ...btnGhost, border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark?'rgba(139,92,246,0.12)':'#f5f3ff') : (dark?'#111113':'#fff'), color:selectedTagIds.size > 0 ? (dark?'#c4b5fd':'#7c3aed') : (dark?'#d4d4d8':'#374151') }}
-                >
+                <button onClick={() => setShowTagFilter(v => !v)} style={{ ...btnGhost, border:`1px solid ${selectedTagIds.size > 0 ? '#8b5cf6' : border}`, background:selectedTagIds.size > 0 ? (dark?'rgba(139,92,246,0.12)':'#f5f3ff') : (dark?'#111113':'#fff'), color:selectedTagIds.size > 0 ? (dark?'#c4b5fd':'#7c3aed') : (dark?'#d4d4d8':'#374151') }}>
                   <TagIcon style={{ width:'12px', height:'12px' }}/>
                   Tags {selectedTagIds.size > 0 && <span style={{ background:'#8b5cf6', color:'#fff', borderRadius:'99px', padding:'0px 5px', fontSize:'11px', fontWeight:700 }}>{selectedTagIds.size}</span>}
                 </button>
-                {showTagFilter && (
-                  <>
-                    <div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
-                    <div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>
-                      {orgTags.map(tag => {
-                        const sel = selectedTagIds.has(tag.id);
-                        return (
-                          <button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); if (sel) n.delete(tag.id); else n.add(tag.id); setSelectedTagIds(n); }}
-                            style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:sel?(dark?`${tag.cor}18`:`${tag.cor}12`):'transparent', cursor:'pointer', fontFamily:'inherit', marginBottom:'2px' }}
-                          >
-                            <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/>
-                            <span style={{ flex:1, fontSize:'12.5px', color:sel?tag.cor:(dark?'#f4f4f5':'#111827'), fontWeight:sel?600:400, textAlign:'left' }}>{tag.nome}</span>
-                            {sel && <Check style={{ width:'11px', height:'11px', color:tag.cor, flexShrink:0 }}/>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
+                {showTagFilter && (<><div onClick={() => setShowTagFilter(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/><div style={{ position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:41, background:dark?'#111113':'#fff', border:`1px solid ${border}`, borderRadius:'12px', padding:'8px', minWidth:'180px', boxShadow:dark?'0 8px 24px rgba(0,0,0,0.4)':'0 8px 24px rgba(0,0,0,0.12)' }}>{orgTags.map(tag => { const sel = selectedTagIds.has(tag.id); return (<button key={tag.id} onClick={() => { const n = new Set(selectedTagIds); if (sel) n.delete(tag.id); else n.add(tag.id); setSelectedTagIds(n); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:'8px', padding:'6px 8px', borderRadius:'7px', border:'none', background:sel?(dark?`${tag.cor}18`:`${tag.cor}12`):'transparent', cursor:'pointer', fontFamily:'inherit', marginBottom:'2px' }}><span style={{ width:'8px', height:'8px', borderRadius:'50%', background:tag.cor, flexShrink:0 }}/><span style={{ flex:1, fontSize:'12.5px', color:sel?tag.cor:(dark?'#f4f4f5':'#111827'), fontWeight:sel?600:400, textAlign:'left' }}>{tag.nome}</span>{sel && <Check style={{ width:'11px', height:'11px', color:tag.cor, flexShrink:0 }}/>}</button>); })}</div></>)}
               </div>
             )}
+            {hasActiveFilters && (<button onClick={clearFilters} style={{ ...btnGhost, color:dark?'#f87171':'#ef4444', borderColor:'rgba(239,68,68,0.3)', background:dark?'rgba(239,68,68,0.08)':'rgba(239,68,68,0.05)' }}><X style={{ width:'12px', height:'12px' }}/> Limpar</button>)}
 
-            {/* Clear all */}
-            {hasActiveFilters && (
-              <button onClick={clearFilters} style={{ ...btnGhost, color:dark?'#f87171':'#ef4444', borderColor:'rgba(239,68,68,0.3)', background:dark?'rgba(239,68,68,0.08)':'rgba(239,68,68,0.05)' }}>
-                <X style={{ width:'12px', height:'12px' }}/> Limpar
-              </button>
-            )}
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:dark?'#8a8a96':'#9ca3af', flexShrink:0 }}>
+              <span style={{ width:'7px', height:'7px', borderRadius:'50%', background:'#10b981', display:'inline-block', animation:'kpulse 2s ease-in-out infinite' }}/>Tempo real
+            </div>
           </div>
-          </>
           )}
         </div>
 
@@ -1184,7 +1368,20 @@ export default function KanbanPage() {
         )}
 
         {/* Kanban board */}
-        {editMode && editConfig ? (
+        {isLoadingKanban ? (
+          <div className="kanban-desktop" style={{ display:'flex', gap:'14px', alignItems:'start', overflowX:'auto', paddingBottom:'12px', minWidth:0 }}>
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} style={{ flex:'0 0 260px', minWidth:'220px' }}>
+                <div style={{ display:'flex', flexDirection:'column', borderRadius:'16px', borderTop:'3px solid rgba(255,255,255,0.05)', border: `1px solid ${border}`, background:dark?'#1b1b1d':'#fafafa', overflow:'hidden', minHeight:'60vh', padding:'12px' }}>
+                  <div className="animate-pulse" style={{ width:'120px', height:'20px', borderRadius:'6px', background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', marginBottom:'16px' }} />
+                  {Array.from({ length: 3 }).map((_, cIdx) => (
+                    <div key={cIdx} className="animate-pulse" style={{ height:'80px', borderRadius:'12px', background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', marginBottom:'10px' }} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : editMode && editConfig ? (
           <DndContext
             sensors={isMobile ? undefined : colSensors}
             collisionDetection={closestCenter}
@@ -1248,6 +1445,8 @@ export default function KanbanPage() {
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                           leadTags={leadTagsMap.get(lead.id)}
+                          statusConfig={statusConfig}
+                          now={now}
                         />
                       ))}
                       {remaining > 0 && (
@@ -1280,6 +1479,8 @@ export default function KanbanPage() {
                           onWhatsApp={e => { e.stopPropagation(); handleWhatsApp(lead); }}
                           onViewProfile={e => { e.stopPropagation(); setViewingLead(lead); }}
                           leadTags={leadTagsMap.get(lead.id)}
+                          statusConfig={statusConfig}
+                          now={now}
                         />
                       ))}
                       {remaining > 0 && (
@@ -1306,6 +1507,92 @@ export default function KanbanPage() {
 
       {motivoCtx && createPortal(
         <MotivoModal dark={dark} motivoAtual={(motivoCtx.lead as any).motivo_reprovacao} onConfirm={handleMotivoConfirm} onCancel={() => setMotivoCtx(null)}/>,
+        document.body
+      )}
+
+      {agendamentoCtx && createPortal(
+        <>
+          <div style={{ position:'fixed', inset:0, zIndex:999998, background:'rgba(0,0,0,0.55)' }} onClick={handleAgendamentoPular} />
+          <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:999999, background: dark?'#111113':'#fff', borderRadius:'18px', padding:'22px', width:'90%', maxWidth:'360px', boxShadow: dark?'0 24px 60px rgba(0,0,0,0.7)':'0 24px 60px rgba(0,0,0,0.18)', fontFamily:'inherit' }}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
+              <div style={{ width:'34px', height:'34px', borderRadius:'10px', background:'rgba(139,92,246,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'17px', flexShrink:0 }}>📅</div>
+              <div>
+                <h3 style={{ margin:0, fontSize:'15px', fontWeight:600, color: dark?'#fff':'#111827' }}>Quando é a reunião?</h3>
+                <p style={{ margin:0, fontSize:'12px', color: dark?'#71717a':'#9ca3af' }}>{agendamentoCtx.lead.nome}</p>
+              </div>
+            </div>
+
+            {/* Month navigation */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' }}>
+              <button onClick={() => setMesModal(p => new Date(p.getFullYear(), p.getMonth()-1, 1))} style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${dark?'rgba(255,255,255,0.1)':'#e5e7eb'}`, background:'transparent', color:dark?'#a0a0a8':'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontFamily:'inherit' }}>‹</button>
+              <span style={{ fontSize:'13px', fontWeight:600, color:dark?'#f0f0f0':'#111827', textTransform:'capitalize' }}>{mesModal.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+              <button onClick={() => setMesModal(p => new Date(p.getFullYear(), p.getMonth()+1, 1))} style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${dark?'rgba(255,255,255,0.1)':'#e5e7eb'}`, background:'transparent', color:dark?'#a0a0a8':'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontFamily:'inherit' }}>›</button>
+            </div>
+
+            {/* Day headers */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:'2px' }}>
+              {['D','S','T','Q','Q','S','S'].map((d,i) => (
+                <div key={i} style={{ textAlign:'center', fontSize:'10px', fontWeight:600, color:dark?'#52525b':'#9ca3af', padding:'3px 0' }}>{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'1px', marginBottom:'14px' }}>
+              {(() => {
+                const anoM = mesModal.getFullYear(), mesM = mesModal.getMonth();
+                const primeiroDia = new Date(anoM, mesM, 1);
+                const offset = primeiroDia.getDay();
+                const diasNoMes = new Date(anoM, mesM + 1, 0).getDate();
+                const hojeStr = new Date().toISOString().split('T')[0];
+                const cells: (number | null)[] = [...Array(offset).fill(null), ...Array.from({length: diasNoMes}, (_, i) => i + 1)];
+                return cells.map((dia, idx) => {
+                  if (!dia) return <div key={idx} />;
+                  const dateStr = `${anoM}-${String(mesM+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+                  const isHoje = dateStr === hojeStr;
+                  const isPassado = dateStr < hojeStr;
+                  const isSel = agendamentoData === dateStr;
+                  return (
+                    <button key={idx} onClick={() => !isPassado && setAgendamentoData(dateStr)} disabled={isPassado}
+                      style={{ padding:'5px 0', borderRadius:'7px', border:'none', textAlign:'center', fontSize:'12px', fontWeight: isSel || isHoje ? 700 : 400, background: isSel ? '#8b5cf6' : isHoje ? (dark?'rgba(0,68,253,0.2)':'rgba(0,68,253,0.1)') : 'transparent', color: isSel ? '#fff' : isHoje ? '#0044fd' : isPassado ? (dark?'#3f3f3f':'#d1d5db') : (dark?'#e4e4e7':'#374151'), cursor: isPassado ? 'default' : 'pointer', fontFamily:'inherit', opacity: isPassado ? 0.35 : 1 }}>
+                      {dia}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Time chips */}
+            {agendamentoData && (
+              <div style={{ marginBottom:'16px' }}>
+                <p style={{ fontSize:'10.5px', fontWeight:600, color:dark?'#71717a':'#9ca3af', textTransform:'uppercase', letterSpacing:'0.05em', margin:'0 0 8px' }}>Horário</p>
+                {loadingHorarios ? (
+                  <p style={{ fontSize:'12px', color:dark?'#52525b':'#9ca3af', margin:0 }}>Carregando...</p>
+                ) : (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
+                    {horariosOrg.map(h => (
+                      <button key={h} onClick={() => setAgendamentoHora(h)}
+                        style={{ padding:'6px 14px', borderRadius:'99px', border:`1px solid ${agendamentoHora === h ? '#8b5cf6' : (dark?'rgba(255,255,255,0.1)':'#e5e7eb')}`, background: agendamentoHora === h ? '#8b5cf6' : 'transparent', color: agendamentoHora === h ? '#fff' : (dark?'#a0a0a8':'#374151'), fontSize:'13px', fontWeight: agendamentoHora === h ? 600 : 400, cursor:'pointer', fontFamily:'inherit' }}>
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div style={{ display:'flex', gap:'8px' }}>
+              <button onClick={handleAgendamentoPular} style={{ flex:1, padding:'10px', borderRadius:'10px', border:`1px solid ${dark?'#1e1e22':'#e5e7eb'}`, background:'transparent', color:dark?'#a1a1aa':'#6b7280', fontSize:'13px', cursor:'pointer', fontFamily:'inherit' }}>
+                Pular
+              </button>
+              <button onClick={handleAgendamentoConfirm} disabled={agendandoSaving || !agendamentoData || !agendamentoHora}
+                style={{ flex:2, padding:'10px', borderRadius:'10px', border:'none', background:'#8b5cf6', color:'#fff', fontSize:'13px', fontWeight:600, cursor: (agendandoSaving || !agendamentoData || !agendamentoHora) ? 'default' : 'pointer', fontFamily:'inherit', opacity: (!agendamentoData || !agendamentoHora) ? 0.45 : agendandoSaving ? 0.7 : 1 }}>
+                {agendandoSaving ? 'Salvando…' : 'Confirmar reunião'}
+              </button>
+            </div>
+          </div>
+        </>,
         document.body
       )}
 

@@ -7,3 +7,11 @@ export function dispararCapiConversao(leadId: number | string, orgId: string): v
     body: JSON.stringify({ lead_id: leadId, tipo: 'conversao', org_id: orgId }),
   }).catch(err => console.warn('[CAPI] Erro ao disparar conversão:', err));
 }
+
+export function dispararCapiReprovacao(leadId: number | string, orgId: string): void {
+  fetch('https://obguidmfvfjaekaskgob.functions.supabase.co/meta-capi-evento', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lead_id: leadId, tipo: 'reprovacao', org_id: orgId }),
+  }).catch(err => console.warn('[CAPI reprovação] erro:', err));
+}

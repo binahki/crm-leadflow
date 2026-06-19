@@ -11,6 +11,7 @@ import AdminPage from "./pages/Admin";
 import DashboardPage from "./pages/Dashboard";
 import LeadsPage from "./pages/Leads";
 import KanbanPage from "./pages/Kanban";
+import CalendarioPage from "./pages/CalendarioPage";
 import CampanhasPage from "./pages/Campanhas";
 import CriativosPage from "./pages/Criativos";
 import WebhookPage from "./pages/Webhook";
@@ -45,6 +46,7 @@ const App = () => (
           <Route path="/" element={<ProtectedRoute><ErrorBoundary><DashboardPage /></ErrorBoundary></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
           <Route path="/kanban" element={<ProtectedRoute><KanbanPage /></ProtectedRoute>} />
+          <Route path="/calendario" element={<ProtectedRoute><CalendarioPage /></ProtectedRoute>} />
           <Route path="/campanhas" element={<ProtectedRoute><CampanhasPage /></ProtectedRoute>} />
           <Route path="/criativos" element={<ProtectedRoute><CriativosPage /></ProtectedRoute>} />
           <Route path="/webhook" element={<ProtectedRoute><WebhookPage /></ProtectedRoute>} />
