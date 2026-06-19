@@ -35,6 +35,7 @@ import {
   MessageCircle,
   Clock,
   X,
+  Search,
 } from 'lucide-react';
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -452,6 +453,8 @@ export default function CalendarioPage() {
   const [horariosOrg, setHorariosOrg] = useState<string[]>(['10:00', '12:00', '15:00', '17:00', '19:00']);
   const [savingHorarios, setSavingHorarios] = useState(false);
   const [modalDia, setModalDia]       = useState<{ dateStr: string; leads: CalLead[] } | null>(null);
+  const [modalDiaBusca, setModalDiaBusca] = useState('');
+  const [modalDiaLimite, setModalDiaLimite] = useState(10);
   const [drawerModal, setDrawerModal] = useState<CalLead | null>(null);
   // AgendamentoReuniaoModal — null = fechado; { lead, fromModalDia } = aberto
   const [agendando, setAgendando]     = useState<{ lead: CalLead; fromModalDia: boolean } | null>(null);
@@ -464,6 +467,8 @@ export default function CalendarioPage() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   // Protege o estado otimista de DnD contra sobrescrita do realtime
   const dndProtect = useRef<{ leadId: string; at: string | null; exp: number } | null>(null);
+
+  useEffect(() => { if (modalDia) { setModalDiaBusca(''); setModalDiaLimite(10); } }, [!!modalDia]); // eslint-disable-line
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -863,7 +868,7 @@ export default function CalendarioPage() {
                       )}
                     </div>
                     <div style={{ fontSize: '10px', color: dark ? '#6a6a74' : '#9ca3af', fontWeight: 500 }}>
-                      {total} reunião{total !== 1 ? 'ões' : ''}
+                      {total} reuni{total !== 1 ? 'ões' : 'ão'}
                     </div>
                   </div>
                 )}
@@ -1043,6 +1048,63 @@ export default function CalendarioPage() {
     const d = new Date(modalDia.dateStr + 'T12:00:00');
     const titulo = d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'long' });
 
+    // Filter by search
+    const filtrados = modalDia.leads.filter(l => {
+      if (!modalDiaBusca.trim()) return true;
+      const q = modalDiaBusca.toLowerCase();
+      return (l.nome || '').toLowerCase().includes(q) || (l.whatsapp || '').includes(q);
+    });
+
+    // Group by time slot (hour:minute), preserving horariosOrg order + sem horário
+    const byHora: Record<string, CalLead[]> = {};
+    const semHorario: CalLead[] = [];
+    const horaSet = new Set(horariosOrg);
+    filtrados.forEach(l => {
+      const h = fmtHora(l.reuniao_agendada_at);
+      if (!h) { semHorario.push(l); return; }
+      if (!byHora[h]) byHora[h] = [];
+      byHora[h].push(l);
+    });
+    // Build ordered groups: configured slots first, then any extra times, then sem horário
+    const extraHoras = Object.keys(byHora).filter(h => !horaSet.has(h)).sort();
+    const gruposOrdenados: Array<{ hora: string | null; leads: CalLead[] }> = [
+      ...horariosOrg.filter(h => byHora[h]?.length).map(h => ({ hora: h, leads: byHora[h] })),
+      ...extraHoras.map(h => ({ hora: h, leads: byHora[h] })),
+      ...(semHorario.length ? [{ hora: null, leads: semHorario }] : []),
+    ];
+
+    // For "Ver mais": count total visible across all groups
+    let vistosAte = 0;
+    const limite = modalDiaLimite;
+
+    function renderLeadRow(lead: CalLead) {
+      const ac = getAvatarColor(lead.nome || '', dark, lead.id);
+      const tc = getAvatarTextColor(ac);
+      const rawPhone = (lead.whatsapp || '').replace(/\D/g, '');
+      const wPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+      return (
+        <div key={lead.id} style={{ borderRadius: '12px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)', display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px' }}>
+          <div onClick={() => setDrawerModal(lead)} style={{ width: '36px', height: '36px', borderRadius: '50%', background: ac, color: tc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, flexShrink: 0, cursor: 'pointer' }}>
+            {safeInitials(lead.nome || '')}
+          </div>
+          <div onClick={() => setDrawerModal(lead)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeName(lead.nome) || 'Lead'}</div>
+            {lead.cidade && <div style={{ fontSize: '11px', color: txtLow, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.cidade}</div>}
+          </div>
+          {rawPhone && (
+            <a href={`https://wa.me/${wPhone}`} target="_blank" rel="noreferrer"
+              style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', background: dark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', textDecoration: 'none', flexShrink: 0 }}>
+              <MessageCircle size={14} />
+            </a>
+          )}
+          <button onClick={() => setAgendando({ lead, fromModalDia: true })} title="Reagendar"
+            style={{ width: '32px', height: '32px', borderRadius: '8px', padding: 0, background: dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Calendar size={14} />
+          </button>
+        </div>
+      );
+    }
+
     return createPortal(
       <>
         <div onClick={() => setModalDia(null)} style={{ position: 'fixed', inset: 0, zIndex: 9100, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }} />
@@ -1054,46 +1116,63 @@ export default function CalendarioPage() {
           boxShadow: dark ? '0 24px 64px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.07)' : '0 24px 64px rgba(0,0,0,0.16)',
           fontFamily: FONT,
         }}>
+          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 20px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
             <div style={{ width: '38px', height: '38px', borderRadius: '11px', background: 'rgba(139,92,246,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📅</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3 }}>Reuniões</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3 }}>Reuniões</h3>
+                <span style={{ fontSize: '12px', color: txtLow }}>{modalDia.leads.length} leads</span>
+              </div>
               <p style={{ fontSize: '12px', color: txtLow, margin: 0, textTransform: 'capitalize' }}>{titulo}</p>
             </div>
             <button onClick={() => setModalDia(null)} style={{ width: '30px', height: '30px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: txtLow, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <X size={14} />
             </button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {modalDia.leads.map((lead, li) => {
-              const ac = getAvatarColor(lead.nome || '', dark, lead.id);
-              const tc = getAvatarTextColor(ac);
-              const rawPhone = (lead.whatsapp || '').replace(/\D/g, '');
-              const wPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
-              const faixaCor = lead.faixa === 'verde' ? '#22c55e' : lead.faixa === 'amarelo' ? '#f59e0b' : lead.faixa === 'vermelho' ? '#ef4444' : null;
-              const rowBg = li % 2 === 1 ? (dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)') : 'transparent';
+
+          {/* Search */}
+          <div style={{ padding: '10px 16px 0', flexShrink: 0, position: 'relative' }}>
+            <Search style={{ position: 'absolute', left: '26px', top: '50%', transform: 'translateY(-50%)', width: '13px', height: '13px', color: txtLow, pointerEvents: 'none' }} />
+            <input
+              placeholder="Buscar lead..."
+              value={modalDiaBusca}
+              onChange={e => { setModalDiaBusca(e.target.value); setModalDiaLimite(10); }}
+              style={{ width: '100%', padding: '7px 10px 7px 30px', borderRadius: '8px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.05)' : '#f9fafb', color: txtHi, fontSize: '13px', outline: 'none', fontFamily: FONT, boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Groups */}
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '420px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {gruposOrdenados.map(({ hora, leads: gLeads }) => {
+              const leadsVisiveis: CalLead[] = [];
+              for (const l of gLeads) {
+                if (vistosAte >= limite) break;
+                leadsVisiveis.push(l);
+                vistosAte++;
+              }
+              if (leadsVisiveis.length === 0) return null;
               return (
-                <div key={lead.id} style={{ borderRadius: '12px', border: `1px solid ${border}`, background: rowBg, display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px' }}>
-                  <div onClick={() => setDrawerModal(lead)} style={{ width: '36px', height: '36px', borderRadius: '50%', background: ac, color: tc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, flexShrink: 0, cursor: 'pointer' }}>
-                    {safeInitials(lead.nome || '')}
+                <div key={hora ?? 'sem-hora'}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Clock size={11} />
+                    {hora ?? 'Sem horário'}
+                    <span style={{ color: txtLow, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>{gLeads.length} lead{gLeads.length !== 1 ? 's' : ''}</span>
                   </div>
-                  <div onClick={() => setDrawerModal(lead)} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeName(lead.nome) || 'Lead'}</div>
-                    {lead.cidade && <div style={{ fontSize: '11px', color: txtLow, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.cidade}</div>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {leadsVisiveis.map(l => renderLeadRow(l))}
                   </div>
-                  {rawPhone && (
-                    <a href={`https://wa.me/${wPhone}`} target="_blank" rel="noreferrer"
-                      style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', background: dark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', textDecoration: 'none', flexShrink: 0 }}>
-                      <MessageCircle size={14} />
-                    </a>
-                  )}
-                  <button onClick={() => setAgendando({ lead, fromModalDia: true })}
-                    style={{ height: '32px', borderRadius: '8px', padding: '0 12px', background: dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-                    <Calendar size={12} />Reagendar
-                  </button>
                 </div>
               );
             })}
+            {filtrados.length > limite && (
+              <button
+                onClick={() => setModalDiaLimite(l => l + 10)}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: '#8b5cf6', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: FONT, marginTop: '4px' }}
+              >
+                Ver mais {filtrados.length - limite} leads ↓
+              </button>
+            )}
           </div>
         </div>
       </>,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle, Users, Check, X as XIcon, Calendar as CalendarIcon, User as UserIcon } from 'lucide-react';
+import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Download, MoreHorizontal, MessageCircle, Users, Check, X as XIcon, Calendar as CalendarIcon, User as UserIcon, Search } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -499,6 +499,8 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
   const [leadsCarregados, setLeadsCarregados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalSlot, setModalSlot] = useState<{ hora: string; dia: string; leads: any[] } | null>(null);
+  const [slotBusca, setSlotBusca] = useState('');
+  const [slotLimite, setSlotLimite] = useState(10);
   const [showMesPicker, setShowMesPicker] = useState(false);
   const [anoPicker, setAnoPicker] = useState(() => new Date().getFullYear());
   const [horariosOrg, setHorariosOrg] = useState<string[]>(['10:00','12:00','15:00','17:00','19:00']);
@@ -552,6 +554,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
   // Ref para janela da semana — evita stale closure na subscription
   const semanaRef = useRef({ inicio: inicioSemana, fim: fimSemana });
   useEffect(() => { semanaRef.current = { inicio: inicioSemana, fim: fimSemana }; }, [inicioSemana, fimSemana]);
+  useEffect(() => { if (modalSlot) { setSlotBusca(''); setSlotLimite(10); } }, [!!modalSlot]); // eslint-disable-line
 
   useEffect(() => {
     if (!orgId) return;
@@ -803,7 +806,10 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 20px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
               <div style={{ width: '38px', height: '38px', borderRadius: '11px', background: 'rgba(139,92,246,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>📅</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3 }}>Reuniões às {modalSlot.hora}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 700, color: txtHi, margin: 0, lineHeight: 1.3 }}>Reuniões às {modalSlot.hora}</h3>
+                  <span style={{ fontSize: '12px', color: txtLow }}>{modalSlot.leads.length} leads</span>
+                </div>
                 <p style={{ fontSize: '12px', color: txtLow, margin: 0 }}>
                   {(() => {
                     const d = new Date(modalSlot.dia + 'T12:00:00');
@@ -818,9 +824,28 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
               </button>
             </div>
 
+            {/* Search */}
+            <div style={{ padding: '10px 16px 0', flexShrink: 0, position: 'relative' }}>
+              <Search style={{ position: 'absolute', left: '26px', top: '50%', transform: 'translateY(-50%)', width: '13px', height: '13px', color: txtLow, pointerEvents: 'none' }} />
+              <input
+                placeholder="Buscar lead..."
+                value={slotBusca}
+                onChange={e => { setSlotBusca(e.target.value); setSlotLimite(10); }}
+                style={{ width: '100%', padding: '7px 10px 7px 30px', borderRadius: '8px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.05)' : '#f9fafb', color: txtHi, fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              />
+            </div>
+
             {/* Lead list */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {modalSlot.leads.map((lead: any, li: number) => {
+            <div style={{ flex: 1, overflowY: 'auto', maxHeight: '420px', padding: '12px 16px' }}>
+              {(() => {
+                const leadsFiltrados = modalSlot.leads.filter((lead: any) => {
+                  if (!slotBusca.trim()) return true;
+                  const q = slotBusca.toLowerCase();
+                  return (lead.nome || '').toLowerCase().includes(q) || (lead.whatsapp || '').includes(q);
+                });
+                const visiveis = leadsFiltrados.slice(0, slotLimite);
+                return (<>
+                  {visiveis.map((lead: any, li: number) => {
                 const ac = getAvatarColor(lead.nome || '', dark, lead.id);
                 const tc = getAvatarTextColor(ac);
                 const rawPhone = (lead.whatsapp || '').replace(/\D/g, '');
@@ -829,7 +854,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
                 const isReag = leadReagendando === lead.id;
                 const rowBg = li % 2 === 1 ? (dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)') : 'transparent';
                 return (
-                  <div key={lead.id} style={{ borderRadius: '12px', border: `1px solid ${isReag ? 'rgba(139,92,246,0.35)' : border}`, background: isReag ? (dark ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.03)') : rowBg, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+                  <div key={lead.id} style={{ borderRadius: '12px', border: `1px solid ${isReag ? 'rgba(139,92,246,0.35)' : border}`, background: isReag ? (dark ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.03)') : rowBg, overflow: 'hidden', transition: 'border-color 0.15s', marginBottom: '8px' }}>
 
                     {/* Linha única: avatar + nome + WA + Reagendar */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px' }}>
@@ -865,8 +890,8 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
                           }
                           setLeadReagendando(lead.id);
                         }}
-                        style={{ height: '32px', borderRadius: '8px', padding: '0 12px', background: isReag ? '#8b5cf6' : (dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)'), border: `1px solid ${isReag ? '#8b5cf6' : 'rgba(139,92,246,0.3)'}`, color: isReag ? '#fff' : '#8b5cf6', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, transition: 'all 0.15s' }}>
-                        <CalendarIcon style={{ width: '12px', height: '12px' }} />{isReag ? 'Fechar' : 'Reagendar'}
+                        style={isReag ? { height: '32px', borderRadius: '8px', padding: '0 10px', background: '#8b5cf6', border: '1px solid #8b5cf6', color: '#fff', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, transition: 'all 0.15s' } : { width: '32px', height: '32px', borderRadius: '8px', padding: 0, background: dark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: '#8b5cf6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                        <CalendarIcon style={{ width: '13px', height: '13px' }} />{isReag ? 'Fechar' : ''}
                       </button>
                     </div>
 
@@ -956,7 +981,17 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
                     })()}
                   </div>
                 );
-              })}
+                  })}
+                  {leadsFiltrados.length > slotLimite && (
+                    <button
+                      onClick={() => setSlotLimite(l => l + 10)}
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: '#8b5cf6', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginTop: '4px' }}
+                    >
+                      Ver mais {leadsFiltrados.length - slotLimite} leads ↓
+                    </button>
+                  )}
+                </>);
+              })()}
             </div>
           </div>
         </>,
