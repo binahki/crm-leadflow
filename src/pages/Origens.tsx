@@ -222,7 +222,6 @@ const PERIODO_OPTIONS: { value: Periodo; label: string }[] = [
   { value: 'custom',    label: 'Personalizado' },
 ];
 
-const RANK_COLORS = ['#f59e0b', '#94a3b8', '#cd7c3e'];
 
 const META_PRESET: Record<string, string> = {
   today: 'today', yesterday: 'yesterday', '7days': 'last_7d', '30days': 'last_30d', month: 'this_month',
@@ -485,8 +484,6 @@ export default function Origens() {
   const totalRevendedoras = revsNoPeriodo.length;
   const totalInvestimento = useMemo(() => canaisData.reduce((sum, d) => sum + d.investimento, 0), [canaisData]);
   const totalCPR = totalRevendedoras > 0 && totalInvestimento > 0 ? totalInvestimento / totalRevendedoras : null;
-  const maxRev = useMemo(() => Math.max(...canaisDisplay.map(d => d.revendedoras), 1), [canaisDisplay]);
-  const canaisComLeads = useMemo(() => canaisDisplay.filter(d => d.leads > 0), [canaisDisplay]);
 
   // ── Period selection ──────────────────────────────────────────────────────
 
@@ -520,19 +517,7 @@ export default function Origens() {
   const ink     = isDark ? '#f0f0f2'                  : '#0f0f11';
   const muted   = isDark ? 'rgba(240,240,242,0.42)'   : '#737380';
   const track   = isDark ? '#222228'                  : '#ebebed';
-  const divLine = isDark ? 'rgba(255,255,255,0.06)'   : '#f3f4f6';
-  const sep     = isDark ? 'rgba(255,255,255,0.10)'   : '#e2e8f0';
 
-  const badgeSt = (tipo: BadgeTipo): React.CSSProperties => {
-    const cfg: Record<BadgeTipo, { bg: string; color: string }> = {
-      verde:  { bg: isDark ? 'rgba(16,185,129,0.15)'   : 'rgba(16,185,129,0.12)',  color: isDark ? '#34d399' : '#059669' },
-      azul:   { bg: isDark ? 'rgba(37,99,235,0.18)'    : 'rgba(37,99,235,0.10)',   color: isDark ? '#60a5fa' : '#1d4ed8' },
-      ambar:  { bg: isDark ? 'rgba(245,158,11,0.18)'   : 'rgba(245,158,11,0.12)',  color: isDark ? '#fbbf24' : '#b45309' },
-      neutro: { bg: isDark ? 'rgba(148,163,184,0.12)'  : 'rgba(107,114,128,0.10)', color: isDark ? '#94a3b8' : '#52525b' },
-    };
-    const { bg, color } = cfg[tipo];
-    return { background: bg, color, fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '999px', whiteSpace: 'nowrap' as const, flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' };
-  };
 
   const lbl: React.CSSProperties = {
     display: 'block', fontSize: '11px', fontWeight: 600, color: muted,
@@ -552,14 +537,14 @@ export default function Origens() {
       <style>{`
         @keyframes _spin{to{transform:rotate(360deg)}}
         .ori-wrap { max-width: 1160px; margin: 0 auto; padding: 28px 24px 80px; }
-        .ori-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
-        .ori-canais  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 28px; align-items: start; }
-        .ori-rank-nome { width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 640px) {
+        .ori-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        .ori-table-grid { display: grid; grid-template-columns: 196px 1fr 1fr 1fr 1fr 84px; }
+        .ori-mobile-cards { display: none; }
+        @media (max-width: 700px) {
           .ori-wrap    { padding: 16px 14px 60px; }
-          .ori-summary { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 18px; }
-          .ori-canais  { grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
-          .ori-rank-nome { width: 100px; }
+          .ori-summary { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+          .ori-table-wrap { display: none !important; }
+          .ori-mobile-cards { display: flex; flex-direction: column; gap: 10px; }
         }
       `}</style>
       <div style={{ background: surface, minHeight: '100vh' }}>
@@ -617,167 +602,142 @@ export default function Origens() {
             </div>
           </div>
 
-          {/* ── Loading ──────────────────────────────────────────────────── */}
+          {/* ── Loading ── */}
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '100px 0' }}>
               <Loader2 style={{ width: '22px', height: '22px', color: muted, animation: '_spin 0.8s linear infinite' }} />
             </div>
-
           ) : (
             <>
-              {/* ── 4 summary cards — limpos, sem border-top ────────────────── */}
+              {/* ── Summary — 4 cards compactos ── */}
               <div className="ori-summary">
                 {[
-                  {
-                    label: 'Valor Gasto',
-                    value: totalInvestimento > 0
-                      ? `R$ ${totalInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : '—',
-                    color: totalInvestimento > 0 ? ink : muted,
-                  },
-                  {
-                    label: 'Leads totais',
-                    value: totalLeads.toLocaleString('pt-BR'),
-                    color: ink,
-                  },
-                  {
-                    label: term.convertidoPlural,
-                    value: totalRevendedoras.toLocaleString('pt-BR'),
-                    color: '#10b981',
-                  },
-                  {
-                    label: `Custo por ${term.convertidoSingular}`,
-                    value: totalCPR != null ? `R$ ${Math.round(totalCPR).toLocaleString('pt-BR')}` : '—',
-                    color: totalCPR != null ? ink : muted,
-                  },
+                  { label: 'Valor Gasto', value: totalInvestimento > 0 ? `R$ ${totalInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—', color: totalInvestimento > 0 ? ink : muted },
+                  { label: 'Leads', value: totalLeads > 0 ? totalLeads.toLocaleString('pt-BR') : '—', color: ink },
+                  { label: term.convertidoPlural, value: totalRevendedoras > 0 ? totalRevendedoras.toLocaleString('pt-BR') : '—', color: '#10b981' },
+                  { label: 'CPR', value: totalCPR != null ? `R$ ${Math.round(totalCPR).toLocaleString('pt-BR')}` : '—', color: totalCPR != null ? ink : muted },
                 ].map(({ label, value, color }) => (
-                  <div key={label} style={{ background: card, border: `1px solid ${line}`, borderRadius: '10px', padding: '16px 20px', boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.04)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: '8px' }}>{label}</div>
-                    <div style={{ fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 700, color, lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</div>
+                  <div key={label} style={{ background: card, border: `1px solid ${line}`, borderRadius: '10px', padding: '14px 18px', boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.04)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: '6px' }}>{label}</div>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color, lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</div>
                   </div>
                 ))}
               </div>
 
-              {/* ── Canal cards — 2 colunas, borda colorida, altura própria ── */}
-              <div className="ori-canais">
-                {canaisDisplay.map(d => {
+              {/* ── Canal table — desktop ── */}
+              <div className="ori-table-wrap" style={{ background: card, border: `1px solid ${line}`, borderRadius: '12px', overflow: 'hidden', boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+
+                {/* Header row */}
+                <div className="ori-table-grid" style={{ background: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.022)', borderBottom: `1px solid ${line}` }}>
+                  {(['Canal', 'Invest', 'Leads', term.convertidoPlural, 'CPR', 'Conv.'] as const).map((h, i) => (
+                    <div key={h} style={{ padding: '9px 16px', fontSize: '10px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.07em', borderLeft: i > 0 ? `1px solid ${line}` : 'none', textAlign: i === 5 ? 'center' : 'left' as const }}>
+                      {h}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Data rows */}
+                {canaisDisplay.map((d, idx) => {
                   const isEmpty = d.leads === 0;
                   const participacao = totalLeads > 0 ? Math.round((d.leads / totalLeads) * 100) : 0;
-
-                  const cprDisplay = d.cpr != null
-                    ? `R$ ${d.cpr.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                    : '—';
-                  const cprColor = d.cpr != null ? ink : (isDark ? 'rgba(255,255,255,0.20)' : '#d1d5db');
-
-                  const metricLbl: React.CSSProperties = {
-                    fontSize: '10px', fontWeight: 600, letterSpacing: '0.07em',
-                    color: isDark ? 'rgba(255,255,255,0.30)' : '#9ca3af',
-                    textTransform: 'uppercase' as const, marginTop: '5px',
-                  };
-
-                  const footerMuted = isDark ? 'rgba(255,255,255,0.28)' : '#9ca3af';
-                  const secInk = isDark ? 'rgba(240,240,242,0.85)' : '#1e293b';
-                  const Icon = CANAL_ICON[d.canal as CanalIconKey] ?? HelpCircle;
-
-                  const gastoDisplay = d.investimento > 0
-                    ? `R$ ${d.investimento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                    : '—';
-                  const gastoColor = d.investimento > 0 ? secInk : (isDark ? 'rgba(255,255,255,0.20)' : '#d1d5db');
-
-                  const convLine = isEmpty ? null : `${d.taxaConversao}% de conversão · ${participacao}% dos leads`;
+                  const dim = isDark ? 'rgba(255,255,255,0.18)' : '#c8cdd6';
+                  const cellNum: React.CSSProperties = { fontSize: '16px', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.01em' };
 
                   return (
-                    <div key={d.canal} style={{ background: card, borderRadius: '10px', border: `1px solid ${line}`, borderTop: `3px solid ${d.cor}`, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: isEmpty ? 0.35 : 1, boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    <div key={d.canal} className="ori-table-grid" style={{ borderBottom: idx < canaisDisplay.length - 1 ? `1px solid ${line}` : 'none', opacity: isEmpty ? 0.4 : 1, transition: 'opacity 0.15s' }}>
 
-                      {/* Header — limpo, sem badge */}
-                      <div style={{ padding: '16px 20px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                          <Icon size={14} style={{ color: d.cor, flexShrink: 0 }} />
-                          <span style={{ fontSize: '14px', fontWeight: 700, color: ink, letterSpacing: '-0.015em' }}>{d.canal}</span>
+                      {/* Canal identity */}
+                      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRight: `1px solid ${line}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.cor, flexShrink: 0 }} />
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: ink, letterSpacing: '-0.01em' }}>{d.canal}</span>
+                          {d.badge && (
+                            <span style={{ fontSize: '9px', fontWeight: 700, color: d.cor, background: `${d.cor}1a`, padding: '2px 7px', borderRadius: '99px', whiteSpace: 'nowrap' as const }}>
+                              {d.badge.texto}
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: '11px', color: muted, marginTop: '3px', paddingLeft: '21px' }}>{d.desc}</div>
+                        <div style={{ fontSize: '11px', color: muted, marginTop: '4px', paddingLeft: '16px' }}>{d.desc}</div>
                       </div>
 
-                      {/* Métricas: Revendedoras | Custo/Rev com separador nítido */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${divLine}` }}>
-                        <div style={{ padding: '16px 20px', borderRight: `1px solid ${sep}` }}>
-                          <div style={{ fontSize: '32px', fontWeight: 700, color: '#10b981', lineHeight: 1, letterSpacing: '-0.03em' }}>
-                            {isEmpty ? '—' : d.revendedoras}
-                          </div>
-                          <div style={metricLbl}>{term.convertidoPlural}</div>
-                        </div>
-                        <div style={{ padding: '16px 20px' }}>
-                          <div style={{ fontSize: '32px', fontWeight: 700, color: cprColor, lineHeight: 1, letterSpacing: '-0.03em' }}>
-                            {isEmpty ? '—' : cprDisplay}
-                          </div>
-                          <div style={metricLbl}>Custo/{term.convertidoCurto}</div>
+                      {/* Invest */}
+                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', borderRight: `1px solid ${line}` }}>
+                        <div style={{ ...cellNum, color: d.investimento > 0 ? ink : dim }}>
+                          {d.investimento > 0 ? `R$ ${Math.round(d.investimento).toLocaleString('pt-BR')}` : '—'}
                         </div>
                       </div>
 
-                      {/* Métricas secundárias: Leads | Gasto */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${divLine}`, background: isDark ? 'rgba(255,255,255,0.02)' : '#fafafa' }}>
-                        <div style={{ padding: '10px 20px', borderRight: `1px solid ${sep}` }}>
-                          <div style={{ fontSize: '16px', fontWeight: 700, color: isEmpty ? (isDark ? 'rgba(255,255,255,0.20)' : '#d1d5db') : secInk, lineHeight: 1, letterSpacing: '-0.01em' }}>
-                            {isEmpty ? '—' : d.leads.toLocaleString('pt-BR')}
-                          </div>
-                          <div style={metricLbl}>Leads</div>
+                      {/* Leads */}
+                      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRight: `1px solid ${line}` }}>
+                        <div style={{ ...cellNum, color: d.leads > 0 ? ink : dim }}>
+                          {d.leads > 0 ? d.leads.toLocaleString('pt-BR') : '—'}
                         </div>
-                        <div style={{ padding: '10px 20px' }}>
-                          <div style={{ fontSize: '16px', fontWeight: 700, color: isEmpty ? (isDark ? 'rgba(255,255,255,0.20)' : '#d1d5db') : gastoColor, lineHeight: 1, letterSpacing: '-0.01em' }}>
-                            {isEmpty ? '—' : gastoDisplay}
-                          </div>
-                          <div style={metricLbl}>Gasto</div>
-                        </div>
-                      </div>
-
-                      {/* Rodapé: conversão + badge */}
-                      <div style={{ padding: '8px 20px 10px', borderTop: `1px solid ${divLine}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ fontSize: '11px', color: footerMuted }}>
-                          {isEmpty ? 'Sem dados no período' : convLine}
-                        </div>
-                        {d.badge && (
-                          <span style={{ fontSize: '10px', fontWeight: 700, color: d.cor, flexShrink: 0, letterSpacing: '0.02em' }}>
-                            {d.badge.texto}
-                          </span>
+                        {d.leads > 0 && totalLeads > 0 && (
+                          <div style={{ fontSize: '10px', color: muted, marginTop: '3px' }}>{participacao}% do total</div>
                         )}
+                      </div>
+
+                      {/* Revendedoras — protagonista */}
+                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', borderRight: `1px solid ${line}` }}>
+                        <div style={{ fontSize: '20px', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', color: d.revendedoras > 0 ? '#10b981' : dim }}>
+                          {d.revendedoras > 0 ? d.revendedoras : '—'}
+                        </div>
+                      </div>
+
+                      {/* CPR */}
+                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', borderRight: `1px solid ${line}` }}>
+                        <div style={{ ...cellNum, color: d.cpr != null ? ink : dim }}>
+                          {d.cpr != null ? `R$ ${Math.round(d.cpr).toLocaleString('pt-BR')}` : '—'}
+                        </div>
+                      </div>
+
+                      {/* Conv. + mini bar */}
+                      <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: d.taxaConversao > 0 ? ink : dim }}>
+                          {d.taxaConversao > 0 ? `${d.taxaConversao}%` : '—'}
+                        </div>
+                        <div style={{ width: '48px', height: '3px', background: track, borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(participacao, 100)}%`, height: '100%', background: d.cor, borderRadius: '2px', transition: 'width 0.5s ease-out' }} />
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* ── Ranking visual (só se >= 2 canais com leads) ─────────── */}
-              {canaisComLeads.length >= 2 && (
-                <div style={{ background: card, borderRadius: '12px', border: `1px solid ${line}`, padding: '20px 24px', boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.04)' }}>
-                  <h2 style={{ margin: '0 0 20px', fontSize: '14px', fontWeight: 700, color: ink }}>Ranking de Origens</h2>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {canaisComLeads.map((d, i) => {
-                      const RankIcon = CANAL_ICON[d.canal as CanalIconKey] ?? HelpCircle;
-                      const rankColor = i < 3 ? RANK_COLORS[i] : muted;
-                      return (
-                        <div key={d.canal} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '20px', flexShrink: 0, textAlign: 'center' as const, fontSize: '12px', fontWeight: 700, color: rankColor }}>
-                            {i + 1}
+              {/* ── Canal cards — mobile fallback ── */}
+              <div className="ori-mobile-cards">
+                {canaisDisplay.map(d => {
+                  const isEmpty = d.leads === 0;
+                  const participacao = totalLeads > 0 ? Math.round((d.leads / totalLeads) * 100) : 0;
+                  return (
+                    <div key={d.canal} style={{ background: card, border: `1px solid ${line}`, borderTop: `2px solid ${d.cor}`, borderRadius: '10px', padding: '14px 16px', opacity: isEmpty ? 0.42 : 1, boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.04)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                        <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: d.cor, flexShrink: 0 }} />
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: ink }}>{d.canal}</span>
+                        {d.badge && <span style={{ fontSize: '9px', fontWeight: 700, color: d.cor }}>{d.badge.texto}</span>}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                        {[
+                          { label: term.convertidoPlural, value: d.revendedoras > 0 ? String(d.revendedoras) : '—', big: true },
+                          { label: 'Leads', value: d.leads > 0 ? String(d.leads) : '—', big: false },
+                          { label: 'CPR', value: d.cpr != null ? `R$${Math.round(d.cpr)}` : '—', big: false },
+                        ].map(({ label, value, big }) => (
+                          <div key={label}>
+                            <div style={{ fontSize: big ? '18px' : '15px', fontWeight: big ? 800 : 700, color: ink, lineHeight: 1 }}>{value}</div>
+                            <div style={{ fontSize: '9px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginTop: '3px' }}>{label}</div>
                           </div>
-                          <RankIcon size={14} style={{ color: d.cor, flexShrink: 0 }} />
-                          <span className="ori-rank-nome" style={{ fontSize: '13px', fontWeight: 600, color: ink }}>
-                            {d.canal}
-                          </span>
-                          <div style={{ flex: 1, height: '6px', background: track, borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${maxRev > 0 ? (d.revendedoras / maxRev) * 100 : 0}%`, background: d.cor, borderRadius: '3px', transition: 'width 0.6s ease' }} />
-                          </div>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#10b981', width: '30px', textAlign: 'right' as const, flexShrink: 0 }}>
-                            {d.revendedoras}
-                          </span>
-                          <span style={{ fontSize: '12px', color: muted, width: '42px', textAlign: 'right' as const, flexShrink: 0 }}>
-                            {d.taxaConversao}%
-                          </span>
+                        ))}
+                      </div>
+                      {!isEmpty && (
+                        <div style={{ fontSize: '11px', color: muted, marginTop: '10px' }}>
+                          {d.taxaConversao}% conv. · {participacao}% dos leads
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>

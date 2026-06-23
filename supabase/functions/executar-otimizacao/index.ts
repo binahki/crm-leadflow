@@ -182,11 +182,14 @@ Deno.serve(async (req) => {
         const tipo = (acao.tipo || "").toLowerCase();
         console.log(`[executar] tipo="${tipo}" id="${acao.id}"`);
 
+        const isIncrease = tipo.includes("aumentar") || acao.direcao === "aumento";
+        const isDecrease = tipo.includes("reduzir") || acao.direcao === "reducao";
+
         if (tipo.includes("pausar")) {
           const { success, erro } = await pausarComFallback(acao.id, org.meta_token);
           acoesExecutadas.push({ ...acao, novo_budget: undefined, automatico: false, ok: success, erro, executado_em: new Date().toISOString() });
           if (success) okCount++;
-        } else if (tipo.includes("aumentar")) {
+        } else if (isIncrease) {
           const atual = Number(acao.antigo_budget || 0);
           let novo = Number(acao.novo_budget || 0);
           if (atual <= 0 || novo <= 0) continue;
@@ -201,7 +204,7 @@ Deno.serve(async (req) => {
           const budgetOk = data.success === true;
           acoesExecutadas.push({ ...acao, novo_budget: novo, automatico: false, ok: budgetOk, erro: data.error?.message || (budgetOk ? null : JSON.stringify(data)), executado_em: new Date().toISOString() });
           if (budgetOk) okCount++;
-        } else if (tipo.includes("reduzir")) {
+        } else if (isDecrease) {
           const atual = Number(acao.antigo_budget || 0);
           let novo = Number(acao.novo_budget || 0);
           if (atual <= 0 || novo <= 0 || novo >= atual) continue;

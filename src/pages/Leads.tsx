@@ -160,6 +160,20 @@ function toStatusNum(s: any): number {
   if(s===null||s===undefined||s==='')return 1; const n=Number(s); if(isNaN(n)||n===0)return 1; return n;
 }
 
+const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
+  0: 'status_atendimento_at',
+  1: 'status_atendimento_at',
+  2: 'status_reuniao_at',
+  3: 'status_aprovado_at',
+  5: 'status_contrato_at',
+  6: 'status_sem_retorno_at',
+};
+
+function getStatusMoveDate(lead: Lead, statusId = toStatusNum(lead.status)): string | null {
+  const field = STATUS_TIMESTAMP_FIELD[statusId];
+  return (field ? (lead as any)[field] : null) || (lead as any).ultimo_status_change || null;
+}
+
 function extractCampaignName(utmCampaign: string | null | undefined): string {
   if (!utmCampaign) return '';
   const parts = String(utmCampaign).split('|');
@@ -1349,16 +1363,7 @@ function LeadsPage() {
       ? parseInt(statusFilter)
       : (campDeepFilter?.showRevs ? 3 : null);
     const getRef = (l: Lead): string | null | undefined => {
-      const la = l as any;
-      switch (statusNum) {
-        case 1: return la.status_atendimento_at || la.ultimo_status_change || l.created_at;
-        case 2: return la.status_reuniao_at     || la.ultimo_status_change || l.created_at;
-        case 3: return la.status_aprovado_at    || la.ultimo_status_change || l.created_at;
-        case 4: return la.ultimo_status_change  || l.created_at;
-        case 5: return la.status_contrato_at    || la.ultimo_status_change || l.created_at;
-        case 6: return la.status_sem_retorno_at || la.ultimo_status_change || l.created_at;
-        default: return l.created_at; // sem filtro de status: usa data de entrada
-      }
+      return statusNum ? getStatusMoveDate(l, statusNum) : l.created_at;
     };
 
     r = filterByPeriod(r, periodFilter, customFrom, customTo, getRef);
@@ -1505,8 +1510,8 @@ function LeadsPage() {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
       r = [...r].sort((a, b) => {
-        const da = parseLeadDate(a.created_at).getTime();
-        const db = parseLeadDate(b.created_at).getTime();
+        const da = parseLeadDate(getStatusMoveDate(a)).getTime();
+        const db = parseLeadDate(getStatusMoveDate(b)).getTime();
         return sortByDate === 'desc' ? db - da : da - db;
       });
     }
@@ -2194,7 +2199,7 @@ function LeadsPage() {
                             </span>
                           );
                         })()}
-                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(lead.created_at)}</span>
+                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(getStatusMoveDate(lead))}</span>
                       </div>
                     </div>
                   </div>
@@ -2238,7 +2243,7 @@ function LeadsPage() {
                   <th className={`text-center px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Status</th>
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
                     <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#6b6b75' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
-                      Entrada {sortByDate === 'desc' ? '↓' : '↑'}
+                      Movido {sortByDate === 'desc' ? '↓' : '↑'}
                     </button>
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Ações</th>
@@ -2319,7 +2324,7 @@ function LeadsPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(getStatusMoveDate(lead))}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4, borderRadius:'8px' }}><MessageCircle className="w-3.5 h-3.5"/></button>

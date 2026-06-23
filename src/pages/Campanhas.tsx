@@ -3043,19 +3043,39 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const cardBg = dark ? '#161619' : '#fff';
+  const campanhaMestre = log.campanha_mestre || null;
 
   const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
+  function limparInsight(texto: string): string {
+    if (!texto) return '';
+    let limpo = texto.replace(/\([^)]{0,120}\)/g, '');
+    limpo = limpo.replace(/\s{2,}/g, ' ').trim();
+    const frases = limpo.split(/(?<=[.!?])\s+/).filter(f => f.trim().length > 10);
+    return frases.slice(0, 3).join(' ');
+  }
+
+  function truncarAlerta(texto: string): string {
+    if (!texto) return '';
+    const frases = texto.split(/(?<=[.!?])\s+/);
+    return frases.slice(0, 2).join(' ');
+  }
+
   const isPendente = log.status === 'pendente';
   const isSemAcao = log.status === 'sem_acao';
+  const isErro = log.status === 'erro';
+  const metaAlertas = Array.isArray(log.meta_alertas) ? log.meta_alertas : [];
   const headerTitle = isSemAcao
     ? 'Ravena analisou suas campanhas — tudo estável'
-    : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
+    : isErro ? 'Problema na sincronização da Meta'
+      : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
   const headerSub = isSemAcao
     ? 'Nenhuma ação necessária hoje'
-    : isPendente
-      ? 'Revise e aprove as otimizações recomendadas'
-      : `Hoje às ${new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    : isErro
+      ? 'Veja o motivo antes de esperar novos resultados'
+      : isPendente
+        ? 'Revise e aprove as otimizações recomendadas'
+        : `Hoje às ${new Date(log.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
   async function aplicarSugestao(acao: any) {
     const uid = acao.id;
@@ -3079,7 +3099,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, ok: true }] : []),
       ];
       if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
-      onCampaignStatusChange?.(acao.id, acao.tipo, 'PAUSED');
+      if ((acao.tipo || '').toLowerCase().includes('pausar')) {
+        onCampaignStatusChange?.(acao.id, acao.tipo, 'PAUSED');
+      }
       setToast?.({ msg: 'Ação aplicada com sucesso', ok: true });
     } catch {
       setToast?.({ msg: 'Erro ao conectar — tente novamente', ok: false });
@@ -3105,6 +3127,36 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     }
     if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novoStatus });
     if (novas.length === 0) setTimeout(() => onClose(), 1000);
+  }
+
+  async function marcarCampanhaCriada() {
+    if (!campanhaMestre) return;
+    const executada = {
+      tipo: 'criar_campanha',
+      ok: true,
+      automatico: false,
+      campanha_base: campanhaMestre.campanha_base,
+      campanha_base_id: campanhaMestre.campanha_base_id,
+      publico: campanhaMestre.publico,
+      criativo: campanhaMestre.criativo,
+      budget_diario_sugerido: campanhaMestre.budget_diario_sugerido,
+      executado_em: new Date().toISOString(),
+    };
+    const novasExecutadas = [...(log.acoes_executadas || []), executada];
+    const novoStatus = sugestoes.length === 0 ? 'executado' : log.status;
+    const updated = { ...log, campanha_mestre: null, acoes_executadas: novasExecutadas, status: novoStatus };
+    try {
+      const { error } = await (supabase as any)
+        .from('ai_optimization_logs')
+        .update({ campanha_mestre: null, acoes_executadas: novasExecutadas, status: novoStatus })
+        .eq('id', log.id);
+      if (error) throw error;
+      onLogUpdate?.(updated);
+      setToast?.({ msg: 'Sugestão de campanha marcada como criada', ok: true });
+      setTimeout(() => setToast?.(null), 3500);
+    } catch {
+      setToast?.({ msg: 'Não consegui fechar essa sugestão agora', ok: false });
+    }
   }
 
   return (
@@ -3133,7 +3185,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               {/* Avatar Ravena */}
-              <img src="/ravena.png" alt="Ravena" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 16px rgba(139,92,246,0.4)' }} />
+              <img src="/ravena.png" alt="Ravena" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 14px rgba(239,68,68,0.32)' : '0 0 14px rgba(139,92,246,0.28)' }} />
               <div>
                 <h2 style={{ fontSize: '17px', fontWeight: 800, color: txtHi, margin: 0, letterSpacing: '-0.02em' }}>{headerTitle}</h2>
                 <p style={{ fontSize: '12px', color: txtMid, margin: '3px 0 0' }}>{headerSub}</p>
@@ -3186,7 +3238,37 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
             );
           })()}
 
+          {(log.resumo_contextual || log.resumo) && (
+            <div style={{ padding: '14px 16px', margin: '0 24px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}`, marginBottom: '4px' }}>
+              <p style={{ fontSize: '13px', color: txtMid, margin: 0, lineHeight: 1.6 }}>
+                {(log.resumo_contextual || log.resumo).split('.')[0] + '.'}
+              </p>
+            </div>
+          )}
+
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+            {(isErro || metaAlertas.length > 0) && (
+              <div style={{ padding: '14px', borderRadius: '14px', background: dark ? 'rgba(239,68,68,0.08)' : '#fef2f2', border: '1px solid rgba(239,68,68,0.18)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <AlertTriangle size={15} color="#dc2626" />
+                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 800, color: '#dc2626' }}>Atenção na Meta</p>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: dark ? '#fecaca' : '#7f1d1d', lineHeight: 1.5 }}>
+                  {log.alerta || 'A Meta sinalizou um problema que pode impedir a entrega.'}
+                </p>
+                {metaAlertas.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'grid', gap: '6px' }}>
+                    {metaAlertas.slice(0, 3).map((item: any, i: number) => (
+                      <div key={item.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
+                        <span style={{ color: dark ? '#fee2e2' : '#991b1b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nome}</span>
+                        <span style={{ color: '#dc2626', fontWeight: 800 }}>{item.status_facebook}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Feito automaticamente — automatico === true */}
             {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).length > 0 && (
@@ -3268,78 +3350,77 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
             {log.insight_do_dia && (
               <div style={{ padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.2)' }}>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
-                  💡 Observação do dia
+                  🔍 O que a Ravena encontrou
                 </p>
                 <p style={{ fontSize: '13px', color: dark ? '#c4b5fd' : '#6d28d9', margin: 0, lineHeight: 1.6 }}>
-                  {log.insight_do_dia}
+                  {limparInsight(log.insight_do_dia)}
                 </p>
               </div>
             )}
 
             {/* Campanhas analisadas */}
-            {log.insights?.length > 0 && (
+            {(log.analise_campanhas || []).length > 0 && (
               <div>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que analisei hoje</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {log.insights.map((item: any, i: number) => {
-                    // Verifica se essa campanha tem ação executada automaticamente
+                  {(log.analise_campanhas || []).map((acao: any, i: number) => {
                     const acaoExec = (log.acoes_executadas || []).find((a: any) =>
-                      (a.nome || a.campanha_nome || '').toLowerCase() === (item.campanha_nome || '').toLowerCase()
+                      (a.nome || a.campanha_nome || '').toLowerCase() === (acao.campanha_nome || '').toLowerCase()
                     );
-                    // Verifica se tem sugestão pendente de aprovação
                     const acaoSug = (log.acoes_sugeridas || []).find((a: any) =>
-                      (a.nome || a.campanha_nome || '').toLowerCase() === (item.campanha_nome || '').toLowerCase()
+                      (a.nome || a.campanha_nome || '').toLowerCase() === (acao.campanha_nome || '').toLowerCase()
                     );
 
-                    let badgeColor: string, badgeBg: string, badgeLabel: string, detalheTexto: string | null = null;
+                    let badgeColor: string, badgeBg: string, badgeLabel: string;
+                    let textoExibido = acao.porque ? (acao.porque.length > 80 ? acao.porque.slice(0, 79) + '…' : acao.porque) : '';
+
                     if (acaoExec) {
-                      badgeColor = '#3b82f6'; badgeBg = 'rgba(59,130,246,0.1)';
-                      badgeLabel = '✓ Ajuste feito';
-                      const isUp = acaoExec.direcao === 'aumento';
-                      if (acaoExec.tipo === 'redistribuir_conjunto') {
-                        detalheTexto = `Redistribuí orçamento: ↓${acaoExec.conjunto_reduzido_nome} R$${acaoExec.antigo_budget_reduzido}→R$${acaoExec.novo_budget_reduzido}, ↑${acaoExec.conjunto_aumentado_nome} R$${acaoExec.antigo_budget_aumentado}→R$${acaoExec.novo_budget_aumentado}`;
-                      } else if (acaoExec.tipo === 'reduzir_conjunto') {
-                        detalheTexto = `Reduzi ${acaoExec.conjunto_nome || ''}: R$${acaoExec.antigo_budget}→R$${acaoExec.novo_budget}/dia`;
-                      } else if (acaoExec.tipo?.startsWith('pausar')) {
-                        detalheTexto = `Pausei ${acaoExec.tipo === 'pausar_conjunto' ? `o conjunto ${acaoExec.conjunto_nome || ''}` : 'a campanha'}`;
-                      } else if (acaoExec.antigo_budget != null && acaoExec.novo_budget != null) {
-                        detalheTexto = `${isUp ? 'Aumentei' : 'Reduzi'} o orçamento de R$ ${acaoExec.antigo_budget} para R$ ${acaoExec.novo_budget}/dia`;
-                      }
+                      badgeColor = '#2563eb'; badgeBg = dark ? 'rgba(59,130,246,0.10)' : '#eff6ff';
+                      badgeLabel = 'Ajustado';
                     } else if (acaoSug) {
-                      badgeColor = '#f59e0b'; badgeBg = 'rgba(245,158,11,0.1)';
-                      badgeLabel = '⏳ Sugestão enviada';
-                      if (acaoSug.tipo === 'pausar_conjunto') {
-                        detalheTexto = `Sugeri pausar o conjunto ${acaoSug.conjunto_nome || ''}`;
-                      } else if (acaoSug.tipo?.startsWith('pausar')) {
-                        detalheTexto = 'Sugeri pausar a campanha';
-                      } else if (acaoSug.tipo === 'aumentar_conjunto') {
-                        detalheTexto = `Sugeri aumentar orçamento do conjunto ${acaoSug.conjunto_nome || ''}: R$${acaoSug.antigo_budget}→R$${acaoSug.novo_budget}/dia`;
-                      } else {
-                        const isUp = acaoSug.direcao === 'aumento';
-                        detalheTexto = `Sugeri ${isUp ? 'aumentar' : 'reduzir'} o orçamento: R$${acaoSug.antigo_budget}→R$${acaoSug.novo_budget}/dia`;
-                      }
+                      badgeColor = '#92400e'; badgeBg = dark ? 'rgba(245,158,11,0.10)' : '#fffbeb';
+                      badgeLabel = 'Sugestão';
                     } else {
-                      // Análise pura — verbos conjugados no passado
-                      badgeColor = item.decisao === 'escalar' ? '#10b981' : item.decisao === 'pausar' ? '#ef4444' : item.decisao === 'aguardar' ? '#3b82f6' : '#6b7280';
-                      badgeBg = item.decisao === 'escalar' ? 'rgba(16,185,129,0.1)' : item.decisao === 'pausar' ? 'rgba(239,68,68,0.1)' : item.decisao === 'aguardar' ? 'rgba(59,130,246,0.1)' : 'rgba(107,114,128,0.1)';
-                      badgeLabel = item.decisao === 'escalar' ? '⭐ Escalei' : item.decisao === 'pausar' ? '⏸ Pausei' : item.decisao === 'aguardar' ? '⏳ Aguardei' : '👀 Mantive';
+                      const dec = acao.decisao;
+                      if (dec === 'manter')        { badgeColor = '#047857'; badgeBg = dark ? 'rgba(16,185,129,0.08)' : '#ecfdf5';  badgeLabel = 'Mantendo'; }
+                      else if (dec === 'otimizar') { badgeColor = '#92400e'; badgeBg = dark ? 'rgba(245,158,11,0.08)' : '#fffbeb';  badgeLabel = 'Otimizar'; }
+                      else if (dec === 'escalar')  { badgeColor = '#047857'; badgeBg = dark ? 'rgba(16,185,129,0.08)' : '#ecfdf5';  badgeLabel = 'Escalar'; }
+                      else if (dec === 'aguardar') { badgeColor = '#2563eb'; badgeBg = dark ? 'rgba(59,130,246,0.08)' : '#eff6ff';  badgeLabel = 'Monitorar'; }
+                      else if (dec === 'pausar')   { badgeColor = '#dc2626'; badgeBg = dark ? 'rgba(239,68,68,0.08)' : '#fef2f2';   badgeLabel = 'Pausar'; }
+                      else                         { badgeColor = txtMid; badgeBg = dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6'; badgeLabel = 'Analisar'; }
                     }
 
-                    const textoExibido = detalheTexto || (item.porque ? (item.porque.length > 100 ? item.porque.slice(0, 99) + '…' : item.porque) : '');
-
                     return (
-                      <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#fafafa', border: `1px solid ${border}` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: textoExibido ? '6px' : 0 }}>
+                      <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.018)' : '#fff', border: `1px solid ${border}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: textoExibido || acao.proximo_passo ? '6px' : 0 }}>
                           <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', color: badgeColor, background: badgeBg, whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {badgeLabel}
                           </span>
                           <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                            {item.campanha_nome}
+                            {acao.campanha_nome}
                           </span>
                         </div>
                         {textoExibido && (
                           <p style={{ fontSize: '12px', color: txtMid, margin: 0, lineHeight: 1.5 }}>
                             {textoExibido}
+                          </p>
+                        )}
+                        {(acao.leads != null || acao.revendedoras != null || acao.potenciais != null) && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                            {acao.leads != null && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.leads} leads</span>
+                            )}
+                            {acao.revendedoras != null && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.revendedoras} {t.convertidoCurto}</span>
+                            )}
+                            {acao.potenciais > 0 && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.potenciais} em {acao.potenciais_label || 'potencial'}</span>
+                            )}
+                          </div>
+                        )}
+                        {acao.proximo_passo && (
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: txtMid, lineHeight: 1.5, fontStyle: 'italic' }}>
+                            → {acao.proximo_passo.length > 100 ? acao.proximo_passo.slice(0, 99) + '…' : acao.proximo_passo}
                           </p>
                         )}
                       </div>
@@ -3356,7 +3437,63 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                   <span style={{ color: '#ef4444' }}>⚠️</span> Ponto de atenção
                 </p>
                 <div style={{ padding: '14px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '13px', lineHeight: 1.5, fontWeight: 500 }}>
-                  {log.alerta}
+                  {truncarAlerta(log.alerta)}
+                </div>
+              </div>
+            )}
+
+            {campanhaMestre && (
+              <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 800, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sugestão de campanha</p>
+                      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1.35 }}>Nova campanha com o melhor público e o melhor criativo</h3>
+                    </div>
+                    <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtHi, fontSize: '11px', fontWeight: 800 }}>
+                      {fmtMoeda(Number(campanhaMestre.budget_diario_sugerido || 0))}/dia
+                    </span>
+                  </div>
+                  {campanhaMestre.motivo && (
+                    <p style={{ margin: '10px 0 0', fontSize: '13px', color: txtMid, lineHeight: 1.55 }}>{campanhaMestre.motivo}</p>
+                  )}
+                </div>
+                <div style={{ padding: '14px 16px', display: 'grid', gap: '10px' }}>
+                  {[
+                    ['Base', campanhaMestre.campanha_base],
+                    ['Público', campanhaMestre.publico],
+                    ['Criativo', campanhaMestre.criativo],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '10px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
+                    </div>
+                  ))}
+                  {Array.isArray(campanhaMestre.instrucoes) && campanhaMestre.instrucoes.length > 0 && (
+                    <div style={{ marginTop: '4px', display: 'grid', gap: '6px' }}>
+                      {campanhaMestre.instrucoes.slice(0, 4).map((item: string, i: number) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: txtMid, lineHeight: 1.45 }}>
+                          <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '10px', fontWeight: 800 }}>{i + 1}</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ marginTop: '4px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      onClick={marcarCampanhaCriada}
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtHi, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Marcar como criada
+                    </button>
+                    <button
+                      onClick={() => window.open('https://adsmanager.facebook.com/adsmanager/manage/campaigns', '_blank', 'noopener,noreferrer')}
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <ExternalLink size={14} />
+                      Abrir Meta
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

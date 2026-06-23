@@ -51,6 +51,14 @@ const STATUS_LIGHT_BG: Record<number, string> = { 0: '#dbeafe', 1: '#dbeafe', 2:
 const STATUS_LIGHT_TEXT: Record<number, string> = { 0: '#1d4ed8', 1: '#1d4ed8', 2: '#6d28d9', 3: '#065f46', 4: '#991b1b', 5: '#9a3412', 6: '#3f3f46' };
 const STATUS_LIGHT_DOT: Record<number, string> = { 0: '#3b82f6', 1: '#3b82f6', 2: '#7e3beb', 3: '#10b981', 4: '#f43f5e', 5: '#f97316', 6: '#71717a' };
 const STATUS_LIGHT_PILL_BORDER: Record<number, string> = { 0: 'rgba(29,78,216,0.12)', 1: 'rgba(29,78,216,0.12)', 2: 'rgba(109,40,217,0.15)', 3: 'rgba(6,95,70,0.12)', 4: 'rgba(153,27,27,0.12)', 5: 'rgba(154,52,18,0.12)', 6: 'rgba(63,63,70,0.12)' };
+const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
+  0: 'status_atendimento_at',
+  1: 'status_atendimento_at',
+  2: 'status_reuniao_at',
+  3: 'status_aprovado_at',
+  5: 'status_contrato_at',
+  6: 'status_sem_retorno_at',
+};
 
 // ── Utilitários de data — Brasília ────────────────────────────
 function parseLeadDate(str?: string | null): Date {
@@ -85,6 +93,13 @@ function todayBR(): string {
   } catch { return new Date().toISOString().slice(0, 10); }
 }
 
+function localDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function subDays(dateStr: string, n: number): string {
   try {
     const d = new Date(dateStr + 'T12:00:00Z');
@@ -107,6 +122,39 @@ function filterByPeriod(leads: Lead[], period: string, from?: string, to?: strin
     case 'custom': { if (!from || !to) return leads; return leads.filter(l => ok(l, from, to)); }
     default: return leads;
   }
+}
+
+function getStatusMoveDate(lead: Lead, statusId: number): string | null {
+  const field = STATUS_TIMESTAMP_FIELD[statusId];
+  return (field ? (lead as any)[field] : null) || (lead as any).ultimo_status_change || null;
+}
+
+function isDateInPeriod(dateStr: string | null | undefined, period: string, from?: string, to?: string): boolean {
+  if (period === 'all') return true;
+  const today = todayBR();
+  const ok = (a: string, b: string) => {
+    const d = leadDateBR(dateStr);
+    return !!d && d >= a && d <= b;
+  };
+  switch (period) {
+    case 'today': return ok(today, today);
+    case 'yesterday': {
+      const y = subDays(today, 1);
+      return ok(y, y);
+    }
+    case '7days': return ok(subDays(today, 6), today);
+    case '30days': return ok(subDays(today, 29), today);
+    case 'month': return ok(today.slice(0, 7) + '-01', today);
+    case 'custom': return !from || !to ? true : ok(from, to);
+    default: return true;
+  }
+}
+
+function isLeadMovedToStatusInPeriod(lead: Lead, statusId: number, period: string, from?: string, to?: string): boolean {
+  let currentStatus = toNum(lead.status);
+  if (currentStatus === 0) currentStatus = 1;
+  if (currentStatus !== statusId) return false;
+  return isDateInPeriod(getStatusMoveDate(lead, statusId), period, from, to);
 }
 
 function buildChartData(leads: Lead[], period: string, from?: string, to?: string) {
@@ -196,12 +244,12 @@ function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?
     });
     allLeads.filter(l => toNum(l.status) === convertidoStatus).forEach(l => {
       try {
-        const ref = (l as any).ultimo_status_change || l.created_at;
+        const ref = getStatusMoveDate(l, convertidoStatus);
         if (leadDateBR(ref) !== startDate) return;
         const d = parseLeadDate(ref);
         if (!d || isNaN(d.getTime())) return;
         const sh = Math.floor(d.getHours() / 2) * 2;
-        const k = `${String(sh).padStart(2, '00')}h`;
+        const k = `${String(sh).padStart(2, '0')}h`;
         if (k in slots) slots[k].revs++;
       } catch { }
     });
@@ -218,8 +266,8 @@ function buildChartDataDual(allLeads: Lead[], period: string, from?: string, to?
     } catch { }
   }
   allLeads.forEach(l => { const k = leadDateBR(l.created_at); if (k && k in dayMap) dayMap[k].leads++; });
-  allLeads.filter(l => toNum(l.status) === 3).forEach(l => {
-    const ref = (l as any).ultimo_status_change || l.created_at;
+  allLeads.filter(l => toNum(l.status) === convertidoStatus).forEach(l => {
+    const ref = getStatusMoveDate(l, convertidoStatus);
     const k = leadDateBR(ref);
     if (k && k in dayMap) dayMap[k].revs++;
   });
@@ -412,6 +460,35 @@ function calcularRitmo(aprovadas: number, meta: number, feriados: string[] = [])
   };
 }
 
+function RitmoResumo({ metaDiaria, status, convertidoCurto, faltamMeta, compact = false }: {
+  metaDiaria: number;
+  status: string;
+  convertidoCurto: string;
+  faltamMeta: number;
+  compact?: boolean;
+}) {
+  const ok = status === 'ok';
+  const near = status === 'ritmo';
+  const title = ok ? 'No ritmo da meta' : near ? 'Perto do ritmo' : 'Atrasado no ritmo';
+  const color = ok ? 'rgba(134,239,172,0.98)' : near ? 'rgba(253,224,71,0.98)' : 'rgba(255,185,185,1)';
+  const metaDiaLabel = metaDiaria.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (
+    <div style={{ marginTop: compact ? '7px' : '8px', paddingTop: compact ? '7px' : '8px', borderTop: '1px solid rgba(255,255,255,0.16)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+        <span style={{ fontSize: compact ? '10.5px' : '11px', fontWeight: 800, color, lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+        <span style={{ color: 'rgba(255,255,255,0.24)', fontSize: '10px', flexShrink: 0 }}>·</span>
+        <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: compact ? '10px' : '10.5px', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          faltam {faltamMeta} {convertidoCurto}
+        </span>
+        <span style={{ color: 'rgba(255,255,255,0.24)', fontSize: '10px', flexShrink: 0 }}>·</span>
+        <span style={{ color: 'rgba(255,255,255,0.58)', fontSize: compact ? '9.5px' : '10px', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          meta {metaDiaLabel}/dia
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function FunilHorizontal({ funnelData, totalLeads, dark, loading, navigate, selectedPeriod }: {
   funnelData: { stage: string; statusId: number; color: string; value: number }[];
   totalLeads: number;
@@ -432,8 +509,11 @@ function FunilHorizontal({ funnelData, totalLeads, dark, loading, navigate, sele
       boxShadow: cardShadow, marginBottom: '14px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Funil de leads</h3>
-        <span style={{ fontSize: '11px', color: txtLow }}>{totalLeads} no período</span>
+        <div>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Movimentos do funil</h3>
+          <p style={{ fontSize: '11px', color: txtLow, margin: '3px 0 0' }}>Quando os leads entraram em cada status</p>
+        </div>
+        <span style={{ fontSize: '11px', color: txtLow }}>{totalLeads} leads criados</span>
       </div>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
         {funnelData.map(stage => {
@@ -472,6 +552,51 @@ function FunilHorizontal({ funnelData, totalLeads, dark, loading, navigate, sele
   );
 }
 
+function normalizarOrigem(src: string | null | undefined): string {
+  if (!src) return 'Outros';
+  const s = src.trim()
+    .replace(/[àáâãäå]/gi, 'a').replace(/[èéêë]/gi, 'e')
+    .replace(/[ìíîï]/gi, 'i').replace(/[òóôõö]/gi, 'o')
+    .replace(/[ùúûü]/gi, 'u').replace(/ç/gi, 'c')
+    .toUpperCase().trim();
+  if (['FB','FACEBOOK','META','IG_BOOST','TRAFEGO PAGO','TRAFEGO ANTIGO','CAMPANHA'].includes(s)
+      || s.startsWith('FB') || s.includes('PAGO') || s.includes('CAMPANHA')) return 'Meta Ads';
+  if (s.includes('INSTAGRAM') || s === 'IG') return 'Orgânico';
+  if (s.includes('INDICAC')) return 'Indicação';
+  return 'Outros';
+}
+
+function corOrigem(nome: string): string {
+  if (nome === 'Meta Ads') return '#3b82f6';
+  if (nome === 'Indicação') return '#f97316';
+  if (nome === 'Orgânico') return '#8b5cf6';
+  return '#94a3b8';
+}
+
+function origemKey(src: string | null | undefined): 'meta' | 'indicacao' | 'organico' | 'outros' {
+  if (!src) return 'outros';
+  const s = src.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  if (['FB','FACEBOOK','META','IG_BOOST','TRAFEGO PAGO','TRAFEGO ANTIGO','CAMPANHA'].includes(s)
+      || s.startsWith('FB') || s.includes('PAGO') || s.includes('CAMPANHA')) return 'meta';
+  if (s.includes('INSTAGRAM') || s === 'IG') return 'organico';
+  if (s.includes('INDICAC')) return 'indicacao';
+  return 'outros';
+}
+
+function origemLabel(key: string): string {
+  if (key === 'meta') return 'Meta Ads';
+  if (key === 'indicacao') return 'Indicação';
+  if (key === 'organico') return 'Orgânico';
+  return 'Outros';
+}
+
+function origemColor(key: string): string {
+  if (key === 'meta') return '#3b82f6';
+  if (key === 'indicacao') return '#f97316';
+  if (key === 'organico') return '#8b5cf6';
+  return '#94a3b8';
+}
+
 function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
   dark: boolean;
   orgId: string | null;
@@ -485,7 +610,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
   const txtMid = dark ? '#a0a0a8' : '#374151';
   const rowPar = dark ? '#222225' : '#f9fafb';
 
-  const hojeStr = new Date().toISOString().split('T')[0];
+  const hojeStr = todayBR();
 
   const navigate = useNavigate();
 
@@ -520,8 +645,8 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
     return d;
   }), [semanaBase]);
 
-  const inicioSemana = diasSemana[0].toISOString().split('T')[0];
-  const fimSemana = diasSemana[6].toISOString().split('T')[0];
+  const inicioSemana = localDateKey(diasSemana[0]);
+  const fimSemana = localDateKey(diasSemana[6]);
   const meioSemana = diasSemana[3];
   const mesLabel = meioSemana.toLocaleString('pt-BR', { month: 'long' });
   const anoLabel = meioSemana.getFullYear();
@@ -614,7 +739,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
     d.setDate(d.getDate() + dir * 7);
     d.setHours(0, 0, 0, 0);
     setSemanaBase(d);
-    setDiaFiltro(d.toISOString().split('T')[0]);
+    setDiaFiltro(localDateKey(d));
   }
 
   function irParaMes(mes: number, ano: number) {
@@ -623,7 +748,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
     dom.setDate(p.getDate() - p.getDay());
     dom.setHours(0, 0, 0, 0);
     setSemanaBase(dom);
-    setDiaFiltro(dom.toISOString().split('T')[0]);
+    setDiaFiltro(localDateKey(dom));
     setShowMesPicker(false);
   }
 
@@ -699,7 +824,7 @@ function MiniCalendarioReuniao({ dark, orgId, reuniaoStatusIds, onDayClick }: {
       {/* Week strip — pt-BR, clicável, underline no dia selecionado/hoje */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '10px' }}>
         {diasSemana.map((dia, i) => {
-          const dataStr = dia.toISOString().split('T')[0];
+          const dataStr = localDateKey(dia);
           const isHoje = dataStr === hojeStr;
           const isSelecionado = diaFiltro === dataStr;
           const cor = isSelecionado ? '#8b5cf6' : isHoje ? '#0044fd' : txtLow;
@@ -1033,12 +1158,6 @@ export default function Dashboard() {
     const stages = convertidoIdx >= 0 ? sorted.slice(0, convertidoIdx + 1) : sorted.slice(0, 4);
     return stages.map(s => ({ stage: s.label, statusId: s.id, color: s.cor }));
   }, [statusConfig]);
-
-  const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
-    0: 'status_atendimento_at', 1: 'status_atendimento_at',
-    2: 'status_reuniao_at', 3: 'status_aprovado_at',
-    5: 'status_contrato_at', 6: 'status_sem_retorno_at',
-  };
 
   function getStatusPillStyle(statusId: number, dark: boolean): React.CSSProperties {
     const cfg = statusConfig.statuses.find(s => s.id === statusId);
@@ -1393,70 +1512,88 @@ export default function Dashboard() {
 
   const filtered = useMemo(() => filterByPeriod(allLeads, selectedPeriod, customFrom, customTo), [allLeads, selectedPeriod, customFrom, customTo]);
   const totalLeads = filtered.length;
-  // Aprovados: conta pelo status_aprovado_at (quando foi efetivamente aprovada)
   const approved = useMemo(() => {
-    const today = todayBR();
-    const ok = (dateStr: string | null | undefined, from: string, to: string) => {
-      const d = leadDateBR(dateStr);
-      return !!d && d >= from && d <= to;
-    };
-    return allLeads.filter(l => {
-      if (toNum(l.status) !== statusConfig.convertido_status) return false;
-      const changeDate = (l as any).ultimo_status_change || l.created_at;
-      switch (selectedPeriod) {
-        case 'today': { const t = today; return ok(changeDate, t, t); }
-        case 'yesterday': { const y = subDays(today, 1); return ok(changeDate, y, y); }
-        case '7days': return ok(changeDate, subDays(today, 6), today);
-        case '30days': return ok(changeDate, subDays(today, 29), today);
-        case 'month': return ok(changeDate, today.slice(0, 7) + '-01', today);
-        case 'custom': { if (!customFrom || !customTo) return true; return ok(changeDate, customFrom, customTo); }
-        default: return true;
-      }
-    }).length;
+    return allLeads.filter(l => isLeadMovedToStatusInPeriod(l, statusConfig.convertido_status, selectedPeriod, customFrom, customTo)).length;
   }, [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
   const approvedThisMonth = useMemo(() => {
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const today = todayBR();
+    const from = today.slice(0, 7) + '-01';
     return allLeads.filter(l => {
       if (toNum(l.status) !== statusConfig.convertido_status) return false;
-      const ref = (l as any).ultimo_status_change || (l as any).status_aprovado_at || l.created_at;
-      if (!ref) return false;
-      return String(ref).slice(0, 7) === currentMonth;
+      return isDateInPeriod(getStatusMoveDate(l, statusConfig.convertido_status), 'custom', from, today);
     }).length;
   }, [allLeads, statusConfig]);
   const convRate = totalLeads > 0 ? safe((approved / totalLeads) * 100).toFixed(1) : '0.0';
   const metaSpend = metaMetrics.spend || 0;
+  const custoIndicacaoOrigem = useMemo(() =>
+    allLeads
+      .filter(l => origemKey((l as any).utm_source) === 'indicacao')
+      .filter(l => isLeadMovedToStatusInPeriod(l, statusConfig.convertido_status, selectedPeriod, customFrom, customTo))
+      .reduce((sum, l) => sum + (Number((l as any).custo_indicacao) || 0), 0),
+    [allLeads, statusConfig, selectedPeriod, customFrom, customTo]);
   const custoTotalIndicacao = useMemo(() =>
-    filtered
+    allLeads
+      .filter(l => normalizarOrigem((l as any).utm_source) === 'IndicaÃ§Ã£o')
+      .filter(l => isLeadMovedToStatusInPeriod(l, statusConfig.convertido_status, selectedPeriod, customFrom, customTo))
       .filter(l => (l as any).status_aprovado_at != null)
       .reduce((sum, l) => sum + (Number((l as any).custo_indicacao) || 0), 0),
-    [filtered]);
-  const spend = metaSpend + custoTotalIndicacao;
+    [allLeads, statusConfig, selectedPeriod, customFrom, customTo]);
+  const spend = metaSpend + custoIndicacaoOrigem;
   const chartData = useMemo(() => buildChartDataDual(allLeads, selectedPeriod, customFrom, customTo, statusConfig.convertido_status), [allLeads, selectedPeriod, customFrom, customTo, statusConfig]);
   const funnelData = useMemo(() => {
     return funnelConfig.map(f => {
-      const today = todayBR();
-      const ok = (dateStr: string | null | undefined, from: string, to: string) => {
-        const d = leadDateBR(dateStr); return !!d && d >= from && d <= to;
-      };
-      const value = allLeads.filter(l => {
-        let s = toNum(l.status); if (s === 0) s = 1;
-        if (s !== f.statusId) return false;
-        const tsField = STATUS_TIMESTAMP_FIELD[f.statusId];
-        const changeDate = (tsField && (l as any)[tsField]) ? (l as any)[tsField] : ((l as any).ultimo_status_change || l.created_at);
-        switch (selectedPeriod) {
-          case 'today': { const t = today; return ok(changeDate, t, t); }
-          case 'yesterday': { const y = subDays(today, 1); return ok(changeDate, y, y); }
-          case '7days': { return ok(changeDate, subDays(today, 6), today); }
-          case '30days': { return ok(changeDate, subDays(today, 29), today); }
-          case 'month': { return ok(changeDate, today.slice(0, 7) + '-01', today); }
-          case 'custom': { if (!customFrom || !customTo) return true; return ok(changeDate, customFrom, customTo); }
-          default: return true;
-        }
-      }).length;
+      const value = allLeads.filter(l => isLeadMovedToStatusInPeriod(l, f.statusId, selectedPeriod, customFrom, customTo)).length;
       return { ...f, value };
     });
-  }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig, STATUS_TIMESTAMP_FIELD]);
+  }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig]);
   const recentLeads = useMemo(() => [...allLeads].sort((a, b) => parseLeadDate(b.created_at).getTime() - parseLeadDate(a.created_at).getTime()).slice(0, 5), [allLeads]);
+  const rankingOrigens = useMemo(() => {
+    const FIXAS = ['Meta Ads', 'Indicação', 'Orgânico', 'Outros'] as const;
+    const isConvertidoNoPeriodo = (l: Lead) => {
+      return isLeadMovedToStatusInPeriod(l, statusConfig.convertido_status, selectedPeriod, customFrom, customTo);
+    };
+    const revMap: Record<string, number> = { 'Meta Ads': 0, 'Indicação': 0, 'Orgânico': 0, 'Outros': 0 };
+    const leadsMap: Record<string, number> = { 'Meta Ads': 0, 'Indicação': 0, 'Orgânico': 0, 'Outros': 0 };
+    for (const lead of allLeads) {
+      if (!isConvertidoNoPeriodo(lead)) continue;
+      const nome = normalizarOrigem((lead as any).utm_source);
+      revMap[nome] = (revMap[nome] || 0) + 1;
+    }
+    for (const lead of filtered) {
+      const nome = normalizarOrigem((lead as any).utm_source);
+      leadsMap[nome] = (leadsMap[nome] || 0) + 1;
+    }
+    return FIXAS.map(nome => {
+      const aprovadas = revMap[nome] || 0;
+      const totalLeads = leadsMap[nome] || 0;
+      const investido = nome === 'Meta Ads' ? (metaSpend || 0) : nome === 'Indicação' ? (custoTotalIndicacao || 0) : 0;
+      const cprMeta = investido > 0 && aprovadas > 0 ? investido / aprovadas : 0;
+      return { nome, cor: corOrigem(nome), aprovadas, totalLeads, investido, cprMeta };
+    });
+  }, [allLeads, filtered, statusConfig, metaSpend, custoTotalIndicacao, selectedPeriod, customFrom, customTo]);
+
+  const rankingOrigensCorrigido = useMemo(() => {
+    const fixas = ['meta', 'indicacao', 'organico', 'outros'] as const;
+    const revMap: Record<string, number> = { meta: 0, indicacao: 0, organico: 0, outros: 0 };
+    const leadsMap: Record<string, number> = { meta: 0, indicacao: 0, organico: 0, outros: 0 };
+    for (const lead of allLeads) {
+      if (!isLeadMovedToStatusInPeriod(lead, statusConfig.convertido_status, selectedPeriod, customFrom, customTo)) continue;
+      const nome = origemKey((lead as any).utm_source);
+      revMap[nome] = (revMap[nome] || 0) + 1;
+    }
+    for (const lead of filtered) {
+      const nome = origemKey((lead as any).utm_source);
+      leadsMap[nome] = (leadsMap[nome] || 0) + 1;
+    }
+    return fixas.map(nome => {
+      const aprovadas = revMap[nome] || 0;
+      const totalLeadsOrigem = leadsMap[nome] || 0;
+      const investido = nome === 'meta' ? (metaSpend || 0) : nome === 'indicacao' ? (custoIndicacaoOrigem || 0) : 0;
+      const cprMeta = investido > 0 && aprovadas > 0 ? investido / aprovadas : 0;
+      return { nome: origemLabel(nome), cor: origemColor(nome), aprovadas, totalLeads: totalLeadsOrigem, investido, cprMeta };
+    });
+  }, [allLeads, filtered, statusConfig, metaSpend, custoIndicacaoOrigem, selectedPeriod, customFrom, customTo]);
+
   const campRows = useMemo(() => {
     if (!metaCampaigns.length) return [];
     const withSpend = metaCampaigns.filter(c => Number(c.spend) > 0);
@@ -1630,6 +1767,7 @@ export default function Dashboard() {
               </div>
               {metaOrg.revs > 0 && approvedThisMonth != null && (() => {
                 const { diff, metaDiaria, restantes, status } = calcularRitmo(approvedThisMonth, metaOrg.revs, feriadosMes);
+                return <RitmoResumo metaDiaria={metaDiaria} status={status} convertidoCurto={t.convertidoCurto} faltamMeta={Math.max(metaOrg.revs - approvedThisMonth, 0)} compact />;
                 const pct = Math.round((approvedThisMonth / metaOrg.revs) * 100);
                 const cor = status === 'ok' ? 'rgba(134,239,172,0.95)' : status === 'ritmo' ? 'rgba(253,224,71,0.95)' : 'rgba(255,160,160,1)';
                 const sinal = diff > 0 ? `+${diff}` : `${diff}`;
@@ -1702,6 +1840,7 @@ export default function Dashboard() {
               </div>
               {metaOrg.revs > 0 && approvedThisMonth != null && (() => {
                 const { diff, metaDiaria, restantes, status } = calcularRitmo(approvedThisMonth, metaOrg.revs, feriadosMes);
+                return <RitmoResumo metaDiaria={metaDiaria} status={status} convertidoCurto={t.convertidoCurto} faltamMeta={Math.max(metaOrg.revs - approvedThisMonth, 0)} />;
                 const pct = Math.round((approvedThisMonth / metaOrg.revs) * 100);
                 const cor = status === 'ok' ? 'rgba(134,239,172,0.95)' : status === 'ritmo' ? 'rgba(253,224,71,0.95)' : 'rgba(255,160,160,1)';
                 const sinal = diff > 0 ? `+${diff}` : `${diff}`;
@@ -1759,6 +1898,71 @@ export default function Dashboard() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {rankingOrigensCorrigido.length > 0 && showContent && !isMobile && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '2px 2px 8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: txtHi }}>Origens no período</span>
+              <button onClick={() => navigate('/origens')} style={{ border: 'none', background: 'transparent', color: '#3b82f6', fontSize: '12px', fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
+                Ver detalhes
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              {rankingOrigensCorrigido.slice(0, 4).map(origem => (
+                <div
+                  key={origem.nome}
+                  onClick={() => navigate('/origens')}
+                  style={{
+                    background: cardBg,
+                    border: `1px solid ${border}`,
+                    borderRadius: '14px',
+                    cursor: 'pointer',
+                    padding: '12px 14px',
+                    transition: 'background 0.15s ease-out, transform 0.15s ease-out, border-color 0.15s ease-out',
+                    boxShadow: dark ? '0 1px 2px rgba(0,0,0,0.28)' : '0 1px 2px rgba(15,23,42,0.05)',
+                    minWidth: 0,
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.035)' : '#ffffff';
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
+                    (e.currentTarget as HTMLElement).style.borderColor = dark ? 'rgba(255,255,255,0.12)' : 'rgba(59,130,246,0.18)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.background = cardBg;
+                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                    (e.currentTarget as HTMLElement).style.borderColor = border;
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: origem.cor, flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{origem.nome}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: txtLow, whiteSpace: 'nowrap' }}>{origem.totalLeads} leads</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1 }}>{origem.aprovadas}</div>
+                      <div style={{ fontSize: '9px', color: txtLow, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px' }}>{t.convertidoCurto}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: origem.investido > 0 ? 750 : 650, color: origem.investido > 0 ? txtMid : (dark ? 'rgba(255,255,255,0.32)' : 'rgba(107,114,128,0.45)'), lineHeight: 1, whiteSpace: 'nowrap' }}>
+                        {origem.investido > 0 ? `R$${Math.round(origem.investido).toLocaleString('pt-BR')}` : 'Sem custo'}
+                      </div>
+                      <div style={{ fontSize: '9px', color: txtLow, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px' }}>Invest</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: origem.cprMeta > 0 ? 750 : 650, color: origem.cprMeta > 0 ? txtMid : (dark ? 'rgba(255,255,255,0.32)' : 'rgba(107,114,128,0.45)'), lineHeight: 1, whiteSpace: 'nowrap' }}>
+                        {origem.cprMeta > 0 ? `R$${Math.round(origem.cprMeta)}` : 'Aguard.'}
+                      </div>
+                      <div style={{ fontSize: '9px', color: txtLow, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px' }}>{t.custoConversaoSigla}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
