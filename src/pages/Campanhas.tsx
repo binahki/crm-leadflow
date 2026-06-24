@@ -6,7 +6,7 @@ import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useTerminology, useModeloNegocio } from '@/hooks/useTerminology';
 import { useStatusConfig } from '@/hooks/useStatusConfig';
-import { TrendingUp, TrendingDown, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ChevronUp, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone, Search, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, Pause, AlertTriangle, X, DollarSign, Users, RefreshCw, Zap, ChevronDown, ChevronUp, Lightbulb, Edit2, Copy, ExternalLink, Settings, Folder, LayoutGrid, Monitor, ArrowUp, ArrowDown, Trash2, Info, Smartphone, Search, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -1441,7 +1441,8 @@ export default function CampanhasPage() {
   }, [filtered]);
 
   const bg=dark?'#090909':'#f4f4f5'; const cardBg=dark?'#111113':'#ffffff'; const border=dark?'#1e1e22':'#e5e7eb';
-  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const txtLow=dark?'#52525b':'#9ca3af';
+  const txtHi=dark?'#f4f4f5':'#111827'; const txtMid=dark?'#71717a':'#6b7280'; const panelBg = dark ? '#0d0d18' : '#f5f7ff';
+  const txtLow=dark?'#52525b':'#9ca3af';
   const divCls=dark?'#1e1e22':'#f3f4f6'; const gridLn=dark?'#1e1e22':'#f0f0f0';
   const inputBg=dark?'#1a1a1e':'#ffffff';
   const pad=isMobile?'16px':'32px';
@@ -1883,7 +1884,7 @@ export default function CampanhasPage() {
               <img src="/ravena.png" alt="Ravena" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: isErro ? '0 0 12px rgba(239,68,68,0.4)' : (isSemAcao || isIgnorado) ? 'none' : pendenteAtivo ? '0 0 12px rgba(245,158,11,0.4)' : '0 0 12px rgba(139,92,246,0.4)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: textColor }}>
-                  {isErro ? 'Erro de sincronização' : isIgnorado ? 'Ravena analisou suas campanhas — sugestões descartadas' : isSemAcao ? `Ravena analisou ${(aiLog.insights || []).length > 0 ? (aiLog.insights || []).length + ' campanhas' : 'suas campanhas'} — tudo estável` : isPendente ? (numSugestoes > 0 ? 'Ravena tem sugestões para você' : 'Todas as sugestões foram revisadas') : 'Ravena atualizou suas campanhas'}
+                  {isErro ? 'Erro de sincronização' : isIgnorado ? 'Analisei suas campanhas — sugestões descartadas' : isSemAcao ? `Analisei ${(aiLog.insights || []).length > 0 ? (aiLog.insights || []).length + ' campanhas' : 'suas campanhas'} — tudo estável` : isPendente ? (numSugestoes > 0 ? 'Tenho sugestões para você' : 'Todas as sugestões foram revisadas') : 'Atualizei suas campanhas'}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '12px', color: subColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isErro
@@ -1918,7 +1919,7 @@ export default function CampanhasPage() {
             <img src="/ravena.png" alt="Ravena" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
             <p style={{ margin: 0, fontSize: '12px', color: dark ? '#8b5cf6' : '#7c3aed' }}>
               {ravenaAtivaNoBanco === true
-                ? 'Ravena ativa — análise será exibida em breve'
+                ? 'Estou ativa — minha análise aparece aqui em breve'
                 : 'Ative a Ravena em Integrações → Meta Ads'}
             </p>
           </div>
@@ -2217,7 +2218,7 @@ export default function CampanhasPage() {
                     <div style={{background:dark?'#0d0d0f':'#ffffff',borderBottom:`1px solid ${border}`}}>
                       {/* Status pills — full width */}
                       <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'10px 16px'}}>
-                        {(['all','ACTIVE','PAUSED'] as const).map(s=>(
+                        {(['all','ACTIVE'] as const).map(s=>(
                           <button key={s} onClick={()=>setStatusFilter(s)} style={{flex:1,padding:'8px 0',borderRadius:'99px',border:`1px solid ${statusFilter===s?'#2563eb':border}`,background:statusFilter===s?'#2563eb':'transparent',color:statusFilter===s?'#fff':txtMid,fontSize:'13px',cursor:'pointer',fontFamily:'inherit',fontWeight:statusFilter===s?600:400,transition:'all 0.15s'}}>
                             {s==='all'?'Todas':s==='ACTIVE'?'Ativas':'Pausadas'}
                           </button>
@@ -2251,7 +2252,7 @@ export default function CampanhasPage() {
                       </button>
                       <div style={{width:'1px',height:'16px',background:border,flexShrink:0}}/>
                       <div style={{display:'flex',alignItems:'center',gap:'4px',flexShrink:0}}>
-                        {(['all','ACTIVE','PAUSED'] as const).map(s=>(
+                        {(['all','ACTIVE'] as const).map(s=>(
                           <button key={s} onClick={()=>setStatusFilter(s)} style={{padding:'5px 10px',borderRadius:'99px',border:`1px solid ${statusFilter===s?'#2563eb':border}`,background:statusFilter===s?'#2563eb':'transparent',color:statusFilter===s?'#fff':txtMid,fontSize:'12px',cursor:'pointer',fontFamily:'inherit',fontWeight:statusFilter===s?600:400,transition:'all 0.15s'}}>
                             {s==='all'?'Todas':s==='ACTIVE'?'Ativas':'Pausadas'}
                           </button>
@@ -2807,6 +2808,11 @@ export default function CampanhasPage() {
           onClose={() => setShowAiPanel(false)}
           metaRevs={metaRevsOrg}
           setToast={setToast}
+          totalSpend={totalSpend}
+          leadsTotal={leadsCRMTotal}
+          revsTotal={revsCRMTotal}
+          cprVal={cprCard}
+          dateLabel={PERIOD_OPTIONS.find(p => p.value === datePreset)?.label || '7 dias'}
           onLogUpdate={(updatedLog) => {
             setAiLog(updatedLog);
             const sugestoesPendentes = (updatedLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter');
@@ -3028,7 +3034,7 @@ export default function CampanhasPage() {
 
 // ── Componentes do Painel de Otimização IA ───────────────────────────────────
 
-function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, setToast, onLogUpdate, onCampaignStatusChange }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; setToast?: (t: {msg: string; ok: boolean} | null) => void; onLogUpdate?: (log: any) => void; onCampaignStatusChange?: (id: string, tipo: string, status: string) => void }) {
+function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs = 0, setToast, onLogUpdate, onCampaignStatusChange, totalSpend = 0, leadsTotal = 0, revsTotal = 0, cprVal = 0, dateLabel = 'Últimos 7 dias' }: { log: any; dark: boolean; isMobile: boolean; allLeads: any[]; onClose: () => void; metaRevs?: number; setToast?: (t: {msg: string; ok: boolean} | null) => void; onLogUpdate?: (log: any) => void; onCampaignStatusChange?: (id: string, tipo: string, status: string) => void; totalSpend?: number; leadsTotal?: number; revsTotal?: number; cprVal?: number; dateLabel?: string; }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const t = useTerminology();
@@ -3043,10 +3049,62 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   const txtMid = dark ? '#a1a1aa' : '#6b7280';
   const border = dark ? '#1e1e22' : '#e5e7eb';
   const cardBg = dark ? '#161619' : '#fff';
+  const panelBg = dark ? '#0d0d18' : '#f5f7ff';
+  const txtLow = dark ? '#52525b' : '#9ca3af';
   const campanhaMestre = log.campanha_mestre || null;
 
   const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
+  const analises = Array.isArray(log.analise_campanhas) ? log.analise_campanhas : (Array.isArray(log.insights) ? log.insights : []);
+  const metricas7d = log.metricas_7d || {};
+  const convertidoLabel = metricas7d.convertido_label || log.funil_analisado?.convertido_label || t.convertidoPlural;
+  const totalLeadsAnalise = Number(metricas7d.leads ?? log.total_leads ?? leadsTotal ?? 0);
+  const totalGastoAnalise = Number(metricas7d.gasto ?? log.total_gasto ?? totalSpend ?? 0);
+  const cplAnalise = Number(metricas7d.cpl ?? log.cpl_medio ?? (totalLeadsAnalise > 0 ? totalGastoAnalise / totalLeadsAnalise : 0));
+  const convertidosAnalise = Number(metricas7d.convertido ?? analises.reduce((sum: number, a: any) => sum + Number(a.revendedoras || 0), 0) ?? revsTotal ?? 0);
+  const cprAnalise = Number(metricas7d.cpr ?? (convertidosAnalise > 0 ? totalGastoAnalise / convertidosAnalise : cprVal ?? 0));
+  const fmtInteiro = (n: number) => Math.round(Number(n || 0)).toLocaleString('pt-BR');
+  const metricasBase = [
+    { label: 'Investido', value: fmtMoeda(totalGastoAnalise) },
+    { label: 'Leads', value: fmtInteiro(totalLeadsAnalise) },
+    { label: convertidoLabel, value: fmtInteiro(convertidosAnalise) },
+    { label: 'CPL', value: fmtMoeda(cplAnalise) },
+    { label: 'Custo/' + convertidoLabel, value: fmtMoeda(cprAnalise) },
+  ];
+  const prioridadeDecisao: Record<string, number> = { escalar: 0, otimizar: 1, pausar: 2, reduzir: 2, manter: 3, aguardar: 4 };
+  const chaveAnaliseCampanha = (a: any) => {
+    const nome = String(a?.campanha_nome || a?.campanha_curta || '');
+    const match = nome.match(/BCK\s*\d+/i);
+    return match ? match[0].toUpperCase().replace(/\s+/, ' ') : (nome.split(' - ')[0] || nome || 'Campanha').toLowerCase();
+  };
+  const campanhasLidas = Array.from(new Map(
+    [...analises]
+      .filter((a: any) => a?.campanha_nome || a?.campanha_curta)
+      .sort((a: any, b: any) => (prioridadeDecisao[a.decisao] ?? 5) - (prioridadeDecisao[b.decisao] ?? 5))
+      .map((a: any) => [chaveAnaliseCampanha(a), a])
+  ).values()).slice(0, 5);
+  const decisaoVisual = (decisao: string) => {
+    const d = (decisao || '').toLowerCase();
+    if (d.includes('escalar')) return { label: 'Observei escala', color: '#7c3aed', bg: dark ? 'rgba(124,58,237,0.14)' : '#f3e8ff' };
+    if (d.includes('pausar')) return { label: 'Observei risco', color: '#e11d48', bg: dark ? 'rgba(225,29,72,0.14)' : '#fff1f2' };
+    if (d.includes('otimizar') || d.includes('reduzir')) return { label: 'Observei custo', color: '#2563eb', bg: dark ? 'rgba(37,99,235,0.14)' : '#eff6ff' };
+    return { label: 'Observei', color: txtMid, bg: dark ? 'rgba(255,255,255,0.06)' : '#f8fafc' };
+  };
+  const textoCampanha = (a: any) => {
+    const d = String(a.decisao || '').toLowerCase();
+    const detalhe = a.porque ? a.porque : (a.proximo_passo ? a.proximo_passo : (a.motivo ? a.motivo : ''));
+    let acaoFeita: any = null;
+    for (const item of acoesAutomaticas) {
+      const base = String(a.campanha_nome ? a.campanha_nome : (a.campanha_curta ? a.campanha_curta : '')).toLowerCase();
+      const alvo = String(item.campanha_nome ? item.campanha_nome : (item.nome ? item.nome : '')).toLowerCase();
+      if (base) { if (alvo.includes(base)) { acaoFeita = item; } }
+    }
+    if (acaoFeita) { if (acaoFeita.ok !== false) { const antigo = acaoFeita.antigo_budget ? 'R$ ' + acaoFeita.antigo_budget : 'orcamento anterior'; const novo = acaoFeita.novo_budget ? 'R$ ' + acaoFeita.novo_budget : 'novo orcamento'; return ('Eu alterei essa campanha: ' + antigo + ' para ' + novo + '. ' + detalhe).trim(); } }
+    if (d.includes('escalar')) return ('Eu encontrei potencial de escala porque ela esta convertendo melhor que o restante. ' + detalhe).trim();
+    if (d.includes('pausar')) return ('Eu marquei risco alto antes de consumir mais verba sem retorno em ' + convertidoLabel + '. ' + detalhe).trim();
+    if (d.includes('otimizar') || d.includes('reduzir')) return ('Eu marquei custo em atencao e separei os pontos que estao puxando desperdicio. ' + detalhe).trim();
+    return ('Eu mantive em observacao por enquanto. ' + (detalhe || 'Ainda nao tem um sinal forte o bastante para alterar o orcamento.')).trim();
+  };
   function limparInsight(texto: string): string {
     if (!texto) return '';
     let limpo = texto.replace(/\([^)]{0,120}\)/g, '');
@@ -3065,10 +3123,77 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   const isSemAcao = log.status === 'sem_acao';
   const isErro = log.status === 'erro';
   const metaAlertas = Array.isArray(log.meta_alertas) ? log.meta_alertas : [];
+  const acoesDoLog = Array.isArray(log.acoes_executadas) ? log.acoes_executadas : [];
+  const acoesAutomaticas = acoesDoLog.filter(function(a: any) { return a.automatico !== false; });
+  const acoesUsuario = acoesDoLog.filter(function(a: any) { return a.automatico === false; });
+  const alertasMetaGraves = metaAlertas.filter(function(item: any) {
+    const texto = String([item.status_facebook,item.status,item.motivo,item.tipo].join(' ')).toUpperCase();
+    return ['ACCOUNT','CONTA','DISABLE','BLOQUE','RESTRICT','PAYMENT','PAGAMENTO','PERMISSION'].some(function(term: string) { return texto.includes(term); });
+  });
+  const nomeCurtoCampanha = (valor: string) => {
+    const nome = String(valor || '');
+    const match = nome.match(/BCK\s*\d+/i);
+    return match ? match[0].toUpperCase().replace(/\s+/, ' ') : (nome.split(' - ')[0] || nome || 'Campanha');
+  };
+  const chaveCampanha = (valor: string) => nomeCurtoCampanha(valor).toLowerCase();
+  const acoesDaCampanha = (campanha: any) => {
+    const chave = chaveCampanha(campanha.campanha_nome || campanha.campanha_curta || '');
+    const nomeCompleto = String(campanha.campanha_nome || '').toLowerCase();
+    const nomeCurto = String(campanha.campanha_curta || '').toLowerCase();
+    return acoesAutomaticas.filter(function(item: any) {
+      const campos = [item.campanha_nome, item.campanha_curta, item.nome, item.conjunto_nome, item.adset_nome, item.anuncio_nome]
+        .filter(Boolean)
+        .map(function(valor: any) { return String(valor).toLowerCase(); });
+      return chave.length > 0 && campos.some(function(alvo: string) {
+        return alvo.includes(chave) || (nomeCompleto && alvo.includes(nomeCompleto)) || (nomeCurto && alvo.includes(nomeCurto));
+      });
+    });
+  };
+  const variacaoBudget = (acao: any) => {
+    const antigo = Number(acao.antigo_budget || 0);
+    const novo = Number(acao.novo_budget || 0);
+    if (!antigo || !novo) return 0;
+    return Math.round(((novo - antigo) / antigo) * 100);
+  };
+  const labelAcaoBudget = (acao: any) => {
+    const tipo = String(acao.tipo || '').toLowerCase();
+    const alvo = tipo.includes('conjunto') ? 'conjunto' : tipo.includes('campanha') ? 'campanha' : tipo.includes('anuncio') ? 'anuncio' : 'orcamento';
+    if (tipo.includes('aumentar')) return 'Aumentei o orçamento do ' + alvo;
+    if (tipo.includes('reduzir')) return 'Reduzi o orçamento do ' + alvo;
+    if (tipo.includes('redistrib')) return 'Redistribui orçamento';
+    return 'Ajustei o ' + alvo;
+  };
+  const visualCampanha = (campanha: any) => {
+    const acoes = acoesDaCampanha(campanha);
+    if (acoes.length > 0) {
+      const deltas = acoes.map(variacaoBudget);
+      const subidas = deltas.filter((v: number) => v > 0).length;
+      const quedas = deltas.filter((v: number) => v < 0).length;
+      if (subidas > 0 && quedas > 0) return { label: 'Redistribuí verba', color: '#7c3aed', bg: dark ? 'rgba(124,58,237,0.14)' : '#f3e8ff' };
+      if (subidas > 0) return { label: 'Aumentei orçamento', color: '#2563eb', bg: dark ? 'rgba(37,99,235,0.14)' : '#eff6ff' };
+      if (quedas > 0) return { label: 'Reduzi orçamento', color: '#f97316', bg: dark ? 'rgba(249,115,22,0.14)' : '#fff7ed' };
+      return { label: 'Ajustei orçamento', color: '#2563eb', bg: dark ? 'rgba(37,99,235,0.14)' : '#eff6ff' };
+    }
+    const d = String(campanha.decisao || '').toLowerCase();
+    if (d.includes('escalar')) return { label: 'Observei escala', color: '#7c3aed', bg: dark ? 'rgba(124,58,237,0.14)' : '#f3e8ff' };
+    if (d.includes('otimizar') || d.includes('reduzir')) return { label: 'Observei custo', color: '#e11d48', bg: dark ? 'rgba(225,29,72,0.14)' : '#fff1f2' };
+    if (d.includes('pausar')) return { label: 'Observei risco', color: '#e11d48', bg: dark ? 'rgba(225,29,72,0.14)' : '#fff1f2' };
+    return { label: 'Observei', color: txtMid, bg: dark ? 'rgba(255,255,255,0.06)' : '#f8fafc' };
+  };
+  const textoAnaliseCampanha = (campanha: any) => {
+    const acoes = acoesDaCampanha(campanha);
+    const detalhe = campanha.porque || campanha.proximo_passo || campanha.motivo || '';
+    if (acoes.length > 0) return ('Eu executei ' + acoes.length + ' ajuste' + (acoes.length === 1 ? '' : 's') + ' de orçamento aqui. ' + detalhe).trim();
+    const d = String(campanha.decisao || '').toLowerCase();
+    if (d.includes('escalar')) return ('Eu identifiquei potencial forte de escala. ' + detalhe).trim();
+    if (d.includes('otimizar') || d.includes('reduzir')) return ('Eu marquei essa campanha como ponto de atenção de custo. ' + detalhe).trim();
+    if (d.includes('pausar')) return ('Eu marquei essa campanha como risco alto. ' + detalhe).trim();
+    return ('Eu acompanhei essa campanha e mantive sob observação. ' + (detalhe || 'Sem ação necessária neste ciclo.')).trim();
+  };
   const headerTitle = isSemAcao
-    ? 'Ravena analisou suas campanhas — tudo estável'
+    ? 'Analisei suas campanhas — tudo estável'
     : isErro ? 'Problema na sincronização da Meta'
-      : isPendente ? 'Ravena tem sugestões para você' : 'Ravena atualizou suas campanhas';
+      : isPendente ? 'Tenho sugestões para você' : 'Atualizei suas campanhas';
   const headerSub = isSemAcao
     ? 'Nenhuma ação necessária hoje'
     : isErro
@@ -3096,7 +3221,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
       setSugestoes(novas);
       const novasExecutadas = [
         ...(log.acoes_executadas || []),
-        ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, ok: true }] : []),
+        ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, aprovado: true, ok: true, executado_em: new Date().toISOString() }] : []),
       ];
       if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
       if ((acao.tipo || '').toLowerCase().includes('pausar')) {
@@ -3115,17 +3240,19 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     const uid = acao.id;
     const novas = sugestoes.filter((a: any) => a.id !== uid);
     setSugestoes(novas);
+    const ignorada = { ...acao, automatico: false, ignorado: true, ok: true, executado_em: new Date().toISOString() };
+    const novasExecutadas = [...(log.acoes_executadas || []), ignorada];
     const novoStatus = novas.length === 0 ? 'ignorado' : log.status;
     try {
       const { error } = await (supabase as any)
         .from('ai_optimization_logs')
-        .update({ acoes_sugeridas: novas, status: novoStatus })
+        .update({ acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novoStatus })
         .eq('id', log.id);
       if (error) console.warn('ignorarSugestao: DB update failed', error);
     } catch (e) {
       console.warn('ignorarSugestao: DB update error', e);
     }
-    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, status: novoStatus });
+    if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novoStatus });
     if (novas.length === 0) setTimeout(() => onClose(), 1000);
   }
 
@@ -3172,7 +3299,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
       <div style={{
         position: 'fixed', right: 0, top: 0, bottom: 0,
         width: isMobile ? '100%' : '440px',
-        background: dark ? '#0d0d0f' : '#f8fafc',
+        background: panelBg,
         borderLeft: `1px solid ${border}`,
         zIndex: 1001,
         display: 'flex', flexDirection: 'column',
@@ -3238,18 +3365,76 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
             );
           })()}
 
-          {(log.resumo_contextual || log.resumo) && (
-            <div style={{ padding: '14px 16px', margin: '0 24px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}`, marginBottom: '4px' }}>
-              <p style={{ fontSize: '13px', color: txtMid, margin: 0, lineHeight: 1.6 }}>
-                {(log.resumo_contextual || log.resumo).split('.')[0] + '.'}
-              </p>
-            </div>
-          )}
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+{campanhasLidas.length > 0 && (
+              <div style={{ order: 3, padding: '16px', borderRadius: '18px', background: dark ? 'linear-gradient(180deg,rgba(124,58,237,0.14),rgba(37,99,235,0.06))' : 'linear-gradient(180deg,#ffffff,#f3f6ff)', border: '1px solid ' + (dark ? 'rgba(139,92,246,0.24)' : 'rgba(99,102,241,0.18)'), boxShadow: dark ? 'none' : '0 16px 34px rgba(79,70,229,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 850, color: txtHi }}>Minha análise dos últimos 7 dias</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '12px', color: txtMid }}>O que eu executei, redistribuí ou deixei em observação por campanha</p>
+                  </div>
+                  <span style={{ height: '30px', minWidth: '30px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#2563eb,#8b5cf6)', color: '#fff', boxShadow: '0 10px 22px rgba(79,70,229,0.25)' }}>
+                    <Lightbulb size={15} />
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {campanhasLidas.map((campanha: any, i: number) => {
+                    const visual = visualCampanha(campanha);
+                    const nome = nomeCurtoCampanha(campanha.campanha_nome || campanha.campanha_curta || 'Campanha');
+                    const ajustes = acoesDaCampanha(campanha);
+                    return (
+                      <div key={campanha.campanha_id || campanha.campanha_nome || i} className="ravena-campaign-card" style={{ padding: '12px', borderRadius: '14px', background: dark ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.90)', border: '1px solid ' + (dark ? 'rgba(255,255,255,0.07)' : 'rgba(99,102,241,0.10)' ) }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: '12px', fontWeight: 850, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nome}</p>
+                            <p style={{ margin: '5px 0 0', fontSize: '12px', lineHeight: 1.45, color: txtMid }}>{textoAnaliseCampanha(campanha)}</p>
+                          </div>
+                          <span style={{ flexShrink: 0, padding: '5px 8px', borderRadius: '999px', background: visual.bg, color: visual.color, fontSize: '10px', fontWeight: 850 }}>{visual.label}</span>
+                        </div>
+                        {ajustes.length > 0 && (
+                          <div style={{ display: 'grid', gap: '7px', marginTop: '11px' }}>
+                            {ajustes.map((ajuste: any, idx: number) => {
+                              const delta = variacaoBudget(ajuste);
+                              const subiu = delta >= 0;
+                              const alvo = ajuste.conjunto_nome || ajuste.nome || ajuste.campanha_nome || 'Orçamento';
+                              const cor = subiu ? '#2563eb' : '#f97316';
+                              return (
+                                <div key={ajuste.id || alvo || idx} style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: '8px', alignItems: 'center', padding: '8px', borderRadius: '11px', background: dark ? 'rgba(255,255,255,0.055)' : '#f8faff', border: '1px solid ' + (dark ? 'rgba(255,255,255,0.06)' : 'rgba(99,102,241,0.10)') }}>
+                                  <span style={{ width: '22px', height: '22px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: subiu ? 'rgba(37,99,235,0.10)' : 'rgba(249,115,22,0.10)', color: cor }}>
+                                    {subiu ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                                  </span>
+                                  <div style={{ minWidth: 0 }}>
+                                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 800, color: txtHi }}>{labelAcaoBudget(ajuste)}</p>
+                                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: txtMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alvo}</p>
+                                  </div>
+                                  <span style={{ flexShrink: 0, fontSize: '11px', fontWeight: 850, color: cor }}>
+                                    {ajuste.antigo_budget ? 'R$ ' + ajuste.antigo_budget : '—'} → {ajuste.novo_budget ? 'R$ ' + ajuste.novo_budget : '—'} · {delta > 0 ? '+' : ''}{delta}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
+                          {[
+                            ['Leads', campanha.leads],
+                            ['Rev', campanha.revendedoras],
+                            ['CPL', fmtMoeda(Number(campanha.cpl || 0))],
+                            ['CPR', fmtMoeda(Number(campanha.cpr || 0))],
+                          ].map(([label, value]: any) => (
+                            <span key={label} style={{ padding: '4px 7px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f1f5ff', color: txtMid, fontSize: '10px', fontWeight: 750 }}>{label}: {value || 0}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-            {(isErro || metaAlertas.length > 0) && (
-              <div style={{ padding: '14px', borderRadius: '14px', background: dark ? 'rgba(239,68,68,0.08)' : '#fef2f2', border: '1px solid rgba(239,68,68,0.18)' }}>
+            {/* Alerta Meta — só se erro real ou meta_alertas */}
+            {(isErro || alertasMetaGraves.length > 0) && (
+              <div style={{ order:1, padding: '14px', borderRadius: '14px', background: dark ? 'rgba(239,68,68,0.08)' : '#fef2f2', border: '1px solid rgba(239,68,68,0.18)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <AlertTriangle size={15} color="#dc2626" />
                   <p style={{ margin: 0, fontSize: '12px', fontWeight: 800, color: '#dc2626' }}>Atenção na Meta</p>
@@ -3257,9 +3442,9 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                 <p style={{ margin: 0, fontSize: '12px', color: dark ? '#fecaca' : '#7f1d1d', lineHeight: 1.5 }}>
                   {log.alerta || 'A Meta sinalizou um problema que pode impedir a entrega.'}
                 </p>
-                {metaAlertas.length > 0 && (
+                {alertasMetaGraves.length > 0 && (
                   <div style={{ marginTop: '10px', display: 'grid', gap: '6px' }}>
-                    {metaAlertas.slice(0, 3).map((item: any, i: number) => (
+                    {alertasMetaGraves.slice(0, 3).map((item: any, i: number) => (
                       <div key={item.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
                         <span style={{ color: dark ? '#fee2e2' : '#991b1b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nome}</span>
                         <span style={{ color: '#dc2626', fontWeight: 800 }}>{item.status_facebook}</span>
@@ -3270,232 +3455,135 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
               </div>
             )}
 
-            {/* Feito automaticamente — automatico === true */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).length > 0 && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Feito automaticamente
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === true).map((acao: any, i: number) => (
-                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Aprovado por você — automatico === false */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).length > 0 && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Aprovado por você
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).map((acao: any, i: number) => (
-                    <ActionCard key={i} acao={acao} dark={dark} origem="usuario" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Legado — sem campo automatico (logs antigos) */}
-            {(log.acoes_executadas || []).filter((a: any) => a.automatico === undefined || a.automatico === null).length > 0 && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Feito automaticamente
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(log.acoes_executadas || []).filter((a: any) => a.automatico === undefined || a.automatico === null).map((acao: any, i: number) => (
-                    <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* SEÇÃO 2: Sugestões aguardando aprovação */}
-            {isPendente && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-                  Aguardando sua aprovação
-                </p>
-                {sugestoes.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {sugestoes.map((acao: any, i: number) => (
-                      <SugestaoCard
-                        key={acao.id || i}
-                        acao={acao}
-                        dark={dark}
-                        onAplicar={() => aplicarSugestao(acao)}
-                        onIgnorar={() => ignorarSugestao(acao)}
-                        aplicando={aplicandoIds.has(acao.id)}
-                      />
-                    ))}
+            {/* BLOCO 3: Ações — executadas + sugestões pendentes */}
+            {((log.acoes_executadas || []).length > 0 || (isPendente && sugestoes.length > 0)) ? (
+              <div style={{ display: 'contents' }}>
+                {/* Sub-bloco A: ações automáticas (automatico !== false) */}
+                {(log.acoes_executadas || []).filter((a: any) => a.automatico !== false).length > 0 && false && (
+                  <div style={{ order: 4 }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: txtLow, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
+                      Acoes executadas
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(log.acoes_executadas || [])
+                        .filter((a: any) => a.automatico !== false)
+                        .map((acao: any, i: number) => (
+                          <ActionCard key={i} acao={acao} dark={dark} origem="automatico" />
+                        ))}
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
-                    <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>✅ Todas as sugestões foram processadas.</p>
+                )}
+                {/* Sub-bloco B: ações aprovadas pelo usuário */}
+                {(log.acoes_executadas || []).filter((a: any) => a.automatico === false).length > 0 && (
+                  <div style={{ order: 5 }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
+                      Acoes aprovadas ou ignoradas
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(log.acoes_executadas || [])
+                        .filter((a: any) => a.automatico === false)
+                        .map((acao: any, i: number) => (
+                          <ActionCard key={i} acao={acao} dark={dark} origem="usuario" />
+                        ))}
+                    </div>
+                  </div>
+                )}
+                {(log.acoes_executadas || []).length > 0 && isPendente && sugestoes.length > 0 && (
+                  <div style={{ height: '1px', background: border }} />
+                )}
+                {/* Sub-bloco B: sugestões aguardando aprovação */}
+                {isPendente && (
+          <div style={{ order: 2 }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>
+                      Sugestoes para aprovar
+                    </p>
+                    {sugestoes.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {sugestoes.map((acao: any, i: number) => (
+                          <SugestaoCard
+                            key={acao.id || i}
+                            acao={acao}
+                            dark={dark}
+                            onAplicar={() => aplicarSugestao(acao)}
+                            onIgnorar={() => ignorarSugestao(acao)}
+                            aplicando={aplicandoIds.has(acao.id)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
+                        Todas as sugestões foram processadas.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-
-            {/* Fallback quando não tem nenhuma ação */}
-            {!log.acoes_executadas?.length && !isPendente && (
-              <div style={{ padding: '16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f9fafb', border: `1px solid ${border}` }}>
-                <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>✋ {log.resumo || 'Nenhuma ação necessária hoje.'}</p>
-              </div>
-            )}
-
-            {/* Insight do dia */}
-            {log.insight_do_dia && (
-              <div style={{ padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(139,92,246,0.08)' : '#faf5ff', border: '1px solid rgba(139,92,246,0.2)' }}>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 6px' }}>
-                  🔍 O que a Ravena encontrou
+            ) : (
+              !isPendente && (
+                <p style={{ fontSize: '13px', color: txtMid, margin: 0 }}>
+                  Nenhuma ação necessária hoje.
                 </p>
-                <p style={{ fontSize: '13px', color: dark ? '#c4b5fd' : '#6d28d9', margin: 0, lineHeight: 1.6 }}>
-                  {limparInsight(log.insight_do_dia)}
-                </p>
-              </div>
+              )
             )}
 
-            {/* Campanhas analisadas */}
-            {(log.analise_campanhas || []).length > 0 && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>O que analisei hoje</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(log.analise_campanhas || []).map((acao: any, i: number) => {
-                    const acaoExec = (log.acoes_executadas || []).find((a: any) =>
-                      (a.nome || a.campanha_nome || '').toLowerCase() === (acao.campanha_nome || '').toLowerCase()
-                    );
-                    const acaoSug = (log.acoes_sugeridas || []).find((a: any) =>
-                      (a.nome || a.campanha_nome || '').toLowerCase() === (acao.campanha_nome || '').toLowerCase()
-                    );
-
-                    let badgeColor: string, badgeBg: string, badgeLabel: string;
-                    let textoExibido = acao.porque ? (acao.porque.length > 80 ? acao.porque.slice(0, 79) + '…' : acao.porque) : '';
-
-                    if (acaoExec) {
-                      badgeColor = '#2563eb'; badgeBg = dark ? 'rgba(59,130,246,0.10)' : '#eff6ff';
-                      badgeLabel = 'Ajustado';
-                    } else if (acaoSug) {
-                      badgeColor = '#92400e'; badgeBg = dark ? 'rgba(245,158,11,0.10)' : '#fffbeb';
-                      badgeLabel = 'Sugestão';
-                    } else {
-                      const dec = acao.decisao;
-                      if (dec === 'manter')        { badgeColor = '#047857'; badgeBg = dark ? 'rgba(16,185,129,0.08)' : '#ecfdf5';  badgeLabel = 'Mantendo'; }
-                      else if (dec === 'otimizar') { badgeColor = '#92400e'; badgeBg = dark ? 'rgba(245,158,11,0.08)' : '#fffbeb';  badgeLabel = 'Otimizar'; }
-                      else if (dec === 'escalar')  { badgeColor = '#047857'; badgeBg = dark ? 'rgba(16,185,129,0.08)' : '#ecfdf5';  badgeLabel = 'Escalar'; }
-                      else if (dec === 'aguardar') { badgeColor = '#2563eb'; badgeBg = dark ? 'rgba(59,130,246,0.08)' : '#eff6ff';  badgeLabel = 'Monitorar'; }
-                      else if (dec === 'pausar')   { badgeColor = '#dc2626'; badgeBg = dark ? 'rgba(239,68,68,0.08)' : '#fef2f2';   badgeLabel = 'Pausar'; }
-                      else                         { badgeColor = txtMid; badgeBg = dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6'; badgeLabel = 'Analisar'; }
-                    }
-
-                    return (
-                      <div key={i} style={{ padding: '12px 14px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.018)' : '#fff', border: `1px solid ${border}` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: textoExibido || acao.proximo_passo ? '6px' : 0 }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '99px', color: badgeColor, background: badgeBg, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {badgeLabel}
-                          </span>
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                            {acao.campanha_nome}
-                          </span>
-                        </div>
-                        {textoExibido && (
-                          <p style={{ fontSize: '12px', color: txtMid, margin: 0, lineHeight: 1.5 }}>
-                            {textoExibido}
-                          </p>
-                        )}
-                        {(acao.leads != null || acao.revendedoras != null || acao.potenciais != null) && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                            {acao.leads != null && (
-                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.leads} leads</span>
-                            )}
-                            {acao.revendedoras != null && (
-                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.revendedoras} {t.convertidoCurto}</span>
-                            )}
-                            {acao.potenciais > 0 && (
-                              <span style={{ fontSize: '10px', fontWeight: 700, color: txtMid, background: dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6', borderRadius: '99px', padding: '2px 7px' }}>{acao.potenciais} em {acao.potenciais_label || 'potencial'}</span>
-                            )}
-                          </div>
-                        )}
-                        {acao.proximo_passo && (
-                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: txtMid, lineHeight: 1.5, fontStyle: 'italic' }}>
-                            → {acao.proximo_passo.length > 100 ? acao.proximo_passo.slice(0, 99) + '…' : acao.proximo_passo}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Alerta */}
-            {log.alerta && (
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: '#ef4444' }}>⚠️</span> Ponto de atenção
-                </p>
-                <div style={{ padding: '14px', borderRadius: '14px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', color: '#ef4444', fontSize: '13px', lineHeight: 1.5, fontWeight: 500 }}>
-                  {truncarAlerta(log.alerta)}
-                </div>
-              </div>
-            )}
-
+            {/* BLOCO 6: Campanha Mestre */}
             {campanhaMestre && (
-              <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
-                <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 800, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sugestão de campanha</p>
-                      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1.35 }}>Nova campanha com o melhor público e o melhor criativo</h3>
+              <>
+                <div style={{ height: '1px', background: border }} />
+                <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                  <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 800, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sugestão de campanha</p>
+                        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1.35 }}>Nova campanha com o melhor público e o melhor criativo</h3>
+                      </div>
+                      <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtHi, fontSize: '11px', fontWeight: 800 }}>
+                        {fmtMoeda(Number(campanhaMestre.budget_diario_sugerido || 0))}/dia
+                      </span>
                     </div>
-                    <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtHi, fontSize: '11px', fontWeight: 800 }}>
-                      {fmtMoeda(Number(campanhaMestre.budget_diario_sugerido || 0))}/dia
-                    </span>
+                    {campanhaMestre.motivo && (
+                      <p style={{ margin: '10px 0 0', fontSize: '13px', color: txtMid, lineHeight: 1.55 }}>{campanhaMestre.motivo}</p>
+                    )}
                   </div>
-                  {campanhaMestre.motivo && (
-                    <p style={{ margin: '10px 0 0', fontSize: '13px', color: txtMid, lineHeight: 1.55 }}>{campanhaMestre.motivo}</p>
-                  )}
-                </div>
-                <div style={{ padding: '14px 16px', display: 'grid', gap: '10px' }}>
-                  {[
-                    ['Base', campanhaMestre.campanha_base],
-                    ['Público', campanhaMestre.publico],
-                    ['Criativo', campanhaMestre.criativo],
-                  ].map(([label, value]) => (
-                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '10px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
+                  <div style={{ padding: '14px 16px', display: 'grid', gap: '10px' }}>
+                    {[
+                      ['Base', campanhaMestre.campanha_base],
+                      ['Público', campanhaMestre.publico],
+                      ['Criativo', campanhaMestre.criativo],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '10px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
+                      </div>
+                    ))}
+                    {Array.isArray(campanhaMestre.instrucoes) && campanhaMestre.instrucoes.length > 0 && (
+                      <div style={{ marginTop: '4px', display: 'grid', gap: '6px' }}>
+                        {campanhaMestre.instrucoes.slice(0, 4).map((item: string, i: number) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: txtMid, lineHeight: 1.45 }}>
+                            <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '10px', fontWeight: 800 }}>{i + 1}</span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ marginTop: '4px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <button
+                        onClick={marcarCampanhaCriada}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtHi, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Marcar como criada
+                      </button>
+                      <button
+                        onClick={() => window.open('https://adsmanager.facebook.com/adsmanager/manage/campaigns', '_blank', 'noopener,noreferrer')}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        <ExternalLink size={14} />
+                        Abrir Meta
+                      </button>
                     </div>
-                  ))}
-                  {Array.isArray(campanhaMestre.instrucoes) && campanhaMestre.instrucoes.length > 0 && (
-                    <div style={{ marginTop: '4px', display: 'grid', gap: '6px' }}>
-                      {campanhaMestre.instrucoes.slice(0, 4).map((item: string, i: number) => (
-                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: txtMid, lineHeight: 1.45 }}>
-                          <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '10px', fontWeight: 800 }}>{i + 1}</span>
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ marginTop: '4px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <button
-                      onClick={marcarCampanhaCriada}
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtHi, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      Marcar como criada
-                    </button>
-                    <button
-                      onClick={() => window.open('https://adsmanager.facebook.com/adsmanager/manage/campaigns', '_blank', 'noopener,noreferrer')}
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >
-                      <ExternalLink size={14} />
-                      Abrir Meta
-                    </button>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
           </div>
@@ -3504,7 +3592,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         {/* Footer info */}
         <div style={{ padding: '16px 24px', borderTop: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
           <p style={{ fontSize: '11px', color: txtMid, margin: 0, textAlign: 'center' }}>
-            As decisões da IA são baseadas na performance dos últimos 7 dias.
+            Analiso os últimos 7 dias de performance. Só executo com sua aprovação.
           </p>
         </div>
       </div>
@@ -3547,7 +3635,7 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   const ant = acao.antigo_budget != null ? acao.antigo_budget : null;
   const nov = acao.novo_budget   != null ? acao.novo_budget   : null;
   const varPct = ant && nov && Number(ant) > 0
-    ? Math.round(((Number(nov) - Number(ant)) / Number(ant)) * 100)
+    ? Math.max(-20, Math.min(20, Math.round(((Number(nov) - Number(ant)) / Number(ant)) * 100)))
     : null;
 
   return (
@@ -3607,11 +3695,20 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
         </div>
       )}
 
+      {/* Guardrail note for increases */}
+      {isIncrease && varPct !== null && (
+        <div style={{ margin: '0 14px', padding: '7px 10px', borderRadius: '8px', background: dark ? 'rgba(245,158,11,0.06)' : '#fffbeb', border: '1px solid rgba(245,158,11,0.18)' }}>
+          <p style={{ margin: 0, fontSize: '11px', color: dark ? '#fbbf24' : '#92400e', lineHeight: 1.4 }}>
+            Aumento de {varPct}% — dentro do limite de 20% por análise. Você aprova, eu executo.
+          </p>
+        </div>
+      )}
+
       {/* Botões */}
       <div style={{ display: 'flex', gap: '8px', padding: '12px 14px 14px' }}>
         <button onClick={onAplicar} disabled={aplicando}
           style={{ flex: 1, padding: '9px', borderRadius: '9px', border: 'none', background: aplicando ? bdr : '#8b5cf6', color: aplicando ? txtMid : '#fff', fontSize: '13px', fontWeight: 600, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
-          {aplicando ? 'Aplicando…' : 'Aplicar'}
+          {aplicando ? 'Aplicando…' : 'Aprovar'}
         </button>
         <button onClick={onIgnorar} disabled={aplicando}
           style={{ padding: '9px 14px', borderRadius: '9px', border: `1px solid ${bdr}`, background: 'transparent', color: txtMid, fontSize: '13px', fontWeight: 500, cursor: aplicando ? 'default' : 'pointer', fontFamily: 'inherit' }}>
@@ -3657,14 +3754,14 @@ function ActionCard({ acao, dark, origem }: { acao: any; dark: boolean; origem?:
     ? Math.round(((Number(acao.novo_budget) - Number(acao.antigo_budget)) / Number(acao.antigo_budget)) * 100)
     : null;
 
-  const label = isPause && isConjunto ? 'Conjunto pausado'
-    : isPause ? 'Campanha pausada'
-    : isRedistribuir ? 'Orçamento redistribuído'
-    : isUp && isConjunto ? 'Orçamento de conjunto aumentado'
-    : isUp ? 'Orçamento aumentado'
-    : isDown && isConjunto ? 'Orçamento de conjunto reduzido'
-    : isDown ? 'Orçamento reduzido'
-    : 'Ação automática';
+  const label = isPause && isConjunto ? 'Pausei um conjunto'
+    : isPause ? 'Pausei a campanha'
+    : isRedistribuir ? 'Redistribuí o orçamento'
+    : isUp && isConjunto ? 'Aumentei o orçamento do conjunto'
+    : isUp ? 'Aumentei o orçamento'
+    : isDown && isConjunto ? 'Reduzi o orçamento do conjunto'
+    : isDown ? 'Reduzi o orçamento'
+    : 'Fiz um ajuste';
 
   const truncMotivo = (str: string | undefined, max: number) => {
     if (!str) return '';

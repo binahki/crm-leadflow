@@ -16,6 +16,7 @@ const dbH = {
 
 const LEAD_ACTIONS = ["lead", "offsite_conversion.fb_pixel_lead", "onsite_conversion.lead_grouped"];
 const PAGE_LIMIT = "500";
+const MAX_BUDGET_CHANGE_PCT = 0.20;
 
 type InsightNode = {
   id: string;
@@ -95,6 +96,14 @@ function round(v: number) {
 
 function brl(v: number) {
   return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+}
+
+function increaseBudget(current: number) {
+  return Math.round(current * (1 + MAX_BUDGET_CHANGE_PCT));
+}
+
+function decreaseBudget(current: number) {
+  return Math.max(10, Math.round(current * (1 - MAX_BUDGET_CHANGE_PCT)));
 }
 
 function pct(v: number) {
@@ -515,8 +524,8 @@ function scoreCampaign(c: CampaignNode, avgCpl: number, avgCpr: number) {
 }
 
 function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: number, modo: string, preStatusLabel: string) {
-  const reducao = modo === "agressivo" ? 0.35 : modo === "conservador" ? 0.15 : 0.25;
-  const aumento = modo === "agressivo" ? 0.35 : modo === "conservador" ? 0.15 : 0.20;
+  const reducao = modo === "conservador" ? 0.15 : MAX_BUDGET_CHANGE_PCT;
+  const aumento = modo === "conservador" ? 0.15 : MAX_BUDGET_CHANGE_PCT;
   const sugestoes: any[] = [];
   const analise: any[] = [];
 
@@ -585,6 +594,7 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
               antigo_budget: bestAdset.daily_budget,
               novo_budget: novoAdset,
               motivo: porque,
+              automatico: true,
             });
           } else {
             proximo = `Escalar manualmente os adsets de ${label}.`;
@@ -600,6 +610,7 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
             antigo_budget: campBudget,
             novo_budget: novoBase,
             motivo: porque,
+            automatico: true,
           });
         }
       }
@@ -628,6 +639,7 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
                 antigo_budget: worstAdset.daily_budget,
                 novo_budget: novoAdset,
                 motivo: porque,
+                automatico: true,
               });
             } else {
               proximo = "Revisar adsets — nenhum elegível para redução automática.";
@@ -648,6 +660,7 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
               antigo_budget: campBudget,
               novo_budget: novo,
               motivo: porque,
+              automatico: true,
             });
           }
         }
@@ -783,6 +796,58 @@ async function wasMasterRecentlyClosed(orgId: string, campanhaMestre: any) {
   });
 }
 
+function isBudgetAction(acao: any) {
+  const tipo = String(acao?.tipo || "").toLowerCase();
+  return tipo.includes("budget") && (tipo.includes("aumentar") || tipo.includes("reduzir"));
+}
+
+async function executeBudgetAction(acao: any, token: string) {
+  const tipo = String(acao?.tipo || "").toLowerCase();
+  const atual = Number(acao?.antigo_budget || 0);
+  let novo = Number(acao?.novo_budget || 0);
+  if (!acao?.id || atual <= 0 || novo <= 0) {
+    return { ...acao, automatico: true, ok: false, erro: "Budget invalido para executar", executado_em: new Date().toISOString() };
+  }
+
+  if (tipo.includes("aumentar")) {
+    novo = Math.min(novo, increaseBudget(atual));
+    if (novo <= atual) return { ...acao, novo_budget: novo, automatico: true, ok: false, erro: "Aumento ficou abaixo do budget atual", executado_em: new Date().toISOString() };
+  } else if (tipo.includes("reduzir")) {
+    novo = Math.max(novo, decreaseBudget(atual));
+    if (novo >= atual) return { ...acao, novo_budget: novo, automatico: true, ok: false, erro: "Reducao ficou acima do budget atual", executado_em: new Date().toISOString() };
+  } else {
+    return { ...acao, automatico: true, ok: false, erro: "Tipo de budget nao suportado", executado_em: new Date().toISOString() };
+  }
+
+  try {
+    const res = await fetch(`${META_BASE}/${acao.id}?access_token=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_budget: Math.round(novo * 100) }),
+    });
+    const data = await res.json();
+    const ok = data.success === true;
+    return { ...acao, novo_budget: novo, automatico: true, ok, erro: data.error?.message || (ok ? null : JSON.stringify(data)), executado_em: new Date().toISOString() };
+  } catch (err) {
+    return { ...acao, novo_budget: novo, automatico: true, ok: false, erro: String(err), executado_em: new Date().toISOString() };
+  }
+}
+
+async function executeAutomaticBudgetActions(sugestoes: any[], token: string) {
+  const executadas: any[] = [];
+  const pendentes: any[] = [];
+
+  for (const acao of sugestoes) {
+    if (acao?.automatico === true && isBudgetAction(acao)) {
+      executadas.push(await executeBudgetAction(acao, token));
+    } else {
+      pendentes.push(acao);
+    }
+  }
+
+  return { executadas, pendentes };
+}
+
 async function analisarOrg(orgId: string) {
   const orgRes = await rest(`organizations?select=meta_token,meta_account_id,ravena_ativa,ravena_modo,ravena_meta_revendedoras,modelo_negocio,status_config&id=eq.${orgId}&limit=1`);
   const [org] = await orgRes.json();
@@ -879,7 +944,7 @@ async function analisarOrg(orgId: string) {
   }
   const cprMes = currentMonthTrafficRevs > 0 ? metaMes.spend / currentMonthTrafficRevs : 0;
   const cprMesAnterior = prevMonthTrafficRevs > 0 ? metaMesAnterior.spend / prevMonthTrafficRevs : 0;
-  const { sugestoes, analise } = buildSuggestions(campaigns, cplMedio, avgCpr, modo, funil.preStatusLabel);
+  let { sugestoes, analise } = buildSuggestions(campaigns, cplMedio, avgCpr, modo, funil.preStatusLabel);
   const metaAlertas = collectMetaAlerts(campaigns);
   const campanhaMestreBase = bestMaster(campaigns, avgCpr);
   const campanhaMestre = await wasMasterRecentlyClosed(orgId, campanhaMestreBase) ? null : campanhaMestreBase;
@@ -894,7 +959,7 @@ async function analisarOrg(orgId: string) {
   // When significantly behind on monthly goal, force scale the best campaign(s).
   if (metaRevs > 0 && diasDecorridos >= 7 && ritmoRevs < metaRevs * 0.80) {
     const urgente = ritmoRevs < metaRevs * 0.60;
-    const fatorUrgencia = urgente ? 0.35 : 0.20;
+    const fatorUrgencia = MAX_BUDGET_CHANGE_PCT;
     const jaEscalando = new Set(analise.filter((a: any) => a.decisao === "escalar").map((a: any) => a.campanha_id));
     const candidatos = [...campaigns]
       .filter(c => c.status === "ACTIVE" && !jaEscalando.has(c.id))
@@ -920,6 +985,7 @@ async function analisarOrg(orgId: string) {
           antigo_budget: campBudget,
           novo_budget: novo,
           motivo,
+          automatico: true,
         });
       } else if (bestAdset) {
         const adsetBudget = bestAdset.daily_budget;
@@ -934,6 +1000,7 @@ async function analisarOrg(orgId: string) {
           antigo_budget: adsetBudget,
           novo_budget: novoAdset,
           motivo,
+          automatico: true,
         });
       } else {
         continue;
@@ -946,6 +1013,27 @@ async function analisarOrg(orgId: string) {
       }
     }
   }
+
+  if (campanhaMestre) {
+    sugestoes.push({
+      id: `criar-${campanhaMestre.campanha_base_id}`,
+      tipo: "criar_campanha",
+      nome: "Nova campanha com combinacao vencedora",
+      campanha_nome: campanhaMestre.campanha_base,
+      campanha_base: campanhaMestre.campanha_base,
+      campanha_base_id: campanhaMestre.campanha_base_id,
+      publico: campanhaMestre.publico,
+      publico_id: campanhaMestre.publico_id,
+      criativo: campanhaMestre.criativo,
+      criativo_id: campanhaMestre.criativo_id,
+      budget_diario_sugerido: campanhaMestre.budget_diario_sugerido,
+      motivo: campanhaMestre.motivo || `Eu encontrei uma combinacao forte em ${shortName(campanhaMestre.campanha_base)} para virar uma nova campanha.`,
+      automatico: false,
+    });
+  }
+
+  const { executadas: acoesAutomaticas, pendentes: sugestoesPendentes } = await executeAutomaticBudgetActions(sugestoes, token);
+  sugestoes = sugestoesPendentes;
 
   const melhor = [...analise].sort((a, b) => b.score - a.score)[0];
   const piorando = analise.filter((a) => a.tendencia === "piorando");
@@ -974,21 +1062,25 @@ async function analisarOrg(orgId: string) {
 
   const insightDiaFinal = `${diagnosticoCpr} ${insightDia}`;
 
-  const decisao = sugestoes.length > 0
-    ? `${sugestoes.length} ajuste${sugestoes.length !== 1 ? "s" : ""} recomendado${sugestoes.length !== 1 ? "s" : ""}`
-    : "Nenhum ajuste urgente";
+  const decisao = acoesAutomaticas.length > 0 && sugestoes.length > 0
+    ? `${acoesAutomaticas.length} ajuste${acoesAutomaticas.length !== 1 ? "s" : ""} feito${acoesAutomaticas.length !== 1 ? "s" : ""} e ${sugestoes.length} recomenda${sugestoes.length !== 1 ? "coes" : "cao"}`
+    : acoesAutomaticas.length > 0
+      ? `${acoesAutomaticas.length} ajuste${acoesAutomaticas.length !== 1 ? "s" : ""} feito${acoesAutomaticas.length !== 1 ? "s" : ""}`
+      : sugestoes.length > 0
+        ? `${sugestoes.length} recomenda${sugestoes.length !== 1 ? "coes" : "cao"}`
+        : "Nenhum ajuste urgente";
 
   return {
     skip: false,
     log: {
       org_id: orgId,
-      status: sugestoes.length > 0 ? "pendente" : "sem_acao",
+      status: sugestoes.length > 0 ? "pendente" : (acoesAutomaticas.length > 0 ? "executado" : "sem_acao"),
       acoes_sugeridas: sugestoes,
-      acoes_executadas: [],
+      acoes_executadas: acoesAutomaticas,
       decisao_principal: decisao,
       frase_do_dia: sugestoes.length > 0 ? "A Ravena encontrou ajustes para proteger seu orçamento." : "Campanhas estáveis hoje.",
       resumo: `${Math.max(totalLeadsApi, totalLeadsCrm)} leads, ${revsTotal} aprovadas e custo médio de ${brl(avgCpr || cplMedio)}.`,
-      resumo_contextual: `Ultimos 7 dias de trafego: ${Math.max(totalLeadsApi, totalLeadsCrm)} leads, ${revsTotal} ${funil.convertidoLabel} e custo medio de ${brl(avgCpr || cplMedio)}.`,
+      resumo_contextual: `${Math.max(totalLeadsApi, totalLeadsCrm)} leads, ${revsTotal} ${funil.convertidoLabel} e CPR médio de ${brl(avgCpr || cplMedio)} nos últimos 7 dias.`,
       insights: analise.slice(0, 10),
       analise_campanhas: analise.slice(0, 10),
       insight_do_dia: insightDiaFinal,
@@ -997,6 +1089,14 @@ async function analisarOrg(orgId: string) {
       total_gasto: totalGasto,
       total_leads: Math.max(totalLeadsApi, totalLeadsCrm),
       cpl_medio: cplMedio,
+      metricas_7d: {
+        leads: Math.max(totalLeadsApi, totalLeadsCrm),
+        gasto: round(totalGasto),
+        cpl: round(cplMedio),
+        convertido: revsTotal,
+        cpr: round(avgCpr ? avgCpr : 0),
+        convertido_label: funil.convertidoLabel,
+      },
       ritmo_mensal: ritmoMensal,
       revendedoras_mes: revsMes,
       dias_restantes: diasRestantes,

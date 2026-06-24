@@ -126,7 +126,12 @@ function filterByPeriod(leads: Lead[], period: string, from?: string, to?: strin
 
 function getStatusMoveDate(lead: Lead, statusId: number): string | null {
   const field = STATUS_TIMESTAMP_FIELD[statusId];
-  return (field ? (lead as any)[field] : null) || (lead as any).ultimo_status_change || null;
+  const exact = field ? (lead as any)[field] : null;
+  if (exact) return exact;
+  let currentStatus = toNum(lead.status);
+  if (currentStatus === 0) currentStatus = 1;
+  if (currentStatus === statusId) return (lead as any).ultimo_status_change || lead.created_at || null;
+  return null;
 }
 
 function isDateInPeriod(dateStr: string | null | undefined, period: string, from?: string, to?: string): boolean {
@@ -154,6 +159,10 @@ function isLeadMovedToStatusInPeriod(lead: Lead, statusId: number, period: strin
   let currentStatus = toNum(lead.status);
   if (currentStatus === 0) currentStatus = 1;
   if (currentStatus !== statusId) return false;
+  return isDateInPeriod(getStatusMoveDate(lead, statusId), period, from, to);
+}
+
+function wasLeadMovedToStatusInPeriod(lead: Lead, statusId: number, period: string, from?: string, to?: string): boolean {
   return isDateInPeriod(getStatusMoveDate(lead, statusId), period, from, to);
 }
 
@@ -513,7 +522,7 @@ function FunilHorizontal({ funnelData, totalLeads, dark, loading, navigate, sele
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: txtHi, margin: 0 }}>Movimentos do funil</h3>
           <p style={{ fontSize: '11px', color: txtLow, margin: '3px 0 0' }}>Quando os leads entraram em cada status</p>
         </div>
-        <span style={{ fontSize: '11px', color: txtLow }}>{totalLeads} leads criados</span>
+        <span style={{ fontSize: '11px', color: txtLow }}>{totalLeads} leads no período</span>
       </div>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
         {funnelData.map(stage => {
@@ -577,8 +586,8 @@ function origemKey(src: string | null | undefined): 'meta' | 'indicacao' | 'orga
   if (!src) return 'outros';
   const s = src.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
   if (['FB','FACEBOOK','META','IG_BOOST','TRAFEGO PAGO','TRAFEGO ANTIGO','CAMPANHA'].includes(s)
-      || s.startsWith('FB') || s.includes('PAGO') || s.includes('CAMPANHA')) return 'meta';
-  if (s.includes('INSTAGRAM') || s === 'IG') return 'organico';
+      || s.startsWith('FB') || s.includes('TRAFEGO') || s.includes('PAGO') || s.includes('CAMPANHA')) return 'meta';
+  if (s.includes('INSTAGRAM') || s.includes('ORGANICO') || s === 'IG') return 'organico';
   if (s.includes('INDICAC')) return 'indicacao';
   return 'outros';
 }
@@ -1319,7 +1328,6 @@ export default function Dashboard() {
 
     const PAGE = 1000;
 
-    // 1ª página — mostra conteúdo imediatamente
     const { data: firstData, error } = await supabase
       .from('leads')
       .select(DASH_FIELDS)
@@ -1334,12 +1342,13 @@ export default function Dashboard() {
     }
 
     const firstBatch = (firstData || []) as Lead[];
-    setAllLeads(firstBatch);
-    setLoading(false); // dispara showContent agora
 
-    if (firstBatch.length < PAGE) return firstBatch;
+    if (firstBatch.length < PAGE) {
+      setAllLeads(firstBatch);
+      setLoading(false);
+      return firstBatch;
+    }
 
-    // Páginas restantes em background
     let all = [...firstBatch];
     let from = PAGE;
     while (true) {
@@ -1353,11 +1362,12 @@ export default function Dashboard() {
       const batch = (data || []) as Lead[];
       if (!batch.length) break;
       all = [...all, ...batch];
-      setAllLeads([...all]);
       if (batch.length < PAGE) break;
       from += PAGE;
     }
 
+    setAllLeads(all);
+    setLoading(false);
     return all;
   };
   function getMetaCacheKey(period: string, from?: string, to?: string) {
@@ -1526,11 +1536,10 @@ export default function Dashboard() {
   const convRate = totalLeads > 0 ? safe((approved / totalLeads) * 100).toFixed(1) : '0.0';
   const metaSpend = metaMetrics.spend || 0;
   const custoIndicacaoOrigem = useMemo(() =>
-    allLeads
+    filtered
       .filter(l => origemKey((l as any).utm_source) === 'indicacao')
-      .filter(l => isLeadMovedToStatusInPeriod(l, statusConfig.convertido_status, selectedPeriod, customFrom, customTo))
       .reduce((sum, l) => sum + (Number((l as any).custo_indicacao) || 0), 0),
-    [allLeads, statusConfig, selectedPeriod, customFrom, customTo]);
+    [filtered]);
   const custoTotalIndicacao = useMemo(() =>
     allLeads
       .filter(l => normalizarOrigem((l as any).utm_source) === 'IndicaÃ§Ã£o')
@@ -1546,6 +1555,7 @@ export default function Dashboard() {
       return { ...f, value };
     });
   }, [allLeads, selectedPeriod, customFrom, customTo, funnelConfig]);
+  const funnelTotal = useMemo(() => funnelData.reduce((sum, item) => sum + item.value, 0), [funnelData]);
   const recentLeads = useMemo(() => [...allLeads].sort((a, b) => parseLeadDate(b.created_at).getTime() - parseLeadDate(a.created_at).getTime()).slice(0, 5), [allLeads]);
   const rankingOrigens = useMemo(() => {
     const FIXAS = ['Meta Ads', 'Indicação', 'Orgânico', 'Outros'] as const;
@@ -1800,7 +1810,7 @@ export default function Dashboard() {
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>Leads</p>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {showContent ? <AnimatedCounter value={totalLeads} /> : sk('50px', '24px')}
+                  {allLoaded ? <AnimatedCounter value={totalLeads} /> : sk('50px', '24px')}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1814,7 +1824,7 @@ export default function Dashboard() {
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: '10px', color: txtLow, margin: '0 0 2px', fontWeight: 500 }}>{t.convertidoPlural}</p>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: txtHi, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {showContent ? <AnimatedCounter value={approved} /> : sk('50px', '24px')}
+                  {allLoaded ? <AnimatedCounter value={approved} /> : sk('50px', '24px')}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1870,7 +1880,7 @@ export default function Dashboard() {
             <div style={{ background: cardBg, borderRadius: '14px', padding: '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 160ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '140px' }}>
               <p style={{ fontSize: '11px', color: txtLow, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Leads</p>
               <div style={{ fontSize: '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
-                {showContent ? <AnimatedCounter value={totalLeads} /> : sk('60px', '32px')}
+                {allLoaded ? <AnimatedCounter value={totalLeads} /> : sk('60px', '32px')}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '11px', color: txtLow }}>Total Período</span>
@@ -1886,7 +1896,7 @@ export default function Dashboard() {
             <div style={{ background: cardBg, borderRadius: '14px', padding: '20px 24px', border: `1px solid ${border}`, boxShadow: cardShadow, animation: showContent ? `cardIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 240ms both` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '140px' }}>
               <p style={{ fontSize: '11px', color: txtLow, margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{t.convertidoPlural}</p>
               <div style={{ fontSize: '32px', fontWeight: 800, color: txtHi, letterSpacing: '-0.03em', lineHeight: 1, margin: '8px 0' }}>
-                {showContent ? <AnimatedCounter value={approved} /> : sk('60px', '32px')}
+                {allLoaded ? <AnimatedCounter value={approved} /> : sk('60px', '32px')}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#22c55e' }}>{convRate}% conversão</span>
@@ -1901,7 +1911,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {rankingOrigensCorrigido.length > 0 && showContent && !isMobile && (
+        {rankingOrigensCorrigido.length > 0 && allLoaded && showContent && !isMobile && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '2px 2px 8px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: txtHi }}>Origens no período</span>
@@ -2011,7 +2021,7 @@ export default function Dashboard() {
         {/* Funil Horizontal */}
         <FunilHorizontal
           funnelData={funnelData}
-          totalLeads={totalLeads}
+          totalLeads={funnelTotal}
           dark={dark}
           loading={loading}
           navigate={navigate}

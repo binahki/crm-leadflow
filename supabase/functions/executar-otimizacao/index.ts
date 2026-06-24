@@ -15,7 +15,7 @@ const corsHeaders = {
 function getLimitesModo(modo: string) {
   switch (modo) {
     case "conservador": return { aumentoMaxPct: 0.15, reducaoMaxPct: 0.15, budgetMaxDia: 100 };
-    case "agressivo":   return { aumentoMaxPct: 0.40, reducaoMaxPct: 0.30, budgetMaxDia: 200 };
+    case "agressivo":   return { aumentoMaxPct: 0.20, reducaoMaxPct: 0.20, budgetMaxDia: 200 };
     default:            return { aumentoMaxPct: 0.20, reducaoMaxPct: 0.20, budgetMaxDia: 150 };
   }
 }

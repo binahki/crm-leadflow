@@ -22,6 +22,7 @@ import { formatarWhatsapp } from '@/utils/relativeTime';
 import { safeName } from '@/utils/safeName';
 import { getAvatarColor, getAvatarTextColor } from '@/utils/avatarColor';
 import { aplicarTagOrigem } from '@/utils/tagOrigem';
+import { pedirCustoIndicacao, precisaCustoIndicacaoParaConversao } from '@/utils/indicacao';
 import { dispararCapiConversao } from '@/utils/capiEvento';
 
 const STATUS_STYLE = STATUS_CONFIG;
@@ -171,7 +172,14 @@ const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
 
 function getStatusMoveDate(lead: Lead, statusId = toStatusNum(lead.status)): string | null {
   const field = STATUS_TIMESTAMP_FIELD[statusId];
-  return (field ? (lead as any)[field] : null) || (lead as any).ultimo_status_change || null;
+  const exact = field ? (lead as any)[field] : null;
+  if (exact) return exact;
+  if (toStatusNum(lead.status) === statusId) return (lead as any).ultimo_status_change || lead.created_at || null;
+  return null;
+}
+
+function hasMovedToStatus(lead: Lead, statusId: number): boolean {
+  return !!getStatusMoveDate(lead, statusId);
 }
 
 function extractCampaignName(utmCampaign: string | null | undefined): string {
@@ -1353,18 +1361,23 @@ function LeadsPage() {
       });
   }, [allLeads, periodFilter, customFrom, customTo, storeCampaigns]);
 
+  const activeMoveStatus = useMemo(() => {
+    if (statusFilter !== 'all' && statusFilter !== 'novo') return parseInt(statusFilter);
+    if (campDeepFilter?.showRevs) return 3;
+    return statusConfig.entrada_status || 1;
+  }, [statusFilter, campDeepFilter, statusConfig.entrada_status]);
+
+  const getLeadMoveDateForView = useCallback((lead: Lead) => {
+    return activeMoveStatus ? getStatusMoveDate(lead, activeMoveStatus) : getStatusMoveDate(lead);
+  }, [activeMoveStatus]);
+
   // ── Filtered leads (all active filters, AND logic) ────────────────────────
   const filtered = useMemo(() => {
     let r = [...allLeads];
 
     // Escolhe a data de referência para o filtro de período baseado no status selecionado:
     // cada status tem seu próprio timestamp de quando o lead foi movido para aquele status.
-    const statusNum = (statusFilter !== 'all' && statusFilter !== 'novo')
-      ? parseInt(statusFilter)
-      : (campDeepFilter?.showRevs ? 3 : null);
-    const getRef = (l: Lead): string | null | undefined => {
-      return statusNum ? getStatusMoveDate(l, statusNum) : l.created_at;
-    };
+    const getRef = (l: Lead): string | null | undefined => getStatusMoveDate(l, activeMoveStatus);
 
     r = filterByPeriod(r, periodFilter, customFrom, customTo, getRef);
     if (statusFilter === 'novo') r = r.filter(l => toStatusNum(l.status) === 1 && !l.avaliado);
@@ -1510,13 +1523,13 @@ function LeadsPage() {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
       r = [...r].sort((a, b) => {
-        const da = parseLeadDate(getStatusMoveDate(a)).getTime();
-        const db = parseLeadDate(getStatusMoveDate(b)).getTime();
+        const da = parseLeadDate(getLeadMoveDateForView(a)).getTime();
+        const db = parseLeadDate(getLeadMoveDateForView(b)).getTime();
         return sortByDate === 'desc' ? db - da : da - db;
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap]);
+  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap, activeMoveStatus, getLeadMoveDateForView]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1589,9 +1602,29 @@ function LeadsPage() {
 
     try {
       const ids = allSystemSelected ? filtered.map(l => l.id) : Array.from(selectedIds);
+      const leadsMovidos = allSystemSelected ? filtered : allLeads.filter(l => ids.includes(l.id));
+      const indicacoesSemValor = leadsMovidos.filter(l => precisaCustoIndicacaoParaConversao(l, newStatus, statusConfig.convertido_status));
+      let custoIndicacaoLeadId: string | null = null;
+      let custoIndicacaoValor: number | null = null;
+      if (indicacoesSemValor.length > 1) {
+        toast.error(`${indicacoesSemValor.length} indicações estão sem valor. Atualize o valor antes de aprovar em massa.`);
+        return;
+      }
+      if (indicacoesSemValor.length === 1) {
+        const value = pedirCustoIndicacao(indicacoesSemValor[0]);
+        if (value === null) {
+          toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+          return;
+        }
+        custoIndicacaoLeadId = indicacoesSemValor[0].id;
+        custoIndicacaoValor = value;
+      }
       const CHUNK = 200;
       for (let i = 0; i < ids.length; i += CHUNK) {
         await supabase.from('leads').update(updates).in('id', ids.slice(i, i + CHUNK));
+      }
+      if (custoIndicacaoLeadId && custoIndicacaoValor !== null) {
+        await supabase.from('leads').update({ custo_indicacao: custoIndicacaoValor }).eq('id', custoIndicacaoLeadId);
       }
       const idSet = new Set(ids);
       if (newStatus === statusConfig.convertido_status && orgId) {
@@ -1599,7 +1632,7 @@ function LeadsPage() {
           .filter(l => !(l as any).capi_conversao_enviado);
         leadsParaCapi.forEach(l => dispararCapiConversao(l.id, orgId));
       }
-      setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, ...updates } : l));
+      setAllLeads(prev => prev.map(l => idSet.has(l.id) ? { ...l, ...updates, ...(l.id === custoIndicacaoLeadId ? { custo_indicacao: custoIndicacaoValor } : {}) } : l));
       const label = statusConfig.statuses.find(s => s.id === newStatus)?.label ?? STATUS_LABELS[newStatus];
       toast.success(`${ids.length} lead${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para "${label}"`);
       setSelectedIds(new Set());
@@ -1751,6 +1784,18 @@ function LeadsPage() {
       : newLead.origem === 'Instagram Orgânico'
       ? 'instagram_organico'
       : (newLead.origem || null);
+    let custoIndicacaoFinal = newLead.origem === 'Indicação' && custoIndicacaoInput !== ''
+      ? parseFloat(custoIndicacaoInput) || 0
+      : null;
+    if (precisaCustoIndicacaoParaConversao({ nome: newLead.nome, utm_source: finalUtmSource, custo_indicacao: custoIndicacaoFinal }, Number(newLead.status), statusConfig.convertido_status)) {
+      const value = pedirCustoIndicacao({ nome: newLead.nome, utm_source: finalUtmSource, custo_indicacao: custoIndicacaoFinal });
+      if (value === null) {
+        toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+        addingRef.current = false;
+        return;
+      }
+      custoIndicacaoFinal = value;
+    }
 
     const { data, error } = await supabase.from('leads').insert({
       nome: newLead.nome.trim(),
@@ -1764,8 +1809,8 @@ function LeadsPage() {
       utm_campaign: null, utm_medium: null, utm_content: null, utm_term: null, utm_id: null,
       org_id: orgId,
       created_at: new Date().toISOString(),
-      ...(newLead.origem === 'Indicação' && custoIndicacaoInput !== ''
-        ? { custo_indicacao: parseFloat(custoIndicacaoInput) || 0 }
+      ...(newLead.origem === 'Indicação' && custoIndicacaoFinal !== null
+        ? { custo_indicacao: custoIndicacaoFinal }
         : {}),
     } as any).select('*').single();
 
@@ -1784,14 +1829,19 @@ function LeadsPage() {
   const handleEditLead = async () => {
     if (!editingLead) return;
     const editUtmSource = (editingLead as any).utm_source || null;
-    if (editUtmSource === 'Indicação' &&
-        ((editingLead as any).custo_indicacao === null || (editingLead as any).custo_indicacao === undefined || (editingLead as any).custo_indicacao === '')) {
-      toast.error('Informe o custo desta indicação (pode ser R$ 0)'); return;
-    }
     const cidadeNorm = normalizeCity(editingLead.cidade || '');
     const originalLead = allLeads.find(l => l.id === editingLead.id);
     const newStatus = editingLead.status ?? 0;
-    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus, utm_source: editUtmSource, custo_indicacao: (editingLead as any).custo_indicacao ?? null };
+    let custoIndicacaoFinal = (editingLead as any).custo_indicacao ?? null;
+    if (precisaCustoIndicacaoParaConversao({ ...editingLead, utm_source: editUtmSource, custo_indicacao: custoIndicacaoFinal }, Number(newStatus), statusConfig.convertido_status)) {
+      const value = pedirCustoIndicacao({ ...editingLead, utm_source: editUtmSource, custo_indicacao: custoIndicacaoFinal });
+      if (value === null) {
+        toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+        return;
+      }
+      custoIndicacaoFinal = value;
+    }
+    const updates: any = { nome: editingLead.nome, whatsapp: editingLead.whatsapp, cidade: cidadeNorm, status: newStatus, utm_source: editUtmSource, custo_indicacao: custoIndicacaoFinal };
     if (originalLead && Number(originalLead.status) !== Number(newStatus)) {
       const now = new Date().toISOString();
       const tsField: Record<number, string> = { 0:'status_atendimento_at', 1:'status_atendimento_at', 2:'status_reuniao_at', 5:'status_contrato_at', 3:'status_aprovado_at', 6:'status_sem_retorno_at' };
@@ -2199,7 +2249,7 @@ function LeadsPage() {
                             </span>
                           );
                         })()}
-                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(getStatusMoveDate(lead))}</span>
+                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(getLeadMoveDateForView(lead))}</span>
                       </div>
                     </div>
                   </div>
@@ -2324,7 +2374,7 @@ function LeadsPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(getStatusMoveDate(lead))}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(getLeadMoveDateForView(lead))}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4, borderRadius:'8px' }}><MessageCircle className="w-3.5 h-3.5"/></button>
