@@ -1,34 +1,38 @@
-const UTM_RASTREADOS      = ['FB','fb','ig','IG','facebook','Facebook','Instagram','instagram'];
-const UTM_MANUAL_TRAFEGO  = ['Tráfego Pago','trafego pago','Tráfego Antigo','trafego antigo','meta','Meta'];
-const UTM_ORGANICO        = ['instagram_organico','organico','organic','Orgânico','orgânico','google','direto','seo'];
-const ORIGIN_TAG_NAMES    = ['Meta Ads', 'Indicação', 'Orgânico', 'Outros'];
+const TAG_META = 'Meta Ads';
+const TAG_INDICACAO = 'Indica\u00e7\u00e3o';
+const TAG_ORGANICO = 'Org\u00e2nico';
+const TAG_OUTROS = 'Outros';
 
-// FB/ig COM utm_campaign = rastreado pelo pixel → sem tag
-// FB/ig SEM utm_campaign = inserido manualmente → 'Meta Ads'
-// Retorno → 'Outros' (canal unificado)
-// Sem utm_source → null (sem tag)
+const ORIGIN_TAG_NAMES = [TAG_META, TAG_INDICACAO, TAG_ORGANICO, TAG_OUTROS];
+
+function normalizeOrigin(value: string | null | undefined): string {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 export function mapUtmSourceParaNomeTag(
   utmSource: string | null | undefined,
   utmCampaign: string | null | undefined,
 ): string | null {
-  if (!utmSource || utmSource.trim() === '') return null;
-  const s = utmSource.trim();
+  const s = normalizeOrigin(utmSource);
+  const hasTrackedCampaign = !!utmCampaign?.trim();
 
-  if (UTM_RASTREADOS.includes(s)) {
-    return utmCampaign && utmCampaign.trim() !== '' ? null : 'Meta Ads';
-  }
-  if (UTM_MANUAL_TRAFEGO.includes(s)) return 'Meta Ads';
-  if (s === 'Indicação') return 'Indicação';
-  if (UTM_ORGANICO.includes(s.toLowerCase())) return 'Orgânico';
-  if (s === 'Retorno') return 'Outros';
-  return 'Outros';
+  if (!s || hasTrackedCampaign) return null;
+  if (s === 'TRAFEGO PAGO' || s === 'TRAFEGO ANTIGO') return TAG_META;
+  if (s.includes('INDICAC')) return TAG_INDICACAO;
+  if (s === 'INSTAGRAM ORGANICO' || s === 'INSTAGRAM_ORGANICO' || s === 'ORGANICO' || s === 'ORGANIC' || s === 'GOOGLE' || s === 'DIRETO' || s === 'SEO') return TAG_ORGANICO;
+  if (s === 'RETORNO' || s === 'MANUAL' || s === 'OUTRO') return TAG_OUTROS;
+  return TAG_OUTROS;
 }
 
 const CORES_ORIGENS: Record<string, string> = {
-  'Meta Ads': '#3b82f6',
-  'Indicação': '#10b981',
-  'Orgânico': '#8b5cf6',
-  'Outros': '#71717a',
+  [TAG_META]: '#3b82f6',
+  [TAG_INDICACAO]: '#10b981',
+  [TAG_ORGANICO]: '#8b5cf6',
+  [TAG_OUTROS]: '#71717a',
 };
 
 export async function aplicarTagOrigem(
@@ -39,9 +43,25 @@ export async function aplicarTagOrigem(
   utmCampaign: string | null | undefined,
 ): Promise<void> {
   const nomeTag = mapUtmSourceParaNomeTag(utmSource, utmCampaign);
-  if (!nomeTag) return;
 
   try {
+    const { data: tagsOrg } = await supabase
+      .from('tags')
+      .select('id')
+      .eq('org_id', orgId)
+      .in('nome', ORIGIN_TAG_NAMES);
+
+    if (!nomeTag) {
+      if (tagsOrg?.length) {
+        await supabase
+          .from('lead_tags')
+          .delete()
+          .eq('lead_id', leadId)
+          .in('tag_id', tagsOrg.map((t: any) => t.id));
+      }
+      return;
+    }
+
     let tagId: string | null = null;
 
     const { data: tag } = await supabase
@@ -67,12 +87,6 @@ export async function aplicarTagOrigem(
       }
       tagId = newTag.id;
     }
-
-    const { data: tagsOrg } = await supabase
-      .from('tags')
-      .select('id')
-      .eq('org_id', orgId)
-      .in('nome', ORIGIN_TAG_NAMES);
 
     if (tagsOrg?.length) {
       const idsParaRemover = tagsOrg

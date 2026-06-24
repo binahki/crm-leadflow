@@ -18,6 +18,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
 import { dispararCapiConversao } from '@/utils/capiEvento';
+import { pedirCustoIndicacao, precisaCustoIndicacaoParaConversao } from '@/utils/indicacao';
 
 interface LeadDrawerProps {
   lead: Lead | null;
@@ -442,6 +443,16 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
     };
     const targetLabel = STATUS.find(s => s.id === newStatus)?.label ?? '';
     const updates: any = { status: String(newStatus), avaliado: true, ultimo_status_change: now, ...(extra || {}) };
+    if (precisaCustoIndicacaoParaConversao({ ...lead, ...(extra || {}) }, newStatus, statusConfig.convertido_status)) {
+      const value = pedirCustoIndicacao({ ...lead, ...(extra || {}) });
+      if (value === null) {
+        setStatus(prev);
+        setAvaliado(avaliado);
+        toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+        return;
+      }
+      updates.custo_indicacao = value;
+    }
     if (tsField[newStatus]) updates[tsField[newStatus]] = now;
     if (motivo) updates.motivo_reprovacao = motivo;
     if (targetLabel.toLowerCase().includes('sem retorno')) updates.motivo_reprovacao = null;
@@ -451,7 +462,7 @@ export function LeadDrawer({ lead, isOpen, onClose, onUpdate, onTagsChange }: Le
       if (newStatus === statusConfig.convertido_status && !(lead as any).capi_conversao_enviado && orgId) {
         dispararCapiConversao(lead.id, orgId);
       }
-      setStatusOpen(false); onUpdate({ ...lead, status: newStatus, avaliado: true, ...(motivo ? { motivo_reprovacao: motivo } : {}), ...(extra || {}) }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado');
+      setStatusOpen(false); onUpdate({ ...lead, ...updates, status: newStatus, avaliado: true }); toast.success(STATUS.find(s => s.id === newStatus)?.label || 'Atualizado');
     }
   }
 

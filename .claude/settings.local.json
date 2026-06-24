@@ -46,7 +46,18 @@
       "mcp__claude_ai_Supabase__get_logs",
       "mcp__claude_ai_Supabase__list_tables",
       "Bash(powershell -Command \"\\(Get-Content src/pages/Kanban.tsx\\) -replace \\\\\"\\\\.select\\\\\\('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram'\\\\\\)\\\\\", \\\\\".select\\('id, nome, whatsapp, cidade, score, faixa, status, created_at, org_id, observacoes, motivo_reprovacao, ultimo_status_change, avaliado, utm_campaign, instagram, reuniao_agendada_at, reuniao_link'\\)\\\\\" | Set-Content src/pages/Kanban.tsx\")",
-      "Bash(grep -v \"//\\\\|slotsFiltrados\\\\|slot.dia\\\\|reunião neste\\\\|setDia\\\\|diasSemana\\\\|diaFiltro ===\")"
+      "Bash(grep -v \"//\\\\|slotsFiltrados\\\\|slot.dia\\\\|reunião neste\\\\|setDia\\\\|diasSemana\\\\|diaFiltro ===\")",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\\\\src\\\\pages\\\\Campanhas.tsx\" -Raw\\).Length)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" log --oneline -5 -- src/pages/Campanhas.tsx)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" status src/pages/Campanhas.tsx)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\" restore src/pages/Campanhas.tsx)",
+      "PowerShell(cd \"c:\\\\Users\\\\Murilo\\\\leadflow-dashboard\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"Campanhas\" } | Select-Object -First 15)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "PowerShell(node \"C:\\\\Users\\\\Murilo\\\\.claude\\\\plugins\\\\cache\\\\impeccable\\\\impeccable\\\\3.0.7\\\\skills\\\\impeccable\\\\scripts\\\\load-context.mjs\" 2>&1)",
+      "Bash(xxd)",
+      "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" diff --stat HEAD -- src/pages/Campanhas.tsx)",
+      "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" checkout HEAD -- src/pages/Campanhas.tsx)"
     ]
   }
 }

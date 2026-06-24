@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMetaConfig } from '@/hooks/useMetaConfig';
 import { Tag } from '@/hooks/useTags';
 import { dispararCapiConversao, dispararCapiReprovacao } from '@/utils/capiEvento';
+import { pedirCustoIndicacao, precisaCustoIndicacaoParaConversao } from '@/utils/indicacao';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 type ColumnDef = { status: number; label: string; border: string; dot: string; bg: string };
@@ -1142,6 +1143,14 @@ export default function KanbanPage() {
       [statusConfig.convertido_status]: 'status_aprovado_at',
     };
     const patch: any = { status: newStatus, ultimo_status_change: nowISO };
+    if (precisaCustoIndicacaoParaConversao(lead, newStatus, statusConfig.convertido_status)) {
+      const value = pedirCustoIndicacao(lead);
+      if (value === null) {
+        toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+        return;
+      }
+      patch.custo_indicacao = value;
+    }
     if (tsField[newStatus]) patch[tsField[newStatus]] = nowISO;
     if (motivo !== undefined) patch.motivo_reprovacao = motivo;
     updateLead(lead.id, patch);

@@ -7,6 +7,7 @@ import { useOrgId } from '@/hooks/useOrgId';
 import { useModeloNegocio } from '@/hooks/useTerminology';
 import { useStatusConfig } from '@/hooks/useStatusConfig';
 import { dispararCapiConversao } from '@/utils/capiEvento';
+import { pedirCustoIndicacao, precisaCustoIndicacaoParaConversao } from '@/utils/indicacao';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import {
@@ -766,6 +767,7 @@ function ChatInbox({ colors, orgId, account, user, initialPhone, initialConvId, 
               colors={colors} conv={activeConv} theme={theme}
               onClose={() => setShowInfo(false)}
               onUpdate={() => fetchConvs()}
+              convertidoStatus={statusConfig.convertido_status}
             />
           )}
         </div>
@@ -837,13 +839,22 @@ function ConversationList({ colors, list, selectedId, onSelect, theme, quickStat
 
   const handleStatusUpdate = async (leadId: string, status: number, callOrgId: string, lead?: any) => {
     const now = new Date().toISOString();
-    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+    const convStatus = convertidoStatus ?? 3;
+    const tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', [convStatus]: 'status_aprovado_at' };
     const patch: any = { status, ultimo_status_change: now };
+    if (lead && precisaCustoIndicacaoParaConversao(lead, status, convStatus)) {
+      const value = pedirCustoIndicacao(lead);
+      if (value === null) {
+        toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+        onSetQuickStatus(null);
+        return;
+      }
+      patch.custo_indicacao = value;
+    }
     if (tsField[status]) patch[tsField[status]] = now;
     const { error } = await supabase.from('leads').update(patch).eq('id', leadId).eq('org_id', callOrgId);
     if (error) toast.error('Erro ao atualizar status');
     else {
-      const convStatus = convertidoStatus ?? 3;
       if (status === convStatus && !lead?.capi_conversao_enviado) {
         dispararCapiConversao(leadId, callOrgId);
       }
@@ -1593,7 +1604,7 @@ function EmptyState({ colors }: { colors: any }) {
   );
 }
 
-function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any, conv: any, onClose: () => void, onUpdate: () => void, theme: string }) {
+function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme, convertidoStatus }: { colors: any, conv: any, onClose: () => void, onUpdate: () => void, theme: string, convertidoStatus: number }) {
   const navigate = useNavigate();
   const [lead, setLead] = useState(conv?.lead);
   const name = lead?.nome || conv?.contact_name || formatPhone(conv?.contact_phone || '');
@@ -1705,8 +1716,17 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
                           if (!lead) return;
                           setUpdating(true);
                           const _now = new Date().toISOString();
-                          const _tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at' };
+                          const _tsField: Record<number, string> = { 0: 'status_atendimento_at', 1: 'status_atendimento_at', 2: 'status_reuniao_at', 5: 'status_contrato_at', 3: 'status_aprovado_at', [convertidoStatus]: 'status_aprovado_at' };
                           const _patch: any = { status: opt.value, ultimo_status_change: _now };
+                          if (precisaCustoIndicacaoParaConversao(lead, opt.value, convertidoStatus)) {
+                            const value = pedirCustoIndicacao(lead);
+                            if (value === null) {
+                              toast.error('Informe um valor maior que zero para aprovar esta indicação.');
+                              setUpdating(false);
+                              return;
+                            }
+                            _patch.custo_indicacao = value;
+                          }
                           if (_tsField[opt.value]) _patch[_tsField[opt.value]] = _now;
                           const { error } = await supabase
                             .from('leads')
@@ -1715,7 +1735,7 @@ function LeadInfoPanel({ colors, conv, onClose, onUpdate, theme }: { colors: any
                           if (error) toast.error('Erro ao atualizar status');
                           else {
                             toast.success('Status atualizado!');
-                            setLead(prev => prev ? { ...prev, status: opt.value } : prev);
+                            setLead(prev => prev ? { ...prev, ..._patch, status: opt.value } : prev);
                             onUpdate();
                           }
                           setUpdating(false);
