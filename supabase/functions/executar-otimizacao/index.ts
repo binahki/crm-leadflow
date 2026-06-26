@@ -219,6 +219,9 @@ Deno.serve(async (req) => {
           const budgetOk = data.success === true;
           acoesExecutadas.push({ ...acao, novo_budget: novo, automatico: false, ok: budgetOk, erro: data.error?.message || (budgetOk ? null : JSON.stringify(data)), executado_em: new Date().toISOString() });
           if (budgetOk) okCount++;
+        } else {
+          acoesExecutadas.push({ ...acao, automatico: false, ok: true, aprovado: true, executado_em: new Date().toISOString() });
+          okCount++;
         }
       } catch (e) {
         console.error(`[executar] Erro na ação ${acao.id}:`, e);
@@ -236,7 +239,7 @@ Deno.serve(async (req) => {
     }).eq("id", log_id);
 
     return new Response(
-      JSON.stringify({ ok: true, ok_count: okCount, sugestoes_pendentes: sugestoesPendentes.length }),
+      JSON.stringify({ ok: true, ok_count: okCount, sugestoes_pendentes: sugestoesPendentes.length, acoes_executadas: acoesExecutadas, acoes_sugeridas: sugestoesPendentes, status: novoStatus }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

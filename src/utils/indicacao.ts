@@ -24,7 +24,7 @@ export function precisaCustoIndicacaoParaConversao(lead: any, newStatus: number,
 export function pedirCustoIndicacao(lead: any): number | null {
   const nome = lead?.nome ? ` para ${lead.nome}` : '';
   const atual = Number(lead?.custo_indicacao);
-  const raw = window.prompt(`Qual foi o valor da indicação${nome}?`, Number.isFinite(atual) && atual > 0 ? String(atual) : '');
+  const raw = window.prompt(`Esta indicação${nome} está sendo aprovada sem valor. Qual foi o valor real da indicação?`, Number.isFinite(atual) && atual > 0 ? String(atual) : '');
   if (raw === null) return null;
   const value = Number(raw.replace(/\./g, '').replace(',', '.'));
   if (!Number.isFinite(value) || value <= 0) return null;

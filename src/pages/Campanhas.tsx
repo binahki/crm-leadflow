@@ -3041,7 +3041,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
   // Estado interno de sugestões — banco é a fonte de verdade, sem localStorage
   const [sugestoes, setSugestoes] = useState<any[]>(() =>
-    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter')
+    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && a.tipo !== 'criar_campanha')
   );
   const [aplicandoIds, setAplicandoIds] = useState<Set<string>>(new Set());
 
@@ -3051,7 +3051,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
   const cardBg = dark ? '#161619' : '#fff';
   const panelBg = dark ? '#0d0d18' : '#f5f7ff';
   const txtLow = dark ? '#52525b' : '#9ca3af';
-  const campanhaMestre = log.campanha_mestre || null;
+  const campanhaMestre = log.campanha_mestre || (log.acoes_sugeridas || []).find((a: any) => a.tipo === 'criar_campanha') || null;
 
   const fmtMoeda = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
@@ -3206,24 +3206,21 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     const uid = acao.id;
     setAplicandoIds(prev => new Set([...prev, uid]));
     try {
-      const res = await fetch('https://obguidmfvfjaekaskgob.functions.supabase.co/executar-otimizacao', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ log_id: log.id, acao_id: uid }),
+      const { data, error } = await supabase.functions.invoke('executar-otimizacao', {
+        body: { log_id: log.id, acao_id: uid },
       });
-      const data = await res.json();
-      if (!data.ok) {
-        setToast?.({ msg: data.erro || 'Erro ao executar a ação', ok: false });
+      if (error || data == null || data.ok === false) {
+        setToast?.({ msg: data?.erro || error?.message || 'Erro ao executar a ação', ok: false });
         return;
       }
       const acaoAplicada = sugestoes.find(a => a.id === uid);
       const novas = sugestoes.filter(a => a.id !== uid);
       setSugestoes(novas);
-      const novasExecutadas = [
+      const novasExecutadas = data.acoes_executadas || [
         ...(log.acoes_executadas || []),
         ...(acaoAplicada ? [{ ...acaoAplicada, automatico: false, aprovado: true, ok: true, executado_em: new Date().toISOString() }] : []),
       ];
-      if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: novas, acoes_executadas: novasExecutadas, status: novas.length === 0 ? 'executado' : log.status });
+      if (onLogUpdate) onLogUpdate({ ...log, acoes_sugeridas: data.acoes_sugeridas || novas, acoes_executadas: novasExecutadas, status: data.status || (novas.length === 0 ? 'executado' : log.status) });
       if ((acao.tipo || '').toLowerCase().includes('pausar')) {
         onCampaignStatusChange?.(acao.id, acao.tipo, 'PAUSED');
       }
@@ -3256,21 +3253,25 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
     if (novas.length === 0) setTimeout(() => onClose(), 1000);
   }
 
-  async function marcarCampanhaCriada() {
+  async function concluirCampanhaMestre(ignorado = false) {
     if (!campanhaMestre) return;
     const executada = {
       tipo: 'criar_campanha',
       ok: true,
       automatico: false,
+      aprovado: !ignorado,
+      ignorado,
+      nome: ignorado ? 'Sugestão de campanha ignorada' : 'Sugestão de campanha criada',
       campanha_base: campanhaMestre.campanha_base,
       campanha_base_id: campanhaMestre.campanha_base_id,
       publico: campanhaMestre.publico,
       criativo: campanhaMestre.criativo,
       budget_diario_sugerido: campanhaMestre.budget_diario_sugerido,
+      motivo: campanhaMestre.motivo,
       executado_em: new Date().toISOString(),
     };
     const novasExecutadas = [...(log.acoes_executadas || []), executada];
-    const novoStatus = sugestoes.length === 0 ? 'executado' : log.status;
+    const novoStatus = sugestoes.length === 0 ? (ignorado ? 'ignorado' : 'executado') : log.status;
     const updated = { ...log, campanha_mestre: null, acoes_executadas: novasExecutadas, status: novoStatus };
     try {
       const { error } = await (supabase as any)
@@ -3279,11 +3280,19 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
         .eq('id', log.id);
       if (error) throw error;
       onLogUpdate?.(updated);
-      setToast?.({ msg: 'Sugestão de campanha marcada como criada', ok: true });
+      setToast?.({ msg: ignorado ? 'Sugestão de campanha ignorada' : 'Sugestão de campanha marcada como criada', ok: true });
       setTimeout(() => setToast?.(null), 3500);
     } catch {
       setToast?.({ msg: 'Não consegui fechar essa sugestão agora', ok: false });
     }
+  }
+
+  async function marcarCampanhaCriada() {
+    await concluirCampanhaMestre(false);
+  }
+
+  async function ignorarCampanhaMestre() {
+    await concluirCampanhaMestre(true);
   }
 
   return (
@@ -3492,8 +3501,8 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                   <div style={{ height: '1px', background: border }} />
                 )}
                 {/* Sub-bloco B: sugestões aguardando aprovação */}
-                {isPendente && (
-          <div style={{ order: 2 }}>
+                {isPendente && sugestoes.length > 0 && (
+                  <div style={{ order: 2 }}>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>
                       Sugestoes para aprovar
                     </p>
@@ -3528,7 +3537,7 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
             {/* BLOCO 6: Campanha Mestre */}
             {campanhaMestre && (
-              <>
+              <div style={{ order: 8, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ height: '1px', background: border }} />
                 <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
                   <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
@@ -3574,16 +3583,15 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
                         Marcar como criada
                       </button>
                       <button
-                        onClick={() => window.open('https://adsmanager.facebook.com/adsmanager/manage/campaigns', '_blank', 'noopener,noreferrer')}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                        onClick={ignorarCampanhaMestre}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtMid, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                       >
-                        <ExternalLink size={14} />
-                        Abrir Meta
+                        Ignorar
                       </button>
                     </div>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
           </div>
@@ -3611,11 +3619,14 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   const isDecrease = (tipo.includes('reduzir') && acao.direcao !== 'aumento') || (tipo === 'reduzir' && !acao.direcao);
   const isConjunto = tipo.includes('conjunto');
   const isReativar = tipo === 'reativar_conjunto';
+  const isCreative = tipo.includes('criativo');
 
   const color   = isReativar ? '#10b981' : isPause ? '#ef4444' : isIncrease ? '#10b981' : '#f97316';
   const headerBg = isReativar ? 'rgba(16,185,129,0.08)' : isPause ? 'rgba(239,68,68,0.08)' : isIncrease ? 'rgba(16,185,129,0.08)' : 'rgba(249,115,22,0.08)';
   const headerIcon = isReativar ? '▶' : isPause ? '⏸' : isIncrease ? '↑' : '↓';
-  const headerLabel = isReativar
+  const headerLabel = isCreative
+    ? 'Subir novos criativos'
+    : isReativar
     ? 'Reativar grupo de anúncios'
     : isPause
       ? (isConjunto ? 'Pausar grupo de anúncios' : 'Pausar campanha')
@@ -3637,6 +3648,14 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
   const varPct = ant && nov && Number(ant) > 0
     ? Math.max(-20, Math.min(20, Math.round(((Number(nov) - Number(ant)) / Number(ant)) * 100)))
     : null;
+  const metricas = [
+    acao.gasto != null ? ['Gasto', 'R$ ' + Number(acao.gasto).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })] : null,
+    acao.leads != null ? ['Leads', Number(acao.leads).toLocaleString('pt-BR')] : null,
+    acao.revendedoras != null ? ['Rev', Number(acao.revendedoras).toLocaleString('pt-BR')] : null,
+    acao.potenciais != null ? ['Potenciais', Number(acao.potenciais).toLocaleString('pt-BR')] : null,
+    acao.cpl != null ? ['CPL', 'R$ ' + Number(acao.cpl).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })] : null,
+    acao.benchmark_cpl != null ? ['CPL médio', 'R$ ' + Number(acao.benchmark_cpl).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })] : null,
+  ].filter(Boolean) as [string, string][];
 
   return (
     <div style={{ borderRadius: '14px', background: dark ? '#161619' : '#fff', border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`, opacity: aplicando ? 0.65 : 1, transition: 'opacity 0.15s', overflow: 'hidden' }}>
@@ -3671,6 +3690,14 @@ function SugestaoCard({ acao, dark, onAplicar, onIgnorar, aplicando }: {
           <span style={{ fontSize: '13px', color: txtMid }}>R$ {ant}</span>
           <span style={{ fontSize: '12px', color: txtMid }}>→</span>
           <span style={{ fontSize: '13px', fontWeight: 700, color }}> R$ {nov}/dia</span>
+        </div>
+      )}
+
+      {metricas.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 14px 0' }}>
+          {metricas.map(([label, value]) => (
+            <span key={label} style={{ padding: '4px 7px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, fontSize: '10px', fontWeight: 750 }}>{label}: {value}</span>
+          ))}
         </div>
       )}
 

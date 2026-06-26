@@ -1523,13 +1523,13 @@ function LeadsPage() {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
       r = [...r].sort((a, b) => {
-        const da = parseLeadDate(getLeadMoveDateForView(a)).getTime();
-        const db = parseLeadDate(getLeadMoveDateForView(b)).getTime();
+        const da = parseLeadDate(a.created_at).getTime();
+        const db = parseLeadDate(b.created_at).getTime();
         return sortByDate === 'desc' ? db - da : da - db;
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap, activeMoveStatus, getLeadMoveDateForView]);
+  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap, activeMoveStatus]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -2249,7 +2249,7 @@ function LeadsPage() {
                             </span>
                           );
                         })()}
-                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(getLeadMoveDateForView(lead))}</span>
+                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(lead.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -2293,7 +2293,7 @@ function LeadsPage() {
                   <th className={`text-center px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Status</th>
                   <th className={`text-left px-3 py-3`} style={{ whiteSpace:'nowrap' }}>
                     <button onClick={() => setSortByDate(s => s === 'desc' ? 'asc' : 'desc')} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:dark ? '#6b6b75' : '#6b7280', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
-                      Movido {sortByDate === 'desc' ? '↓' : '↑'}
+                      Entrada {sortByDate === 'desc' ? '↓' : '↑'}
                     </button>
                   </th>
                   <th className={`text-left px-3 py-3 text-xs font-semibold uppercase tracking-wider ${muted}`}>Ações</th>
@@ -2374,7 +2374,7 @@ function LeadsPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(getLeadMoveDateForView(lead))}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4, borderRadius:'8px' }}><MessageCircle className="w-3.5 h-3.5"/></button>

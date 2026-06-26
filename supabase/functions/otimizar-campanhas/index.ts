@@ -355,19 +355,50 @@ async function fbGetAll(url: URL) {
   return all;
 }
 
+function metaFields(preset: string, safe = false) {
+  if (safe) {
+    return {
+      campaign: "id,name,status,daily_budget,lifetime_budget,created_time,insights.date_preset(" + preset + "){spend,impressions,clicks,ctr,cpm,actions}",
+      adset: "id,name,status,campaign_id,daily_budget,lifetime_budget,insights.date_preset(" + preset + "){spend,impressions,clicks,ctr,actions}",
+      ad: "id,name,status,campaign_id,adset_id,creative{thumbnail_url},insights.date_preset(" + preset + "){spend,ctr,actions}",
+    };
+  }
+  return {
+    campaign: "id,name,status,effective_status,daily_budget,lifetime_budget,created_time,insights.date_preset(" + preset + "){spend,impressions,clicks,ctr,cpm,frequency,actions}",
+    adset: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,insights.date_preset(" + preset + "){spend,impressions,clicks,ctr,cpm,frequency,actions}",
+    ad: "id,name,status,effective_status,campaign_id,adset_id,creative{id,thumbnail_url,image_url,video_id,image_hash},insights.date_preset(" + preset + "){spend,impressions,clicks,ctr,cpm,frequency,actions}",
+  };
+}
+
+function isInvalidMetaParameter(err: unknown) {
+  const msg = String(err || "").toLowerCase();
+  return msg.includes("invalid parameter") || msg.includes("nonexisting field") || msg.includes("unsupported get request");
+}
+
 async function loadMeta(token: string, account: string, preset: string) {
-  const campUrl = new URL(`${META_BASE}/act_${account}/campaigns`);
-  campUrl.searchParams.set("fields", `id,name,status,effective_status,daily_budget,lifetime_budget,created_time,insights.date_preset(${preset}){spend,impressions,clicks,ctr,cpm,frequency,actions}`);
+  try {
+    return await loadMetaWithFields(token, account, preset, false);
+  } catch (err) {
+    if (!isInvalidMetaParameter(err)) throw err;
+    console.warn("[otimizar] Meta retornou parametro invalido; tentando leitura segura:", String(err).slice(0, 180));
+    return await loadMetaWithFields(token, account, preset, true);
+  }
+}
+
+async function loadMetaWithFields(token: string, account: string, preset: string, safe: boolean) {
+  const fields = metaFields(preset, safe);
+  const campUrl = new URL(META_BASE + "/act_" + account + "/campaigns");
+  campUrl.searchParams.set("fields", fields.campaign);
   campUrl.searchParams.set("limit", PAGE_LIMIT);
   campUrl.searchParams.set("access_token", token);
 
-  const adsetUrl = new URL(`${META_BASE}/act_${account}/adsets`);
-  adsetUrl.searchParams.set("fields", `id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,insights.date_preset(${preset}){spend,impressions,clicks,ctr,cpm,frequency,actions}`);
+  const adsetUrl = new URL(META_BASE + "/act_" + account + "/adsets");
+  adsetUrl.searchParams.set("fields", fields.adset);
   adsetUrl.searchParams.set("limit", PAGE_LIMIT);
   adsetUrl.searchParams.set("access_token", token);
 
-  const adUrl = new URL(`${META_BASE}/act_${account}/ads`);
-  adUrl.searchParams.set("fields", `id,name,status,effective_status,campaign_id,adset_id,creative{id,thumbnail_url,image_url,video_id,image_hash},insights.date_preset(${preset}){spend,impressions,clicks,ctr,cpm,frequency,actions}`);
+  const adUrl = new URL(META_BASE + "/act_" + account + "/ads");
+  adUrl.searchParams.set("fields", fields.ad);
   adUrl.searchParams.set("limit", PAGE_LIMIT);
   adUrl.searchParams.set("access_token", token);
 
@@ -523,11 +554,16 @@ function scoreCampaign(c: CampaignNode, avgCpl: number, avgCpr: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: number, modo: string, preStatusLabel: string) {
+function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: number, modo: string, preStatusLabel: string, guardrails: any = {}) {
   const reducao = modo === "conservador" ? 0.15 : MAX_BUDGET_CHANGE_PCT;
   const aumento = modo === "conservador" ? 0.15 : MAX_BUDGET_CHANGE_PCT;
   const sugestoes: any[] = [];
   const analise: any[] = [];
+  const cprHistorico = Number(guardrails.cprMesAnterior || 0);
+  const deltaCprGuard = Number(guardrails.deltaCpr || 0);
+  const deltaCplGuard = Number(guardrails.deltaCpl || 0);
+  const contaComCustoEstourado = deltaCprGuard >= 50 || deltaCplGuard >= 50;
+  const contaComCustoPressionado = deltaCprGuard >= 30 || deltaCplGuard >= 35;
 
   for (const camp of campaigns.filter((c) => c.status === "ACTIVE")) {
     const label = shortName(camp.name);
@@ -541,7 +577,7 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
     const isAbo = campBudget === 0 && adsetDailySum > 0;
 
     const enoughSpend = camp.spend >= Math.max(50, avgCpl * 4);
-    const cprRuim = avgCpr > 0 && camp.cpr > avgCpr * 1.25;
+    const cprRuim = (avgCpr > 0 && camp.cpr > avgCpr * 1.25) || (cprHistorico > 0 && camp.cpr > cprHistorico * 1.50);
     const cplRuim = avgCpl > 0 && camp.cpl > avgCpl * 1.35;
     const temPipeline = camp.crm_potentials > 0;
     const semRevs = camp.crm_revs === 0 && enoughSpend;
@@ -550,7 +586,10 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
     // Either CPR or CPL excellent is enough to qualify for scale — CPR winning overrides slightly bad CPL.
     const boaCpr = camp.crm_revs > 0 && avgCpr > 0 && camp.cpr > 0 && camp.cpr <= avgCpr * 0.8;
     const boaCpl = camp.crm_revs > 0 && avgCpl > 0 && camp.cpl > 0 && camp.cpl <= avgCpl * 0.8;
-    const boa = boaCpr || boaCpl;
+    const custoHistoricoOk = cprHistorico <= 0 || camp.cpr <= cprHistorico * 1.30;
+    const custoAtualOk = avgCpr <= 0 || camp.cpr <= avgCpr * 0.85;
+    const podeEscalar = contaComCustoEstourado === false && custoHistoricoOk && custoAtualOk;
+    const boa = (boaCpr || boaCpl) && podeEscalar;
 
     let decisao = "manter";
     let porque = `${label} está dentro do esperado.`;
@@ -571,6 +610,10 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
       decisao = "aguardar";
       porque = `${label} ainda nao aprovou, mas tem ${camp.crm_potentials} lead${camp.crm_potentials !== 1 ? "s" : ""} em ${preStatusLabel}.`;
       proximo = "Segurar por 24-48h e cobrar fechamento antes de cortar verba.";
+    } else if ((boaCpr || boaCpl) && podeEscalar === false) {
+      decisao = "observacao";
+      porque = label + " teve escala bloqueada por alta de CPR/CPL.";
+      proximo = "Subir novos criativos antes de escalar verba.";
     } else if (boa && budget > 0 && camp.tendencia !== "piorando") {
       // Check scale before bad-metrics: excellent CPR overrides slightly bad CPL.
       const novoBase = Math.round(budget * (1 + aumento));
@@ -669,7 +712,17 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
       }
     }
 
-    const badAdsets = camp.adsets.filter((a) => a.status === "ACTIVE" && a.spend >= Math.max(25, avgCpl * 2) && a.crm_revs === 0 && a.crm_potentials === 0 && a.leads_api <= 2);
+    const badAdsets = camp.adsets.filter((a) => {
+      const gastoMinimo = Math.max(80, avgCpl * 6);
+      const amostraSuficiente = a.leads_api >= 6 || a.spend >= Math.max(120, avgCpl * 10);
+      const cplMuitoAcima = avgCpl > 0 && a.cpl > avgCpl * 1.4;
+      return a.status === "ACTIVE"
+        && a.spend >= gastoMinimo
+        && amostraSuficiente
+        && cplMuitoAcima
+        && a.crm_revs === 0
+        && a.crm_potentials === 0;
+    });
     for (const adset of badAdsets.slice(0, 2)) {
       sugestoes.push({
         tipo: "pausar_conjunto",
@@ -677,7 +730,13 @@ function buildSuggestions(campaigns: CampaignNode[], avgCpl: number, avgCpr: num
         nome: adset.name,
         conjunto_nome: adset.name,
         campanha_nome: camp.name,
-        motivo: `${adset.name} consumiu ${brl(adset.spend)} sem aprovar ninguém.`,
+        gasto: round(adset.spend),
+        leads: adset.leads_api,
+        cpl: round(adset.cpl),
+        potenciais: adset.crm_potentials,
+        revendedoras: adset.crm_revs,
+        benchmark_cpl: round(avgCpl),
+        motivo: `${adset.name} gastou ${brl(adset.spend)}, trouxe ${adset.leads_api} lead${adset.leads_api !== 1 ? "s" : ""} com CPL de ${brl(adset.cpl || 0)}, não tem ${preStatusLabel} e não aprovou ninguém. A média da conta está perto de ${brl(avgCpl || 0)} por lead.`,
       });
     }
 
@@ -744,13 +803,13 @@ function bestMaster(campaigns: CampaignNode[], avgCpr: number) {
 }
 
 function collectMetaAlerts(campaigns: CampaignNode[]) {
-  const bad = new Set(["DISAPPROVED", "WITH_ISSUES", "PENDING_REVIEW", "IN_PROCESS", "ADSET_PAUSED", "CAMPAIGN_PAUSED", "PAUSED", "DELETED", "ARCHIVED"]);
+  const bad = new Set(["ACCOUNT_DISABLED", "AD_ACCOUNT_DISABLED", "DISABLED", "RESTRICTED", "PAYMENT_REQUIRED", "PAYMENT_DISABLED"]);
   const alerts: any[] = [];
   const push = (tipo: string, item: any, campanha?: CampaignNode) => {
     const effective = String(item.effective_status || item.status || "").toUpperCase();
     const configured = String(item.status || "").toUpperCase();
     if (!effective || effective === "ACTIVE") return;
-    if (configured !== "ACTIVE" && !bad.has(effective)) return;
+    if (!bad.has(effective)) return;
     alerts.push({
       tipo,
       id: item.id,
@@ -944,9 +1003,13 @@ async function analisarOrg(orgId: string) {
   }
   const cprMes = currentMonthTrafficRevs > 0 ? metaMes.spend / currentMonthTrafficRevs : 0;
   const cprMesAnterior = prevMonthTrafficRevs > 0 ? metaMesAnterior.spend / prevMonthTrafficRevs : 0;
-  let { sugestoes, analise } = buildSuggestions(campaigns, cplMedio, avgCpr, modo, funil.preStatusLabel);
+  const deltaCpr = cprMes > 0 && cprMesAnterior > 0 ? ((cprMes - cprMesAnterior) / cprMesAnterior) * 100 : 0;
+  const deltaCpl = metaMes.cpl > 0 && metaMesAnterior.cpl > 0 ? ((metaMes.cpl - metaMesAnterior.cpl) / metaMesAnterior.cpl) * 100 : 0;
+  let { sugestoes, analise } = buildSuggestions(campaigns, cplMedio, avgCpr, modo, funil.preStatusLabel, { cprMesAnterior, deltaCpr, deltaCpl });
+  const custoGlobalEstourado = deltaCpr >= 50 || deltaCpl >= 50;
+  const custoGlobalPressionado = deltaCpr >= 30 || deltaCpl >= 35;
   const metaAlertas = collectMetaAlerts(campaigns);
-  const campanhaMestreBase = bestMaster(campaigns, avgCpr);
+  const campanhaMestreBase = custoGlobalEstourado ? null : bestMaster(campaigns, avgCpr);
   const campanhaMestre = await wasMasterRecentlyClosed(orgId, campanhaMestreBase) ? null : campanhaMestreBase;
 
   const agora = new Date();
@@ -957,7 +1020,7 @@ async function analisarOrg(orgId: string) {
   const ritmoRevs = Math.round((revsMes / diasDecorridos) * diasNoMes);
 
   // When significantly behind on monthly goal, force scale the best campaign(s).
-  if (metaRevs > 0 && diasDecorridos >= 7 && ritmoRevs < metaRevs * 0.80) {
+  if (custoGlobalEstourado === false && metaRevs > 0 && diasDecorridos >= 7 && ritmoRevs < metaRevs * 0.80) {
     const urgente = ritmoRevs < metaRevs * 0.60;
     const fatorUrgencia = MAX_BUDGET_CHANGE_PCT;
     const jaEscalando = new Set(analise.filter((a: any) => a.decisao === "escalar").map((a: any) => a.campanha_id));
@@ -1014,24 +1077,20 @@ async function analisarOrg(orgId: string) {
     }
   }
 
-  if (campanhaMestre) {
-    sugestoes.push({
-      id: `criar-${campanhaMestre.campanha_base_id}`,
-      tipo: "criar_campanha",
-      nome: "Nova campanha com combinacao vencedora",
-      campanha_nome: campanhaMestre.campanha_base,
-      campanha_base: campanhaMestre.campanha_base,
-      campanha_base_id: campanhaMestre.campanha_base_id,
-      publico: campanhaMestre.publico,
-      publico_id: campanhaMestre.publico_id,
-      criativo: campanhaMestre.criativo,
-      criativo_id: campanhaMestre.criativo_id,
-      budget_diario_sugerido: campanhaMestre.budget_diario_sugerido,
-      motivo: campanhaMestre.motivo || `Eu encontrei uma combinacao forte em ${shortName(campanhaMestre.campanha_base)} para virar uma nova campanha.`,
-      automatico: false,
-    });
-  }
 
+  const piorCriativo = [...analise].filter((a: any) => a.gasto >= 50).sort((a: any, b: any) => (b.cpr || 0) - (a.cpr || 0))[0];
+  if (custoGlobalPressionado) {
+    if (piorCriativo) {
+      sugestoes.push({
+        tipo: "novo_criativo",
+        id: piorCriativo.campanha_id,
+        nome: "Subir novos criativos",
+        campanha_nome: piorCriativo.campanha_nome,
+        motivo: "CPR/CPL subiram. Hora de testar novos criativos antes de escalar verba.",
+        automatico: false,
+      });
+    }
+  }
   const { executadas: acoesAutomaticas, pendentes: sugestoesPendentes } = await executeAutomaticBudgetActions(sugestoes, token);
   sugestoes = sugestoesPendentes;
 
@@ -1045,8 +1104,6 @@ async function analisarOrg(orgId: string) {
         ? `${piorando[0].campanha_curta} está piorando. Melhor reduzir verba antes de queimar mais orçamento.`
         : null;
 
-  const deltaCpr = cprMes > 0 && cprMesAnterior > 0 ? ((cprMes - cprMesAnterior) / cprMesAnterior) * 100 : 0;
-  const deltaCpl = metaMes.cpl > 0 && metaMesAnterior.cpl > 0 ? ((metaMes.cpl - metaMesAnterior.cpl) / metaMesAnterior.cpl) * 100 : 0;
   const piorCampanha = [...analise].filter((a) => a.gasto > 0).sort((a, b) => (b.cpr || 9999) - (a.cpr || 9999))[0];
   const diagnosticoCpr = cprMes > 0 && cprMesAnterior > 0
     ? deltaCpr > 25
@@ -1062,23 +1119,24 @@ async function analisarOrg(orgId: string) {
 
   const insightDiaFinal = `${diagnosticoCpr} ${insightDia}`;
 
-  const decisao = acoesAutomaticas.length > 0 && sugestoes.length > 0
-    ? `${acoesAutomaticas.length} ajuste${acoesAutomaticas.length !== 1 ? "s" : ""} feito${acoesAutomaticas.length !== 1 ? "s" : ""} e ${sugestoes.length} recomenda${sugestoes.length !== 1 ? "coes" : "cao"}`
+  const recomendacoesPendentes = sugestoes.length + (campanhaMestre ? 1 : 0);
+  const decisao = acoesAutomaticas.length > 0 && recomendacoesPendentes > 0
+    ? `${acoesAutomaticas.length} ajuste${acoesAutomaticas.length !== 1 ? "s" : ""} feito${acoesAutomaticas.length !== 1 ? "s" : ""} e ${recomendacoesPendentes} recomenda${recomendacoesPendentes !== 1 ? "coes" : "cao"}`
     : acoesAutomaticas.length > 0
       ? `${acoesAutomaticas.length} ajuste${acoesAutomaticas.length !== 1 ? "s" : ""} feito${acoesAutomaticas.length !== 1 ? "s" : ""}`
-      : sugestoes.length > 0
-        ? `${sugestoes.length} recomenda${sugestoes.length !== 1 ? "coes" : "cao"}`
+      : recomendacoesPendentes > 0
+        ? `${recomendacoesPendentes} recomenda${recomendacoesPendentes !== 1 ? "coes" : "cao"}`
         : "Nenhum ajuste urgente";
 
   return {
     skip: false,
     log: {
       org_id: orgId,
-      status: sugestoes.length > 0 ? "pendente" : (acoesAutomaticas.length > 0 ? "executado" : "sem_acao"),
+      status: recomendacoesPendentes > 0 ? "pendente" : (acoesAutomaticas.length > 0 ? "executado" : "sem_acao"),
       acoes_sugeridas: sugestoes,
       acoes_executadas: acoesAutomaticas,
       decisao_principal: decisao,
-      frase_do_dia: sugestoes.length > 0 ? "A Ravena encontrou ajustes para proteger seu orçamento." : "Campanhas estáveis hoje.",
+      frase_do_dia: recomendacoesPendentes > 0 ? "A Ravena encontrou ajustes para proteger seu orçamento." : "Campanhas estáveis hoje.",
       resumo: `${Math.max(totalLeadsApi, totalLeadsCrm)} leads, ${revsTotal} aprovadas e custo médio de ${brl(avgCpr || cplMedio)}.`,
       resumo_contextual: `${Math.max(totalLeadsApi, totalLeadsCrm)} leads, ${revsTotal} ${funil.convertidoLabel} e CPR médio de ${brl(avgCpr || cplMedio)} nos últimos 7 dias.`,
       insights: analise.slice(0, 10),
@@ -1179,3 +1237,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: false, erro: String(err) }), { status: 500, headers: CORS });
   }
 });
+
