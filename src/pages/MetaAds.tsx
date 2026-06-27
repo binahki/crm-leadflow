@@ -161,7 +161,18 @@ export default function MetaAdsPage() {
     const next = !ravenaAtiva;
     setRavenaAtiva(next);
     setTogglingRavena(true);
-    const { error } = await db.from('organizations').update({ ravena_ativa: next }).eq('id', orgId);
+    const updatePayload: any = { ravena_ativa: next };
+    if (next) {
+      const { data: orgAtual } = await db
+        .from('organizations')
+        .select('ravena_ativada_em')
+        .eq('id', orgId)
+        .single();
+      if (!orgAtual?.ravena_ativada_em) {
+        updatePayload.ravena_ativada_em = new Date().toISOString();
+      }
+    }
+    const { error } = await db.from('organizations').update(updatePayload).eq('id', orgId);
     if (error) {
       setRavenaAtiva(!next);
       toast.error('Erro ao salvar');

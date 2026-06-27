@@ -1842,7 +1842,9 @@ export default function CampanhasPage() {
           const isErro = aiLog.status === 'erro';
           const isIgnorado = aiLog.status === 'ignorado';
           if (aiLog.status === 'expirado') return null;
-          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter').length;
+          const numSugestoes = (aiLog.acoes_sugeridas || []).filter((a: any) =>
+            a.tipo !== 'manter' && a.tipo !== 'novo_criativo'
+          ).length;
           const numExecutadas = (aiLog.acoes_executadas || []).filter((a: any) => a.ok !== false).length;
           const pendenteAtivo = isPendente && numSugestoes > 0;
           const bannerBg = isErro
@@ -1870,7 +1872,8 @@ export default function CampanhasPage() {
             ? (dark ? '#8b5cf6' : '#7c3aed')
             : pendenteAtivo ? (dark ? '#f59e0b' : '#b45309') : (dark ? '#8b5cf6' : '#7c3aed');
           const badgeBg   = isErro ? '#ef4444' : pendenteAtivo ? '#f59e0b' : '#8b5cf6';
-          const badgeNum  = pendenteAtivo ? numSugestoes : numExecutadas;
+          const temNovoConjunto = !!aiLog.sugestao_novo_conjunto;
+          const badgeNum  = pendenteAtivo ? (numSugestoes + (temNovoConjunto ? 1 : 0)) : numExecutadas;
           const badgeText = pendenteAtivo
             ? (badgeNum === 1 ? '1 sugestão' : `${badgeNum} sugestões`)
             : `${badgeNum} ajuste${badgeNum !== 1 ? 's' : ''} de orçamento`;
@@ -1895,7 +1898,7 @@ export default function CampanhasPage() {
                     ? (() => { const n = (aiLog.insights || []).length; return n > 0 ? `${n} campanha${n !== 1 ? 's' : ''} analisada${n !== 1 ? 's' : ''} — nenhuma ação necessária` : 'Nenhuma ação necessária hoje'; })()
                     : isPendente
                       ? (numSugestoes === 0 ? 'Clique para ver o histórico de ações' : numSugestoes === 1 ? '1 sugestão aguardando aprovação' : `${numSugestoes} sugestões aguardando aprovação`)
-                      : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de orçamento realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo || 'Clique para ver a análise')}
+                      : numExecutadas > 0 ? `${numExecutadas} ajuste${numExecutadas !== 1 ? 's' : ''} de orçamento realizado${numExecutadas !== 1 ? 's' : ''}` : (aiLog.resumo_contextual || aiLog.resumo || 'Clique para ver a análise')}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
@@ -3041,7 +3044,11 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
 
   // Estado interno de sugestões — banco é a fonte de verdade, sem localStorage
   const [sugestoes, setSugestoes] = useState<any[]>(() =>
-    (log.acoes_sugeridas || []).filter((a: any) => a.tipo !== 'manter' && a.tipo !== 'criar_campanha')
+    (log.acoes_sugeridas || []).filter((a: any) =>
+      a.tipo !== 'manter' &&
+      a.tipo !== 'criar_campanha' &&
+      a.tipo !== 'novo_criativo'
+    )
   );
   const [aplicandoIds, setAplicandoIds] = useState<Set<string>>(new Set());
 
@@ -3535,64 +3542,97 @@ function AIOptimizationPanel({ log, dark, isMobile, allLeads, onClose, metaRevs 
               )
             )}
 
-            {/* BLOCO 6: Campanha Mestre */}
-            {campanhaMestre && (
-              <div style={{ order: 8, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ height: '1px', background: border }} />
-                <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
-                  <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 800, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sugestão de campanha</p>
-                        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1.35 }}>Nova campanha com o melhor público e o melhor criativo</h3>
+            {/* BLOCO 6: Sugestão de Novo Conjunto */}
+            {(() => {
+              const novoConjunto = log.sugestao_novo_conjunto;
+              if (!novoConjunto) return null;
+              return (
+                <div style={{ order: 8, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ height: '1px', background: border }} />
+                  <div style={{ borderRadius: '16px', background: cardBg, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                    <div style={{ padding: '16px', borderBottom: `1px solid ${border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 800, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            Sugestão de estrutura
+                          </p>
+                          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: txtHi, lineHeight: 1.35 }}>
+                            Criar conjunto novo dentro do melhor ABO
+                          </h3>
+                        </div>
+                        <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtHi, fontSize: '11px', fontWeight: 800 }}>
+                          R$ {novoConjunto.budget_diario_sugerido}/dia
+                        </span>
                       </div>
-                      <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: '999px', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtHi, fontSize: '11px', fontWeight: 800 }}>
-                        {fmtMoeda(Number(campanhaMestre.budget_diario_sugerido || 0))}/dia
-                      </span>
+                      {novoConjunto.motivo && (
+                        <p style={{ margin: '10px 0 0', fontSize: '13px', color: txtMid, lineHeight: 1.55 }}>
+                          {novoConjunto.motivo}
+                        </p>
+                      )}
                     </div>
-                    {campanhaMestre.motivo && (
-                      <p style={{ margin: '10px 0 0', fontSize: '13px', color: txtMid, lineHeight: 1.55 }}>{campanhaMestre.motivo}</p>
-                    )}
-                  </div>
-                  <div style={{ padding: '14px 16px', display: 'grid', gap: '10px' }}>
-                    {[
-                      ['Base', campanhaMestre.campanha_base],
-                      ['Público', campanhaMestre.publico],
-                      ['Criativo', campanhaMestre.criativo],
-                    ].map(([label, value]) => (
-                      <div key={label} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: '10px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
+                    <div style={{ padding: '14px 16px', display: 'grid', gap: '10px' }}>
+                      {[
+                        ['Campanha base', novoConjunto.campanha_base],
+                        ['Conjunto referência', novoConjunto.melhor_conjunto_atual],
+                        ['Criativo sugerido', novoConjunto.criativo_sugerido],
+                      ].map(([label, value]) => (
+                        <div key={label} style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '10px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: txtMid, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: txtHi, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
+                        </div>
+                      ))}
+                      {Array.isArray(novoConjunto.instrucoes) && novoConjunto.instrucoes.length > 0 && (
+                        <div style={{ marginTop: '4px', display: 'grid', gap: '6px' }}>
+                          {novoConjunto.instrucoes.slice(0, 4).map((item: string, i: number) => (
+                            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: txtMid, lineHeight: 1.45 }}>
+                              <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '10px', fontWeight: 800 }}>{i + 1}</span>
+                              <span>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ marginTop: '4px' }}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { error } = await (supabase as any)
+                                .from('ai_optimization_logs')
+                                .update({
+                                  sugestao_novo_conjunto: null,
+                                  acoes_executadas: [
+                                    ...(log.acoes_executadas || []),
+                                    {
+                                      tipo: 'novo_conjunto',
+                                      ok: true,
+                                      automatico: false,
+                                      aprovado: false,
+                                      ignorado: true,
+                                      nome: 'Sugestão de novo conjunto ignorada',
+                                      campanha_base: novoConjunto.campanha_base,
+                                      executado_em: new Date().toISOString(),
+                                    }
+                                  ]
+                                })
+                                .eq('id', log.id);
+                              if (!error) {
+                                onLogUpdate?.({ ...log, sugestao_novo_conjunto: null });
+                                setToast?.({ msg: 'Sugestão ignorada', ok: true });
+                                setTimeout(() => setToast?.(null), 3000);
+                              }
+                            } catch {
+                              setToast?.({ msg: 'Erro ao ignorar sugestão', ok: false });
+                            }
+                          }}
+                          style={{ width: '100%', padding: '9px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtMid, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          Ignorar sugestão
+                        </button>
                       </div>
-                    ))}
-                    {Array.isArray(campanhaMestre.instrucoes) && campanhaMestre.instrucoes.length > 0 && (
-                      <div style={{ marginTop: '4px', display: 'grid', gap: '6px' }}>
-                        {campanhaMestre.instrucoes.slice(0, 4).map((item: string, i: number) => (
-                          <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: txtMid, lineHeight: 1.45 }}>
-                            <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6', color: txtMid, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '10px', fontWeight: 800 }}>{i + 1}</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ marginTop: '4px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <button
-                        onClick={marcarCampanhaCriada}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtHi, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        Marcar como criada
-                      </button>
-                      <button
-                        onClick={ignorarCampanhaMestre}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', height: '34px', borderRadius: '10px', border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.04)' : '#fff', color: txtMid, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        Ignorar
-                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
           </div>
         </div>
