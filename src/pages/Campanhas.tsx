@@ -910,10 +910,9 @@ export default function CampanhasPage() {
     const convertidoStatusAtual = statusConfig?.convertido_status ?? 3;
     const result = allLeads.filter(l => {
       if (Number((l as any).status) !== convertidoStatusAtual) return false;
-      // Usa status_aprovado_at como referência — quando foi aprovada de fato
-      const ref = (l as any).status_aprovado_at
-        || (l as any).ultimo_status_change
-        || l.created_at;
+      // Atribuição por data de ENTRADA do lead — alinha com o gasto da campanha
+      // Ex: lead entrou ontem, aprovado hoje → conta em "Ontem" em todos os filtros
+      const ref = l.created_at;
       switch(datePreset) {
         case 'today':      return ok(ref, today, today);
         case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(ref, y, y); }
