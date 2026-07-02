@@ -1523,13 +1523,13 @@ function LeadsPage() {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
     } else {
       r = [...r].sort((a, b) => {
-        const da = parseLeadDate(a.created_at).getTime();
-        const db = parseLeadDate(b.created_at).getTime();
+        const da = parseLeadDate(getLeadMoveDateForView(a) ?? a.created_at).getTime();
+        const db = parseLeadDate(getLeadMoveDateForView(b) ?? b.created_at).getTime();
         return sortByDate === 'desc' ? db - da : da - db;
       });
     }
     return r;
-  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap, activeMoveStatus]);
+  }, [allLeads, periodFilter, statusFilter, search, selectedCampaigns, campDeepFilter, customFrom, customTo, sortByScore, sortByDate, selectedTagIds, leadTagsMap, activeMoveStatus, getLeadMoveDateForView]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -2249,7 +2249,7 @@ function LeadsPage() {
                             </span>
                           );
                         })()}
-                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(lead.created_at)}</span>
+                        <span style={{ fontSize:'11px', color:txtMid }}>{formatEntrada(getLeadMoveDateForView(lead) ?? lead.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -2374,7 +2374,7 @@ function LeadsPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(lead.created_at)}</td>
+                        <td className="px-3 py-3" style={{ color: dark ? '#7a7a88' : '#374151', fontSize:'12px', whiteSpace:'nowrap' }}>{formatEntrada(getLeadMoveDateForView(lead) ?? lead.created_at)}</td>
                         <td className="px-3 py-3">
                           <div style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => handleWhatsApp(lead)} className={`w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all ${dark ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} style={{ border:'none', cursor:lead.whatsapp ? 'pointer' : 'default', opacity:lead.whatsapp ? 1 : 0.4, borderRadius:'8px' }}><MessageCircle className="w-3.5 h-3.5"/></button>

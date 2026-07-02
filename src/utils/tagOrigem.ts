@@ -20,11 +20,15 @@ export function mapUtmSourceParaNomeTag(
   const s = normalizeOrigin(utmSource);
   const hasTrackedCampaign = !!utmCampaign?.trim();
 
+  // Leads com UTM de campanha não recebem tag — a origem deles é rastreada via UTM
   if (!s || hasTrackedCampaign) return null;
-  if (s === 'TRAFEGO PAGO' || s === 'TRAFEGO ANTIGO') return TAG_META;
+  // Leads com utm_source reconhecido como tráfego de anúncio (sem campaign) também sem tag
+  const adSources = ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META', 'IG_BOOST'];
+  if (adSources.includes(s) || s.startsWith('FB') || s.includes('FBCLID')) return null;
+
   if (s.includes('INDICAC')) return TAG_INDICACAO;
+  if (s === 'TRAFEGO PAGO' || s === 'TRAFEGO ANTIGO' || s.includes('TRAFEGO') || s.includes('PAGO')) return TAG_META;
   if (s === 'INSTAGRAM ORGANICO' || s === 'INSTAGRAM_ORGANICO' || s === 'ORGANICO' || s === 'ORGANIC' || s === 'GOOGLE' || s === 'DIRETO' || s === 'SEO') return TAG_ORGANICO;
-  if (s === 'RETORNO' || s === 'MANUAL' || s === 'OUTRO') return TAG_OUTROS;
   return TAG_OUTROS;
 }
 

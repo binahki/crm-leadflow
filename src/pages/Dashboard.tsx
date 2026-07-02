@@ -76,10 +76,9 @@ function leadDateBR(str?: string | null): string {
   try {
     const d = parseLeadDate(str);
     if (!d || isNaN(d.getTime()) || d.getTime() === 0) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    // UTC-3 fixo (Brasil), independente do fuso do browser
+    const br = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+    return br.toISOString().slice(0, 10);
   } catch { return ''; }
 }
 
@@ -582,13 +581,26 @@ function corOrigem(nome: string): string {
   return '#94a3b8';
 }
 
-function origemKey(src: string | null | undefined): 'meta' | 'indicacao' | 'organico' | 'outros' {
-  if (!src) return 'outros';
-  const s = src.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
-  if (['FB','FACEBOOK','META','IG_BOOST','TRAFEGO PAGO','TRAFEGO ANTIGO','CAMPANHA'].includes(s)
-      || s.startsWith('FB') || s.includes('TRAFEGO') || s.includes('PAGO') || s.includes('CAMPANHA')) return 'meta';
-  if (s.includes('INSTAGRAM') || s.includes('ORGANICO') || s === 'IG') return 'organico';
-  if (s.includes('INDICAC')) return 'indicacao';
+function origemKey(src: string | null | undefined, camp?: string | null): 'meta' | 'indicacao' | 'organico' | 'outros' {
+  const srcRaw = (src || '').trim();
+  const campRaw = (camp || '').trim();
+  const srcNorm = srcRaw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  // Indica\u00e7\u00e3o tem prioridade absoluta
+  if (srcNorm.includes('INDICAC')) return 'indicacao';
+  // Condi\u00e7\u00e3o 1: qualquer utm_campaign preenchido = tr\u00e1fego rastreado = Meta
+  if (campRaw.length > 0) return 'meta';
+  // Condi\u00e7\u00e3o 3: fbclid em qualquer campo de tracking
+  if (srcRaw.toLowerCase().includes('fbclid')) return 'meta';
+  // Condi\u00e7\u00f5es 2 + 4: utm_source reconhecido como Meta (suporta pipe-separated)
+  if (srcNorm) {
+    const seg = srcNorm.split('|')[0].trim();
+    const isMeta = (s: string) =>
+      ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META', 'IG_BOOST', 'CAMPANHA'].includes(s)
+      || s.startsWith('FB') || s.includes('TRAFEGO') || s.includes('PAGO');
+    if (isMeta(srcNorm) || isMeta(seg)) return 'meta';
+  }
+  // Org\u00e2nico expl\u00edcito (ex: instagram_organico, organico)
+  if (srcNorm.includes('ORGANICO') || srcNorm.includes('ORGANIC')) return 'organico';
   return 'outros';
 }
 
@@ -1537,7 +1549,7 @@ export default function Dashboard() {
   const metaSpend = metaMetrics.spend || 0;
   const custoIndicacaoOrigem = useMemo(() =>
     filtered
-      .filter(l => origemKey((l as any).utm_source) === 'indicacao')
+      .filter(l => origemKey((l as any).utm_source, (l as any).utm_campaign) === 'indicacao')
       .reduce((sum, l) => sum + (Number((l as any).custo_indicacao) || 0), 0),
     [filtered]);
   const custoTotalIndicacao = useMemo(() =>
@@ -1588,11 +1600,11 @@ export default function Dashboard() {
     const leadsMap: Record<string, number> = { meta: 0, indicacao: 0, organico: 0, outros: 0 };
     for (const lead of allLeads) {
       if (!isLeadMovedToStatusInPeriod(lead, statusConfig.convertido_status, selectedPeriod, customFrom, customTo)) continue;
-      const nome = origemKey((lead as any).utm_source);
+      const nome = origemKey((lead as any).utm_source, (lead as any).utm_campaign);
       revMap[nome] = (revMap[nome] || 0) + 1;
     }
     for (const lead of filtered) {
-      const nome = origemKey((lead as any).utm_source);
+      const nome = origemKey((lead as any).utm_source, (lead as any).utm_campaign);
       leadsMap[nome] = (leadsMap[nome] || 0) + 1;
     }
     return fixas.map(nome => {

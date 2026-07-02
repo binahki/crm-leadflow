@@ -70,8 +70,12 @@ function normalizarCanal(utm_source: string | null, utm_campaign?: string | null
   const sl = s.toLowerCase();
   // Indicação tem prioridade sobre qualquer outro critério
   if (sl.startsWith('indica')) return 'Indicação';
-  // Lista explícita de utm_sources de tráfego pago
-  if (UTM_SOURCES_TRAFEGO.includes(s)) return 'Meta Ads';
+  // Match exato OU primeiro segmento antes de pipe (ex: "Tráfego pago|meta ads|fbclid")
+  const sFirst = s.split('|')[0].trim();
+  if (UTM_SOURCES_TRAFEGO.includes(s) || UTM_SOURCES_TRAFEGO.includes(sFirst)) return 'Meta Ads';
+  // Padrões Meta por includes — cobre variações com pipe e acentos
+  const sNorm = s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  if (sNorm.includes('PAGO') || sNorm.includes('TRAFEGO') || sl.includes('fbclid') || sl.includes('meta ads')) return 'Meta Ads';
   // Sem utm_source mas com campanha rastreada = tráfego pago
   if (!s && utm_campaign && utm_campaign.trim()) return 'Meta Ads';
   if (['instagram_organico', 'ig_organico', 'organico', 'orgânico', 'google', 'direto', 'seo'].includes(sl)) return 'Orgânico';

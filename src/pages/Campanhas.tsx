@@ -303,8 +303,9 @@ function isPaidTraffic(la: any): boolean {
   const src = (la.utm_source || '').trim();
   const srcNorm = src.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
   return ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META'].includes(src.toUpperCase())
-    || srcNorm === 'TRAFEGO PAGO'
-    || srcNorm === 'TRAFEGO ANTIGO'
+    || srcNorm.includes('TRAFEGO')
+    || srcNorm.includes('PAGO')
+    || src.toLowerCase().includes('fbclid')
     || (la.utm_campaign || '').trim().length > 0;
 }
 
