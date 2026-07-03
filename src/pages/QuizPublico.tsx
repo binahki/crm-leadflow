@@ -776,7 +776,22 @@ export default function QuizPublico() {
       if (error) {
         console.error('ERRO SUPABASE:', error);
         if (error.code === '23505') {
-          console.error('Lead duplicado (23505) — já existe no banco, continuando sem novo insert:', error);
+          // Lead já existe — atualiza dados + created_at para reposicionar no topo
+          const { data: existing } = await db
+            .from('leads')
+            .select('id')
+            .eq('org_id', leadData.org_id)
+            .eq('whatsapp', leadData.whatsapp)
+            .maybeSingle();
+          if (existing?.id) {
+            const { score: _s, faixa: _f, status: _st, org_id: _o, created_at: _c, ...updateFields } = leadData;
+            await db.from('leads').update({
+              ...updateFields,
+              score: leadData.score,
+              faixa: leadData.faixa,
+              created_at: new Date().toISOString(),
+            }).eq('id', existing.id);
+          }
           await finalizarQuiz(undefined);
           return;
         }

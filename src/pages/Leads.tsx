@@ -1377,7 +1377,10 @@ function LeadsPage() {
 
     // Escolhe a data de referência para o filtro de período baseado no status selecionado:
     // cada status tem seu próprio timestamp de quando o lead foi movido para aquele status.
-    const getRef = (l: Lead): string | null | undefined => getStatusMoveDate(l, activeMoveStatus);
+    const getRef = (l: Lead): string | null | undefined => {
+      const statusDate = getStatusMoveDate(l, activeMoveStatus);
+      return statusDate || l.created_at;
+    };
 
     r = filterByPeriod(r, periodFilter, customFrom, customTo, getRef);
     if (statusFilter === 'novo') r = r.filter(l => toStatusNum(l.status) === 1 && !l.avaliado);
