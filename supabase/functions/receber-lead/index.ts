@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import "@supabase/functions-js/edge-runtime.d.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -9,10 +10,16 @@ const CORS = {
   "Content-Type": "application/json",
 };
 
+const REST_HEADERS = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json",
+};
+
 async function salvarLog(event_type: string, payload: Record<string, unknown>, status: string, orgId?: string) {
   await fetch(`${SUPABASE_URL}/rest/v1/webhook_logs`, {
     method: "POST",
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+    headers: { ...REST_HEADERS, Prefer: "return=minimal" },
     body: JSON.stringify({ event_type, payload, status, ...(orgId ? { org_id: orgId } : {}) }),
   });
 }
@@ -31,7 +38,7 @@ Deno.serve(async (req) => {
     if (token) {
       const wRes = await fetch(
         `${SUPABASE_URL}/rest/v1/webhooks?select=id,org_id,ativo,nome&token=eq.${encodeURIComponent(token)}&limit=1`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        { headers: REST_HEADERS }
       );
       const wRows = await wRes.json();
       const webhook = wRows?.[0] ?? null;
@@ -47,7 +54,7 @@ Deno.serve(async (req) => {
         // Not found in webhooks — try configuracoes_whatsapp by token
         const cRes = await fetch(
           `${SUPABASE_URL}/rest/v1/configuracoes_whatsapp?select=*&webhook_token=eq.${encodeURIComponent(token)}&limit=1`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+          { headers: REST_HEADERS }
         );
         const cRows = await cRes.json();
         const config = cRows?.[0] ?? null;
@@ -62,7 +69,7 @@ Deno.serve(async (req) => {
       // No token — backward compat: accept if first config has no token set
       const cRes = await fetch(
         `${SUPABASE_URL}/rest/v1/configuracoes_whatsapp?select=*&limit=1`,
-        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        { headers: REST_HEADERS }
       );
       const cRows = await cRes.json();
       const config = cRows?.[0] ?? null;
@@ -83,19 +90,70 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: false, erro: "body inválido" }), { status: 400, headers: CORS });
     }
 
-    // ── 3. receber_lead ────────────────────────────────────────
+    // ── 3. Extract fields ──────────────────────────────────────
     const nome = String(body.nome || "");
-    const whatsapp = String(body.whatsapp || body.telefone || "");
+    const whatsapp = String(body.whatsapp || body.telefone || "").replace(/\D/g, "");
     const cidade = String(body.cidade || "");
+
+    // Optional fields that the quiz may send
+    const utm_source = body.utm_source != null ? String(body.utm_source) : undefined;
+    const utm_campaign = body.utm_campaign != null ? String(body.utm_campaign) : undefined;
+    const utm_medium = body.utm_medium != null ? String(body.utm_medium) : undefined;
+    const utm_content = body.utm_content != null ? String(body.utm_content) : undefined;
+    const utm_term = body.utm_term != null ? String(body.utm_term) : undefined;
+    const score = body.score != null ? Number(body.score) : undefined;
 
     if (!nome && !whatsapp) {
       await salvarLog("payload_incompleto", body, "error", orgId ?? undefined);
       return new Response(JSON.stringify({ ok: false, erro: "nome ou whatsapp obrigatório" }), { status: 422, headers: CORS });
     }
 
-    // Limite mensal (plano gratuito = 50 leads/mês)
+    const now = new Date().toISOString();
+
+    // ── 4. Deduplicata: busca lead existente pelo WhatsApp ─────
+    if (whatsapp && orgId) {
+      const findRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/leads?select=id&whatsapp=eq.${encodeURIComponent(whatsapp)}&org_id=eq.${encodeURIComponent(orgId)}&limit=1`,
+        { headers: REST_HEADERS }
+      );
+      const findRows = await findRes.json();
+      const existing = findRows?.[0] ?? null;
+
+      if (existing) {
+        // Lead duplicado: atualiza dados do quiz + created_at = NOW()
+        const updatePayload: Record<string, unknown> = { created_at: now };
+        if (nome) updatePayload.nome = nome;
+        if (cidade) updatePayload.cidade = cidade;
+        if (utm_source !== undefined) updatePayload.utm_source = utm_source;
+        if (utm_campaign !== undefined) updatePayload.utm_campaign = utm_campaign;
+        if (utm_medium !== undefined) updatePayload.utm_medium = utm_medium;
+        if (utm_content !== undefined) updatePayload.utm_content = utm_content;
+        if (utm_term !== undefined) updatePayload.utm_term = utm_term;
+        if (score !== undefined && !isNaN(score)) updatePayload.score = score;
+
+        const upRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(existing.id)}`,
+          {
+            method: "PATCH",
+            headers: { ...REST_HEADERS, Prefer: "return=minimal" },
+            body: JSON.stringify(updatePayload),
+          }
+        );
+
+        if (!upRes.ok) {
+          const err = await upRes.text();
+          await salvarLog("update_error", { erro: err, lead_id: existing.id }, "error", orgId);
+          return new Response(JSON.stringify({ ok: false, erro: "erro ao atualizar lead" }), { status: 500, headers: CORS });
+        }
+
+        await salvarLog("lead_atualizado", { nome, whatsapp, webhook: webhookNome, lead_id: existing.id }, "success", orgId);
+        return new Response(JSON.stringify({ ok: true, mensagem: "Lead atualizado com sucesso" }), { status: 200, headers: CORS });
+      }
+    }
+
+    // ── 5. Limite mensal (plano gratuito = 50 leads/mês) ──────
     if (orgId) {
-      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/subscriptions?select=status&org_id=eq.${orgId}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/subscriptions?select=status&org_id=eq.${orgId}&limit=1`, { headers: REST_HEADERS });
       const subs = await sRes.json();
       const isPago = subs?.[0]?.status === "active";
 
@@ -104,7 +162,7 @@ Deno.serve(async (req) => {
         const inicioMes = `${br.getUTCFullYear()}-${String(br.getUTCMonth() + 1).padStart(2, "0")}-01T00:00:00-03:00`;
         const cntRes = await fetch(
           `${SUPABASE_URL}/rest/v1/leads?select=id&org_id=eq.${orgId}&created_at=gte.${encodeURIComponent(inicioMes)}`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: "count=exact", Range: "0-0" } }
+          { headers: { ...REST_HEADERS, Prefer: "count=exact", Range: "0-0" } }
         );
         const cr = cntRes.headers.get("Content-Range") ?? "";
         const total = parseInt(cr.split("/")[1] ?? "0", 10) || 0;
@@ -115,13 +173,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Insere lead
-    const leadPayload: Record<string, unknown> = { nome, whatsapp, cidade, status: 0, wa_sent: false, created_at: new Date().toISOString() };
+    // ── 6. Insere lead novo ────────────────────────────────────
+    const leadPayload: Record<string, unknown> = {
+      nome, whatsapp, cidade,
+      status: 0, wa_sent: false,
+      created_at: now,
+    };
     if (orgId) leadPayload.org_id = orgId;
+    if (utm_source !== undefined) leadPayload.utm_source = utm_source;
+    if (utm_campaign !== undefined) leadPayload.utm_campaign = utm_campaign;
+    if (utm_medium !== undefined) leadPayload.utm_medium = utm_medium;
+    if (utm_content !== undefined) leadPayload.utm_content = utm_content;
+    if (utm_term !== undefined) leadPayload.utm_term = utm_term;
+    if (score !== undefined && !isNaN(score)) leadPayload.score = score;
 
     const lrRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      headers: { ...REST_HEADERS, Prefer: "return=representation" },
       body: JSON.stringify(leadPayload),
     });
 

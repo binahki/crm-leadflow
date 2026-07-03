@@ -57,7 +57,8 @@
       "PowerShell(node \"C:\\\\Users\\\\Murilo\\\\.claude\\\\plugins\\\\cache\\\\impeccable\\\\impeccable\\\\3.0.7\\\\skills\\\\impeccable\\\\scripts\\\\load-context.mjs\" 2>&1)",
       "Bash(xxd)",
       "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" diff --stat HEAD -- src/pages/Campanhas.tsx)",
-      "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" checkout HEAD -- src/pages/Campanhas.tsx)"
+      "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" checkout HEAD -- src/pages/Campanhas.tsx)",
+      "mcp__claude_ai_Supabase__list_edge_functions"
     ]
   }
 }

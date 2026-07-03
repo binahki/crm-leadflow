@@ -1521,6 +1521,12 @@ function LeadsPage() {
     }
     if (sortByScore) {
       r = [...r].sort((a, b) => { const sa = (a as any).score ?? -1; const sb = (b as any).score ?? -1; return sortByScore === 'desc' ? sb - sa : sa - sb; });
+    } else if (statusFilter === 'all' && !campDeepFilter) {
+      r = [...r].sort((a, b) => {
+        const da = parseLeadDate(a.created_at).getTime();
+        const db = parseLeadDate(b.created_at).getTime();
+        return sortByDate === 'desc' ? db - da : da - db;
+      });
     } else {
       r = [...r].sort((a, b) => {
         const da = parseLeadDate(getLeadMoveDateForView(a) ?? a.created_at).getTime();
