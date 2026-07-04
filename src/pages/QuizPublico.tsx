@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useOrgId } from '@/hooks/useOrgId';
 import { useQuizTracker } from '@/hooks/useQuizTracker';
+import { dispararCapiLead } from '@/utils/capiEvento';
 import { createClient } from '@supabase/supabase-js';
 import {
   QuizRenderer,
@@ -770,7 +771,7 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { error } = await db.from('leads').insert(leadData);
+      const { data: insertedLead, error } = await db.from('leads').insert(leadData).select('id').single();
       console.log('Resultado insert:', { error });
 
       if (error) {
@@ -791,6 +792,8 @@ export default function QuizPublico() {
               faixa: leadData.faixa,
               created_at: new Date().toISOString(),
             }).eq('id', existing.id);
+            const capiEventId = `floow_lead_${existing.id}_${Date.now()}`;
+            dispararCapiLead(existing.id, leadData.org_id, capiEventId);
           }
           await finalizarQuiz(undefined);
           return;
@@ -801,9 +804,11 @@ export default function QuizPublico() {
       }
 
       console.log('Lead salvo com sucesso.');
+      const capiEventId = insertedLead?.id ? `floow_lead_${insertedLead.id}_${Date.now()}` : undefined;
+      if (insertedLead?.id && capiEventId) dispararCapiLead(insertedLead.id, leadData.org_id, capiEventId);
       // Pixel Lead — dispara APÓS o insert para garantir que o lead chegou ao banco
       if (quiz?.pixel_id && (quiz as any).pixel_fire_lead_event !== false) {
-        if ((window as any).fbq) (window as any).fbq('track', 'Lead');
+        if ((window as any).fbq) (window as any).fbq('track', 'Lead', {}, capiEventId ? { eventID: capiEventId } : undefined);
       }
       await finalizarQuiz(undefined);
     } catch (err) {

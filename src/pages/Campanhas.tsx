@@ -909,22 +909,19 @@ export default function CampanhasPage() {
       return !!d && d >= a && d <= b;
     };
     const convertidoStatusAtual = statusConfig?.convertido_status ?? 3;
-    const result = allLeads.filter(l => {
+    return allLeads.filter(l => {
       if (Number((l as any).status) !== convertidoStatusAtual) return false;
-      // Atribuição por data de ENTRADA do lead — alinha com o gasto da campanha
-      // Ex: lead entrou ontem, aprovado hoje → conta em "Ontem" em todos os filtros
-      const ref = l.created_at;
+      const ref = getStatusMovedAt(l, convertidoStatusAtual);
       switch(datePreset) {
         case 'today':      return ok(ref, today, today);
         case 'yesterday':  { const y = subDaysCamp(today, 1); return ok(ref, y, y); }
         case 'last_7d':    return ok(ref, subDaysCamp(today, 6), today);
         case 'last_30d':   return ok(ref, subDaysCamp(today, 29), today);
         case 'this_month': return ok(ref, today.slice(0,7)+'-01', today);
-        default: return Number((l as any).status) === convertidoStatusAtual;
+        default: return true;
       }
     });
-    return result;
-  }, [allLeads, datePreset]);
+  }, [allLeads, datePreset, statusConfig]);
 
   // ── Mapeamento Único: Garante que um lead pertença a apenas 1 campanha
   const campLeadsMap = useMemo(() => {

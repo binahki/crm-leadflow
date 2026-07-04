@@ -16,20 +16,132 @@ const REST_HEADERS = {
   "Content-Type": "application/json",
 };
 
-async function salvarLog(event_type: string, payload: Record<string, unknown>, status: string, orgId?: string) {
-  await fetch(`${SUPABASE_URL}/rest/v1/webhook_logs`, {
-    method: "POST",
-    headers: { ...REST_HEADERS, Prefer: "return=minimal" },
-    body: JSON.stringify({ event_type, payload, status, ...(orgId ? { org_id: orgId } : {}) }),
-  });
+async function dispararCapiLead(leadId: number | string, orgId?: string | null) {
+  if (!orgId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-capi-evento`, {
+      method: "POST",
+      headers: { ...REST_HEADERS },
+      body: JSON.stringify({ lead_id: leadId, tipo: "lead", org_id: orgId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) console.warn("[receber-lead] CAPI Lead falhou", leadId, data?.erro || res.status);
+  } catch (err) {
+    console.warn("[receber-lead] CAPI Lead exception", leadId, String(err));
+  }
+}
+
+async function salvarLog(event_type: string, payload: Record<string, unknown>, status: string, orgId?: string | null) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/webhook_logs`, {
+      method: "POST",
+      headers: { ...REST_HEADERS, Prefer: "return=minimal" },
+      body: JSON.stringify({ event_type, payload, status, ...(orgId ? { org_id: orgId } : {}) }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error("[receber-lead] falha ao salvar webhook_logs", {
+        event_type,
+        status,
+        orgId,
+        http_status: res.status,
+        detail,
+      });
+    }
+  } catch (err) {
+    console.error("[receber-lead] exception ao salvar webhook_logs", {
+      event_type,
+      status,
+      orgId,
+      erro: String(err),
+    });
+  }
+}
+
+function normalizarChaveCampo(chave: string) {
+  return chave
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/^(field|fields|input|answer|resposta|respostas|campo|custom field)\s*:\s*/i, "")
+    .replace(/[_\-]+/g, " ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function textoCampo(valor: unknown): string {
+  if (valor == null) return "";
+  if (Array.isArray(valor)) return valor.map(textoCampo).filter(Boolean).join(", ");
+  if (typeof valor === "object") {
+    const obj = valor as Record<string, unknown>;
+    const direto = obj.value ?? obj.label ?? obj.name ?? obj.text ?? obj.title ?? obj.answer;
+    return direto != null ? textoCampo(direto) : JSON.stringify(valor);
+  }
+  return String(valor).trim();
+}
+
+function detectarCampos(body: Record<string, unknown>) {
+  const campos = Object.entries(body).map(([key, value]) => ({
+    key,
+    norm: normalizarChaveCampo(key),
+    value,
+    text: textoCampo(value),
+  }));
+
+  const buscar = (alvos: string[], contem: string[] = []) => {
+    const alvoSet = new Set(alvos.map(normalizarChaveCampo));
+    const encontrado = campos.find(c => alvoSet.has(c.norm))
+      ?? campos.find(c => contem.some(t => c.norm.includes(t)));
+    return encontrado?.text || "";
+  };
+
+  const nome = buscar(["nome", "nome completo", "name", "full name", "lead nome"], ["nome completo"]);
+  const whatsapp = buscar(["whatsapp", "telefone", "celular", "phone", "telefone celular", "numero", "contato"], ["whatsapp", "telefone", "celular"]);
+  const cidade = buscar(["cidade", "city", "municipio", "localidade"], ["cidade", "municipio"]);
+  const instagram = buscar(["instagram", "insta", "usuario instagram", "perfil instagram"], ["instagram"]);
+
+  return {
+    nome,
+    whatsapp: whatsapp.replace(/\D/g, ""),
+    cidade,
+    instagram,
+    quizRespostas: body,
+  };
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
+  const requestId = crypto.randomUUID();
+
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("token") || "";
+
+    let body: Record<string, unknown> = {};
+    let rawBody = "";
+    try {
+      rawBody = await req.text();
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      await salvarLog("webhook_post_recebido", {
+        request_id: requestId,
+        token_presente: Boolean(token),
+        parse_ok: false,
+        raw_body: rawBody,
+      }, "received");
+      await salvarLog("parse_error", { request_id: requestId, raw_body: rawBody }, "error");
+      return new Response(JSON.stringify({ ok: false, erro: "body inválido" }), { status: 400, headers: CORS });
+    }
+
+    await salvarLog("webhook_post_recebido", {
+      request_id: requestId,
+      token_presente: Boolean(token),
+      parse_ok: true,
+      payload: body,
+    }, "received");
 
     let orgId: string | null = null;
     let webhookNome = "Principal";
@@ -81,19 +193,21 @@ Deno.serve(async (req) => {
       orgId = config?.org_id ?? null;
     }
 
-    // ── 2. Parse body ──────────────────────────────────────────
-    let body: Record<string, unknown> = {};
-    try {
-      body = await req.json();
-    } catch {
-      await salvarLog("parse_error", {}, "error", orgId ?? undefined);
-      return new Response(JSON.stringify({ ok: false, erro: "body inválido" }), { status: 400, headers: CORS });
-    }
+    await salvarLog("webhook_recebido", {
+      request_id: requestId,
+      webhook: webhookNome,
+      token_presente: Boolean(token),
+      parse_ok: true,
+      payload: body,
+    }, "received", orgId);
 
     // ── 3. Extract fields ──────────────────────────────────────
-    const nome = String(body.nome || "");
-    const whatsapp = String(body.whatsapp || body.telefone || "").replace(/\D/g, "");
-    const cidade = String(body.cidade || "");
+    const camposDetectados = detectarCampos(body);
+    const nome = camposDetectados.nome;
+    const whatsapp = camposDetectados.whatsapp;
+    const cidade = camposDetectados.cidade;
+    const instagram = camposDetectados.instagram;
+    const quiz_respostas = camposDetectados.quizRespostas;
 
     // Optional fields that the quiz may send
     const utm_source = body.utm_source != null ? String(body.utm_source) : undefined;
@@ -104,7 +218,7 @@ Deno.serve(async (req) => {
     const score = body.score != null ? Number(body.score) : undefined;
 
     if (!nome && !whatsapp) {
-      await salvarLog("payload_incompleto", body, "error", orgId ?? undefined);
+      await salvarLog("payload_incompleto", { request_id: requestId, payload: body }, "error", orgId);
       return new Response(JSON.stringify({ ok: false, erro: "nome ou whatsapp obrigatório" }), { status: 422, headers: CORS });
     }
 
@@ -129,6 +243,8 @@ Deno.serve(async (req) => {
         if (utm_medium !== undefined) updatePayload.utm_medium = utm_medium;
         if (utm_content !== undefined) updatePayload.utm_content = utm_content;
         if (utm_term !== undefined) updatePayload.utm_term = utm_term;
+        if (instagram) updatePayload.instagram = instagram;
+        if (Object.keys(quiz_respostas).length > 0) updatePayload.quiz_respostas = quiz_respostas;
         if (score !== undefined && !isNaN(score)) updatePayload.score = score;
 
         const upRes = await fetch(
@@ -142,11 +258,12 @@ Deno.serve(async (req) => {
 
         if (!upRes.ok) {
           const err = await upRes.text();
-          await salvarLog("update_error", { erro: err, lead_id: existing.id }, "error", orgId);
+          await salvarLog("update_error", { request_id: requestId, erro: err, lead_id: existing.id, payload: body }, "error", orgId);
           return new Response(JSON.stringify({ ok: false, erro: "erro ao atualizar lead" }), { status: 500, headers: CORS });
         }
 
-        await salvarLog("lead_atualizado", { nome, whatsapp, webhook: webhookNome, lead_id: existing.id }, "success", orgId);
+        await dispararCapiLead(existing.id, orgId);
+        await salvarLog("lead_atualizado", { request_id: requestId, nome, whatsapp, cidade, instagram, webhook: webhookNome, lead_id: existing.id }, "success", orgId);
         return new Response(JSON.stringify({ ok: true, mensagem: "Lead atualizado com sucesso" }), { status: 200, headers: CORS });
       }
     }
@@ -167,7 +284,7 @@ Deno.serve(async (req) => {
         const cr = cntRes.headers.get("Content-Range") ?? "";
         const total = parseInt(cr.split("/")[1] ?? "0", 10) || 0;
         if (total >= 50) {
-          await salvarLog("limite_atingido", { org_id: orgId, total }, "error", orgId);
+          await salvarLog("limite_atingido", { request_id: requestId, org_id: orgId, total, payload: body }, "error", orgId);
           return new Response(JSON.stringify({ ok: false, erro: "Limite mensal de 50 leads atingido. Faça upgrade do seu plano." }), { status: 429, headers: CORS });
         }
       }
@@ -178,6 +295,7 @@ Deno.serve(async (req) => {
       nome, whatsapp, cidade,
       status: 0, wa_sent: false,
       created_at: now,
+      quiz_respostas,
     };
     if (orgId) leadPayload.org_id = orgId;
     if (utm_source !== undefined) leadPayload.utm_source = utm_source;
@@ -185,6 +303,7 @@ Deno.serve(async (req) => {
     if (utm_medium !== undefined) leadPayload.utm_medium = utm_medium;
     if (utm_content !== undefined) leadPayload.utm_content = utm_content;
     if (utm_term !== undefined) leadPayload.utm_term = utm_term;
+    if (instagram) leadPayload.instagram = instagram;
     if (score !== undefined && !isNaN(score)) leadPayload.score = score;
 
     const lrRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
@@ -195,15 +314,19 @@ Deno.serve(async (req) => {
 
     if (!lrRes.ok) {
       const err = await lrRes.text();
-      await salvarLog("insert_error", { erro: err, payload: body }, "error", orgId ?? undefined);
+      await salvarLog("insert_error", { request_id: requestId, erro: err, payload: body, lead_payload: leadPayload }, "error", orgId);
       return new Response(JSON.stringify({ ok: false, erro: "erro ao salvar lead" }), { status: 500, headers: CORS });
     }
 
-    await salvarLog("lead_recebido", { nome, whatsapp, cidade, webhook: webhookNome }, "success", orgId ?? undefined);
+    const leadCriado = await lrRes.json();
+    const leadId = Array.isArray(leadCriado) ? leadCriado[0]?.id : leadCriado?.id;
+    if (leadId) await dispararCapiLead(leadId, orgId);
+
+    await salvarLog("lead_recebido", { request_id: requestId, nome, whatsapp, cidade, instagram, webhook: webhookNome, lead_id: leadId }, "success", orgId);
     return new Response(JSON.stringify({ ok: true, mensagem: "Lead recebido com sucesso" }), { status: 200, headers: CORS });
 
   } catch (err) {
-    await salvarLog("exception", { erro: String(err) }, "error").catch(() => {});
+    await salvarLog("exception", { request_id: requestId, erro: String(err) }, "error");
     return new Response(JSON.stringify({ ok: false, erro: "erro interno" }), { status: 500, headers: CORS });
   }
 });
