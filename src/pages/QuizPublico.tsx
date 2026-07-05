@@ -771,7 +771,7 @@ export default function QuizPublico() {
     console.log('Inserindo no banco...');
 
     try {
-      const { data: insertedLead, error } = await db.from('leads').insert(leadData).select('id').single();
+      const { data: insertedLead, error } = await db.from('leads').insert(leadData).select('id, status').single();
       console.log('Resultado insert:', { error });
 
       if (error) {
@@ -780,17 +780,26 @@ export default function QuizPublico() {
           // Lead já existe — atualiza dados + created_at para reposicionar no topo
           const { data: existing } = await db
             .from('leads')
-            .select('id')
+            .select('id, status')
             .eq('org_id', leadData.org_id)
             .eq('whatsapp', leadData.whatsapp)
             .maybeSingle();
           if (existing?.id) {
             const { score: _s, faixa: _f, status: _st, org_id: _o, created_at: _c, ...updateFields } = leadData;
+            const resetReprovado = String((existing as any).status) === '4';
+            const resetAt = new Date().toISOString();
             await db.from('leads').update({
               ...updateFields,
               score: leadData.score,
               faixa: leadData.faixa,
-              created_at: new Date().toISOString(),
+              created_at: resetAt,
+              ...(resetReprovado ? {
+                status: leadData.status,
+                motivo_reprovacao: null,
+                avaliado: false,
+                ultimo_status_change: resetAt,
+                status_atendimento_at: resetAt,
+              } : {}),
             }).eq('id', existing.id);
             const capiEventId = `floow_lead_${existing.id}_${Date.now()}`;
             dispararCapiLead(existing.id, leadData.org_id, capiEventId);

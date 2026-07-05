@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
     // ── 4. Deduplicata: busca lead existente pelo WhatsApp ─────
     if (whatsapp && orgId) {
       const findRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/leads?select=id&whatsapp=eq.${encodeURIComponent(whatsapp)}&org_id=eq.${encodeURIComponent(orgId)}&limit=1`,
+        `${SUPABASE_URL}/rest/v1/leads?select=id,status&whatsapp=eq.${encodeURIComponent(whatsapp)}&org_id=eq.${encodeURIComponent(orgId)}&limit=1`,
         { headers: REST_HEADERS }
       );
       const findRows = await findRes.json();
@@ -246,6 +246,12 @@ Deno.serve(async (req) => {
         if (instagram) updatePayload.instagram = instagram;
         if (Object.keys(quiz_respostas).length > 0) updatePayload.quiz_respostas = quiz_respostas;
         if (score !== undefined && !isNaN(score)) updatePayload.score = score;
+        if (String(existing.status) === "4") {
+          updatePayload.status = 0;
+          updatePayload.motivo_reprovacao = null;
+          updatePayload.avaliado = false;
+          updatePayload.ultimo_status_change = now;
+        }
 
         const upRes = await fetch(
           `${SUPABASE_URL}/rest/v1/leads?id=eq.${encodeURIComponent(existing.id)}`,
