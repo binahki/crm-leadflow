@@ -64,11 +64,24 @@ const STATUS_TIMESTAMP_FIELD: Record<number, string> = {
 function parseLeadDate(str?: string | null): Date {
   if (!str || typeof str !== 'string') return new Date(0);
   try {
-    if (str.includes('T')) { const d = new Date(str); return isNaN(d.getTime()) ? new Date(0) : d; }
-    if (/^\d{4}-\d{2}-\d{2} /.test(str)) { const d = new Date(str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z')); return isNaN(d.getTime()) ? new Date(0) : d; }
+    if (str.includes('T')) {
+      const cleaned = str.replace(/(\.\d{3})\d+/, '$1');
+      const d = new Date(cleaned);
+      return isNaN(d.getTime()) ? new Date(0) : d;
+    }
+    if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
+      const cleaned = str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z').replace(/(\.\d{3})\d+/, '$1');
+      const d = new Date(cleaned);
+      return isNaN(d.getTime()) ? new Date(0) : d;
+    }
     const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-    if (m) { const [, d, mo, y, h = '0', mi = '0'] = m; const dt = new Date(`${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${h.padStart(2, '0')}:${mi.padStart(2, '0')}:00-03:00`); return isNaN(dt.getTime()) ? new Date(0) : dt; }
-    const d = new Date(str); return isNaN(d.getTime()) ? new Date(0) : d;
+    if (m) {
+      const [, d, mo, y, h = '0', mi = '0'] = m;
+      const dt = new Date(`${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${h.padStart(2, '0')}:${mi.padStart(2, '0')}:00-03:00`);
+      return isNaN(dt.getTime()) ? new Date(0) : dt;
+    }
+    const d = new Date(str.replace(/(\.\d{3})\d+/, '$1'));
+    return isNaN(d.getTime()) ? new Date(0) : d;
   } catch { return new Date(0); }
 }
 
@@ -85,11 +98,38 @@ function leadDateBR(str?: string | null): string {
 function todayBR(): string {
   try {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    // UTC-3 fixo
+    const br = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+    return br.toISOString().slice(0, 10);
   } catch { return new Date().toISOString().slice(0, 10); }
+}
+
+// Clean and check if two campaign names are matching
+function matchCampaignName(utmCampaign: string, metaCampaignName: string): boolean {
+  const clean = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s*-\s*\[cbo\]/gi, '')
+      .replace(/\s*-\s*\[abo\]/gi, '')
+      .replace(/\s*\[leads?\]/gi, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const utmClean = clean(utmCampaign);
+  const metaClean = clean(metaCampaignName);
+
+  if (!utmClean || !metaClean) return false;
+  if (utmClean === metaClean) return true;
+  if (metaClean.includes(utmClean) || utmClean.includes(metaClean)) return true;
+
+  if (utmClean.length >= 6 && metaClean.includes(utmClean.slice(0, 20))) return true;
+  if (metaClean.length >= 6 && utmClean.includes(metaClean.slice(0, 20))) return true;
+
+  return false;
 }
 
 function localDateKey(date: Date): string {
@@ -1623,11 +1663,13 @@ export default function Dashboard() {
     const maxSpend = Math.max(...withSpend.map(c => Number(c.spend)), 1);
     return withSpend.sort((a, b) => { const pA = a.leads_api > 0 ? a.leads_api / a.spend : 0; const pB = b.leads_api > 0 ? b.leads_api / b.spend : 0; if (pA !== pB) return pB - pA; return b.spend - a.spend; }).slice(0, 5).map(c => {
       // Conta leads no CRM pela utm_campaign (mais rápido que FB API, sem delay)
-      const nameLower = c.name.toLowerCase().split('|')[0].trim();
       const leadsCRM = filtered.filter(l => {
         const la = l as any;
-        const camp = (la.utm_campaign || '').toLowerCase().split('|')[0].trim();
-        return camp && camp.includes(nameLower.slice(0, 20));
+        const utmRaw = (la.utm_campaign || '').trim();
+        if (!utmRaw) return false;
+        const parts = utmRaw.split('|');
+        const utm = (parts[0] || '').trim();
+        return matchCampaignName(utm, c.name);
       }).length;
       const leadsCount = leadsCRM || c.leads_api || 0;
       return {

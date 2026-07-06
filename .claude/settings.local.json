@@ -58,7 +58,18 @@
       "Bash(xxd)",
       "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" diff --stat HEAD -- src/pages/Campanhas.tsx)",
       "Bash(git -C \"c:/Users/Murilo/leadflow-dashboard\" checkout HEAD -- src/pages/Campanhas.tsx)",
-      "mcp__claude_ai_Supabase__list_edge_functions"
+      "mcp__claude_ai_Supabase__list_edge_functions",
+      "PowerShell(npx supabase functions deploy receber-lead --project-ref obguidmfvfjaekaskgob 2>&1)",
+      "PowerShell(npx supabase migration list --project-ref obguidmfvfjaekaskgob 2>&1)",
+      "PowerShell(npx supabase migration list --linked 2>&1)",
+      "PowerShell(npx supabase db push 2>&1)",
+      "PowerShell(npx supabase projects api-keys --project-ref obguidmfvfjaekaskgob --output json 2>&1)",
+      "PowerShell(npx supabase functions deploy quiz-submit-lead --project-ref obguidmfvfjaekaskgob 2>&1)",
+      "PowerShell(npx supabase functions list --project-ref obguidmfvfjaekaskgob --output json 2>&1)",
+      "PowerShell(npx supabase functions deploy receber-lead --project-ref obguidmfvfjaekaskgob --no-verify-jwt 2>&1)",
+      "PowerShell(npx supabase functions list --project-ref obguidmfvfjaekaskgob --output json 2>&1 | ConvertFrom-Json | Where-Object { $_.name -eq \"receber-lead\" } | Select-Object name, status, verify_jwt, version | ConvertTo-Json)",
+      "PowerShell(npx supabase functions list --project-ref obguidmfvfjaekaskgob --output json 2>&1 | ForEach-Object { $_ } | ConvertFrom-Json | Where-Object name -eq \"receber-lead\" | ConvertTo-Json)",
+      "PowerShell(npx supabase functions deploy quiz-submit-lead --project-ref obguidmfvfjaekaskgob --no-verify-jwt 2>&1)"
     ]
   }
 }

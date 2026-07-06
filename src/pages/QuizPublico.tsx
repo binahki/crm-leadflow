@@ -531,8 +531,8 @@ export default function QuizPublico() {
       const totalScore = calculateScore(newAnswers, newMultipleAnswers);
       setScore(totalScore);
       if (!quiz) return;
-      
-      const corteMinimo = quiz.corte_amarelo ?? quiz.corte_verde ?? 25;
+
+      const corteMinimo = quiz.corte_amarelo ?? quiz.corte_verde ?? 0;
       const isApproved = totalScore >= corteMinimo;
       setFaixa(totalScore >= quiz.corte_verde ? 'verde' : 'amarelo');
       
@@ -708,7 +708,6 @@ export default function QuizPublico() {
     }
 
     setSubmitting(true);
-    console.log('Passou validações, construindo leadData...');
 
     const stripEmojis = (str: string) => str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
 
@@ -767,54 +766,28 @@ export default function QuizPublico() {
       ...utmPayload
     };
 
-    console.log('LeadData final:', leadData);
-    console.log('Inserindo no banco...');
-
     try {
-      const { data: insertedLead, error } = await db.from('leads').insert(leadData).select('id, status').single();
-      console.log('Resultado insert:', { error });
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quiz-submit-lead`;
+      const resp = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify(leadData),
+      });
+      const result = await resp.json().catch(() => ({ ok: false, erro: 'resposta inválida' }));
 
-      if (error) {
-        console.error('ERRO SUPABASE:', error);
-        if (error.code === '23505') {
-          // Lead já existe — atualiza dados + created_at para reposicionar no topo
-          const { data: existing } = await db
-            .from('leads')
-            .select('id, status')
-            .eq('org_id', leadData.org_id)
-            .eq('whatsapp', leadData.whatsapp)
-            .maybeSingle();
-          if (existing?.id) {
-            const { score: _s, faixa: _f, status: _st, org_id: _o, created_at: _c, ...updateFields } = leadData;
-            const resetReprovado = String((existing as any).status) === '4';
-            const resetAt = new Date().toISOString();
-            await db.from('leads').update({
-              ...updateFields,
-              score: leadData.score,
-              faixa: leadData.faixa,
-              created_at: resetAt,
-              ...(resetReprovado ? {
-                status: leadData.status,
-                motivo_reprovacao: null,
-                avaliado: false,
-                ultimo_status_change: resetAt,
-                status_atendimento_at: resetAt,
-              } : {}),
-            }).eq('id', existing.id);
-            const capiEventId = `floow_lead_${existing.id}_${Date.now()}`;
-            dispararCapiLead(existing.id, leadData.org_id, capiEventId);
-          }
-          await finalizarQuiz(undefined);
-          return;
-        }
+      if (!result.ok) {
+        console.error('ERRO quiz-submit-lead:', result.erro);
         setSubmitting(false);
         alert('Erro ao salvar. Tente novamente.');
         return;
       }
 
-      console.log('Lead salvo com sucesso.');
-      const capiEventId = insertedLead?.id ? `floow_lead_${insertedLead.id}_${Date.now()}` : undefined;
-      if (insertedLead?.id && capiEventId) dispararCapiLead(insertedLead.id, leadData.org_id, capiEventId);
+      const leadId: number | undefined = result.lead_id;
+      const capiEventId = leadId ? `floow_lead_${leadId}_${Date.now()}` : undefined;
+      if (leadId && capiEventId) dispararCapiLead(leadId, leadData.org_id, capiEventId);
       // Pixel Lead — dispara APÓS o insert para garantir que o lead chegou ao banco
       if (quiz?.pixel_id && (quiz as any).pixel_fire_lead_event !== false) {
         if ((window as any).fbq) (window as any).fbq('track', 'Lead', {}, capiEventId ? { eventID: capiEventId } : undefined);

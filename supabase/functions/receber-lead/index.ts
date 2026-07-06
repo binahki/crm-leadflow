@@ -216,6 +216,10 @@ Deno.serve(async (req) => {
     const utm_content = body.utm_content != null ? String(body.utm_content) : undefined;
     const utm_term = body.utm_term != null ? String(body.utm_term) : undefined;
     const score = body.score != null ? Number(body.score) : undefined;
+    // fbclid vem como body.fbclid ou body["tracking.fbclid"] (formato Inlead)
+    const fbclid = body.fbclid != null
+      ? String(body.fbclid)
+      : (body["tracking.fbclid"] != null ? String(body["tracking.fbclid"]) : undefined);
 
     if (!nome && !whatsapp) {
       await salvarLog("payload_incompleto", { request_id: requestId, payload: body }, "error", orgId);
@@ -246,6 +250,7 @@ Deno.serve(async (req) => {
         if (instagram) updatePayload.instagram = instagram;
         if (Object.keys(quiz_respostas).length > 0) updatePayload.quiz_respostas = quiz_respostas;
         if (score !== undefined && !isNaN(score)) updatePayload.score = score;
+        if (fbclid !== undefined) updatePayload.fbclid = fbclid;
         if (String(existing.status) === "4") {
           updatePayload.status = 0;
           updatePayload.motivo_reprovacao = null;
@@ -311,6 +316,7 @@ Deno.serve(async (req) => {
     if (utm_term !== undefined) leadPayload.utm_term = utm_term;
     if (instagram) leadPayload.instagram = instagram;
     if (score !== undefined && !isNaN(score)) leadPayload.score = score;
+    if (fbclid !== undefined) leadPayload.fbclid = fbclid;
 
     const lrRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",

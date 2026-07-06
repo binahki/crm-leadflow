@@ -250,30 +250,38 @@ function getLeads(actions: any[]) { return parseInt(actions?.find((a:any)=>LEAD_
 // ── Datas Brasília ────────────────────────────────────────────
 function parseLeadDateCamp(str?: string|null): Date {
   if (!str) return new Date(0);
-  if (str.includes('T')) return new Date(str);
-  if (/^\d{4}-\d{2}-\d{2} /.test(str)) return new Date(str.replace(' ','T').replace('+00:00','Z').replace('+00','Z'));
+  if (typeof str !== 'string') return new Date(0);
+  if (str.includes('T')) {
+    const cleaned = str.replace(/(\.\d{3})\d+/, '$1');
+    return new Date(cleaned);
+  }
+  if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
+    const cleaned = str.replace(' ', 'T').replace('+00:00', 'Z').replace('+00', 'Z').replace(/(\.\d{3})\d+/, '$1');
+    return new Date(cleaned);
+  }
   const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
-  if (m) { const [, d, mo, y, h='0', mi='0'] = m; return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`); }
-  return new Date(str);
+  if (m) {
+    const [, d, mo, y, h = '0', mi = '0'] = m;
+    return new Date(`${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi.padStart(2,'0')}:00-03:00`);
+  }
+  return new Date(str.replace(/(\.\d{3})\d+/, '$1'));
 }
 function leadDateBRCamp(str?: string|null): string {
   try {
     const d=parseLeadDateCamp(str);
-    if(d.getTime()===0)return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    if(!d || isNaN(d.getTime()) || d.getTime()===0) return '';
+    // UTC-3 fixo (Brasil), independente do fuso do browser
+    const br = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+    return br.toISOString().slice(0, 10);
   } catch { return ''; }
 }
 function todayBRCamp(): string {
   try {
     const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  } catch { return new Date().toISOString().split('T')[0]; }
+    // UTC-3 fixo
+    const br = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+    return br.toISOString().slice(0, 10);
+  } catch { return new Date().toISOString().slice(0, 10); }
 }
 function subDaysCamp(s:string,n:number): string {
   try { const d=new Date(s+'T12:00:00Z'); if(isNaN(d.getTime()))return s; d.setUTCDate(d.getUTCDate()-n); return d.toISOString().slice(0,10); } catch { return s; }
@@ -297,16 +305,57 @@ function filterLeadsByPreset(leads: any[], preset: string) {
 }
 
 // Returns true if the lead should be counted as paid-traffic origin.
-// Matches: utm_source = 'FB' (manually added as "Tráfego Pago"), any 'TRÁFEGO PAGO' variant
-// (accent-normalized), 'INSTAGRAM_ORGANICO', or any utm_campaign present.
 function isPaidTraffic(la: any): boolean {
   const src = (la.utm_source || '').trim();
-  const srcNorm = src.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-  return ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META'].includes(src.toUpperCase())
-    || srcNorm.includes('TRAFEGO')
-    || srcNorm.includes('PAGO')
-    || src.toLowerCase().includes('fbclid')
-    || (la.utm_campaign || '').trim().length > 0;
+  const camp = (la.utm_campaign || '').trim();
+  const srcNorm = src.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  
+  if (srcNorm.includes('INDICAC')) return false;
+  if (camp.length > 0) return true;
+  if (src.toLowerCase().includes('fbclid')) return true;
+  if (la.fbclid && String(la.fbclid).trim().length > 0) return true;
+  
+  if (srcNorm) {
+    const seg = srcNorm.split('|')[0].trim();
+    const isMeta = (s: string) =>
+      ['FB', 'FACEBOOK', 'IG', 'INSTAGRAM', 'META', 'IG_BOOST', 'CAMPANHA'].includes(s)
+      || s.startsWith('FB') || s.includes('TRAFEGO') || s.includes('PAGO');
+    if (isMeta(srcNorm) || isMeta(seg)) return true;
+  }
+  
+  if ((la.utm_medium || '').trim()) return true;
+  if ((la.utm_content || '').trim()) return true;
+  if ((la.utm_term || '').trim()) return true;
+  
+  return false;
+}
+
+// Clean and check if two campaign names are matching
+function matchCampaignName(utmCampaign: string, metaCampaignName: string): boolean {
+  const clean = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s*-\s*\[cbo\]/gi, '')
+      .replace(/\s*-\s*\[abo\]/gi, '')
+      .replace(/\s*\[leads?\]/gi, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const utmClean = clean(utmCampaign);
+  const metaClean = clean(metaCampaignName);
+
+  if (!utmClean || !metaClean) return false;
+  if (utmClean === metaClean) return true;
+  if (metaClean.includes(utmClean) || utmClean.includes(metaClean)) return true;
+
+  if (utmClean.length >= 6 && metaClean.includes(utmClean.slice(0, 20))) return true;
+  if (metaClean.length >= 6 && utmClean.includes(metaClean.slice(0, 20))) return true;
+
+  return false;
 }
 
 // ── Fetch campanhas ───────────────────────────────────────────
@@ -937,27 +986,17 @@ export default function CampanhasPage() {
       let bestMatch: string | null = null;
       if (utmRaw) {
         const parts = utmRaw.split('|');
-        const utm = (parts[0] || '').toLowerCase().trim();
+        const utm = (parts[0] || '').trim();
         const utmId = parts.length >= 2 ? parts[1].trim() : '';
-        let maxMatchLen = 0;
 
         for (const c of campaigns) {
-          if (utm === c.id) { bestMatch = c.id; break; }
-          const cn = c.name.toLowerCase().split('|')[0].trim();
-          if (!cn || cn.length < 3) continue;
-          if (utm === cn) { bestMatch = c.id; break; }
-
-          if (utm.includes(cn.slice(0, 20))) {
-            if (cn.length > maxMatchLen) {
-              maxMatchLen = cn.length;
-              bestMatch = c.id;
-            }
+          if (utm === c.id || (utmId && utmId === c.id)) {
+            bestMatch = c.id;
+            break;
           }
-        }
-
-        if (!bestMatch && utmId) {
-          for (const c of campaigns) {
-            if (utmId === c.id) { bestMatch = c.id; break; }
+          if (matchCampaignName(utm, c.name)) {
+            bestMatch = c.id;
+            break;
           }
         }
       }
@@ -1002,27 +1041,17 @@ export default function CampanhasPage() {
       let bestMatch: string | null = null;
       if (utmRaw) {
         const parts = utmRaw.split('|');
-        const utm = (parts[0] || '').toLowerCase().trim();
+        const utm = (parts[0] || '').trim();
         const utmId = parts.length >= 2 ? parts[1].trim() : '';
-        let maxMatchLen = 0;
 
         for (const c of campaigns) {
-          if (utm === c.id) { bestMatch = c.id; break; }
-          const cn = c.name.toLowerCase().split('|')[0].trim();
-          if (!cn || cn.length < 3) continue;
-          if (utm === cn) { bestMatch = c.id; break; }
-
-          if (utm.includes(cn.slice(0, 20))) {
-            if (cn.length > maxMatchLen) {
-              maxMatchLen = cn.length;
-              bestMatch = c.id;
-            }
+          if (utm === c.id || (utmId && utmId === c.id)) {
+            bestMatch = c.id;
+            break;
           }
-        }
-
-        if (!bestMatch && utmId) {
-          for (const c of campaigns) {
-            if (utmId === c.id) { bestMatch = c.id; break; }
+          if (matchCampaignName(utm, c.name)) {
+            bestMatch = c.id;
+            break;
           }
         }
       }
@@ -1063,22 +1092,17 @@ export default function CampanhasPage() {
       const utmRaw = (la.utm_campaign || '').trim();
       if (!utmRaw) continue;
       const parts = utmRaw.split('|');
-      const utm = (parts[0] || '').toLowerCase().trim();
+      const utm = (parts[0] || '').trim();
       const utmId = parts.length >= 2 ? parts[1].trim() : '';
       let bestMatch: string | null = null;
-      let maxMatchLen = 0;
       for (const c of campaigns) {
-        if (utm === c.id) { bestMatch = c.id; break; }
-        const cn = c.name.toLowerCase().split('|')[0].trim();
-        if (!cn || cn.length < 3) continue;
-        if (utm === cn) { bestMatch = c.id; break; }
-        if (utm.includes(cn.slice(0, 20))) {
-          if (cn.length > maxMatchLen) { maxMatchLen = cn.length; bestMatch = c.id; }
+        if (utm === c.id || (utmId && utmId === c.id)) {
+          bestMatch = c.id;
+          break;
         }
-      }
-      if (!bestMatch && utmId) {
-        for (const c of campaigns) {
-          if (utmId === c.id) { bestMatch = c.id; break; }
+        if (matchCampaignName(utm, c.name)) {
+          bestMatch = c.id;
+          break;
         }
       }
       if (bestMatch) {
