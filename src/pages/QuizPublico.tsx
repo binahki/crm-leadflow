@@ -62,7 +62,7 @@ function getUtmsPayload(): Record<string, string> {
     if (val) fromUrl[key] = val;
   });
 
-  const merged = { ...fromUrl, ...stored };
+  const merged = { ...stored, ...fromUrl };
 
   const coreKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
   coreKeys.forEach(key => {

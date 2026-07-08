@@ -30,6 +30,14 @@ Deno.serve(async (req) => {
     const cleanWa: string = String(whatsapp ?? "").replace(/\D/g, "");
     const now = new Date().toISOString();
 
+    // Resolve UTMs: se fbclid presente mas sem utm_source, infere origem Facebook
+    const fbclid = leadData.fbclid || "";
+    const resolvedUtmSource = leadData.utm_source || (fbclid ? "Facebook" : "");
+    const resolvedUtmMedium = leadData.utm_medium || (fbclid && !leadData.utm_source ? "paid" : "");
+    const resolvedUtmCampaign = leadData.utm_campaign || "";
+    const resolvedUtmContent = leadData.utm_content || "";
+    const resolvedUtmTerm = leadData.utm_term || "";
+
     // ── 1. Dedup: busca lead existente pelo WhatsApp ───────────────────────────
     if (cleanWa && org_id) {
       const findRes = await fetch(
@@ -51,12 +59,13 @@ Deno.serve(async (req) => {
         if (leadData.quiz_respostas != null) updatePayload.quiz_respostas = leadData.quiz_respostas;
         if (leadData.score != null && !isNaN(Number(leadData.score))) updatePayload.score = Number(leadData.score);
         if (leadData.faixa) updatePayload.faixa = leadData.faixa;
-        if (leadData.utm_source !== undefined) updatePayload.utm_source = leadData.utm_source;
-        if (leadData.utm_medium !== undefined) updatePayload.utm_medium = leadData.utm_medium;
-        if (leadData.utm_campaign !== undefined) updatePayload.utm_campaign = leadData.utm_campaign;
-        if (leadData.utm_content !== undefined) updatePayload.utm_content = leadData.utm_content;
-        if (leadData.utm_term !== undefined) updatePayload.utm_term = leadData.utm_term;
-        if (leadData.fbclid) updatePayload.fbclid = leadData.fbclid;
+        // Só sobrescreve UTMs se o valor novo for não-vazio (preserva UTMs do Inlead)
+        if (resolvedUtmSource) updatePayload.utm_source = resolvedUtmSource;
+        if (resolvedUtmMedium) updatePayload.utm_medium = resolvedUtmMedium;
+        if (resolvedUtmCampaign) updatePayload.utm_campaign = resolvedUtmCampaign;
+        if (resolvedUtmContent) updatePayload.utm_content = resolvedUtmContent;
+        if (resolvedUtmTerm) updatePayload.utm_term = resolvedUtmTerm;
+        if (fbclid) updatePayload.fbclid = fbclid;
 
         if (resetReprovado) {
           updatePayload.status = leadData.status ?? 1;
@@ -95,12 +104,12 @@ Deno.serve(async (req) => {
 
     if (leadData.score != null && !isNaN(Number(leadData.score))) insertPayload.score = Number(leadData.score);
     if (leadData.faixa) insertPayload.faixa = leadData.faixa;
-    if (leadData.utm_source !== undefined) insertPayload.utm_source = leadData.utm_source;
-    if (leadData.utm_medium !== undefined) insertPayload.utm_medium = leadData.utm_medium;
-    if (leadData.utm_campaign !== undefined) insertPayload.utm_campaign = leadData.utm_campaign;
-    if (leadData.utm_content !== undefined) insertPayload.utm_content = leadData.utm_content;
-    if (leadData.utm_term !== undefined) insertPayload.utm_term = leadData.utm_term;
-    if (leadData.fbclid) insertPayload.fbclid = leadData.fbclid;
+    insertPayload.utm_source = resolvedUtmSource;
+    insertPayload.utm_medium = resolvedUtmMedium;
+    insertPayload.utm_campaign = resolvedUtmCampaign;
+    insertPayload.utm_content = resolvedUtmContent;
+    insertPayload.utm_term = resolvedUtmTerm;
+    if (fbclid) insertPayload.fbclid = fbclid;
 
     const insRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",
